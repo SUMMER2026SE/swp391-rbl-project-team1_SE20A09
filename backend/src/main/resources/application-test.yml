@@ -1,0 +1,26 @@
+# ── Test profile — dùng cho unit/integration tests ──
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/sportvenue_test}
+    username: ${SPRING_DATASOURCE_USERNAME:sportvenue_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:testpassword}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+  flyway:
+    enabled: true
+
+  # Dùng embedded Redis nếu có, hoặc connect localhost khi CI
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
+
+logging:
+  level:
+    root: WARN
+    com.sportvenue: INFO
