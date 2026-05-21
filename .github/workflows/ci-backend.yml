@@ -52,7 +52,11 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build with Maven
+      - name: Run Checkstyle
+        working-directory: backend
+        run: ./mvnw checkstyle:check -B
+
+      - name: Build and Package
         working-directory: backend
         run: ./mvnw package -DskipTests -B
 
