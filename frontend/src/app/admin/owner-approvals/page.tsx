@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { CheckCircle, XCircle, FileText, MapPin, Building } from "lucide-react";
 
-export function OwnerApprovalPage() {
+function OwnerApprovalPage() {
   const [selectedApplication, setSelectedApplication] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState("");
 
@@ -295,6 +295,5 @@ export function OwnerApprovalPage() {
     </div>
   );
 }
-
 
 export default OwnerApprovalPage;

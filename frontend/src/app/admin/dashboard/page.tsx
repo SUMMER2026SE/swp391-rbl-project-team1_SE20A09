@@ -30,7 +30,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 
-export function AdminDashboardPage() {
+function AdminDashboardPage() {
   const kpiData = [
     {
       title: "Tổng người dùng",
@@ -329,6 +329,5 @@ export function AdminDashboardPage() {
     </div>
   );
 }
-
 
 export default AdminDashboardPage;

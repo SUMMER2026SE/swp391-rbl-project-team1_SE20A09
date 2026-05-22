@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
-export function ForgotPasswordPage() {
+function ForgotPasswordPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-primary/5 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -41,8 +41,7 @@ export function ForgotPasswordPage() {
             Gửi link đặt lại mật khẩu
           </Button>
 
-          <Link
-            to="/login"
+          <Link href="/login"
             className="flex items-center justify-center text-sm text-primary hover:underline"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -53,6 +52,5 @@ export function ForgotPasswordPage() {
     </div>
   );
 }
-
 
 export default ForgotPasswordPage;

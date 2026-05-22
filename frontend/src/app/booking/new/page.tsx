@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Calendar, MapPin, Minus, Plus } from "lucide-react";
 
-export function BookingSlotPickerPage() {
+function BookingSlotPickerPage() {
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [selectedSlot, setSelectedSlot] = useState<string>("");
   const [accessories, setAccessories] = useState({
@@ -142,7 +142,7 @@ export function BookingSlotPickerPage() {
                       <div>
                         <div className="font-medium">{item.name}</div>
                         <div className="text-sm text-muted-foreground">
-                          {item.price.toLocaleString()}đ
+                          {item.price.toLocaleString('vi-VN')}đ
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
@@ -213,19 +213,19 @@ export function BookingSlotPickerPage() {
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span>Giá sân</span>
-                    <span>{venuePrice.toLocaleString()}đ</span>
+                    <span>{venuePrice.toLocaleString('vi-VN')}đ</span>
                   </div>
 
                   {calculateAccessoryTotal() > 0 && (
                     <div className="flex justify-between text-sm">
                       <span>Phụ kiện</span>
-                      <span>{calculateAccessoryTotal().toLocaleString()}đ</span>
+                      <span>{calculateAccessoryTotal().toLocaleString('vi-VN')}đ</span>
                     </div>
                   )}
 
                   <div className="flex justify-between text-sm">
                     <span>Phí dịch vụ</span>
-                    <span>{platformFee.toLocaleString()}đ</span>
+                    <span>{platformFee.toLocaleString('vi-VN')}đ</span>
                   </div>
 
                   <Separator />
@@ -233,7 +233,7 @@ export function BookingSlotPickerPage() {
                   <div className="flex justify-between">
                     <span>Tổng cộng</span>
                     <span className="text-xl text-primary">
-                      {total.toLocaleString()}đ
+                      {total.toLocaleString('vi-VN')}đ
                     </span>
                   </div>
                 </div>
@@ -255,6 +255,5 @@ export function BookingSlotPickerPage() {
     </div>
   );
 }
-
 
 export default BookingSlotPickerPage;

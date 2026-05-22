@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Search } from "lucide-react";
 
-export function VenueSearchPage() {
+function VenueSearchPage() {
   const [priceRange, setPriceRange] = useState([0, 1000000]);
 
   const venues = [
@@ -91,8 +91,8 @@ export function VenueSearchPage() {
                   className="mb-3"
                 />
                 <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>{priceRange[0].toLocaleString()}đ</span>
-                  <span>{priceRange[1].toLocaleString()}đ</span>
+                  <span>{priceRange[0].toLocaleString('vi-VN')}đ</span>
+                  <span>{priceRange[1].toLocaleString('vi-VN')}đ</span>
                 </div>
               </div>
 
@@ -195,6 +195,5 @@ export function VenueSearchPage() {
     </div>
   );
 }
-
 
 export default VenueSearchPage;

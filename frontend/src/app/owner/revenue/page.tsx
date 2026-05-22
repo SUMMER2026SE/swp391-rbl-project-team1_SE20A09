@@ -21,7 +21,7 @@ import {
 } from "recharts";
 import { Download, TrendingUp, Calendar, DollarSign } from "lucide-react";
 
-export function RevenueReportPage() {
+function RevenueReportPage() {
   const summaryData = [
     { title: "Tổng doanh thu", value: "125,500,000đ", icon: <DollarSign className="h-6 w-6" /> },
     { title: "Tổng đặt sân", value: "245", icon: <Calendar className="h-6 w-6" /> },
@@ -124,7 +124,7 @@ export function RevenueReportPage() {
                 <XAxis dataKey="date" />
                 <YAxis />
                 <Tooltip
-                  formatter={(value) => `${Number(value).toLocaleString()}đ`}
+                  formatter={(value) => `${Number(value).toLocaleString('vi-VN')}đ`}
                 />
                 <Bar dataKey="revenue" fill="#2563EB" />
               </BarChart>
@@ -155,7 +155,7 @@ export function RevenueReportPage() {
                       <td className="p-3">{venue.venue}</td>
                       <td className="p-3 text-center">{venue.bookings}</td>
                       <td className="p-3 text-right">
-                        {venue.revenue.toLocaleString()}đ
+                        {venue.revenue.toLocaleString('vi-VN')}đ
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex items-center justify-center gap-2">
@@ -189,7 +189,7 @@ export function RevenueReportPage() {
                     <td className="p-3 text-right">
                       {venueBreakdown
                         .reduce((sum, v) => sum + v.revenue, 0)
-                        .toLocaleString()}
+                        .toLocaleString('vi-VN')}
                       đ
                     </td>
                     <td className="p-3 text-center">-</td>
@@ -204,6 +204,5 @@ export function RevenueReportPage() {
     </div>
   );
 }
-
 
 export default RevenueReportPage;

@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, Edit, Trash2, Trophy } from "lucide-react";
 
-export function SportCategoriesPage() {
+function SportCategoriesPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -261,6 +261,5 @@ export function SportCategoriesPage() {
     </div>
   );
 }
-
 
 export default SportCategoriesPage;

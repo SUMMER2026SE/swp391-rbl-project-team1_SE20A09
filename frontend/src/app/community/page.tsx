@@ -32,7 +32,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-export function MatchRequestFeedPage() {
+function MatchRequestFeedPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
@@ -394,6 +394,5 @@ export function MatchRequestFeedPage() {
     </div>
   );
 }
-
 
 export default MatchRequestFeedPage;

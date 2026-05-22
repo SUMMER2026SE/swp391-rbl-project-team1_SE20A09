@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
-export function ResetPasswordPage() {
+function ResetPasswordPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -134,6 +134,5 @@ export function ResetPasswordPage() {
     </div>
   );
 }
-
 
 export default ResetPasswordPage;

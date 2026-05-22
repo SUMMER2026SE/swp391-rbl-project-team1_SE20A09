@@ -49,7 +49,7 @@ export function VenueCard({
             <span>{rating.toFixed(1)}</span>
           </div>
           <div>
-            <span className="text-primary">Từ {price.toLocaleString()}đ</span>
+            <span className="text-primary">Từ {price.toLocaleString('vi-VN')}đ</span>
             <span className="text-muted-foreground text-sm">/giờ</span>
           </div>
         </div>

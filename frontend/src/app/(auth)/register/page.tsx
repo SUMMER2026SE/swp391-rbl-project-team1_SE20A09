@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
-export function RegisterPage() {
+function RegisterPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-primary/5 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -126,6 +126,5 @@ export function RegisterPage() {
     </div>
   );
 }
-
 
 export default RegisterPage;

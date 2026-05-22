@@ -17,7 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-export function NotificationsPage() {
+function NotificationsPage() {
   const [notifications, setNotifications] = useState([
     {
       id: 1,
@@ -225,6 +225,5 @@ export function NotificationsPage() {
     </div>
   );
 }
-
 
 export default NotificationsPage;

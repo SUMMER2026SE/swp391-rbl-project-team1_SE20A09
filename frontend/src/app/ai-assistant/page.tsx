@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, Send, Search, Calendar, TrendingUp, MapPin } from "lucide-react";
 
-export function AIAssistantPage() {
+function AIAssistantPage() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([
     {
@@ -177,7 +177,7 @@ export function AIAssistantPage() {
 
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-xl text-primary">
-                          {venueRecommendation.price.toLocaleString()}đ
+                          {venueRecommendation.price.toLocaleString('vi-VN')}đ
                         </span>
                         <span className="text-sm">
                           ⭐ {venueRecommendation.rating}
@@ -216,6 +216,5 @@ export function AIAssistantPage() {
     </div>
   );
 }
-
 
 export default AIAssistantPage;

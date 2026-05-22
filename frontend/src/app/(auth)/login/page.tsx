@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
-export function LoginPage() {
+function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-primary/5 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -50,8 +50,7 @@ export function LoginPage() {
           </div>
 
           <div className="flex justify-end">
-            <Link
-              to="/forgot-password"
+            <Link href="/forgot-password"
               className="text-sm text-primary hover:underline"
             >
               Quên mật khẩu?
@@ -85,6 +84,5 @@ export function LoginPage() {
     </div>
   );
 }
-
 
 export default LoginPage;

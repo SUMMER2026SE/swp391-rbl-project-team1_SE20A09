@@ -8,7 +8,7 @@ import { HowItWorks } from "@/components/landing/HowItWorks";
 import { Footer } from "@/components/landing/Footer";
 import { Header } from "@/components/layout/Header";
 
-export function LandingPage() {
+function LandingPage() {
   const featuredVenues = [
     {
       id: 1,
@@ -100,6 +100,5 @@ export function LandingPage() {
     </div>
   );
 }
-
 
 export default LandingPage;

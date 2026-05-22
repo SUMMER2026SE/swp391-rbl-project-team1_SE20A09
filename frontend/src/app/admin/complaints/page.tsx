@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/sheet";
 import { AlertCircle, MessageSquare, Image as ImageIcon } from "lucide-react";
 
-export function ComplaintsManagementPage() {
+function ComplaintsManagementPage() {
   const [selectedComplaint, setSelectedComplaint] = useState<any>(null);
   const [resolution, setResolution] = useState("");
 
@@ -357,6 +357,5 @@ export function ComplaintsManagementPage() {
     </div>
   );
 }
-
 
 export default ComplaintsManagementPage;

@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { AlertCircle, Plus, MessageSquare } from "lucide-react";
 
-export function ComplaintsPage() {
+function ComplaintsPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedComplaint, setSelectedComplaint] = useState<any>(null);
 
@@ -290,6 +290,5 @@ export function ComplaintsPage() {
     </div>
   );
 }
-
 
 export default ComplaintsPage;

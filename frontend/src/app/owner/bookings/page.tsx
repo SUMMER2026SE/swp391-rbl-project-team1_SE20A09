@@ -16,7 +16,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { CheckCircle, XCircle, ChevronDown, ChevronUp } from "lucide-react";
 
-export function BookingManagementPage() {
+function BookingManagementPage() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
   const bookings = [
@@ -97,7 +97,7 @@ export function BookingManagementPage() {
           <td className="p-3">{booking.venue}</td>
           <td className="p-3">{booking.date}</td>
           <td className="p-3">{booking.time}</td>
-          <td className="p-3 text-right">{booking.amount.toLocaleString()}đ</td>
+          <td className="p-3 text-right">{booking.amount.toLocaleString('vi-VN')}đ</td>
           <td className="p-3">{getStatusBadge(booking.status)}</td>
           <td className="p-3">
             <div className="flex gap-2">
@@ -303,6 +303,5 @@ export function BookingManagementPage() {
     </div>
   );
 }
-
 
 export default BookingManagementPage;

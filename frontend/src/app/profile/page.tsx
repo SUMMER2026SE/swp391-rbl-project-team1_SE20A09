@@ -20,7 +20,7 @@ import {
   Settings,
 } from "lucide-react";
 
-export function UserProfilePage() {
+function UserProfilePage() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -286,6 +286,5 @@ export function UserProfilePage() {
     </div>
   );
 }
-
 
 export default UserProfilePage;

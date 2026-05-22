@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Plus, MoreVertical, Edit, Settings, Eye, Pause, Trash } from "lucide-react";
 
-export function VenueManagementPage() {
+function VenueManagementPage() {
   const venues = [
     {
       id: 1,
@@ -125,7 +125,7 @@ export function VenueManagementPage() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Doanh thu tháng</span>
                     <span className="text-primary">
-                      {venue.monthRevenue.toLocaleString()}đ
+                      {venue.monthRevenue.toLocaleString('vi-VN')}đ
                     </span>
                   </div>
                 </div>
@@ -146,6 +146,5 @@ export function VenueManagementPage() {
     </div>
   );
 }
-
 
 export default VenueManagementPage;

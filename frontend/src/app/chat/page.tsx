@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Send, Smile, Paperclip, Search, MoreVertical } from "lucide-react";
 
-export function ChatPage() {
+function ChatPage() {
   const [message, setMessage] = useState("");
   const [selectedChat, setSelectedChat] = useState(1);
 
@@ -253,6 +253,5 @@ export function ChatPage() {
     </div>
   );
 }
-
 
 export default ChatPage;

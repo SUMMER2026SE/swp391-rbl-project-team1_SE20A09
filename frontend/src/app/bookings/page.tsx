@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MapPin, Calendar, Clock, FileText } from "lucide-react";
 
-export function BookingHistoryPage() {
+function BookingHistoryPage() {
   const bookings = [
     {
       id: "BK001234",
@@ -155,7 +155,7 @@ export function BookingHistoryPage() {
 
             <div className="flex items-center justify-between mt-4">
               <div className="text-xl text-primary">
-                {booking.price.toLocaleString()}đ
+                {booking.price.toLocaleString('vi-VN')}đ
               </div>
               <div className="flex gap-2">{getActionButtons(booking.status)}</div>
             </div>
@@ -210,6 +210,5 @@ export function BookingHistoryPage() {
     </div>
   );
 }
-
 
 export default BookingHistoryPage;

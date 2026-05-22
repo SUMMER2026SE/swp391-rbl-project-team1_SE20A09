@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { CreditCard, Building2, Smartphone, Shield, Clock } from "lucide-react";
 
-export function PaymentPage() {
+function PaymentPage() {
   const [paymentMethod, setPaymentMethod] = useState("bank");
   const [countdown, setCountdown] = useState(300);
 
@@ -162,6 +162,5 @@ export function PaymentPage() {
     </div>
   );
 }
-
 
 export default PaymentPage;

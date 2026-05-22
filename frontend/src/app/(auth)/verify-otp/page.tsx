@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
-export function VerifyOTPPage() {
+function VerifyOTPPage() {
   const [otp, setOtp] = useState("");
   const [countdown, setCountdown] = useState(150);
 
@@ -78,6 +78,5 @@ export function VerifyOTPPage() {
     </div>
   );
 }
-
 
 export default VerifyOTPPage;

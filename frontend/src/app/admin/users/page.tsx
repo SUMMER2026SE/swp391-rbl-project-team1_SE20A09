@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Search, Lock, Unlock, Eye, AlertCircle } from "lucide-react";
 
-export function UserManagementPage() {
+function UserManagementPage() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
 
   const users = [
@@ -116,7 +116,7 @@ export function UserManagementPage() {
         {user.type === "customer" ? user.bookings : user.venues}
       </td>
       {user.type === "owner" && (
-        <td className="p-3 text-right">{user.revenue.toLocaleString()}đ</td>
+        <td className="p-3 text-right">{user.revenue.toLocaleString('vi-VN')}đ</td>
       )}
       <td className="p-3">{getStatusBadge(user.status)}</td>
       <td className="p-3">
@@ -288,7 +288,7 @@ export function UserManagementPage() {
                           Doanh thu tháng này
                         </div>
                         <div className="text-xl text-primary">
-                          {selectedUser.revenue.toLocaleString()}đ
+                          {selectedUser.revenue.toLocaleString('vi-VN')}đ
                         </div>
                       </div>
                     </>
@@ -320,6 +320,5 @@ export function UserManagementPage() {
     </div>
   );
 }
-
 
 export default UserManagementPage;

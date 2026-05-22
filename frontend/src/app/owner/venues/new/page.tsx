@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Upload, X, Plus, Minus, MapPin } from "lucide-react";
 
-export function AddEditVenuePage() {
+function AddEditVenuePage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   const [timeSlots, setTimeSlots] = useState([
@@ -331,6 +331,5 @@ export function AddEditVenuePage() {
     </div>
   );
 }
-
 
 export default AddEditVenuePage;

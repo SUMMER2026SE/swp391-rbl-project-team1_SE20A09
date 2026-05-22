@@ -31,7 +31,7 @@ import {
   Bell,
 } from "lucide-react";
 
-export function OwnerDashboardPage() {
+function OwnerDashboardPage() {
   const kpiData = [
     {
       title: "Đặt sân hôm nay",
@@ -195,7 +195,7 @@ export function OwnerDashboardPage() {
                     <XAxis dataKey="date" />
                     <YAxis />
                     <Tooltip
-                      formatter={(value) => `${Number(value).toLocaleString()}đ`}
+                      formatter={(value) => `${Number(value).toLocaleString('vi-VN')}đ`}
                     />
                     <Line
                       type="monotone"
@@ -269,7 +269,7 @@ export function OwnerDashboardPage() {
                         <td className="p-3">{booking.date}</td>
                         <td className="p-3">{booking.time}</td>
                         <td className="p-3 text-right">
-                          {booking.amount.toLocaleString()}đ
+                          {booking.amount.toLocaleString('vi-VN')}đ
                         </td>
                         <td className="p-3 text-right">
                           <div className="flex gap-2 justify-end">
@@ -294,6 +294,5 @@ export function OwnerDashboardPage() {
     </div>
   );
 }
-
 
 export default OwnerDashboardPage;
