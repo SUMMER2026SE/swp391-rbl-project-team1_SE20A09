@@ -4,27 +4,91 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────────────────────────────────────────────────────────
+   Base layer: CSS variables — shadcn/ui compatible (light + dark)
+───────────────────────────────────────────────────────────── */
 @layer base {
   :root {
-    --background: 15 23 42;       /* slate-900 */
-    --foreground: 226 232 240;    /* slate-200 */
-    --card: 30 41 59;             /* slate-800 */
-    --card-foreground: 226 232 240;
-    --primary: 34 197 94;         /* green-500 */
-    --primary-foreground: 255 255 255;
-    --muted: 71 85 105;           /* slate-600 */
-    --muted-foreground: 148 163 184;
-    --border: 51 65 85;           /* slate-700 */
-    --radius: 0.75rem;
+    /* Light mode — matches Figma design */
+    --background:        0 0% 100%;
+    --foreground:        240 10% 3.9%;
+    --card:              0 0% 100%;
+    --card-foreground:   240 10% 3.9%;
+    --popover:           0 0% 100%;
+    --popover-foreground:240 10% 3.9%;
+    --primary:           142 72% 29%;   /* SportHub green */
+    --primary-foreground:0 0% 100%;
+    --secondary:         240 4.8% 95.9%;
+    --secondary-foreground:240 5.9% 10%;
+    --muted:             240 4.8% 95.9%;
+    --muted-foreground:  240 3.8% 46.1%;
+    --accent:            240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive:       0 84.2% 60.2%;
+    --destructive-foreground:0 0% 98%;
+    --border:            240 5.9% 90%;
+    --input:             240 5.9% 90%;
+    --ring:              142 72% 29%;
+    --radius:            0.625rem;
+    /* Sidebar */
+    --sidebar:                    0 0% 98%;
+    --sidebar-foreground:         240 5.3% 26.1%;
+    --sidebar-primary:            142 72% 29%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent:             240 4.8% 95.9%;
+    --sidebar-accent-foreground:  240 5.9% 10%;
+    --sidebar-border:             220 13% 91%;
+    --sidebar-ring:               142 72% 29%;
+    /* Charts */
+    --chart-1: 142 72% 29%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+
+  .dark {
+    /* Dark mode — for future dark theme toggle */
+    --background:        222 47% 11%;
+    --foreground:        213 31% 91%;
+    --card:              215 28% 17%;
+    --card-foreground:   213 31% 91%;
+    --popover:           215 28% 17%;
+    --popover-foreground:213 31% 91%;
+    --primary:           142 76% 46%;
+    --primary-foreground:144 80% 10%;
+    --secondary:         217 19% 27%;
+    --secondary-foreground:213 31% 91%;
+    --muted:             217 19% 27%;
+    --muted-foreground:  215 20% 65%;
+    --accent:            217 19% 27%;
+    --accent-foreground: 213 31% 91%;
+    --destructive:       0 62.8% 30.6%;
+    --destructive-foreground:0 85.7% 97.3%;
+    --border:            217 19% 27%;
+    --input:             217 19% 27%;
+    --ring:              142 76% 36%;
+    --sidebar:                    215 28% 14%;
+    --sidebar-foreground:         213 31% 91%;
+    --sidebar-primary:            142 76% 46%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent:             217 19% 27%;
+    --sidebar-accent-foreground:  213 31% 91%;
+    --sidebar-border:             217 19% 27%;
+    --sidebar-ring:               142 76% 36%;
   }
 
   * {
-    @apply border-slate-700;
+    border-color: hsl(var(--border));
+    box-sizing: border-box;
   }
 
   body {
-    @apply bg-slate-900 text-slate-200 font-sans antialiased;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
     font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   html {
@@ -32,25 +96,18 @@
   }
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Component utilities — kept for backward compatibility
+───────────────────────────────────────────────────────────── */
 @layer components {
-  .card {
-    @apply bg-slate-800 border border-slate-700 rounded-xl shadow-card;
-  }
-
   .btn-primary {
-    @apply bg-green-500 hover:bg-green-400 text-white font-semibold px-6 py-2.5 rounded-lg
-           transition-all duration-200 hover:shadow-glow-green active:scale-95;
+    @apply bg-green-600 hover:bg-green-500 text-white font-semibold px-6 py-2.5 rounded-lg
+           transition-all duration-200 active:scale-95;
   }
 
   .btn-outline {
-    @apply border border-slate-600 hover:border-green-500 text-slate-300 hover:text-green-400
+    @apply border border-border hover:border-primary text-muted-foreground hover:text-primary
            font-medium px-6 py-2.5 rounded-lg transition-all duration-200;
-  }
-
-  .input {
-    @apply bg-slate-700 border border-slate-600 rounded-lg px-4 py-2.5 text-slate-200
-           placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-green-500
-           focus:border-transparent transition-all duration-200 w-full;
   }
 
   .badge {
@@ -58,24 +115,27 @@
   }
 
   .badge-green {
-    @apply badge bg-green-500/20 text-green-400 border border-green-500/30;
+    @apply badge bg-green-500/20 text-green-600 border border-green-500/30;
   }
 
   .badge-yellow {
-    @apply badge bg-yellow-500/20 text-yellow-400 border border-yellow-500/30;
+    @apply badge bg-yellow-500/20 text-yellow-600 border border-yellow-500/30;
   }
 
   .badge-red {
-    @apply badge bg-red-500/20 text-red-400 border border-red-500/30;
+    @apply badge bg-red-500/20 text-red-600 border border-red-500/30;
   }
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Utility classes
+───────────────────────────────────────────────────────────── */
 @layer utilities {
   .text-gradient {
-    @apply bg-gradient-to-r from-green-400 to-emerald-300 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-green-600 to-emerald-500 bg-clip-text text-transparent;
   }
 
   .glass {
-    @apply bg-slate-800/50 backdrop-blur-md border border-slate-700/50;
+    @apply bg-white/60 backdrop-blur-md border border-border;
   }
 }

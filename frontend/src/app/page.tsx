@@ -1,82 +1,104 @@
-export default function HomePage() {
+﻿'use client'
+
+import { Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { SearchBar } from "@/components/landing/SearchBar";
+import { VenueCard } from "@/components/landing/VenueCard";
+import { HowItWorks } from "@/components/landing/HowItWorks";
+import { Footer } from "@/components/landing/Footer";
+import { Header } from "@/components/layout/Header";
+
+function LandingPage() {
+  const featuredVenues = [
+    {
+      id: 1,
+      image: "https://images.unsplash.com/photo-1705593813682-033ee2991df6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+      name: "Sân bóng Thành Công",
+      sportType: "Bóng đá",
+      price: 500000,
+      rating: 4.8,
+      location: "Quận 1, TP.HCM",
+    },
+    {
+      id: 2,
+      image: "https://images.unsplash.com/photo-1764703666646-acc2f7d48857?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+      name: "Arena Sports Center",
+      sportType: "Bóng đá",
+      price: 700000,
+      rating: 4.9,
+      location: "Quận 3, TP.HCM",
+    },
+    {
+      id: 3,
+      image: "https://images.unsplash.com/photo-1767729790212-661953ecaa90?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+      name: "Sân Vận Động Quận 7",
+      sportType: "Bóng đá",
+      price: 600000,
+      rating: 4.7,
+      location: "Quận 7, TP.HCM",
+    },
+    {
+      id: 4,
+      image: "https://images.unsplash.com/photo-1765305460539-edf7a0838dad?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+      name: "Sân bóng Phú Mỹ Hưng",
+      sportType: "Bóng đá",
+      price: 550000,
+      rating: 4.6,
+      location: "Quận 7, TP.HCM",
+    },
+  ];
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center bg-slate-900 relative overflow-hidden">
-      {/* Background glow effects */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-green-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-emerald-500/5 rounded-full blur-3xl" />
-      </div>
+    <div className="min-h-screen bg-background">
+      <Header />
 
-      {/* Content */}
-      <div className="relative z-10 text-center px-6 max-w-2xl mx-auto">
-        {/* Logo / Icon */}
-        <div className="text-7xl mb-6 animate-bounce">🏟️</div>
+      {/* Hero Section */}
+      <section className="relative bg-gradient-to-br from-primary/10 via-background to-primary/5 py-20">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h1 className="text-4xl md:text-5xl mb-4">
+              Đặt sân thể thao
+              <br />
+              <span className="text-primary">Nhanh chóng & Tiện lợi</span>
+            </h1>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Tìm kiếm và đặt sân thể thao yêu thích chỉ với vài cú click.
+              Kết nối với cộng đồng và tận hưởng niềm đam mê thể thao.
+            </p>
+          </div>
 
-        {/* Heading */}
-        <h1 className="text-4xl md:text-5xl font-bold mb-4 leading-tight">
-          <span className="text-gradient">Sport Venue</span>
-          <br />
-          <span className="text-slate-200">Management System</span>
-        </h1>
-
-        <p className="text-slate-400 text-lg mb-8 leading-relaxed">
-          Nền tảng đặt sân thể thao trực tuyến — tìm kiếm, đặt lịch, thanh toán và kết nối cộng đồng thể thao trong một ứng dụng duy nhất.
-        </p>
-
-        {/* Status badges */}
-        <div className="flex flex-wrap gap-3 justify-center mb-10">
-          <span className="badge-green">✅ Frontend Running</span>
-          <span className="badge badge-yellow">🔧 In Development</span>
-          <span className="badge badge-green">Next.js 14</span>
+          <SearchBar />
         </div>
+      </section>
 
-        {/* Quick links */}
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <a
-            href="http://localhost:8080/swagger-ui.html"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-primary inline-flex items-center gap-2"
-          >
-            📄 API Docs (Swagger)
-          </a>
-          <a
-            href="http://localhost:8080/api/v1/hello"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-outline inline-flex items-center gap-2"
-          >
-            🔍 Test Backend API
-          </a>
-        </div>
+      {/* Featured Venues */}
+      <section className="py-16">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="mb-2">Sân nổi bật</h2>
+              <p className="text-muted-foreground">
+                Các sân thể thao được yêu thích nhất
+              </p>
+            </div>
+            <Button variant="outline">
+              Xem tất cả
+              <Search className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
 
-        {/* Tech stack */}
-        <div className="mt-12 card p-6">
-          <p className="text-sm text-slate-500 mb-4 font-medium uppercase tracking-wider">Tech Stack</p>
-          <div className="grid grid-cols-3 gap-3 text-sm">
-            {[
-              { icon: '⚡', label: 'Next.js 14' },
-              { icon: '☕', label: 'Spring Boot 3.3' },
-              { icon: '🐘', label: 'PostgreSQL 16' },
-              { icon: '⚡', label: 'Redis 7' },
-              { icon: '🔐', label: 'Spring Security' },
-              { icon: '📦', label: 'Docker' },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="glass rounded-lg p-2.5 flex flex-col items-center gap-1 hover:border-green-500/50 transition-colors"
-              >
-                <span className="text-xl">{item.icon}</span>
-                <span className="text-slate-400 text-xs">{item.label}</span>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {featuredVenues.map((venue) => (
+              <VenueCard key={venue.id} {...venue} />
             ))}
           </div>
         </div>
+      </section>
 
-        <p className="mt-8 text-slate-600 text-sm">
-          Team 1 — SE20A09 · SWP391 · FPT University
-        </p>
-      </div>
-    </main>
-  )
+      <HowItWorks />
+      <Footer />
+    </div>
+  );
 }
+
+export default LandingPage;
