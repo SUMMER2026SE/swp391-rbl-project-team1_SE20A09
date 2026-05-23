@@ -17,9 +17,13 @@ backend/.mvn/wrapper/maven-wrapper.jar
 .idea/
 *.iml
 .vscode/
+.cursor/
 *.swp
 *.swo
 .DS_Store
+
+# ── Codegraph ───────────────────────────────────
+.codegraph/
 
 # ── Node.js / Next.js ───────────────────────────
 frontend/node_modules/
