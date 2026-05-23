@@ -534,6 +534,9 @@ docker compose exec redis redis-cli ping
 
 ---
 
+🔗 Quản lý công việc (Trello)
+📌 **Link Trello của nhóm:** https://trello.com/b/muCQpNYN/timsanchothuesan-nhom1-se20a09
+
 ## 📄 License
 
 Dự án này được phát triển cho mục đích học thuật.

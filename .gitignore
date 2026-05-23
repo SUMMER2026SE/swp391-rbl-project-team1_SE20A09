@@ -20,6 +20,7 @@ backend/.mvn/wrapper/maven-wrapper.jar
 *.swp
 *.swo
 .DS_Store
+docs/
 
 # ── Node.js / Next.js ───────────────────────────
 frontend/node_modules/
