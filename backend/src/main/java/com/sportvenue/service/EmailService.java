@@ -20,7 +20,7 @@ import org.springframework.util.StringUtils;
 @Service
 public class EmailService {
 
-    private static final Logger log = LoggerFactory.getLogger(EmailService.class);
+    private static final Logger LOG = LoggerFactory.getLogger(EmailService.class);
 
     private final JavaMailSender mailSender;
 
@@ -41,13 +41,13 @@ public class EmailService {
     @PostConstruct
     void logMailConfiguration() {
         if (mockMail) {
-            log.warn("app.mail.mock=true — OTP will be logged here only, not sent via SMTP");
+            LOG.warn("app.mail.mock=true — OTP will be logged here only, not sent via SMTP");
             return;
         }
         if (!StringUtils.hasText(smtpUsername)) {
-            log.warn("MAIL_USERNAME is empty — OTP emails will fail. Set SMTP in backend/.env or MAIL_MOCK=true");
+            LOG.warn("MAIL_USERNAME is empty — OTP emails will fail. Set SMTP in backend/.env or MAIL_MOCK=true");
         } else {
-            log.info("SMTP enabled: from={} via host user={}", fromAddress, smtpUsername);
+            LOG.info("SMTP enabled: from={} via host user={}", fromAddress, smtpUsername);
         }
     }
 
@@ -56,7 +56,7 @@ public class EmailService {
      */
     public void sendOtpEmail(String toEmail, String otpCode, int expiryMinutes) {
         if (mockMail) {
-            log.warn("=== DEV MAIL MOCK === OTP for {}: {} (expires in {} min) ===", toEmail, otpCode, expiryMinutes);
+            LOG.warn("=== DEV MAIL MOCK === OTP for {}: {} (expires in {} min) ===", toEmail, otpCode, expiryMinutes);
             return;
         }
 
@@ -68,9 +68,9 @@ public class EmailService {
             helper.setSubject("SportVenue — Mã OTP xác thực đăng ký");
             helper.setText(buildOtpEmailBody(otpCode, expiryMinutes), true);
             mailSender.send(mimeMessage);
-            log.info("OTP email sent to {}", toEmail);
+            LOG.info("OTP email sent to {}", toEmail);
         } catch (MailException | MessagingException ex) {
-            log.error(
+            LOG.error(
                     "Failed to send OTP to {}. OTP (dev fallback): {} — fix backend/.env SMTP",
                     toEmail, otpCode, ex
             );
@@ -86,11 +86,11 @@ public class EmailService {
      */
     public void sendResetPasswordOtpEmail(String toEmail, String otp) {
         if (mockMail) {
-            log.warn("=== DEV MAIL MOCK === Reset OTP for {}: {} ===", toEmail, otp);
+            LOG.warn("=== DEV MAIL MOCK === Reset OTP for {}: {} ===", toEmail, otp);
             return;
         }
 
-        log.info("Preparing to send OTP reset password email to: {}", toEmail);
+        LOG.info("Preparing to send OTP reset password email to: {}", toEmail);
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromAddress);
@@ -106,10 +106,10 @@ public class EmailService {
             message.setText(textContent);
 
             mailSender.send(message);
-            log.info("OTP reset password email successfully sent to: {}", toEmail);
-        } catch (MailException e) {
-            log.error("Failed to send OTP reset password email to: {}, error: {}", toEmail, e.getMessage());
-        }
+            LOG.info("OTP reset password email successfully sent to: {}", toEmail);
+            } catch (MailException e) {
+            LOG.error("Failed to send OTP reset password email to: {}, error: {}", toEmail, e.getMessage());
+            }
     }
 
     private String buildOtpEmailBody(String otpCode, int expiryMinutes) {

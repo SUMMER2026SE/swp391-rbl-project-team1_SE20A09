@@ -23,7 +23,7 @@ import com.sportvenue.repository.UserRepository;
 @Service
 public class OtpService {
 
-    private static final Logger log = LoggerFactory.getLogger(OtpService.class);
+    private static final Logger LOG = LoggerFactory.getLogger(OtpService.class);
 
     private final OtpTokenRepository otpTokenRepository;
     private final UserRepository userRepository;
@@ -72,7 +72,7 @@ public class OtpService {
         otpTokenRepository.save(otpToken);
         userRepository.save(user);
         
-        log.info("User {} verified successfully via OTP", email);
+        LOG.info("User {} verified successfully via OTP", email);
     }
 
     /**
@@ -96,7 +96,7 @@ public class OtpService {
             emailService.sendOtpEmail(user.getEmail(), otpCode, expiryMinutes);
         } catch (EmailDeliveryException ex) {
             // OTP đã lưu DB — không rollback đăng ký vì lỗi SMTP
-            log.warn("OTP saved for {} but email failed. Code: {} — check logs or resend later.",
+            LOG.warn("OTP saved for {} but email failed. Code: {} — check logs or resend later.",
                     user.getEmail(), otpCode, ex);
         }
         return saved;

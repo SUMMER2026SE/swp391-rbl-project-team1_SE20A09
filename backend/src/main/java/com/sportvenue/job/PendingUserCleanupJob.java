@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @Component
 public class PendingUserCleanupJob {
 
-    private static final Logger log = LoggerFactory.getLogger(PendingUserCleanupJob.class);
+    private static final Logger LOG = LoggerFactory.getLogger(PendingUserCleanupJob.class);
 
     private final UserRepository userRepository;
 
@@ -31,13 +31,13 @@ public class PendingUserCleanupJob {
     @Transactional
     public void cleanupPendingUsers() {
         LocalDateTime threshold = LocalDateTime.now().minusHours(24);
-        log.info("Starting cleanup of unverified users created before {}", threshold);
+        LOG.info("Starting cleanup of unverified users created before {}", threshold);
         
         try {
             userRepository.deleteAllByIsVerifiedFalseAndCreatedAtBefore(threshold);
-            log.info("Cleanup of pending users completed successfully");
+            LOG.info("Cleanup of pending users completed successfully");
         } catch (Exception e) {
-            log.error("Error occurred during pending user cleanup", e);
+            LOG.error("Error occurred during pending user cleanup", e);
         }
     }
 }
