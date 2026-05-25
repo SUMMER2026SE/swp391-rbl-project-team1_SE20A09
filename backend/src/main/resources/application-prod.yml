@@ -26,7 +26,9 @@ server:
 
 springdoc:
   swagger-ui:
-    enabled: false   # Tắt Swagger trên production
+    enabled: false   # Tắt giao diện Swagger
+  api-docs:
+    enabled: false   # Tắt endpoint JSON/YAML docs
 
 app:
   mail:

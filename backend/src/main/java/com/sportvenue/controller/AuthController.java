@@ -5,6 +5,8 @@ import com.sportvenue.dto.ResetPasswordRequest;
 import com.sportvenue.dto.request.GoogleLoginRequest;
 import com.sportvenue.dto.request.LoginRequest;
 import com.sportvenue.dto.request.RegisterRequest;
+import com.sportvenue.dto.request.ResendOtpRequest;
+import com.sportvenue.dto.request.VerifyOtpRequest;
 import com.sportvenue.dto.response.AuthResponse;
 import com.sportvenue.dto.response.MessageResponse;
 import com.sportvenue.dto.response.UserResponse;
@@ -15,7 +17,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,7 +26,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -32,8 +34,9 @@ import java.util.Map;
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 @Tag(name = "Authentication", description = "Endpoints phục vụ Đăng ký, Xác thực OTP & Đăng nhập")
-@Slf4j
 public class AuthController {
+
+    private static final Logger LOG = LoggerFactory.getLogger(AuthController.class);
 
     private final AuthService authService;
 
@@ -45,14 +48,14 @@ public class AuthController {
 
     @PostMapping("/verify-otp")
     @Operation(summary = "Xác thực OTP", description = "Xác thực mã OTP và kích hoạt tài khoản, trả về JWT token")
-    public ResponseEntity<AuthResponse> verifyOtp(@RequestParam String email, @RequestParam String otpCode) {
-        return ResponseEntity.ok(authService.verifyOtp(email, otpCode));
+    public ResponseEntity<AuthResponse> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        return ResponseEntity.ok(authService.verifyOtp(request.getEmail(), request.getOtpCode()));
     }
 
     @PostMapping("/resend-otp")
     @Operation(summary = "Gửi lại OTP", description = "Gửi lại mã OTP mới vào email")
-    public ResponseEntity<MessageResponse> resendOtp(@RequestParam String email) {
-        return ResponseEntity.ok(authService.resendOtp(email));
+    public ResponseEntity<MessageResponse> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
+        return ResponseEntity.ok(authService.resendOtp(request.getEmail()));
     }
 
     @PostMapping("/login")
