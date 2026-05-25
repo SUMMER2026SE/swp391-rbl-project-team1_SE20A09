@@ -78,7 +78,8 @@ public class AuthController {
     @Operation(summary = "Yêu cầu khôi phục mật khẩu", description = "Gửi mã khôi phục mật khẩu qua email cho người dùng")
     public ResponseEntity<Map<String, String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         authService.forgotPassword(request);
-        return ResponseEntity.ok(Map.of("message", "Nếu email tồn tại trên hệ thống, một liên kết khôi phục mật khẩu đã được gửi đi."));
+        return ResponseEntity.ok(
+                Map.of("message", "Nếu email tồn tại trên hệ thống, một liên kết khôi phục mật khẩu đã được gửi đi."));
     }
 
     @PostMapping("/reset-password")
