@@ -1,6 +1,7 @@
 package com.sportvenue.job;
 
 import com.sportvenue.repository.OtpTokenRepository;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
