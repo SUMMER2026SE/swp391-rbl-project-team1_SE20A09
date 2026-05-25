@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
@@ -19,6 +19,15 @@ function LoginPage() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("error") === "SessionExpired") {
+        setError("Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.");
+      }
+    }
+  }, []);
 
   const getLoginErrorMessage = (message: string) => {
     if (message === "Bad credentials" || message.includes("Bad credentials")) {

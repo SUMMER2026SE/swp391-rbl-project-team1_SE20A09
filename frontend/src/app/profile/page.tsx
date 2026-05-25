@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/landing/Footer";
@@ -78,6 +78,11 @@ function UserProfilePage() {
       setProfile(data);
     } catch (err: any) {
       console.error("Error fetching user profile:", err);
+      if (err.status === 401 || err.message?.includes("401") || err.message?.includes("unauthorized") || err.message?.includes("authenticated")) {
+        console.warn("Session expired or unauthorized, signing out...");
+        signOut({ callbackUrl: "/login?error=SessionExpired" });
+        return;
+      }
       setError(err.message ?? "Không thể tải thông tin hồ sơ. Vui lòng thử lại sau.");
     } finally {
       setLoading(false);

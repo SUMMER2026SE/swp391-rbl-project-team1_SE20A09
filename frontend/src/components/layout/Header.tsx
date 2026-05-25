@@ -54,17 +54,15 @@ export function Header() {
             ) : user ? (
               <>
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="relative h-10 w-10 rounded-full p-0">
+                  <DropdownMenuTrigger className="focus:outline-none cursor-pointer">
                     <Avatar className="h-10 w-10 border border-primary/20 hover:border-primary/50 transition-colors">
                       <AvatarImage src={user.avatarUrl} alt={user.email} />
                       <AvatarFallback className="bg-primary/10 text-primary font-bold">
                         {getInitials()}
                       </AvatarFallback>
                     </Avatar>
-                    </Button>
                   </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="end" forceMount>
+                <DropdownMenuContent className="w-56" align="end">
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-semibold leading-none">
