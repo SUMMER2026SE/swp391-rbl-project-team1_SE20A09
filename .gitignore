@@ -21,6 +21,7 @@ backend/.mvn/wrapper/maven-wrapper.jar
 *.swo
 .DS_Store
 docs/
+swp391-rbl-project-team1_SE20A09/
 
 # ── Node.js / Next.js ───────────────────────────
 frontend/node_modules/
