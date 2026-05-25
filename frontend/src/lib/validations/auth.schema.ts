@@ -1,0 +1,26 @@
+import { z } from "zod";
+
+export const registerSchema = z
+  .object({
+    fullName: z.string().min(2, "Họ và tên phải có ít nhất 2 ký tự"),
+    email: z.string().email("Email không hợp lệ"),
+    phone: z
+      .string()
+      .regex(/^(0[3|5|7|8|9])+([0-9]{8})$/, "Số điện thoại không hợp lệ"),
+    password: z
+      .string()
+      .min(8, "Mật khẩu phải có ít nhất 8 ký tự")
+      .regex(/[A-Z]/, "Mật khẩu phải chứa ít nhất 1 chữ hoa")
+      .regex(/[0-9]/, "Mật khẩu phải chứa ít nhất 1 số")
+      .regex(/[^A-Za-z0-9]/, "Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt"),
+    confirmPassword: z.string(),
+    terms: z.boolean().refine((val) => val === true, {
+      message: "Vui lòng đồng ý với điều khoản sử dụng",
+    }),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Mật khẩu xác nhận không khớp",
+    path: ["confirmPassword"],
+  });
+
+export type RegisterFormValues = z.infer<typeof registerSchema>;
