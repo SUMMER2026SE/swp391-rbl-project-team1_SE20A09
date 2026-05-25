@@ -11,6 +11,7 @@ import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -54,6 +55,7 @@ public class EmailService {
     /**
      * Gửi email OTP xác thực tài khoản sau đăng ký.
      */
+    @Async
     public void sendOtpEmail(String toEmail, String otpCode, int expiryMinutes) {
         if (mockMail) {
             LOG.warn("=== DEV MAIL MOCK === OTP for {}: {} (expires in {} min) ===", toEmail, otpCode, expiryMinutes);
@@ -84,6 +86,7 @@ public class EmailService {
     /**
      * Gửi email OTP khôi phục mật khẩu.
      */
+    @Async
     public void sendResetPasswordOtpEmail(String toEmail, String otp) {
         if (mockMail) {
             LOG.warn("=== DEV MAIL MOCK === Reset OTP for {}: {} ===", toEmail, otp);
