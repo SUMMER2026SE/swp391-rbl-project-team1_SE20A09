@@ -70,6 +70,9 @@ function RegisterPage() {
       });
 
       toast.success("Đăng ký thành công! Vui lòng kiểm tra email để nhận mã OTP.");
+      // Lưu tạm password để auto-login sau khi verify OTP
+      sessionStorage.setItem("pending_login_email", values.email);
+      sessionStorage.setItem("pending_login_password", values.password);
       router.push(`/verify-otp?email=${encodeURIComponent(values.email)}`);
     } catch (error: any) {
       toast.error(error.message || "Đăng ký thất bại");
