@@ -60,9 +60,10 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public MessageResponse register(RegisterRequest request) {
-        log.info("Attempting registration for email: {}", request.getEmail());
+        String email = request.getEmail().trim().toLowerCase();
+        log.info("Attempting registration for email: {}", email);
 
-        if (userRepository.existsByEmail(request.getEmail())) {
+        if (userRepository.existsByEmail(email)) {
             throw new BadRequestException("Email này đã được sử dụng.");
         }
         if (userRepository.existsByPhoneNumber(request.getPhone())) {
@@ -78,7 +79,7 @@ public class AuthServiceImpl implements AuthService {
         String lastName = nameParts.length > 1 ? nameParts[1] : firstName;
 
         User user = User.builder()
-                .email(request.getEmail().trim().toLowerCase())
+                .email(email)
                 .firstName(firstName)
                 .lastName(lastName)
                 .phoneNumber(request.getPhone())
@@ -100,9 +101,10 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthResponse verifyOtp(String email, String otpCode) {
-        otpService.verify(email, otpCode);
+        String normalizedEmail = email.trim().toLowerCase();
+        otpService.verify(normalizedEmail, otpCode);
         
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
 
         String jwt = tokenProvider.generateTokenFromEmail(user.getEmail());
@@ -115,7 +117,8 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public MessageResponse resendOtp(String email) {
-        User user = userRepository.findByEmail(email)
+        String normalizedEmail = email.trim().toLowerCase();
+        User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
         
         if (user.getIsVerified()) {
@@ -128,9 +131,10 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse login(LoginRequest request) {
-        log.info("Attempting login for email: {}", request.getEmail());
+        String email = request.getEmail().trim().toLowerCase();
+        log.info("Attempting login for email: {}", email);
         
-        User user = userRepository.findByEmail(request.getEmail())
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
 
         if (!user.getIsVerified()) {
@@ -139,7 +143,7 @@ public class AuthServiceImpl implements AuthService {
 
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        request.getEmail(),
+                        email,
                         request.getPassword()
                 )
         );

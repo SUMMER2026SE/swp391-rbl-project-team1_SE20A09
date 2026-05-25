@@ -45,7 +45,8 @@ public class OtpService {
      */
     @Transactional
     public void verify(String email, String otpCode) {
-        User user = userRepository.findByEmail(email)
+        String normalizedEmail = email.trim().toLowerCase();
+        User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
         OtpToken otpToken = otpTokenRepository.findByUser(user)
