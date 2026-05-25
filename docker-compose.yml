@@ -118,7 +118,7 @@ services:
       - backend-net                  # Kết nối DB/Redis
       - frontend-net                 # FIX: Cho phép frontend proxy đến backend
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/v1/hello || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/api/v1/hello || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
