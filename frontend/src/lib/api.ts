@@ -56,7 +56,9 @@ api.interceptors.response.use(
       error.message ||
       'Đã xảy ra lỗi, vui lòng thử lại'
 
-    return Promise.reject(new Error(message))
+    const customError = new Error(message) as any;
+    customError.status = error.response?.status;
+    return Promise.reject(customError)
   }
 )
 
