@@ -22,7 +22,8 @@ import com.sportvenue.repository.RoleRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -42,8 +43,9 @@ import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class AuthServiceImpl implements AuthService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(AuthServiceImpl.class);
 
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
@@ -61,7 +63,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public MessageResponse register(RegisterRequest request) {
         String email = request.getEmail().trim().toLowerCase();
-        log.info("Attempting registration for email: {}", email);
+        LOG.info("Attempting registration for email: {}", email);
 
         if (userRepository.existsByEmail(email)) {
             throw new BadRequestException("Email này đã được sử dụng.");
@@ -94,7 +96,7 @@ public class AuthServiceImpl implements AuthService {
         user = userRepository.save(user);
         otpService.createAndSendOtp(user);
 
-        log.info("User registered successfully (pending verification): {}", user.getEmail());
+        LOG.info("User registered successfully (pending verification): {}", user.getEmail());
         return new MessageResponse("Đăng ký thành công. Vui lòng kiểm tra email để nhận mã xác thực OTP.");
     }
 
@@ -132,7 +134,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public AuthResponse login(LoginRequest request) {
         String email = request.getEmail().trim().toLowerCase();
-        log.info("Attempting login for email: {}", email);
+        LOG.info("Attempting login for email: {}", email);
         
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
@@ -160,7 +162,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthResponse googleLogin(GoogleLoginRequest request) {
-        log.info("Attempting Google login — verifying ID token...");
+        LOG.info("Attempting Google login — verifying ID token...");
 
         GoogleIdToken.Payload payload = verifyGoogleIdToken(request.getIdToken());
         String email = payload.getEmail();
@@ -168,12 +170,12 @@ public class AuthServiceImpl implements AuthService {
         String lastName = (String) payload.get("family_name");
         String avatarUrl = (String) payload.get("picture");
 
-        log.info("Google token verified for email: {}", email);
+        LOG.info("Google token verified for email: {}", email);
 
         User user = userRepository.findByEmail(email).orElse(null);
 
         if (user == null) {
-            log.info("First time Google login, registering user: {}", email);
+            LOG.info("First time Google login, registering user: {}", email);
             Role customerRole = roleRepository.findByRoleName("Customer")
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy vai trò Customer"));
 
@@ -231,7 +233,7 @@ public class AuthServiceImpl implements AuthService {
 
             return payload;
         } catch (GeneralSecurityException | IOException e) {
-            log.error("Lỗi xác thực Google ID Token: {}", e.getMessage());
+            LOG.error("Lỗi xác thực Google ID Token: {}", e.getMessage());
             throw new BadRequestException("Không thể xác thực Google ID Token: " + e.getMessage());
         }
     }
@@ -268,13 +270,13 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public void forgotPassword(ForgotPasswordRequest request) {
         String email = request.getEmail().trim().toLowerCase();
-        log.info("Received forgot password request for email: {}", email);
+        LOG.info("Received forgot password request for email: {}", email);
 
         // Security mitigation: Rate Limiting to prevent email flooding (limit 1 request per 2 minutes per email)
         String rateLimitKey = "forgot-password:rate-limit:" + email;
         Boolean isRateLimited = redisTemplate.hasKey(rateLimitKey);
         if (Boolean.TRUE.equals(isRateLimited)) {
-            log.warn("Forgot password request rate limited for email: {}", email);
+            LOG.warn("Forgot password request rate limited for email: {}", email);
             throw new BadRequestException("Vui lòng đợi 2 phút trước khi yêu cầu lại mã khôi phục.");
         }
 
@@ -282,7 +284,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null) {
             // Mitigate User Enumeration: Log but do not throw exception, return successfully to the client
-            log.warn("Forgot password request for non-existent email: {}", email);
+            LOG.warn("Forgot password request for non-existent email: {}", email);
             // Still set a generic rate limit key to match response times and prevent timing attacks
             redisTemplate.opsForValue().set(rateLimitKey, "true", 2, TimeUnit.MINUTES);
             return;
@@ -294,7 +296,7 @@ public class AuthServiceImpl implements AuthService {
 
         // Generate 6-digit numeric OTP
         String otp = String.format("%06d", ThreadLocalRandom.current().nextInt(100000, 1000000));
-        log.info("Generated reset password OTP for {}: {}", email, otp);
+        LOG.info("Generated reset password OTP for {}: {}", email, otp);
 
         // Save OTP in Redis with a 5-minute expiration time
         String otpKey = "reset:otp:" + email;
@@ -316,7 +318,7 @@ public class AuthServiceImpl implements AuthService {
         // Retrieve OTP associated with email
         String storedOtp = redisTemplate.opsForValue().get(otpKey);
         if (storedOtp == null || !storedOtp.equals(request.getOtp())) {
-            log.warn("Invalid or expired reset password OTP attempt for email: {}", email);
+            LOG.warn("Invalid or expired reset password OTP attempt for email: {}", email);
             throw new BadRequestException("Mã OTP không hợp lệ hoặc đã hết hạn.");
         }
 
@@ -331,7 +333,7 @@ public class AuthServiceImpl implements AuthService {
         // Update password hash
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
-        log.info("Successfully reset password for email: {}", email);
+        LOG.info("Successfully reset password for email: {}", email);
 
         // Delete OTP immediately to prevent replay attacks
         redisTemplate.delete(otpKey);
