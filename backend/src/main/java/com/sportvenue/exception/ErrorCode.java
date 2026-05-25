@@ -1,0 +1,33 @@
+package com.sportvenue.exception;
+
+/**
+ * Danh sách mã lỗi chuẩn của hệ thống.
+ */
+public enum ErrorCode {
+    // Auth Errors
+    OTP_EXPIRED(400, "Mã xác thực đã hết hạn"),
+    OTP_ALREADY_USED(400, "Mã xác thực đã được sử dụng"),
+    OTP_INVALID(400, "Mã xác thực không chính xác"),
+    OTP_NOT_FOUND(404, "Không tìm thấy mã xác thực"),
+    USER_NOT_FOUND(404, "Không tìm thấy người dùng"),
+    
+    // Resource Errors
+    DUPLICATE_RESOURCE(409, "Dữ liệu đã tồn tại trong hệ thống"),
+    INTERNAL_SERVER_ERROR(500, "Lỗi hệ thống không mong muốn");
+
+    private final int status;
+    private final String message;
+
+    ErrorCode(int status, String message) {
+        this.status = status;
+        this.message = message;
+    }
+
+    public int getStatus() {
+        return status;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+}
