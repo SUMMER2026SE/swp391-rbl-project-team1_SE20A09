@@ -7,6 +7,7 @@ import com.sportvenue.mapper.UserMapper;
 import com.sportvenue.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -21,6 +22,7 @@ public class UserService {
      * @param email user email from authenticated principal
      * @return mapped UserProfileResponse DTO
      */
+    @Transactional(readOnly = true)
     public UserProfileResponse getMyProfile(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));

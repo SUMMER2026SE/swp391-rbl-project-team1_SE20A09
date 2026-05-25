@@ -9,6 +9,5 @@ import org.mapstruct.Mapping;
 public interface UserMapper {
     
     @Mapping(target = "roleName", source = "role.roleName")
-    @Mapping(target = "fullName", expression = "java(user.getFirstName() + \" \" + user.getLastName())")
     UserProfileResponse toProfileResponse(User user);
 }
