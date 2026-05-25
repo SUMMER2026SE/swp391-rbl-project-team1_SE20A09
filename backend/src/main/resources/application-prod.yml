@@ -1,9 +1,9 @@
 # ── Production profile — override application.yml ──
 spring:
   datasource:
-    url: ${DATABASE_URL}
-    username: ${POSTGRES_USER}
-    password: ${POSTGRES_PASSWORD}
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5

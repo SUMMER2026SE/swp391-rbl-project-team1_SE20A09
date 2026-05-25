@@ -23,6 +23,8 @@ export const metadata: Metadata = {
   },
 }
 
+import NextAuthProvider from '@/components/providers/NextAuthProvider'
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -31,7 +33,9 @@ export default function RootLayout({
   return (
     <html lang="vi" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
-        {children}
+        <NextAuthProvider>
+          {children}
+        </NextAuthProvider>
       </body>
     </html>
   )

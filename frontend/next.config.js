@@ -17,12 +17,12 @@ const nextConfig = {
   async rewrites() {
     return [
       {
-        source: '/api/:path*',
+        source: '/api/v1/:path*',
         // FIX: Dùng API_URL (không có NEXT_PUBLIC prefix) cho server-side proxy
         // Trong Docker: API_URL = http://backend:8080 (internal network)
         // Trong dev local: fallback về NEXT_PUBLIC_API_URL hoặc localhost:8080
-        // Browser luôn gọi /api/... → Next.js server proxy → backend
-        destination: `${process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/:path*`,
+        // Browser luôn gọi /api/v1/... → Next.js server proxy → backend
+        destination: `${process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/v1/:path*`,
       },
     ]
   },
