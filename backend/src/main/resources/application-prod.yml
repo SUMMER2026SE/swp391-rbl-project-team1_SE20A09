@@ -27,3 +27,7 @@ server:
 springdoc:
   swagger-ui:
     enabled: false   # Tắt Swagger trên production
+
+app:
+  mail:
+    mock: false
