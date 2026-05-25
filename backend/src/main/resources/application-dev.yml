@@ -1,16 +1,5 @@
 # ── Dev profile — override application.yml ──
 spring:
-  datasource:
-    # Hardcode dev values để tránh lỗi env var trên Windows khi dùng mvnw
-    # Thay đổi nếu bạn dùng password khác trong Docker
-    url: jdbc:postgresql://localhost:5433/sportvenue
-    username: sportvenue_user
-    password: changeme
-    driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: 5
-      minimum-idle: 2
-
   jpa:
     show-sql: true
     hibernate:
@@ -26,9 +15,9 @@ spring:
       password: ${REDIS_PASSWORD:changeme}
 
   mail:
-    host: ${MAIL_HOST:smtp.gmail.com}
+    host: ${MAIL_HOST:smtp.resend.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
+    username: ${MAIL_USERNAME:resend}
     password: ${MAIL_PASSWORD:}
     properties:
       mail:
@@ -36,9 +25,8 @@ spring:
           auth: true
           starttls:
             enable: true
-
-mail:
-  from: ${MAIL_FROM:}
+            required: true
+        debug: true
 
 logging:
   level:
@@ -49,3 +37,9 @@ logging:
 springdoc:
   swagger-ui:
     enabled: true
+
+# Dev: MAIL_MOCK=true → chỉ in OTP ra console; false → gửi SMTP (cần MAIL_USERNAME/PASSWORD trong .env)
+app:
+  mail:
+    from: ${MAIL_FROM:noreply@sportvenue.com}
+    mock: ${MAIL_MOCK:false}

@@ -4,16 +4,19 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
-import com.sportvenue.dto.AuthResponse;
-import com.sportvenue.dto.GoogleLoginRequest;
-import com.sportvenue.dto.LoginRequest;
-import com.sportvenue.dto.RegisterRequest;
-import com.sportvenue.dto.UserResponse;
 import com.sportvenue.dto.ForgotPasswordRequest;
 import com.sportvenue.dto.ResetPasswordRequest;
+import com.sportvenue.dto.request.GoogleLoginRequest;
+import com.sportvenue.dto.request.LoginRequest;
+import com.sportvenue.dto.request.RegisterRequest;
+import com.sportvenue.dto.response.AuthResponse;
+import com.sportvenue.dto.response.MessageResponse;
+import com.sportvenue.dto.response.UserResponse;
 import com.sportvenue.entity.Role;
 import com.sportvenue.entity.User;
+import com.sportvenue.exception.AppException;
 import com.sportvenue.exception.BadRequestException;
+import com.sportvenue.exception.ErrorCode;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.RoleRepository;
 import com.sportvenue.repository.UserRepository;
@@ -47,6 +50,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final OtpService otpService;
     private final StringRedisTemplate redisTemplate;
     private final EmailService emailService;
 
@@ -55,11 +59,15 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public AuthResponse register(RegisterRequest request) {
-        log.info("Attempting registration for email: {}", request.getEmail());
+    public MessageResponse register(RegisterRequest request) {
+        String email = request.getEmail().trim().toLowerCase();
+        log.info("Attempting registration for email: {}", email);
 
-        if (userRepository.existsByEmail(request.getEmail())) {
+        if (userRepository.existsByEmail(email)) {
             throw new BadRequestException("Email này đã được sử dụng.");
+        }
+        if (userRepository.existsByPhoneNumber(request.getPhone())) {
+            throw new BadRequestException("Số điện thoại này đã được sử dụng.");
         }
 
         Role customerRole = roleRepository.findByRoleName("Customer")
@@ -68,27 +76,38 @@ public class AuthServiceImpl implements AuthService {
         // Tách họ và tên
         String[] nameParts = request.getFullName().trim().split("\\s+", 2);
         String firstName = nameParts[0];
-        String lastName = nameParts.length > 1 ? nameParts[1] : "";
-
-        String phoneNumber = generateUniquePhoneNumber();
+        String lastName = nameParts.length > 1 ? nameParts[1] : firstName;
 
         User user = User.builder()
-                .email(request.getEmail())
+                .email(email)
                 .firstName(firstName)
                 .lastName(lastName)
-                .phoneNumber(phoneNumber)
+                .phoneNumber(request.getPhone())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(customerRole)
-                .accountStatus("Active")
+                .accountStatus("Pending")
+                .isVerified(false)
                 .userRank("Bronze")
                 .userPoint(0)
                 .build();
 
         user = userRepository.save(user);
-        log.info("User registered successfully: {}", user.getEmail());
+        otpService.createAndSendOtp(user);
+
+        log.info("User registered successfully (pending verification): {}", user.getEmail());
+        return new MessageResponse("Đăng ký thành công. Vui lòng kiểm tra email để nhận mã xác thực OTP.");
+    }
+
+    @Override
+    @Transactional
+    public AuthResponse verifyOtp(String email, String otpCode) {
+        String normalizedEmail = email.trim().toLowerCase();
+        otpService.verify(normalizedEmail, otpCode);
+        
+        User user = userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
 
         String jwt = tokenProvider.generateTokenFromEmail(user.getEmail());
-
         return AuthResponse.builder()
                 .accessToken(jwt)
                 .user(mapToUserResponse(user))
@@ -96,20 +115,41 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
+    public MessageResponse resendOtp(String email) {
+        String normalizedEmail = email.trim().toLowerCase();
+        User user = userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
+        
+        if (user.getIsVerified()) {
+            throw new BadRequestException("Tài khoản đã được xác thực.");
+        }
+
+        otpService.createAndSendOtp(user);
+        return new MessageResponse("Mã OTP mới đã được gửi vào email của bạn.");
+    }
+
+    @Override
     public AuthResponse login(LoginRequest request) {
-        log.info("Attempting login for email: {}", request.getEmail());
+        String email = request.getEmail().trim().toLowerCase();
+        log.info("Attempting login for email: {}", email);
+        
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
+
+        if (!user.getIsVerified()) {
+            throw new AppException(ErrorCode.USER_NOT_VERIFIED);
+        }
+
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        request.getEmail(),
+                        email,
                         request.getPassword()
                 )
         );
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
         String jwt = tokenProvider.generateToken(authentication);
-
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
 
         return AuthResponse.builder()
                 .accessToken(jwt)
@@ -122,7 +162,6 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse googleLogin(GoogleLoginRequest request) {
         log.info("Attempting Google login — verifying ID token...");
 
-        // === SECURITY: Verify Google ID Token ===
         GoogleIdToken.Payload payload = verifyGoogleIdToken(request.getIdToken());
         String email = payload.getEmail();
         String firstName = (String) payload.get("given_name");
@@ -135,11 +174,9 @@ public class AuthServiceImpl implements AuthService {
 
         if (user == null) {
             log.info("First time Google login, registering user: {}", email);
-            // Create user
             Role customerRole = roleRepository.findByRoleName("Customer")
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy vai trò Customer"));
 
-            // Generate a unique dummy phone number
             String phoneNumber = generateUniquePhoneNumber();
 
             user = User.builder()
@@ -148,9 +185,10 @@ public class AuthServiceImpl implements AuthService {
                     .lastName(lastName != null ? lastName : "")
                     .avatarUrl(avatarUrl)
                     .phoneNumber(phoneNumber)
-                    .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString())) // Secure dummy password
+                    .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString()))
                     .role(customerRole)
                     .accountStatus("Active")
+                    .isVerified(true) // Google users are verified by default
                     .userRank("Bronze")
                     .userPoint(0)
                     .build();
@@ -160,7 +198,6 @@ public class AuthServiceImpl implements AuthService {
             if ("Blocked".equalsIgnoreCase(user.getAccountStatus())) {
                 throw new BadRequestException("Tài khoản của bạn đã bị khóa.");
             }
-            // Optional: update avatar if changed
             if (avatarUrl != null && !avatarUrl.equals(user.getAvatarUrl())) {
                 user.setAvatarUrl(avatarUrl);
                 user = userRepository.save(user);
@@ -175,10 +212,6 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
-    /**
-     * Xác thực Google ID Token bằng GoogleIdTokenVerifier.
-     * Email được lấy từ payload đã xác thực — KHÔNG tin vào client gửi lên.
-     */
     private GoogleIdToken.Payload verifyGoogleIdToken(String idTokenString) {
         try {
             GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(
@@ -213,7 +246,6 @@ public class AuthServiceImpl implements AuthService {
             }
             attempts++;
         }
-        // Fallback: dùng prefix G- + UUID ngắn để tránh xung đột
         return "G-" + UUID.randomUUID().toString().substring(0, 10);
     }
 

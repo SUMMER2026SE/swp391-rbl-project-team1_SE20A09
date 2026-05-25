@@ -12,6 +12,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Entity ánh xạ bảng roles.
+ */
 @Entity
 @Table(name = "roles")
 @Getter

@@ -4,90 +4,89 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Mail, Lock, User, Chrome, Loader2 } from "lucide-react";
+import { 
+  Mail, 
+  Lock, 
+  User, 
+  Chrome, 
+  Phone, 
+  Loader2, 
+  Eye, 
+  EyeOff 
+} from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { post } from "@/lib/api";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 
-type RegisterResponse = {
-  accessToken: string;
-};
+import api from "@/lib/api";
+import { registerSchema, type RegisterFormValues } from "@/lib/validations/auth.schema";
+import { PasswordStrengthIndicator } from "@/components/auth/PasswordStrengthIndicator";
 
 function RegisterPage() {
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const router = useRouter();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const form = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      fullName: "",
+      email: "",
+      phone: "",
+      password: "",
+      confirmPassword: "",
+      terms: false,
+    },
+  });
 
-    if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
-      setError("Vui lòng điền đầy đủ thông tin đăng ký.");
-      return;
-    }
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
+  const passwordValue = form.watch("password");
 
-    if (password.length < 8) {
-      setError("Mật khẩu phải có ít nhất 8 ký tự.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Mật khẩu xác nhận không khớp.");
-      return;
-    }
-
-    if (!acceptedTerms) {
-      setError("Bạn cần đồng ý với điều khoản sử dụng và chính sách bảo mật.");
-      return;
-    }
-
-    setError(null);
+  async function onSubmit(values: RegisterFormValues) {
     setIsLoading(true);
-
     try {
-      await post<RegisterResponse>("/auth/register", {
-        fullName: fullName.trim(),
-        email: email.trim(),
-        password,
+      await api.post("/auth/register", {
+        fullName: values.fullName,
+        email: values.email,
+        phone: values.phone,
+        password: values.password,
+        confirmPassword: values.confirmPassword,
       });
 
-      const result = await signIn("credentials", {
-        redirect: false,
-        email: email.trim(),
-        password,
-      });
-
-      if (result?.error) {
-        setError(result.error);
-        return;
-      }
-
-      router.push("/");
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Đã xảy ra lỗi khi đăng ký. Vui lòng thử lại.");
+      toast.success("Đăng ký thành công! Vui lòng kiểm tra email để nhận mã OTP.");
+      // Lưu tạm password để auto-login sau khi verify OTP
+      sessionStorage.setItem("pending_login_email", values.email);
+      sessionStorage.setItem("pending_login_password", values.password);
+      router.push(`/verify-otp?email=${encodeURIComponent(values.email)}`);
+    } catch (error: any) {
+      toast.error(error.message || "Đăng ký thất bại");
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
   const handleGoogleRegister = async () => {
-    setError(null);
     setIsGoogleLoading(true);
     try {
       await signIn("google", { callbackUrl: "/" });
     } catch {
-      setError("Đã xảy ra lỗi khi đăng ký bằng Google.");
+      toast.error("Đã xảy ra lỗi khi đăng ký bằng Google.");
       setIsGoogleLoading(false);
     }
   };
@@ -99,132 +98,194 @@ function RegisterPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center pb-8">
           <div className="mx-auto w-16 h-16 bg-primary rounded-lg flex items-center justify-center text-white text-2xl mb-4 font-bold">
-            SH
+            SV
           </div>
-          <h1 className="text-2xl font-semibold mb-2">Đăng ký tài khoản</h1>
-          <p className="text-muted-foreground text-sm">
+          <h1 className="text-2xl font-bold mb-2">Đăng ký tài khoản</h1>
+          <p className="text-muted-foreground">
             Tạo tài khoản để bắt đầu đặt sân
           </p>
         </CardHeader>
 
-        <CardContent className="space-y-4">
-          {error && (
-            <div className="p-3 bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-sm rounded-lg border border-red-200 dark:border-red-900/50 text-center font-medium">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="fullname">Họ và tên</Label>
-              <div className="relative">
-                <User className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                <Input
-                  id="fullname"
-                  type="text"
-                  placeholder="Nguyễn Văn A"
-                  className="pl-10"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  disabled={isBusy}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="your@email.com"
-                  className="pl-10"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isBusy}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Mật khẩu</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  className="pl-10"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isBusy}
-                  required
-                />
-              </div>
-              <div className="flex gap-1 mt-2">
-                <div className={`h-1 flex-1 rounded ${password.length > 0 ? "bg-primary" : "bg-muted"}`}></div>
-                <div className={`h-1 flex-1 rounded ${password.length >= 4 ? "bg-primary" : "bg-muted"}`}></div>
-                <div className={`h-1 flex-1 rounded ${password.length >= 8 ? "bg-primary" : "bg-muted"}`}></div>
-                <div className={`h-1 flex-1 rounded ${password.length >= 12 ? "bg-primary" : "bg-muted"}`}></div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Mật khẩu phải có ít nhất 8 ký tự
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="confirm-password">Xác nhận mật khẩu</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  placeholder="••••••••"
-                  className="pl-10"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  disabled={isBusy}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="flex items-start space-x-2">
-              <Checkbox
-                id="terms"
-                className="mt-1"
-                checked={acceptedTerms}
-                onCheckedChange={(checked) => setAcceptedTerms(checked === true)}
-                disabled={isBusy}
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="fullName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Họ và tên</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <User className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                        <Input placeholder="Nguyễn Văn A" className="pl-10" {...field} disabled={isBusy} />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-              <label htmlFor="terms" className="text-sm text-muted-foreground cursor-pointer">
-                Tôi đồng ý với{" "}
-                <a href="#" className="text-primary hover:underline">
-                  Điều khoản sử dụng
-                </a>{" "}
-                và{" "}
-                <a href="#" className="text-primary hover:underline">
-                  Chính sách bảo mật
-                </a>
-              </label>
-            </div>
 
-            <Button className="w-full" size="lg" type="submit" disabled={isBusy}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Đang tạo tài khoản...
-                </>
-              ) : (
-                "Tạo tài khoản"
-              )}
-            </Button>
-          </form>
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                        <Input placeholder="your@email.com" className="pl-10" {...field} disabled={isBusy} />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-          <div className="relative">
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Số điện thoại</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                        <Input placeholder="0901234567" className="pl-10" {...field} disabled={isBusy} />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Mật khẩu</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="••••••••"
+                          className="pl-10 pr-10"
+                          {...field}
+                          disabled={isBusy}
+                          onFocus={() => setIsPasswordFocused(true)}
+                          onBlur={(e) => {
+                            field.onBlur();
+                            setIsPasswordFocused(false);
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                          onClick={() => setShowPassword(!showPassword)}
+                          disabled={isBusy}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="h-5 w-5 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-5 w-5 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
+                    </FormControl>
+                    {(passwordValue || isPasswordFocused) && (
+                      <PasswordStrengthIndicator password={passwordValue} />
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="confirmPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Xác nhận mật khẩu</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                        <Input
+                          type={showConfirmPassword ? "text" : "password"}
+                          placeholder="••••••••"
+                          className="pl-10 pr-10"
+                          {...field}
+                          disabled={isBusy}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          disabled={isBusy}
+                        >
+                          {showConfirmPassword ? (
+                            <EyeOff className="h-5 w-5 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-5 w-5 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="terms"
+                render={({ field }) => (
+                  <FormItem className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          className="shrink-0"
+                          disabled={isBusy}
+                        />
+                      </FormControl>
+                      <p className="text-sm font-normal text-muted-foreground leading-none">
+                        Tôi đồng ý với{" "}
+                        <Link href="#" className="text-primary hover:underline">
+                          Điều khoản sử dụng
+                        </Link>
+                        {" "}và{" "}
+                        <Link href="#" className="text-primary hover:underline">
+                          Chính sách bảo mật
+                        </Link>
+                      </p>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <Button className="w-full" size="lg" type="submit" disabled={isBusy}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Đang xử lý...
+                  </>
+                ) : (
+                  "Tạo tài khoản"
+                )}
+              </Button>
+            </form>
+          </Form>
+
+          <div className="relative my-6">
             <Separator />
             <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-sm text-muted-foreground">
               hoặc
@@ -246,9 +307,9 @@ function RegisterPage() {
             Đăng ký với Google
           </Button>
 
-          <p className="text-center text-sm text-muted-foreground">
+          <p className="text-center text-sm text-muted-foreground mt-6">
             Đã có tài khoản?{" "}
-            <Link href="/login" className="text-primary hover:underline">
+            <Link href="/login" className="text-primary hover:underline font-medium">
               Đăng nhập
             </Link>
           </p>

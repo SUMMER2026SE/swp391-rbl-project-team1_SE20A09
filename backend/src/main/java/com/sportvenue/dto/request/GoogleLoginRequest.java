@@ -1,4 +1,4 @@
-package com.sportvenue.dto;
+package com.sportvenue.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
