@@ -21,6 +21,8 @@ backend/.mvn/wrapper/maven-wrapper.jar
 *.swp
 *.swo
 .DS_Store
+docs/
+swp391-rbl-project-team1_SE20A09/
 
 # ── Codegraph ───────────────────────────────────
 .codegraph/

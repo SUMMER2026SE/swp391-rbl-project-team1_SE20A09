@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { 
   Mail, 
   Lock, 
@@ -38,6 +39,7 @@ import { PasswordStrengthIndicator } from "@/components/auth/PasswordStrengthInd
 function RegisterPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -60,7 +62,7 @@ function RegisterPage() {
     setIsLoading(true);
     try {
       await api.post("/auth/register", {
-        name: values.fullName,
+        fullName: values.fullName,
         email: values.email,
         phone: values.phone,
         password: values.password,
@@ -75,6 +77,18 @@ function RegisterPage() {
       setIsLoading(false);
     }
   }
+
+  const handleGoogleRegister = async () => {
+    setIsGoogleLoading(true);
+    try {
+      await signIn("google", { callbackUrl: "/" });
+    } catch {
+      toast.error("Đã xảy ra lỗi khi đăng ký bằng Google.");
+      setIsGoogleLoading(false);
+    }
+  };
+
+  const isBusy = isLoading || isGoogleLoading;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-primary/5 flex items-center justify-center p-4">
@@ -101,7 +115,7 @@ function RegisterPage() {
                     <FormControl>
                       <div className="relative">
                         <User className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                        <Input placeholder="Nguyễn Văn A" className="pl-10" {...field} />
+                        <Input placeholder="Nguyễn Văn A" className="pl-10" {...field} disabled={isBusy} />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -118,7 +132,7 @@ function RegisterPage() {
                     <FormControl>
                       <div className="relative">
                         <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                        <Input placeholder="your@email.com" className="pl-10" {...field} />
+                        <Input placeholder="your@email.com" className="pl-10" {...field} disabled={isBusy} />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -135,7 +149,7 @@ function RegisterPage() {
                     <FormControl>
                       <div className="relative">
                         <Phone className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                        <Input placeholder="0901234567" className="pl-10" {...field} />
+                        <Input placeholder="0901234567" className="pl-10" {...field} disabled={isBusy} />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -157,6 +171,7 @@ function RegisterPage() {
                           placeholder="••••••••"
                           className="pl-10 pr-10"
                           {...field}
+                          disabled={isBusy}
                           onFocus={() => setIsPasswordFocused(true)}
                           onBlur={(e) => {
                             field.onBlur();
@@ -169,6 +184,7 @@ function RegisterPage() {
                           size="sm"
                           className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                           onClick={() => setShowPassword(!showPassword)}
+                          disabled={isBusy}
                         >
                           {showPassword ? (
                             <EyeOff className="h-5 w-5 text-muted-foreground" />
@@ -200,6 +216,7 @@ function RegisterPage() {
                           placeholder="••••••••"
                           className="pl-10 pr-10"
                           {...field}
+                          disabled={isBusy}
                         />
                         <Button
                           type="button"
@@ -207,6 +224,7 @@ function RegisterPage() {
                           size="sm"
                           className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          disabled={isBusy}
                         >
                           {showConfirmPassword ? (
                             <EyeOff className="h-5 w-5 text-muted-foreground" />
@@ -232,6 +250,7 @@ function RegisterPage() {
                           checked={field.value}
                           onCheckedChange={field.onChange}
                           className="shrink-0"
+                          disabled={isBusy}
                         />
                       </FormControl>
                       <p className="text-sm font-normal text-muted-foreground leading-none">
@@ -250,7 +269,7 @@ function RegisterPage() {
                 )}
               />
 
-              <Button className="w-full" size="lg" type="submit" disabled={isLoading}>
+              <Button className="w-full" size="lg" type="submit" disabled={isBusy}>
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -270,8 +289,18 @@ function RegisterPage() {
             </span>
           </div>
 
-          <Button variant="outline" className="w-full" size="lg">
-            <Chrome className="mr-2 h-5 w-5" />
+          <Button
+            variant="outline"
+            className="w-full"
+            size="lg"
+            onClick={handleGoogleRegister}
+            disabled={isBusy}
+          >
+            {isGoogleLoading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Chrome className="mr-2 h-5 w-5" />
+            )}
             Đăng ký với Google
           </Button>
 

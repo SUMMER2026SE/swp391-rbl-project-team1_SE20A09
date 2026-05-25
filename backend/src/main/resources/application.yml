@@ -75,7 +75,7 @@ management:
     health:
       show-details: when_authorized
 
-# ── JWT ──────────────────────────────────────────────────
+# ── App Config (JWT, OTP, Mail, Google) ─────────────────
 app:
   jwt:
     secret: ${JWT_SECRET:dev_secret_key_please_change_in_production_min_256_bits}
@@ -87,6 +87,8 @@ app:
     from: ${MAIL_FROM:noreply@sportvenue.com}
     # Dev/local: mặc định mock nếu không set — tránh 500 khi chưa cấu hình SMTP
     mock: ${MAIL_MOCK:true}
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
 
 # ── Swagger / SpringDoc ───────────────────────────────────
 springdoc:

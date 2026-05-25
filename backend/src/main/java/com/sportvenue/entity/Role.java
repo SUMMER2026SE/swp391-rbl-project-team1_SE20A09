@@ -1,12 +1,18 @@
 package com.sportvenue.entity;
 
 import jakarta.persistence.*;
+import lombok.*;
 
 /**
  * Entity ánh xạ bảng roles.
  */
 @Entity
 @Table(name = "roles")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Role {
 
     @Id
@@ -16,23 +22,4 @@ public class Role {
 
     @Column(name = "role_name", nullable = false, unique = true, length = 30)
     private String roleName;
-
-    public Role() {
-    }
-
-    public Integer getRoleId() {
-        return roleId;
-    }
-
-    public void setRoleId(Integer roleId) {
-        this.roleId = roleId;
-    }
-
-    public String getRoleName() {
-        return roleName;
-    }
-
-    public void setRoleName(String roleName) {
-        this.roleName = roleName;
-    }
 }
