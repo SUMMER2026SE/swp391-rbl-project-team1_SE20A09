@@ -7,6 +7,19 @@ RUN apk add --no-cache maven
 COPY pom.xml .
 RUN mvn dependency:go-offline -B
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+# Fix Windows line endings (CRLF → LF) using sed, then make executable
+=======
+# Fix line endings (CRLF to LF) for Windows compatibility and make executable
+>>>>>>> af0f783c01c48b5748e64259381d94628f8aaf9e
+RUN sed -i 's/\r$//' mvnw && chmod +x mvnw
+# Download dependencies trước khi copy source (cache layer)
+RUN ./mvnw dependency:go-offline -B
+
+# Copy source code và build
+>>>>>>> main
 COPY src ./src
 RUN mvn package -DskipTests -B
 
