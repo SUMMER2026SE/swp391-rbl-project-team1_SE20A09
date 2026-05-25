@@ -42,10 +42,18 @@ api.interceptors.response.use(
       // if (newToken) { ... retry ... }
     }
 
-    // Chuẩn hóa error message
+    // Chuẩn hóa error message (ưu tiên chi tiết validation từ BE)
+    const data = error.response?.data as {
+      message?: string
+      errors?: string[]
+      error?: string
+    } | undefined
+    const validationDetail = data?.errors?.filter(Boolean).join('; ')
     const message =
-      (error.response?.data as { message?: string })?.message ??
-      error.message ??
+      validationDetail ||
+      data?.message ||
+      data?.error ||
+      error.message ||
       'Đã xảy ra lỗi, vui lòng thử lại'
 
     return Promise.reject(new Error(message))
