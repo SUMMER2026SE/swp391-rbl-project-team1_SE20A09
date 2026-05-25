@@ -10,7 +10,8 @@ public enum ErrorCode {
     OTP_INVALID(400, "Mã xác thực không chính xác"),
     OTP_NOT_FOUND(404, "Không tìm thấy mã xác thực"),
     USER_NOT_FOUND(404, "Không tìm thấy người dùng"),
-    
+    USER_NOT_VERIFIED(403, "Tài khoản chưa được xác thực email. Vui lòng kiểm tra hộp thư và nhập mã OTP."),
+
     // Resource Errors
     DUPLICATE_RESOURCE(409, "Dữ liệu đã tồn tại trong hệ thống"),
     INTERNAL_SERVER_ERROR(500, "Lỗi hệ thống không mong muốn");
