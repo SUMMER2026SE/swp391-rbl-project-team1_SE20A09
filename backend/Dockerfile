@@ -1,10 +1,10 @@
 # ── Stage 1: Build ─────────────────────────────────────────
-FROM eclipse-temurin:25-jdk-alpine AS builder
+FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /app
 
 # Copy Maven wrapper và pom.xml trước (tận dụng Docker layer cache)
 COPY mvnw .
-COPY .mvn .mvn
+COPY .mvn .mvn```
 COPY pom.xml .
 
 # Fix line endings (CRLF to LF) for Windows compatibility and make executable
@@ -12,12 +12,12 @@ RUN sed -i 's/\r$//' mvnw && chmod +x mvnw
 # Download dependencies trước khi copy source (cache layer)
 RUN ./mvnw dependency:go-offline -B
 
-# Copy source code và build
-COPY src ./src
+# Copy source code và` build
+COPY src ./src`
 RUN ./mvnw package -DskipTests -B
 
 # ── Stage 2: Runtime ───────────────────────────────────────
-FROM eclipse-temurin:25-jre-alpine AS runtime
+FROM eclipse-temurin:21-jre-alpine AS runtime
 WORKDIR /app
 
 # Install curl for healthcheck

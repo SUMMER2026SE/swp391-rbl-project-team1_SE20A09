@@ -1,4 +1,11 @@
 # ── Dev profile — override application.yml ──
 spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/sportvenue}
+    username: ${SPRING_DATASOURCE_USERNAME:sportvenue_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:changeme}
+  data:
+    redis:
+      password: ${SPRING_DATA_REDIS_PASSWORD:changeme}
   jpa:
     show-sql: true
