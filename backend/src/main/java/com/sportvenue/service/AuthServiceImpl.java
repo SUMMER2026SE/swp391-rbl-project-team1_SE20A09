@@ -1,5 +1,9 @@
 package com.sportvenue.service;
 
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
 import com.sportvenue.dto.AuthResponse;
 import com.sportvenue.dto.GoogleLoginRequest;
 import com.sportvenue.dto.LoginRequest;
@@ -14,6 +18,7 @@ import com.sportvenue.repository.UserRepository;
 import com.sportvenue.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -22,7 +27,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.util.Collections;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +43,9 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+
+    @Value("${app.google.client-id:}")
+    private String googleClientId;
 
     @Override
     @Transactional
@@ -78,7 +90,6 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request) {
         log.info("Attempting login for email: {}", request.getEmail());
         Authentication authentication = authenticationManager.authenticate(
@@ -103,13 +114,21 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthResponse googleLogin(GoogleLoginRequest request) {
-        log.info("Attempting Google login for email: {}", request.getEmail());
-        
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElse(null);
+        log.info("Attempting Google login — verifying ID token...");
+
+        // === SECURITY: Verify Google ID Token ===
+        GoogleIdToken.Payload payload = verifyGoogleIdToken(request.getIdToken());
+        String email = payload.getEmail();
+        String firstName = (String) payload.get("given_name");
+        String lastName = (String) payload.get("family_name");
+        String avatarUrl = (String) payload.get("picture");
+
+        log.info("Google token verified for email: {}", email);
+
+        User user = userRepository.findByEmail(email).orElse(null);
 
         if (user == null) {
-            log.info("First time Google login, registering user: {}", request.getEmail());
+            log.info("First time Google login, registering user: {}", email);
             // Create user
             Role customerRole = roleRepository.findByRoleName("Customer")
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy vai trò Customer"));
@@ -118,10 +137,10 @@ public class AuthServiceImpl implements AuthService {
             String phoneNumber = generateUniquePhoneNumber();
 
             user = User.builder()
-                    .email(request.getEmail())
-                    .firstName(request.getFirstName())
-                    .lastName(request.getLastName() != null ? request.getLastName() : "")
-                    .avatarUrl(request.getAvatarUrl())
+                    .email(email)
+                    .firstName(firstName != null ? firstName : "")
+                    .lastName(lastName != null ? lastName : "")
+                    .avatarUrl(avatarUrl)
                     .phoneNumber(phoneNumber)
                     .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString())) // Secure dummy password
                     .role(customerRole)
@@ -136,8 +155,8 @@ public class AuthServiceImpl implements AuthService {
                 throw new BadRequestException("Tài khoản của bạn đã bị khóa.");
             }
             // Optional: update avatar if changed
-            if (request.getAvatarUrl() != null && !request.getAvatarUrl().equals(user.getAvatarUrl())) {
-                user.setAvatarUrl(request.getAvatarUrl());
+            if (avatarUrl != null && !avatarUrl.equals(user.getAvatarUrl())) {
+                user.setAvatarUrl(avatarUrl);
                 user = userRepository.save(user);
             }
         }
@@ -150,15 +169,45 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
+    /**
+     * Xác thực Google ID Token bằng GoogleIdTokenVerifier.
+     * Email được lấy từ payload đã xác thực — KHÔNG tin vào client gửi lên.
+     */
+    private GoogleIdToken.Payload verifyGoogleIdToken(String idTokenString) {
+        try {
+            GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(
+                    new NetHttpTransport(), GsonFactory.getDefaultInstance())
+                    .setAudience(Collections.singletonList(googleClientId))
+                    .build();
+
+            GoogleIdToken idToken = verifier.verify(idTokenString);
+            if (idToken == null) {
+                throw new BadRequestException("Google ID Token không hợp lệ hoặc đã hết hạn.");
+            }
+
+            GoogleIdToken.Payload payload = idToken.getPayload();
+            if (!Boolean.TRUE.equals(payload.getEmailVerified())) {
+                throw new BadRequestException("Email Google chưa được xác thực.");
+            }
+
+            return payload;
+        } catch (GeneralSecurityException | IOException e) {
+            log.error("Lỗi xác thực Google ID Token: {}", e.getMessage());
+            throw new BadRequestException("Không thể xác thực Google ID Token: " + e.getMessage());
+        }
+    }
+
     private String generateUniquePhoneNumber() {
         int attempts = 0;
         while (attempts < 10) {
-            String phoneNumber = "09" + String.format("%08d", (int) (Math.random() * 100000000));
+            String phoneNumber = "09" + String.format("%08d",
+                    ThreadLocalRandom.current().nextInt(0, 100_000_000));
             if (!userRepository.existsByPhoneNumber(phoneNumber)) {
                 return phoneNumber;
             }
             attempts++;
         }
+        // Fallback: dùng prefix G- + UUID ngắn để tránh xung đột
         return "G-" + UUID.randomUUID().toString().substring(0, 10);
     }
 

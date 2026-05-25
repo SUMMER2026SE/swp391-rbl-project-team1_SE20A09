@@ -50,15 +50,7 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user, account }) {
       if (account?.provider === "google") {
         try {
-          const nameParts = user.name?.split(" ") ?? [];
-          const firstName = nameParts[0] || user.email?.split("@")[0] || "Google";
-          const lastName = nameParts.slice(1).join(" ") || "User";
-
           const response = await axios.post(`${BACKEND_URL}/api/v1/auth/google`, {
-            email: user.email,
-            firstName: firstName,
-            lastName: lastName,
-            avatarUrl: user.image,
             idToken: account.id_token
           });
 
