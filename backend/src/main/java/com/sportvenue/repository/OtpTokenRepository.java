@@ -21,4 +21,10 @@ public interface OtpTokenRepository extends JpaRepository<OtpToken, Integer> {
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("DELETE FROM OtpToken o WHERE o.user = :user")
     void deleteAllByUser(User user);
+
+    /** Dọn dẹp mã OTP đã hết hạn. */
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM OtpToken o WHERE o.expiresAt < :now")
+    void deleteExpiredTokens(java.time.LocalDateTime now);
 }
