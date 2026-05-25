@@ -48,9 +48,9 @@ VALUES (
     'Hoàng',
     'Mai Huy',
     '0912345678',
-    'cun030206@gmail.com',
+    'customer@sportvenue.com',
     '$2a$10$dY/hQd0G/jQoN5uJ9V2OSe2P5xM2lB6e6gN3xVwz1H9h1dE7I5bK.',
-    'https://api.dicebear.com/7.x/adventurer/svg?seed=cun030206',
+    'https://api.dicebear.com/7.x/adventurer/svg?seed=customer',
     0,
     'Bronze',
     'Active'

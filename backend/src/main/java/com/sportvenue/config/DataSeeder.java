@@ -31,7 +31,7 @@ public class DataSeeder implements CommandLineRunner {
     public void run(String... args) {
         seedUser("admin@sportvenue.com", "Admin", "System", "0900000001", "Admin");
         seedUser("owner@sportvenue.com", "Hoàng", "Mai Huy", "0900000002", "Owner");
-        seedUser("cun030206@gmail.com", "Hoàng", "Mai Huy", "0912345678", "Customer");
+        seedUser("customer@sportvenue.com", "Hoàng", "Mai Huy", "0912345678", "Customer");
         log.info("✅ DataSeeder: Seed accounts verified/updated.");
     }
 
