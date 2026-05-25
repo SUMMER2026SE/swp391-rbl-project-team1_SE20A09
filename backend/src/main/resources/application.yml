@@ -1,6 +1,9 @@
 spring:
   config:
-    import: optional:file:.env[.properties]
+    import:
+      # ../.env trước, backend/.env sau → biến trong backend/.env được ưu tiên
+      - optional:file:../.env[.properties]
+      - optional:file:.env[.properties]
   application:
     name: sport-venue-backend
   profiles:

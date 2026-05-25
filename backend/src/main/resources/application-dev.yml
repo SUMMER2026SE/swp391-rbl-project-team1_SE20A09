@@ -15,9 +15,9 @@ spring:
       password: ${REDIS_PASSWORD:changeme}
 
   mail:
-    host: ${MAIL_HOST:smtp.gmail.com}
+    host: ${MAIL_HOST:smtp.resend.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
+    username: ${MAIL_USERNAME:resend}
     password: ${MAIL_PASSWORD:}
     properties:
       mail:
@@ -25,9 +25,8 @@ spring:
           auth: true
           starttls:
             enable: true
-
-mail:
-  from: ${MAIL_FROM:}
+            required: true
+        debug: true
 
 logging:
   level:
@@ -39,7 +38,8 @@ springdoc:
   swagger-ui:
     enabled: true
 
-# Dev: không gửi email thật — in OTP ra log console (tránh lỗi 500 khi SMTP chưa cấu hình)
+# Dev: MAIL_MOCK=true → chỉ in OTP ra console; false → gửi SMTP (cần MAIL_USERNAME/PASSWORD trong .env)
 app:
   mail:
-    mock: true
+    from: ${MAIL_FROM:noreply@sportvenue.com}
+    mock: ${MAIL_MOCK:false}

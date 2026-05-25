@@ -144,6 +144,13 @@
             <version>8.10.1</version>
         </dependency>
 
+        <!-- ── Dotenv (load .env into Spring environment) ── -->
+        <dependency>
+            <groupId>me.paulschwarz</groupId>
+            <artifactId>springboot3-dotenv</artifactId>
+            <version>5.1.0</version>
+        </dependency>
+
         <!-- ── Test ─────────────────────────────── -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
