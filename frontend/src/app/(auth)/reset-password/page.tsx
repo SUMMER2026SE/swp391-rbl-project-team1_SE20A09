@@ -132,23 +132,30 @@ function ResetPasswordPage() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Email Field */}
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="your@email.com"
-                    className="pl-10"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={isLoading}
-                    required
-                  />
+              {/* Email (Show input only if not pre-filled via URL to keep UI clean) */}
+              {searchParams.get("email") ? (
+                <div className="text-center text-sm bg-primary/5 border border-primary/10 p-2.5 rounded-lg text-muted-foreground font-medium mb-2">
+                  Đang khôi phục tài khoản: <br/>
+                  <span className="text-foreground font-semibold">{email}</span>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="your@email.com"
+                      className="pl-10"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={isLoading}
+                      required
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* OTP Field */}
               <div className="space-y-2">
