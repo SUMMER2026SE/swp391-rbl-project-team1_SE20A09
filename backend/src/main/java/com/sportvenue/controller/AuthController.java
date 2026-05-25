@@ -4,9 +4,6 @@ import com.sportvenue.dto.AuthResponse;
 import com.sportvenue.dto.GoogleLoginRequest;
 import com.sportvenue.dto.LoginRequest;
 import com.sportvenue.dto.RegisterRequest;
-import com.sportvenue.dto.UserResponse;
-import com.sportvenue.entity.User;
-import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -14,8 +11,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -47,26 +42,5 @@ public class AuthController {
     public ResponseEntity<AuthResponse> googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
         return ResponseEntity.ok(authService.googleLogin(request));
     }
-
-    @GetMapping("/me")
-    @Operation(summary = "Lấy thông tin tài khoản hiện tại", description = "Yêu cầu đính kèm Bearer JWT Token ở Header")
-    public ResponseEntity<UserResponse> getCurrentUser(@AuthenticationPrincipal UserPrincipal userPrincipal) {
-        if (userPrincipal == null) {
-            return ResponseEntity.status(401).build();
-        }
-        User user = userPrincipal.getUser();
-        UserResponse response = UserResponse.builder()
-                .userId(user.getUserId())
-                .email(user.getEmail())
-                .firstName(user.getFirstName())
-                .lastName(user.getLastName())
-                .roleName(user.getRole().getRoleName())
-                .avatarUrl(user.getAvatarUrl())
-                .phoneNumber(user.getPhoneNumber())
-                .userRank(user.getUserRank())
-                .userPoint(user.getUserPoint())
-                .accountStatus(user.getAccountStatus())
-                .build();
-        return ResponseEntity.ok(response);
-    }
 }
+
