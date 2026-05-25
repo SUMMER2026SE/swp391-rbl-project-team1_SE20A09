@@ -14,7 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import { get } from "@/lib/api";
+import { get, post } from "@/lib/api";
 import {
   Camera,
   Trophy,
@@ -26,7 +26,10 @@ import {
   Phone,
   Mail,
   Shield,
-  Activity
+  Activity,
+  Lock,
+  Eye,
+  EyeOff
 } from "lucide-react";
 
 interface UserProfileResponse {
@@ -58,6 +61,79 @@ function UserProfilePage() {
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Change password states
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
+  const [changePasswordError, setChangePasswordError] = useState<string | null>(null);
+  const [changePasswordSuccess, setChangePasswordSuccess] = useState<string | null>(null);
+
+  const getPasswordStrength = (pass: string) => {
+    if (!pass) return { label: "", color: "text-slate-400", progressColor: "bg-slate-200", percentage: 0 };
+    if (pass.length < 6) return { label: "Quá ngắn", color: "text-red-500", progressColor: "bg-red-500", percentage: 25 };
+    
+    let score = 0;
+    if (/[a-z]/.test(pass)) score++;
+    if (/[A-Z]/.test(pass)) score++;
+    if (/[0-9]/.test(pass)) score++;
+    if (/[^A-Za-z0-9]/.test(pass)) score++;
+
+    if (pass.length >= 8 && score >= 3) {
+      return { label: "Rất mạnh", color: "text-emerald-600", progressColor: "bg-emerald-500", percentage: 100 };
+    }
+    if (pass.length >= 6 && score >= 2) {
+      return { label: "Trung bình", color: "text-amber-500", progressColor: "bg-amber-500", percentage: 60 };
+    }
+    return { label: "Yêu", color: "text-orange-500", progressColor: "bg-orange-500", percentage: 40 };
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      setChangePasswordError("Vui lòng điền đầy đủ các thông tin mật khẩu.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setChangePasswordError("Mật khẩu mới phải có ít nhất 6 ký tự.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setChangePasswordError("Xác nhận mật khẩu mới không khớp.");
+      return;
+    }
+    if (newPassword === oldPassword) {
+      setChangePasswordError("Mật khẩu mới phải khác mật khẩu hiện tại.");
+      return;
+    }
+
+    try {
+      setChangePasswordLoading(true);
+      setChangePasswordError(null);
+      setChangePasswordSuccess(null);
+
+      await post("/users/change-password", {
+        oldPassword,
+        newPassword,
+        confirmPassword,
+      });
+
+      setChangePasswordSuccess("Mật khẩu của bạn đã được thay đổi thành công!");
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      console.error("Error changing password:", err);
+      setChangePasswordError(err.message ?? "Có lỗi xảy ra khi đổi mật khẩu.");
+    } finally {
+      setChangePasswordLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -457,22 +533,163 @@ function UserProfilePage() {
               <CardContent className="space-y-6">
                 <div>
                   <h4 className="font-bold text-slate-800 mb-4 text-sm uppercase tracking-wide">Tài khoản & Xác thực</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Button variant="outline" onClick={() => router.push("/reset-password")} className="justify-start border-slate-200 py-6 h-auto">
-                      <Settings className="h-5 w-5 mr-3 text-slate-500" />
-                      <div className="text-left">
-                        <div className="font-semibold text-slate-800 text-sm">Đổi mật khẩu</div>
-                        <div className="text-slate-400 text-xs mt-0.5">Nên thay đổi mật khẩu định kỳ để an toàn</div>
-                      </div>
-                    </Button>
-                    <Button variant="outline" disabled className="justify-start border-slate-200 py-6 h-auto opacity-75">
-                      <Shield className="h-5 w-5 mr-3 text-slate-400" />
-                      <div className="text-left">
-                        <div className="font-semibold text-slate-500 text-sm">Bảo mật 2 lớp (2FA)</div>
-                        <div className="text-slate-400 text-xs mt-0.5">Đang phát triển thiết lập an toàn SMS</div>
-                      </div>
-                    </Button>
-                  </div>
+                  {isChangingPassword ? (
+                    <Card className="border border-slate-100 shadow-sm">
+                      <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-sm">Thay đổi mật khẩu tài khoản</h4>
+                          <p className="text-xs text-slate-400 mt-0.5">Mật khẩu mới phải chứa ít nhất 6 ký tự</p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setIsChangingPassword(false);
+                            setOldPassword("");
+                            setNewPassword("");
+                            setConfirmPassword("");
+                            setChangePasswordError(null);
+                            setChangePasswordSuccess(null);
+                          }}
+                          className="text-slate-400 hover:text-slate-600 text-xs"
+                        >
+                          Hủy bỏ
+                        </Button>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {changePasswordError && (
+                          <div className="p-3 bg-red-50 text-red-600 border border-red-100 text-xs rounded-xl font-medium">
+                            {changePasswordError}
+                          </div>
+                        )}
+                        {changePasswordSuccess && (
+                          <div className="p-3 bg-emerald-50 text-emerald-700 border border-emerald-100 text-xs rounded-xl font-medium">
+                            {changePasswordSuccess}
+                          </div>
+                        )}
+                        <form onSubmit={handleChangePassword} className="space-y-4">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-600">Mật khẩu hiện tại</Label>
+                            <div className="relative">
+                              <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                              <Input
+                                type={showOldPassword ? "text" : "password"}
+                                placeholder="••••••••"
+                                className="pl-10 pr-10 border-slate-200 focus-visible:ring-primary h-9 text-sm"
+                                value={oldPassword}
+                                onChange={(e) => setOldPassword(e.target.value)}
+                                required
+                              />
+                              <button
+                                type="button"
+                                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                                onClick={() => setShowOldPassword(!showOldPassword)}
+                              >
+                                {showOldPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-600">Mật khẩu mới</Label>
+                            <div className="relative">
+                              <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                              <Input
+                                type={showNewPassword ? "text" : "password"}
+                                placeholder="••••••••"
+                                className="pl-10 pr-10 border-slate-200 focus-visible:ring-primary h-9 text-sm"
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                required
+                              />
+                              <button
+                                type="button"
+                                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                                onClick={() => setShowNewPassword(!showNewPassword)}
+                              >
+                                {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              </button>
+                            </div>
+                            {newPassword && (() => {
+                              const strength = getPasswordStrength(newPassword);
+                              return (
+                                <div className="space-y-1 mt-1.5">
+                                  <div className="flex justify-between items-center text-[10px]">
+                                    <span className="text-slate-400">Độ mạnh mật khẩu:</span>
+                                    <span className={`font-semibold ${strength.color}`}>{strength.label}</span>
+                                  </div>
+                                  <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div
+                                      className={`h-full ${strength.progressColor} transition-all duration-300`}
+                                      style={{ width: `${strength.percentage}%` }}
+                                    ></div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-600">Xác nhận mật khẩu mới</Label>
+                            <div className="relative">
+                              <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                              <Input
+                                type={showConfirmPassword ? "text" : "password"}
+                                placeholder="••••••••"
+                                className="pl-10 pr-10 border-slate-200 focus-visible:ring-primary h-9 text-sm"
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                required
+                              />
+                              <button
+                                type="button"
+                                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                              >
+                                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <Button type="submit" disabled={changePasswordLoading} className="w-full mt-2 h-9 text-sm">
+                            {changePasswordLoading ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Đang lưu mật khẩu mới...
+                              </>
+                            ) : (
+                              "Lưu mật khẩu mới"
+                            )}
+                          </Button>
+                        </form>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsChangingPassword(true)}
+                        className="justify-start border-slate-200 py-6 h-auto hover:bg-slate-50 transition-colors"
+                      >
+                        <Lock className="h-5 w-5 mr-3 text-slate-500" />
+                        <div className="text-left">
+                          <div className="font-semibold text-slate-800 text-sm">Đổi mật khẩu</div>
+                          <div className="text-slate-400 text-xs mt-0.5">Nên thay đổi mật khẩu định kỳ để an toàn</div>
+                        </div>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        disabled
+                        className="justify-start border-slate-200 py-6 h-auto opacity-75"
+                      >
+                        <Shield className="h-5 w-5 mr-3 text-slate-400" />
+                        <div className="text-left">
+                          <div className="font-semibold text-slate-500 text-sm">Bảo mật 2 lớp (2FA)</div>
+                          <div className="text-slate-400 text-xs mt-0.5">Đang phát triển thiết lập an toàn SMS</div>
+                        </div>
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
                 <Separator className="bg-slate-100" />
