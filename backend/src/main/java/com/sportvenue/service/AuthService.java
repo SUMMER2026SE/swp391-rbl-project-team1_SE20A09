@@ -1,5 +1,7 @@
 package com.sportvenue.service;
 
+import com.sportvenue.dto.ForgotPasswordRequest;
+import com.sportvenue.dto.ResetPasswordRequest;
 import com.sportvenue.dto.request.GoogleLoginRequest;
 import com.sportvenue.dto.request.LoginRequest;
 import com.sportvenue.dto.request.RegisterRequest;
@@ -16,4 +18,8 @@ public interface AuthService {
     AuthResponse login(LoginRequest request);
 
     AuthResponse googleLogin(GoogleLoginRequest request);
+
+    void forgotPassword(ForgotPasswordRequest request);
+
+    void resetPassword(ResetPasswordRequest request);
 }

@@ -57,6 +57,32 @@ public class EmailService {
         }
     }
 
+    /**
+     * Gửi email OTP khôi phục mật khẩu.
+     */
+    public void sendResetPasswordOtpEmail(String toEmail, String otp) {
+        log.info("Preparing to send OTP reset password email to: {}", toEmail);
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(fromAddress);
+            message.setTo(toEmail);
+            message.setSubject("🔑 Mã OTP Khôi Phục Mật Khẩu — SportVenue");
+
+            String textContent = "Xin chào,\n\n" +
+                    "Bạn đã yêu cầu khôi phục mật khẩu cho tài khoản SportVenue.\n" +
+                    "Mã OTP của bạn là: " + otp + "\n\n" +
+                    "Mã OTP này có hiệu lực trong vòng 5 phút. Vui lòng nhập mã này vào trang khôi phục để đặt lại mật khẩu mới.\n\n" +
+                    "Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.";
+
+            message.setText(textContent);
+
+            mailSender.send(message);
+            log.info("OTP reset password email successfully sent to: {}", toEmail);
+        } catch (MailException e) {
+            log.error("Failed to send OTP reset password email to: {}, error: {}", toEmail, e.getMessage());
+        }
+    }
+
     private String buildOtpEmailBody(String otpCode, int expiryMinutes) {
         return """
                 Hello,

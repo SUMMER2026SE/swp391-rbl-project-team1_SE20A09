@@ -1,5 +1,7 @@
 package com.sportvenue.controller;
 
+import com.sportvenue.dto.ForgotPasswordRequest;
+import com.sportvenue.dto.ResetPasswordRequest;
 import com.sportvenue.dto.request.GoogleLoginRequest;
 import com.sportvenue.dto.request.LoginRequest;
 import com.sportvenue.dto.request.RegisterRequest;
@@ -19,9 +21,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * Authentication endpoints.
- */
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
@@ -81,5 +82,20 @@ public class AuthController {
                 .accountStatus(user.getAccountStatus())
                 .build();
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/forgot-password")
+    @Operation(summary = "Yêu cầu khôi phục mật khẩu", description = "Gửi mã khôi phục mật khẩu qua email cho người dùng")
+    public ResponseEntity<Map<String, String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        authService.forgotPassword(request);
+        return ResponseEntity.ok(
+                Map.of("message", "Nếu email tồn tại trên hệ thống, một liên kết khôi phục mật khẩu đã được gửi đi."));
+    }
+
+    @PostMapping("/reset-password")
+    @Operation(summary = "Đặt lại mật khẩu mới", description = "Sử dụng token được cung cấp để đặt mật khẩu mới cho tài khoản")
+    public ResponseEntity<Map<String, String>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.ok(Map.of("message", "Mật khẩu của bạn đã được thay đổi thành công."));
     }
 }

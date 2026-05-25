@@ -79,7 +79,7 @@ management:
 app:
   jwt:
     secret: ${JWT_SECRET:dev_secret_key_please_change_in_production_min_256_bits}
-    access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:900}
+    access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:86400}
     refresh-token-expiry: ${JWT_REFRESH_TOKEN_EXPIRY:604800}
   otp:
     expiry-minutes: ${OTP_EXPIRY_MINUTES:5}

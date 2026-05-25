@@ -32,7 +32,7 @@ public class JwtTokenProvider {
         byte[] keyBytes;
         if (jwtSecret.length() < 32) {
             log.warn("JWT Secret is too short. Generating a secure key for local development.");
-            this.key = Keys.secretKeyFor(io.jsonwebtoken.SignatureAlgorithm.HS256);
+            this.key = Jwts.SIG.HS256.key().build();
         } else {
             keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
             this.key = Keys.hmacShaKeyFor(keyBytes);
