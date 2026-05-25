@@ -68,7 +68,9 @@ public class RateLimitingFilter extends OncePerRequestFilter {
 
     private void handleLimitExceeded(HttpServletResponse response, long nanosToWait) throws IOException {
         long minutesToWait = nanosToWait / 1_000_000_000 / 60;
-        if (minutesToWait == 0) minutesToWait = 1;
+        if (minutesToWait == 0) {
+            minutesToWait = 1;
+        }
 
         ErrorResponse errorResponse = ErrorResponse.of(
                 HttpStatus.TOO_MANY_REQUESTS.value(),
