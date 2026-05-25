@@ -45,6 +45,13 @@ spring:
       password: ${SPRING_DATA_REDIS_PASSWORD:}
       timeout: 2000ms
 
+  # ── Caching (Redis) ────────────────────────────────────
+  cache:
+    type: redis
+    redis:
+      time-to-live: 3600000       # TTL: 1 giờ
+      cache-null-values: false
+
   # ── Mail ───────────────────────────────────────────────
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
