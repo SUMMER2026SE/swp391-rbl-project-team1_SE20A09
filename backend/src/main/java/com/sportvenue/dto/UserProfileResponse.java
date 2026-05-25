@@ -15,4 +15,6 @@ public record UserProfileResponse(
     String userRank,
     String accountStatus,
     LocalDateTime createdAt
-) {}
+) {
+}
+
