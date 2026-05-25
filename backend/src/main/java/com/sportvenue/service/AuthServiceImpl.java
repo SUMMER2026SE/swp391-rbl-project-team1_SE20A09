@@ -238,12 +238,12 @@ public class AuthServiceImpl implements AuthService {
         String email = request.getEmail().trim().toLowerCase();
         log.info("Received forgot password request for email: {}", email);
 
-        // Security mitigation: Rate Limiting to prevent email flooding (limit 1 request per 2 minutes per email)
+        // Security mitigation: Rate Limiting to prevent email flooding (limit 1 request per 5 minutes per email)
         String rateLimitKey = "forgot-password:rate-limit:" + email;
         Boolean isRateLimited = redisTemplate.hasKey(rateLimitKey);
         if (Boolean.TRUE.equals(isRateLimited)) {
             log.warn("Forgot password request rate limited for email: {}", email);
-            throw new BadRequestException("Vui lòng đợi 2 phút trước khi yêu cầu lại mã khôi phục.");
+            throw new BadRequestException("Vui lòng đợi 5 phút trước khi yêu cầu lại mã khôi phục.");
         }
 
         // Check if user exists
@@ -252,7 +252,7 @@ public class AuthServiceImpl implements AuthService {
             // Mitigate User Enumeration: Log but do not throw exception, return successfully to the client
             log.warn("Forgot password request for non-existent email: {}", email);
             // Still set a generic rate limit key to match response times and prevent timing attacks
-            redisTemplate.opsForValue().set(rateLimitKey, "true", 2, TimeUnit.MINUTES);
+            redisTemplate.opsForValue().set(rateLimitKey, "true", 5, TimeUnit.MINUTES);
             return;
         }
 
@@ -268,8 +268,8 @@ public class AuthServiceImpl implements AuthService {
         String otpKey = "reset:otp:" + email;
         redisTemplate.opsForValue().set(otpKey, otp, 5, TimeUnit.MINUTES);
 
-        // Set rate limit key for 2 minutes
-        redisTemplate.opsForValue().set(rateLimitKey, "true", 2, TimeUnit.MINUTES);
+        // Set rate limit key for 5 minutes
+        redisTemplate.opsForValue().set(rateLimitKey, "true", 5, TimeUnit.MINUTES);
 
         // Send email with OTP
         emailService.sendResetPasswordOtpEmail(email, otp);
