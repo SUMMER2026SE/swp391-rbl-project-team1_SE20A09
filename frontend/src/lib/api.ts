@@ -17,6 +17,10 @@ const api: AxiosInstance = axios.create({
 // ── Request interceptor: đính kèm JWT token ──────────────
 api.interceptors.request.use(
   (config) => {
+    // FormData: để trình duyệt tự gắn boundary (tránh lỗi upload multipart)
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type']
+    }
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('access_token')
       if (token) {
@@ -42,11 +46,22 @@ api.interceptors.response.use(
       // if (newToken) { ... retry ... }
     }
 
-    // Chuẩn hóa error message
-    const message =
-      (error.response?.data as { message?: string })?.message ??
+    const data = error.response?.data as {
+      message?: string
+      errors?: Record<string, string>
+    }
+    const validationMessage = data?.errors
+      ? Object.values(data.errors)[0]
+      : undefined
+    let message =
+      validationMessage ??
+      data?.message ??
       error.message ??
       'Đã xảy ra lỗi, vui lòng thử lại'
+
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      message = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng xuất và đăng nhập lại.'
+    }
 
     return Promise.reject(new Error(message))
   }
@@ -78,5 +93,24 @@ export async function patch<T>(url: string, data?: unknown, config?: AxiosReques
 
 export async function del<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
   const res = await api.delete<T>(url, config)
+  return res.data
+}
+
+export type FileUploadResult = {
+  url: string
+  fileName: string
+}
+
+/** Upload ảnh đại diện (multipart) */
+export async function uploadAvatar(file: File): Promise<FileUploadResult> {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const token =
+    typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
+
+  const res = await api.post<FileUploadResult>('/files/avatar', formData, {
+    timeout: 60_000,
+  })
   return res.data
 }

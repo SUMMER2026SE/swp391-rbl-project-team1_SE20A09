@@ -8,7 +8,9 @@ import com.sportvenue.dto.AuthResponse;
 import com.sportvenue.dto.GoogleLoginRequest;
 import com.sportvenue.dto.LoginRequest;
 import com.sportvenue.dto.RegisterRequest;
+import com.sportvenue.dto.UpdateProfileRequest;
 import com.sportvenue.dto.UserResponse;
+import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.entity.Role;
 import com.sportvenue.entity.User;
 import com.sportvenue.exception.BadRequestException;
@@ -195,6 +197,45 @@ public class AuthServiceImpl implements AuthService {
             log.error("Lỗi xác thực Google ID Token: {}", e.getMessage());
             throw new BadRequestException("Không thể xác thực Google ID Token: " + e.getMessage());
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserResponse getCurrentUser(UserPrincipal userPrincipal) {
+        User user = requireAuthenticatedUser(userPrincipal);
+        return mapToUserResponse(user);
+    }
+
+    @Override
+    @Transactional
+    public UserResponse updateProfile(UserPrincipal userPrincipal, UpdateProfileRequest request) {
+        User user = requireAuthenticatedUser(userPrincipal);
+
+        String phoneNumber = request.getPhoneNumber().trim();
+        if (userRepository.existsByPhoneNumberAndUserIdNot(phoneNumber, user.getUserId())) {
+            throw new BadRequestException("Số điện thoại này đã được sử dụng.");
+        }
+
+        user.setFirstName(request.getFirstName().trim());
+        user.setLastName(request.getLastName() != null ? request.getLastName().trim() : "");
+        user.setPhoneNumber(phoneNumber);
+
+        String avatarUrl = request.getAvatarUrl();
+        if (avatarUrl != null) {
+            String trimmed = avatarUrl.trim();
+            user.setAvatarUrl(trimmed.isEmpty() ? null : trimmed);
+        }
+
+        user = userRepository.save(user);
+        log.info("Profile updated for user: {}", user.getEmail());
+        return mapToUserResponse(user);
+    }
+
+    private User requireAuthenticatedUser(UserPrincipal userPrincipal) {
+        if (userPrincipal == null) {
+            throw new BadRequestException("Bạn cần đăng nhập để thực hiện thao tác này.");
+        }
+        return userPrincipal.getUser();
     }
 
     private String generateUniquePhoneNumber() {

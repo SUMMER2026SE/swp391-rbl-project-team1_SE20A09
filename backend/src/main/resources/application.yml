@@ -29,6 +29,11 @@ spring:
       password: ${SPRING_DATA_REDIS_PASSWORD:}
       timeout: 2000ms
 
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
+
   # ── Mail ───────────────────────────────────────────────
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
@@ -67,6 +72,9 @@ app:
     refresh-token-expiry: ${JWT_REFRESH_TOKEN_EXPIRY:604800}
   google:
     client-id: ${GOOGLE_CLIENT_ID:}
+  files:
+    upload-dir: ${FILE_UPLOAD_DIR:uploads}
+    base-url: ${FILE_BASE_URL:http://localhost:8080}
 
 # ── Swagger / SpringDoc ───────────────────────────────────
 springdoc:
