@@ -1,30 +1,4 @@
 # ── Dev profile — override application.yml ──
 spring:
-  datasource:
-    # Hardcode dev values để tránh lỗi env var trên Windows khi dùng mvnw
-    # Thay đổi nếu bạn dùng password khác trong Docker
-    url: jdbc:postgresql://localhost:5433/sportvenue
-    username: sportvenue_user
-    password: changeme
-    driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: 5
-      minimum-idle: 2
-
   jpa:
     show-sql: true
-    hibernate:
-      ddl-auto: validate
-
-  flyway:
-    enabled: true
-
-logging:
-  level:
-    com.sportvenue: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.orm.jdbc.bind: TRACE
-
-springdoc:
-  swagger-ui:
-    enabled: true
