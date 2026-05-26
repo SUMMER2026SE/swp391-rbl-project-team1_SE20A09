@@ -1,42 +1,32 @@
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import { Toaster } from "sonner";
+import NextAuthProvider from "@/components/providers/NextAuthProvider";
 
 const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-})
+  subsets: ["latin", "vietnamese"],
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
-  title: {
-    default: '🏟️ Sport Venue — Đặt Sân Thể Thao Trực Tuyến',
-    template: '%s | Sport Venue',
-  },
-  description:
-    'Nền tảng đặt sân thể thao trực tuyến — tìm kiếm, đặt lịch, thanh toán và kết nối cộng đồng thể thao trong một ứng dụng duy nhất.',
-  keywords: ['đặt sân', 'thể thao', 'sân bóng đá', 'cầu lông', 'tennis', 'sport venue'],
-  authors: [{ name: 'Team 1 — SE20A09' }],
-  robots: {
-    index: true,
-    follow: true,
-  },
-}
-
-import NextAuthProvider from '@/components/providers/NextAuthProvider'
+  title: "SportVenue - Hệ thống đặt sân thể thao trực tuyến",
+  description: "Đặt sân bóng đá, cầu lông, tennis và nhiều môn thể thao khác một cách dễ dàng và nhanh chóng.",
+};
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode
+  children: React.ReactNode;
 }>) {
   return (
     <html lang="vi" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
         <NextAuthProvider>
           {children}
+          <Toaster position="top-right" richColors />
         </NextAuthProvider>
       </body>
     </html>
-  )
+  );
 }

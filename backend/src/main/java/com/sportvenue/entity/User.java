@@ -1,7 +1,5 @@
 package com.sportvenue.entity;
 
-import java.time.LocalDateTime;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -11,20 +9,32 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.io.Serializable;
+import java.time.LocalDateTime;
+
+/**
+ * Entity ánh xạ bảng users.
+ */
 @Entity
-@Table(name = "users")
+@Table(name = "users", uniqueConstraints = {
+        @UniqueConstraint(columnNames = "email"),
+        @UniqueConstraint(columnNames = "phone_number")
+})
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class User {
+public class User implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -47,6 +57,7 @@ public class User {
     @Column(name = "email", nullable = false, unique = true, length = 100)
     private String email;
 
+    /** Mật khẩu đã được hash bằng BCrypt — không bao giờ lưu plain text. */
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
@@ -63,7 +74,12 @@ public class User {
 
     @Column(name = "account_status", nullable = false, length = 20)
     @Builder.Default
-    private String accountStatus = "Active";
+    private String accountStatus = "Pending";
+
+    /** false = chưa xác thực email, true = đã xác thực. */
+    @Column(name = "is_verified", nullable = false)
+    @Builder.Default
+    private Boolean isVerified = false;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
