@@ -6,6 +6,8 @@ import com.sportvenue.dto.UpdateProfileRequest;
 import com.sportvenue.dto.request.GoogleLoginRequest;
 import com.sportvenue.dto.request.LoginRequest;
 import com.sportvenue.dto.request.RegisterRequest;
+import com.sportvenue.dto.request.ResendOtpRequest;
+import com.sportvenue.dto.request.VerifyOtpRequest;
 import com.sportvenue.dto.response.AuthResponse;
 import com.sportvenue.dto.response.MessageResponse;
 import com.sportvenue.dto.response.UserResponse;
@@ -24,7 +26,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -46,14 +47,14 @@ public class AuthController {
 
     @PostMapping("/verify-otp")
     @Operation(summary = "Xác thực OTP", description = "Xác thực mã OTP và kích hoạt tài khoản, trả về JWT token")
-    public ResponseEntity<AuthResponse> verifyOtp(@RequestParam String email, @RequestParam String otpCode) {
-        return ResponseEntity.ok(authService.verifyOtp(email, otpCode));
+    public ResponseEntity<AuthResponse> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        return ResponseEntity.ok(authService.verifyOtp(request.getEmail(), request.getOtpCode()));
     }
 
     @PostMapping("/resend-otp")
     @Operation(summary = "Gửi lại OTP", description = "Gửi lại mã OTP mới vào email")
-    public ResponseEntity<MessageResponse> resendOtp(@RequestParam String email) {
-        return ResponseEntity.ok(authService.resendOtp(email));
+    public ResponseEntity<MessageResponse> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
+        return ResponseEntity.ok(authService.resendOtp(request.getEmail()));
     }
 
     @PostMapping("/login")

@@ -1,8 +1,7 @@
 package com.sportvenue.service;
 
 import com.sportvenue.exception.EmailDeliveryException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import jakarta.annotation.PostConstruct;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
@@ -19,9 +18,8 @@ import org.springframework.util.StringUtils;
  * Reusable email service — dùng chung cho OTP, thông báo booking, v.v.
  */
 @Service
+@Slf4j
 public class EmailService {
-
-    private static final Logger LOG = LoggerFactory.getLogger(EmailService.class);
 
     private final JavaMailSender mailSender;
 
@@ -42,13 +40,13 @@ public class EmailService {
     @PostConstruct
     void logMailConfiguration() {
         if (mockMail) {
-            LOG.warn("app.mail.mock=true — OTP will be logged here only, not sent via SMTP");
+            log.warn("app.mail.mock=true — OTP will be logged here only, not sent via SMTP");
             return;
         }
         if (!StringUtils.hasText(smtpUsername)) {
-            LOG.warn("MAIL_USERNAME is empty — OTP emails will fail. Set SMTP in backend/.env or MAIL_MOCK=true");
+            log.warn("MAIL_USERNAME is empty — OTP emails will fail. Set SMTP in backend/.env or MAIL_MOCK=true");
         } else {
-            LOG.info("SMTP enabled: from={} via host user={}", fromAddress, smtpUsername);
+            log.info("SMTP enabled: from={} via host user={}", fromAddress, smtpUsername);
         }
     }
 
@@ -58,7 +56,7 @@ public class EmailService {
     @Async
     public void sendOtpEmail(String toEmail, String otpCode, int expiryMinutes) {
         if (mockMail) {
-            LOG.warn("=== DEV MAIL MOCK === OTP for {}: {} (expires in {} min) ===", toEmail, otpCode, expiryMinutes);
+            log.warn("=== DEV MAIL MOCK === OTP for {}: {} (expires in {} min) ===", toEmail, otpCode, expiryMinutes);
             return;
         }
 
@@ -70,9 +68,9 @@ public class EmailService {
             helper.setSubject("SportVenue — Mã OTP xác thực đăng ký");
             helper.setText(buildOtpEmailBody(otpCode, expiryMinutes), true);
             mailSender.send(mimeMessage);
-            LOG.info("OTP email sent to {}", toEmail);
+            log.info("OTP email sent to {}", toEmail);
         } catch (MailException | MessagingException ex) {
-            LOG.error(
+            log.error(
                     "Failed to send OTP to {}. OTP (dev fallback): {} — fix backend/.env SMTP",
                     toEmail, otpCode, ex
             );
@@ -89,11 +87,11 @@ public class EmailService {
     @Async
     public void sendResetPasswordOtpEmail(String toEmail, String otp) {
         if (mockMail) {
-            LOG.warn("=== DEV MAIL MOCK === Reset OTP for {}: {} ===", toEmail, otp);
+            log.warn("=== DEV MAIL MOCK === Reset OTP for {}: {} ===", toEmail, otp);
             return;
         }
 
-        LOG.info("Preparing to send OTP reset password email to: {}", toEmail);
+        log.info("Preparing to send OTP reset password email to: {}", toEmail);
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromAddress);
@@ -109,9 +107,9 @@ public class EmailService {
             message.setText(textContent);
 
             mailSender.send(message);
-            LOG.info("OTP reset password email successfully sent to: {}", toEmail);
+            log.info("OTP reset password email successfully sent to: {}", toEmail);
             } catch (MailException e) {
-            LOG.error("Failed to send OTP reset password email to: {}, error: {}", toEmail, e.getMessage());
+            log.error("Failed to send OTP reset password email to: {}, error: {}", toEmail, e.getMessage());
             }
     }
 

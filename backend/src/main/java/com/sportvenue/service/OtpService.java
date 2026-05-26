@@ -5,8 +5,7 @@ import com.sportvenue.entity.User;
 import com.sportvenue.exception.EmailDeliveryException;
 import com.sportvenue.repository.OtpTokenRepository;
 import com.sportvenue.util.OtpGenerator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,9 +20,8 @@ import com.sportvenue.repository.UserRepository;
  * Service quản lý OTP — tạo, lưu và kiểm tra hết hạn.
  */
 @Service
+@Slf4j
 public class OtpService {
-
-    private static final Logger LOG = LoggerFactory.getLogger(OtpService.class);
 
     private final OtpTokenRepository otpTokenRepository;
     private final UserRepository userRepository;
@@ -72,7 +70,7 @@ public class OtpService {
         otpTokenRepository.save(otpToken);
         userRepository.save(user);
         
-        LOG.info("User {} verified successfully via OTP", email);
+        log.info("User {} verified successfully via OTP", email);
     }
 
     /**
@@ -96,7 +94,7 @@ public class OtpService {
             emailService.sendOtpEmail(user.getEmail(), otpCode, expiryMinutes);
         } catch (EmailDeliveryException ex) {
             // OTP đã lưu DB — không rollback đăng ký vì lỗi SMTP
-            LOG.warn("OTP saved for {} but email failed. Code: {} — check logs or resend later.",
+            log.warn("OTP saved for {} but email failed. Code: {} — check logs or resend later.",
                     user.getEmail(), otpCode, ex);
         }
         return saved;
