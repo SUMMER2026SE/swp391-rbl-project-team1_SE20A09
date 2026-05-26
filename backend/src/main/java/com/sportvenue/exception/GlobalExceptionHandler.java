@@ -1,58 +1,89 @@
 package com.sportvenue.exception;
 
+import com.sportvenue.dto.response.ErrorResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 
+/**
+ * Global exception handler — chuẩn hóa error response cho toàn bộ API.
+ */
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(AppException.class)
+    public ResponseEntity<ErrorResponse> handleAppException(AppException ex) {
+        ErrorCode errorCode = ex.getErrorCode();
+        return ResponseEntity.status(errorCode.getStatus())
+                .body(ErrorResponse.of(errorCode.getStatus(), errorCode.getMessage()));
+    }
+
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<Map<String, String>> handleNotFound(ResourceNotFoundException e) {
-        Map<String, String> response = new HashMap<>();
-        response.put("message", e.getMessage());
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(HttpStatus.NOT_FOUND.value(), ex.getMessage()));
     }
 
     @ExceptionHandler(BadRequestException.class)
-    public ResponseEntity<Map<String, String>> handleBadRequest(BadRequestException e) {
-        Map<String, String> response = new HashMap<>();
-        response.put("message", e.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    public ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(HttpStatus.BAD_REQUEST.value(), ex.getMessage()));
     }
 
     @ExceptionHandler(AuthenticationException.class)
-    public ResponseEntity<Map<String, String>> handleUnauthorized(AuthenticationException e) {
-        Map<String, String> response = new HashMap<>();
-        response.put("message", "Xác thực không thành công: " + e.getMessage());
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+    public ResponseEntity<ErrorResponse> handleUnauthorized(AuthenticationException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ErrorResponse.of(HttpStatus.UNAUTHORIZED.value(), "Xác thực không thành công: " + ex.getMessage()));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex) {
+        log.warn("Data integrity violation", ex);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(HttpStatus.CONFLICT.value(), "Dữ liệu đã tồn tại hoặc vi phạm ràng buộc hệ thống."));
+    }
+
+    @ExceptionHandler(DuplicateResourceException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicate(DuplicateResourceException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(HttpStatus.CONFLICT.value(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(EmailDeliveryException.class)
+    public ResponseEntity<ErrorResponse> handleEmailDelivery(EmailDeliveryException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ErrorResponse.of(HttpStatus.BAD_GATEWAY.value(), ex.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, Object>> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        Map<String, Object> response = new HashMap<>();
-        Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getAllErrors().forEach((error) -> {
-            String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
-        });
-        response.put("message", "Dữ liệu đầu vào không hợp lệ");
-        response.put("errors", errors);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
+        List<String> errors = ex.getBindingResult().getFieldErrors().stream()
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .toList();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        "Dữ liệu đầu vào không hợp lệ",
+                        errors
+                ));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, String>> handleGenericException(Exception e) {
-        Map<String, String> response = new HashMap<>();
-        response.put("message", "Hệ thống gặp lỗi: " + e.getMessage());
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+    public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex) {
+        log.error("Unhandled exception", ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse.of(
+                        HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                        "Hệ thống gặp lỗi: " + ex.getMessage()
+                ));
     }
 }

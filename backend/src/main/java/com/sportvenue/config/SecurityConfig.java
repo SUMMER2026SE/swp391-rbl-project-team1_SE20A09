@@ -1,6 +1,7 @@
 package com.sportvenue.config;
 
 import com.sportvenue.security.JwtAuthenticationFilter;
+import com.sportvenue.security.RateLimitingFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,7 +15,6 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -31,7 +31,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final UserDetailsService userDetailsService;
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final PasswordEncoder passwordEncoder;
 
     private static final String[] PUBLIC_ENDPOINTS = {
             "/api/v1/hello",
@@ -45,15 +45,10 @@ public class SecurityConfig {
     };
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-
-    @Bean
     public DaoAuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
         authProvider.setUserDetailsService(userDetailsService);
-        authProvider.setPasswordEncoder(passwordEncoder());
+        authProvider.setPasswordEncoder(passwordEncoder);
         return authProvider;
     }
 
@@ -63,7 +58,9 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(
+            HttpSecurity http,
+            JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -75,9 +72,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/avatars/**").permitAll()
                         .requestMatchers("/api/v1/files/**").authenticated()
                         .anyRequest().authenticated()
-                );
-
-        http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                )
+                .addFilterBefore(new RateLimitingFilter(), UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

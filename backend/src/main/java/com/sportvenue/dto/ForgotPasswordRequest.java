@@ -1,5 +1,6 @@
 package com.sportvenue.dto;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,8 +13,9 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class GoogleLoginRequest {
+public class ForgotPasswordRequest {
 
-    @NotBlank(message = "Google ID Token không được để trống")
-    private String idToken;
+    @NotBlank(message = "Email không được để trống")
+    @Email(message = "Email không đúng định dạng")
+    private String email;
 }

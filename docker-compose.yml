@@ -18,6 +18,8 @@ services:
     image: postgres:16-alpine
     container_name: sportvenue-postgres
     restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-sportvenue}
       POSTGRES_USER: ${POSTGRES_USER:-sportvenue_user}
@@ -25,16 +27,16 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - backend-net                  # FIX: Isolated — frontend không thể access
+      - backend-net # FIX: Isolated — frontend không thể access
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sportvenue_user} -d ${POSTGRES_DB:-sportvenue}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sportvenue_user} -d ${POSTGRES_DB:-sportvenue}" ]
       interval: 10s
       timeout: 5s
       retries: 5
     deploy:
       resources:
         limits:
-          memory: 512m              # FIX: Giới hạn RAM
+          memory: 512m # FIX: Giới hạn RAM
           cpus: '0.5'
 
   # ── Redis ─────────────────────────────────────────────────
@@ -46,9 +48,9 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      - backend-net                  # FIX: Isolated
+      - backend-net # FIX: Isolated
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -73,9 +75,10 @@ services:
     volumes:
       - minio_data:/data
     networks:
-      - backend-net                  # FIX: Isolated
-    healthcheck:                     # FIX: Thêm healthcheck cho MinIO
-      test: ["CMD", "mc", "ready", "local"]
+      - backend-net # FIX: Isolated
+    healthcheck:
+      # FIX: Thêm healthcheck cho MinIO
+      test: [ "CMD", "mc", "ready", "local" ]
       interval: 30s
       timeout: 20s
       retries: 3
@@ -105,7 +108,7 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
-      JWT_SECRET: ${JWT_SECRET}      # Bắt buộc phải set trong .env — không có default!
+      JWT_SECRET: ${JWT_SECRET} # Bắt buộc phải set trong .env — không có default!
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
@@ -115,10 +118,10 @@ services:
     ports:
       - "8080:8080"
     networks:
-      - backend-net                  # Kết nối DB/Redis
-      - frontend-net                 # FIX: Cho phép frontend proxy đến backend
+      - backend-net # Kết nối DB/Redis
+      - frontend-net # FIX: Cho phép frontend proxy đến backend
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/api/v1/hello || exit 1"]
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/api/v1/hello || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -151,13 +154,13 @@ services:
       WS_URL: ws://backend:8080
       # NextAuth
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}    # Bắt buộc phải set
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET} # Bắt buộc phải set
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
     ports:
       - "3000:3000"
     networks:
-      - frontend-net                 # FIX: Chỉ giao tiếp với backend, không với DB
+      - frontend-net # FIX: Chỉ giao tiếp với backend, không với DB
     deploy:
       resources:
         limits:

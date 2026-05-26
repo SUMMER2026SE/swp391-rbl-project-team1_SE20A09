@@ -1,4 +1,4 @@
-package com.sportvenue.dto;
+package com.sportvenue.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

@@ -46,6 +46,7 @@ api.interceptors.response.use(
       // if (newToken) { ... retry ... }
     }
 
+<<<<<<< HEAD
     const data = error.response?.data as {
       message?: string
       errors?: Record<string, string>
@@ -64,6 +65,25 @@ api.interceptors.response.use(
     }
 
     return Promise.reject(new Error(message))
+=======
+    // Chuẩn hóa error message (ưu tiên chi tiết validation từ BE)
+    const data = error.response?.data as {
+      message?: string
+      errors?: string[]
+      error?: string
+    } | undefined
+    const validationDetail = data?.errors?.filter(Boolean).join('; ')
+    const message =
+      validationDetail ||
+      data?.message ||
+      data?.error ||
+      error.message ||
+      'Đã xảy ra lỗi, vui lòng thử lại'
+
+    const customError = new Error(message) as any;
+    customError.status = error.response?.status;
+    return Promise.reject(customError)
+>>>>>>> main
   }
 )
 
