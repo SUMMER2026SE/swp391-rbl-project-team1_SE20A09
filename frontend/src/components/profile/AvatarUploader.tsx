@@ -35,6 +35,28 @@ type PickerDoc = {
   mimeType: string
 }
 
+type GooglePickerCallbackData = {
+  action: string
+  docs?: PickerDoc[]
+}
+
+type GooglePickerBuilder = {
+  addView: (view: unknown) => GooglePickerBuilder
+  setOAuthToken: (token: string) => GooglePickerBuilder
+  setCallback: (cb: (data: GooglePickerCallbackData) => void) => GooglePickerBuilder
+  enableFeature: (feature: string) => GooglePickerBuilder
+  setTitle: (title: string) => GooglePickerBuilder
+  build: () => { setVisible: (visible: boolean) => void }
+}
+
+type GooglePickerApi = {
+  ViewId: { DOCS_IMAGES: string }
+  Action: { PICKED: string }
+  Feature: { NAV_HIDDEN: string }
+  PickerBuilder: new () => GooglePickerBuilder
+  DocsView: new (viewId: string) => unknown
+}
+
 type AvatarUploaderProps = {
   value: string
   onChange: (url: string) => void
@@ -208,38 +230,22 @@ export function AvatarUploader({
         gapi.load('picker', () => resolve())
       })
 
-      const google = window as unknown as {
-        google?: {
-          picker: {
-            ViewId: { DOCS_IMAGES: string }
-            Action: { PICKED: string }
-            Feature: { NAV_HIDDEN: string }
-            PickerBuilder: new () => {
-              addView: (view: unknown) => unknown
-              setOAuthToken: (token: string) => unknown
-              setCallback: (cb: (data: { action: string; docs: PickerDoc[] }) => void) => unknown
-              enableFeature: (f: string) => unknown
-              setTitle: (t: string) => unknown
-              build: () => { setVisible: (v: boolean) => void }
-            }
-            DocsView: new (viewId: string) => unknown
-          }
-        }
-      }
+      const google = window as unknown as { google?: { picker: GooglePickerApi } }
 
-      if (!google.google?.picker) {
+      const pickerApi = google.google?.picker
+      if (!pickerApi) {
         throw new Error('Google Picker chưa sẵn sàng.')
       }
 
-      const view = new google.google.picker.DocsView(google.google.picker.ViewId.DOCS_IMAGES)
-      const picker = new google.google.picker.PickerBuilder()
+      const view = new pickerApi.DocsView(pickerApi.ViewId.DOCS_IMAGES)
+      const picker = new pickerApi.PickerBuilder()
         .addView(view)
         .setOAuthToken(googleAccessToken)
-        .enableFeature(google.google.picker.Feature.NAV_HIDDEN)
+        .enableFeature(pickerApi.Feature.NAV_HIDDEN)
         .setTitle('Chọn ảnh từ Google Drive')
-        .setCallback((data) => {
+        .setCallback((data: GooglePickerCallbackData) => {
           setPickerLoading(false)
-          if (data.action === google.google!.picker.Action.PICKED && data.docs?.[0]) {
+          if (data.action === pickerApi.Action.PICKED && data.docs?.[0]) {
             const doc = data.docs[0]
             downloadDriveFile(doc.id, doc.name, doc.mimeType)
           }
