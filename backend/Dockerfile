@@ -1,37 +1,30 @@
-# ── Stage 1: Build ─────────────────────────────────────────
+# Stage 1: Build
 FROM eclipse-temurin:21-jdk-alpine AS builder
 WORKDIR /app
 
-RUN apk add --no-cache maven
-
+# Copy Maven wrapper and pom.xml first (take advantage of Docker layer cache)
+COPY mvnw .
+COPY .mvn .mvn
 COPY pom.xml .
-RUN mvn dependency:go-offline -B
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-# Fix Windows line endings (CRLF → LF) using sed, then make executable
-=======
-# Fix line endings (CRLF to LF) for Windows compatibility and make executable
->>>>>>> af0f783c01c48b5748e64259381d94628f8aaf9e
+# Fix Windows line endings (CRLF to LF) using sed, then make executable
 RUN sed -i 's/\r$//' mvnw && chmod +x mvnw
-# Download dependencies trước khi copy source (cache layer)
+# Download dependencies before copying source (cache layer)
 RUN ./mvnw dependency:go-offline -B
 
-# Copy source code và build
->>>>>>> main
+# Copy source code and build
 COPY src ./src
-RUN mvn package -DskipTests -B
+RUN ./mvnw package -DskipTests -B
 
-# ── Stage 2: Runtime ───────────────────────────────────────
+# Stage 2: Runtime
 FROM eclipse-temurin:21-jre-alpine AS runtime
 WORKDIR /app
 
+# Install curl for healthcheck
 RUN apk add --no-cache curl
 
-RUN addgroup -S sportvenue && adduser -S sportvenue -G sportvenue \
-    && mkdir -p /app/uploads/avatars \
-    && chown -R sportvenue:sportvenue /app/uploads
+# Create non-root user for security
+RUN addgroup -S sportvenue && adduser -S sportvenue -G sportvenue
 USER sportvenue
 
 COPY --from=builder /app/target/*.jar app.jar
