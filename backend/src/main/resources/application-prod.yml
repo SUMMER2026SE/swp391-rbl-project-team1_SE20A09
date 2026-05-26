@@ -32,4 +32,4 @@ springdoc:
 
 app:
   mail:
-    mock: false
+    mock: ${MAIL_MOCK:false}

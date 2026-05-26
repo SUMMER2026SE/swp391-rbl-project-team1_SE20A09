@@ -17,6 +17,9 @@ const api: AxiosInstance = axios.create({
 // ── Request interceptor: đính kèm JWT token ──────────────
 api.interceptors.request.use(
   (config) => {
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type']
+    }
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('access_token')
       if (token) {
@@ -34,37 +37,42 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean }
 
-    // 401: thử refresh token một lần
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
-      // TODO: implement token refresh logic
-      // const newToken = await refreshToken()
-      // if (newToken) { ... retry ... }
     }
 
-    // Chuẩn hóa error message (ưu tiên chi tiết validation từ BE)
     const data = error.response?.data as {
       message?: string
-      errors?: string[]
+      errors?: Record<string, string> | string[]
       error?: string
     } | undefined
-    const validationDetail = data?.errors?.filter(Boolean).join('; ')
-    const message =
-      validationDetail ||
-      data?.message ||
-      data?.error ||
-      error.message ||
+
+    const validationFromRecord = data?.errors && !Array.isArray(data.errors)
+      ? Object.values(data.errors)[0]
+      : undefined
+    const validationFromArray = Array.isArray(data?.errors)
+      ? data.errors.filter(Boolean).join('; ')
+      : undefined
+
+    let message =
+      validationFromRecord ??
+      validationFromArray ??
+      data?.message ??
+      data?.error ??
+      error.message ??
       'Đã xảy ra lỗi, vui lòng thử lại'
 
-    const customError = new Error(message) as any;
-    customError.status = error.response?.status;
+    if (error.response?.status === 401) {
+      message = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+    }
+
+    const customError = new Error(message) as Error & { status?: number }
+    customError.status = error.response?.status
     return Promise.reject(customError)
   }
 )
 
 export default api
-
-// ── Typed helpers ─────────────────────────────────────────
 
 export async function get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
   const res = await api.get<T>(url, config)
@@ -88,5 +96,19 @@ export async function patch<T>(url: string, data?: unknown, config?: AxiosReques
 
 export async function del<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
   const res = await api.delete<T>(url, config)
+  return res.data
+}
+
+export type FileUploadResult = {
+  url: string
+  fileName: string
+}
+
+export async function uploadAvatar(file: File): Promise<FileUploadResult> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await api.post<FileUploadResult>('/files/avatar', formData, {
+    timeout: 60_000,
+  })
   return res.data
 }

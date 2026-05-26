@@ -115,6 +115,11 @@ services:
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      FILE_UPLOAD_DIR: /app/uploads
+      FILE_BASE_URL: ${FILE_BASE_URL:-http://localhost:8080}
+      MAIL_MOCK: ${MAIL_MOCK:-true}
+    volumes:
+      - ./backend/uploads:/app/uploads
     ports:
       - "8080:8080"
     networks:

@@ -9,6 +9,11 @@ const nextConfig = {
         port: '9000',          // MinIO dev
       },
       {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '8080',          // Avatar uploads từ backend
+      },
+      {
         protocol: 'https',
         hostname: '*.amazonaws.com',   // AWS S3 production
       },

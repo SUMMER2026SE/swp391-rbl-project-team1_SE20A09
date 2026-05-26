@@ -5,6 +5,7 @@ import com.sportvenue.security.RateLimitingFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -68,6 +69,8 @@ public class SecurityConfig {
                 .authenticationProvider(authenticationProvider())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/files/avatars/**").permitAll()
+                        .requestMatchers("/api/v1/files/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(new RateLimitingFilter(), UsernamePasswordAuthenticationFilter.class)
