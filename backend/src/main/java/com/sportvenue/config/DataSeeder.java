@@ -5,8 +5,7 @@ import com.sportvenue.entity.User;
 import com.sportvenue.repository.RoleRepository;
 import com.sportvenue.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -18,9 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class DataSeeder implements CommandLineRunner {
-
-    private static final Logger LOG = LoggerFactory.getLogger(DataSeeder.class);
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -34,7 +32,7 @@ public class DataSeeder implements CommandLineRunner {
         seedUser("admin@sportvenue.com", "Admin", "System", "0900000001", "Admin");
         seedUser("owner@sportvenue.com", "Hoàng", "Mai Huy", "0900000002", "Owner");
         seedUser("customer@sportvenue.com", "Hoàng", "Mai Huy", "0912345678", "Customer");
-        LOG.info("✅ DataSeeder: Seed accounts verified/updated.");
+        log.info("✅ DataSeeder: Seed accounts verified/updated.");
     }
 
     private void seedUser(String email, String firstName, String lastName,
@@ -48,7 +46,7 @@ public class DataSeeder implements CommandLineRunner {
             if (!passwordEncoder.matches(SEED_PASSWORD, user.getPasswordHash())) {
                 user.setPasswordHash(encodedPassword);
                 userRepository.save(user);
-                LOG.info("🔑 Updated password for seed user: {}", email);
+                log.info("🔑 Updated password for seed user: {}", email);
             }
         } else {
             Role role = roleRepository.findByRoleName(roleName)
@@ -66,7 +64,7 @@ public class DataSeeder implements CommandLineRunner {
                     .userPoint(0)
                     .build();
             userRepository.save(user);
-            LOG.info("➕ Created seed user: {}", email);
+            log.info("➕ Created seed user: {}", email);
         }
     }
 }
