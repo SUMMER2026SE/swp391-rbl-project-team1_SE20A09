@@ -5,8 +5,7 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
@@ -16,9 +15,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 @Component
+@Slf4j
 public class JwtTokenProvider {
-
-    private static final Logger LOG = LoggerFactory.getLogger(JwtTokenProvider.class);
 
     @Value("${app.jwt.secret}")
     private String jwtSecret;
@@ -32,7 +30,7 @@ public class JwtTokenProvider {
     public void init() {
         // Ensure secret key is long enough for HS256 (min 256 bits / 32 bytes)
         if (jwtSecret.length() < 32) {
-            LOG.warn("JWT Secret is too short. Generating a secure key for local development.");
+            log.warn("JWT Secret is too short. Generating a secure key for local development.");
             this.key = Jwts.SIG.HS256.key().build();
         } else {
             byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
@@ -72,7 +70,7 @@ public class JwtTokenProvider {
             Jwts.parser().verifyWith(key).build().parseSignedClaims(authToken);
             return true;
         } catch (JwtException | IllegalArgumentException ex) {
-            LOG.error("Invalid JWT token: {}", ex.getMessage());
+            log.error("Invalid JWT token: {}", ex.getMessage());
         }
         return false;
     }
