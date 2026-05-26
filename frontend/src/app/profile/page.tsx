@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
@@ -29,7 +30,8 @@ import {
   Activity,
   Lock,
   Eye,
-  EyeOff
+  EyeOff,
+  Edit,
 } from "lucide-react";
 
 interface UserProfileResponse {
@@ -59,10 +61,9 @@ function UserProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Change password states
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -77,7 +78,7 @@ function UserProfilePage() {
   const getPasswordStrength = (pass: string) => {
     if (!pass) return { label: "", color: "text-slate-400", progressColor: "bg-slate-200", percentage: 0 };
     if (pass.length < 6) return { label: "Quá ngắn", color: "text-red-500", progressColor: "bg-red-500", percentage: 25 };
-    
+
     let score = 0;
     if (/[a-z]/.test(pass)) score++;
     if (/[A-Z]/.test(pass)) score++;
@@ -90,7 +91,7 @@ function UserProfilePage() {
     if (pass.length >= 6 && score >= 2) {
       return { label: "Trung bình", color: "text-amber-500", progressColor: "bg-amber-500", percentage: 60 };
     }
-    return { label: "Yêu", color: "text-orange-500", progressColor: "bg-orange-500", percentage: 40 };
+    return { label: "Yếu", color: "text-orange-500", progressColor: "bg-orange-500", percentage: 40 };
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -116,35 +117,17 @@ function UserProfilePage() {
       setChangePasswordLoading(true);
       setChangePasswordError(null);
       setChangePasswordSuccess(null);
-
-      await post("/users/change-password", {
-        oldPassword,
-        newPassword,
-        confirmPassword,
-      });
-
+      await post("/users/change-password", { oldPassword, newPassword, confirmPassword });
       setChangePasswordSuccess("Mật khẩu của bạn đã được thay đổi thành công!");
       setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
-    } catch (err: any) {
-      console.error("Error changing password:", err);
-      setChangePasswordError(err.message ?? "Có lỗi xảy ra khi đổi mật khẩu.");
+    } catch (err: unknown) {
+      setChangePasswordError(err instanceof Error ? err.message : "Có lỗi xảy ra khi đổi mật khẩu.");
     } finally {
       setChangePasswordLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login");
-      return;
-    }
-
-    if (status === "authenticated") {
-      fetchUserProfile();
-    }
-  }, [status, router]);
 
   const fetchUserProfile = async () => {
     try {
@@ -152,20 +135,29 @@ function UserProfilePage() {
       setError(null);
       const data = await get<UserProfileResponse>("/users/me");
       setProfile(data);
-    } catch (err: any) {
-      console.error("Error fetching user profile:", err);
-      if (err.status === 401 || err.message?.includes("401") || err.message?.includes("unauthorized") || err.message?.includes("authenticated")) {
-        console.warn("Session expired or unauthorized, signing out...");
-        signOut({ callbackUrl: "/login?error=SessionExpired" });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Không thể tải thông tin hồ sơ.";
+      const httpStatus = (err as Error & { status?: number }).status;
+      if (httpStatus === 401) {
+        signOut({ callbackUrl: "/login?error=session_expired" });
         return;
       }
-      setError(err.message ?? "Không thể tải thông tin hồ sơ. Vui lòng thử lại sau.");
+      setError(message);
     } finally {
       setLoading(false);
     }
   };
 
-  // Get initials for avatar fallback
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login?callbackUrl=/profile");
+      return;
+    }
+    if (status === "authenticated" && session?.accessToken) {
+      fetchUserProfile();
+    }
+  }, [status, session?.accessToken, router]);
+
   const getInitials = (name: string) => {
     if (!name) return "U";
     const parts = name.split(" ");
@@ -203,7 +195,10 @@ function UserProfilePage() {
             <p className="text-muted-foreground text-sm mb-6">
               {error ?? "Đã xảy ra lỗi không xác định khi truy xuất thông tin của bạn."}
             </p>
-            <Button onClick={fetchUserProfile} className="w-full">
+            <Button
+              onClick={() => session?.accessToken && fetchUserProfile()}
+              className="w-full"
+            >
               Thử tải lại trang
             </Button>
           </Card>
@@ -213,13 +208,12 @@ function UserProfilePage() {
     );
   }
 
-  // Calculate rank info
   const currentRankInfo = rankMap[profile.userRank] || {
     label: profile.userRank,
     color: "text-primary",
     bg: "bg-primary/10",
-    next: "Cao Hơn",
-    target: profile.userPoint * 1.5
+    next: "Cao hơn",
+    target: profile.userPoint * 1.5,
   };
 
   const points = profile.userPoint;
@@ -227,10 +221,7 @@ function UserProfilePage() {
   const progressPercent = Math.min((points / targetPoints) * 100, 100);
 
   const formattedJoinDate = profile.createdAt
-    ? new Date(profile.createdAt).toLocaleDateString("vi-VN", {
-        month: "2-digit",
-        year: "numeric"
-      })
+    ? new Date(profile.createdAt).toLocaleDateString("vi-VN", { month: "2-digit", year: "numeric" })
     : "01/2024";
 
   return (
@@ -238,24 +229,11 @@ function UserProfilePage() {
       <Header />
 
       <main className="flex-1 container mx-auto px-4 py-8">
-        {/* Cover Photo & Avatar Card */}
         <Card className="mb-8 overflow-hidden border-none shadow-md bg-white">
           <div className="relative">
-            {/* Design elements */}
             <div className="h-48 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 relative overflow-hidden">
-              <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-white via-transparent to-transparent"></div>
-              <div className="absolute -right-16 -top-16 w-64 h-64 bg-white/5 rounded-full blur-2xl"></div>
-              <div className="absolute -left-16 -bottom-16 w-64 h-64 bg-black/10 rounded-full blur-2xl"></div>
+              <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-white via-transparent to-transparent" />
             </div>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 text-white backdrop-blur-md border border-white/10"
-            >
-              <Camera className="h-4 w-4 mr-2" />
-              Đổi ảnh bìa
-            </Button>
 
             <div className="absolute left-8 -bottom-16">
               <div className="relative">
@@ -267,9 +245,12 @@ function UserProfilePage() {
                 </Avatar>
                 <Button
                   size="sm"
-                  className="absolute bottom-0 right-0 rounded-full h-9 w-9 p-0 shadow-md border-2 border-white bg-primary hover:bg-primary/90"
+                  className="absolute bottom-0 right-0 rounded-full h-9 w-9 p-0 shadow-md border-2 border-white"
+                  asChild
                 >
-                  <Camera className="h-4 w-4" />
+                  <Link href="/profile/edit">
+                    <Camera className="h-4 w-4" />
+                  </Link>
                 </Button>
               </div>
             </div>
@@ -278,7 +259,7 @@ function UserProfilePage() {
           <CardContent className="pt-20 pb-8 px-8">
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
               <div className="space-y-1">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   <h1 className="text-3xl font-extrabold tracking-tight text-slate-800">
                     {profile.fullName}
                   </h1>
@@ -301,37 +282,26 @@ function UserProfilePage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Button className="shadow-sm">
-                  <UserIcon className="h-4 w-4 mr-2" />
-                  Hồ sơ của tôi
-                </Button>
-              </div>
+              <Button asChild className="shadow-sm">
+                <Link href="/profile/edit">
+                  <Edit className="h-4 w-4 mr-2" />
+                  Chỉnh sửa hồ sơ
+                </Link>
+              </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* Tab Interface */}
         <Tabs defaultValue="info" className="space-y-6">
           <TabsList className="bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-full sm:w-auto overflow-x-auto flex whitespace-nowrap">
-            <TabsTrigger value="info" className="px-6 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
-              Thông tin cá nhân
-            </TabsTrigger>
-            <TabsTrigger value="bookings" className="px-6 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
-              Lịch sử đặt sân
-            </TabsTrigger>
-            <TabsTrigger value="reviews" className="px-6 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
-              Đánh giá của tôi
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="px-6 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
-              Bảo mật & Cài đặt
-            </TabsTrigger>
+            <TabsTrigger value="info">Thông tin cá nhân</TabsTrigger>
+            <TabsTrigger value="bookings">Lịch sử đặt sân</TabsTrigger>
+            <TabsTrigger value="reviews">Đánh giá của tôi</TabsTrigger>
+            <TabsTrigger value="settings">Bảo mật & Cài đặt</TabsTrigger>
           </TabsList>
 
-          {/* Info Tab */}
           <TabsContent value="info" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Detailed Personal Info Form */}
               <div className="lg:col-span-2 space-y-6">
                 <Card className="border-none shadow-sm bg-white">
                   <CardHeader className="pb-4">
@@ -339,80 +309,52 @@ function UserProfilePage() {
                       <UserIcon className="h-5 w-5 text-primary" />
                       Chi tiết tài khoản
                     </h3>
-                    <p className="text-slate-500 text-sm">Xem và kiểm tra thông tin tài khoản đã xác thực của bạn.</p>
+                    <p className="text-slate-500 text-sm">Thông tin tài khoản đã xác thực của bạn.</p>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <Label htmlFor="lastName" className="text-slate-600 font-medium">Họ</Label>
-                        <Input
-                          id="lastName"
-                          value={profile.lastName}
-                          disabled
-                          className="bg-slate-50 border-slate-200 text-slate-700 disabled:opacity-100 disabled:cursor-not-allowed font-medium"
-                        />
+                        <Label htmlFor="lastName">Họ</Label>
+                        <Input id="lastName" value={profile.lastName} disabled className="bg-slate-50" />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="firstName" className="text-slate-600 font-medium">Tên</Label>
-                        <Input
-                          id="firstName"
-                          value={profile.firstName}
-                          disabled
-                          className="bg-slate-50 border-slate-200 text-slate-700 disabled:opacity-100 disabled:cursor-not-allowed font-medium"
-                        />
+                        <Label htmlFor="firstName">Tên</Label>
+                        <Input id="firstName" value={profile.firstName} disabled className="bg-slate-50" />
                       </div>
                     </div>
-
                     <div className="space-y-2">
-                      <Label htmlFor="email" className="text-slate-600 font-medium flex items-center gap-1.5">
+                      <Label htmlFor="email" className="flex items-center gap-1.5">
                         <Mail className="h-4 w-4 text-slate-400" />
-                        Địa chỉ Email
+                        Email
                       </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={profile.email}
-                        disabled
-                        className="bg-slate-50 border-slate-200 text-slate-700 disabled:opacity-100 disabled:cursor-not-allowed font-medium"
-                      />
+                      <Input id="email" type="email" value={profile.email} disabled className="bg-slate-50" />
                     </div>
-
                     <div className="space-y-2">
-                      <Label htmlFor="phone" className="text-slate-600 font-medium flex items-center gap-1.5">
+                      <Label htmlFor="phone" className="flex items-center gap-1.5">
                         <Phone className="h-4 w-4 text-slate-400" />
                         Số điện thoại
                       </Label>
-                      <Input
-                        id="phone"
-                        value={profile.phoneNumber || "Chưa cập nhật"}
-                        disabled
-                        className="bg-slate-50 border-slate-200 text-slate-700 disabled:opacity-100 disabled:cursor-not-allowed font-medium"
-                      />
+                      <Input id="phone" value={profile.phoneNumber || "Chưa cập nhật"} disabled className="bg-slate-50" />
                     </div>
-
-                    <div className="pt-2 flex items-center justify-between border-t border-slate-100">
-                      <div className="flex items-center gap-2">
-                        <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
-                          <Activity className="h-3 w-3 mr-1" />
-                          Trạng thái: {profile.accountStatus === "Active" ? "Đang hoạt động" : "Tạm khóa"}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-slate-400">
-                        *Để thay đổi các thông tin này, vui lòng nhấn nút chỉnh sửa ở phần cài đặt.
-                      </p>
+                    <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100">
+                      <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <Activity className="h-3 w-3 mr-1" />
+                        {profile.accountStatus === "Active" ? "Đang hoạt động" : "Tạm khóa"}
+                      </Badge>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href="/profile/edit">Chỉnh sửa thông tin</Link>
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
               </div>
 
-              {/* Loyalty & Rank Progress Card */}
               <div className="space-y-6">
-                <Card className="border-none shadow-sm bg-white overflow-hidden relative">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-8 -mt-8"></div>
+                <Card className="border-none shadow-sm bg-white">
                   <CardHeader className="pb-2">
                     <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                       <Trophy className="h-5 w-5 text-amber-500" />
-                      Hạng & Điểm Tích Lũy
+                      Hạng & Điểm tích lũy
                     </h3>
                   </CardHeader>
                   <CardContent className="space-y-6">
@@ -424,7 +366,6 @@ function UserProfilePage() {
                         Điểm tích lũy hiện có
                       </p>
                     </div>
-
                     <div className="space-y-3">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-slate-600 font-medium">Hành trình lên {currentRankInfo.next}</span>
@@ -432,60 +373,7 @@ function UserProfilePage() {
                           {points.toLocaleString()} / {targetPoints.toLocaleString()}
                         </span>
                       </div>
-                      
-                      <div className="relative">
-                        <Progress value={progressPercent} className="h-2.5 bg-slate-100" />
-                      </div>
-                      
-                      {points < targetPoints ? (
-                        <p className="text-xs text-slate-500 leading-relaxed">
-                          Bạn chỉ cần tích lũy thêm <strong className="text-primary">{(targetPoints - points).toLocaleString()} điểm</strong> để thăng hạng <strong className="text-primary">{currentRankInfo.next}</strong>.
-                        </p>
-                      ) : (
-                        <p className="text-xs text-slate-500 leading-relaxed">
-                          Chúc mừng! Bạn đã đạt mức điểm tối đa của bảng xếp hạng hiện tại.
-                        </p>
-                      )}
-                    </div>
-
-                    <Separator className="bg-slate-100" />
-
-                    <div className="space-y-2.5">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-500">Cấp bậc hiện tại</span>
-                        <Badge className={`${currentRankInfo.bg} ${currentRankInfo.color} font-bold`}>
-                          {profile.userRank}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-500">Chiết khấu đặc quyền</span>
-                        <span className="font-bold text-emerald-600">
-                          {profile.userRank === "Bronze" ? "0%" : profile.userRank === "Silver" ? "3%" : profile.userRank === "Gold" ? "5%" : "10%"}
-                        </span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Quick stats */}
-                <Card className="border-none shadow-sm bg-white">
-                  <CardHeader className="pb-2">
-                    <h3 className="text-lg font-bold text-slate-800">Hoạt động</h3>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between py-2 border-b border-slate-50">
-                      <div className="flex items-center gap-2 text-slate-500">
-                        <Calendar className="h-4.5 w-4.5 text-primary/75" />
-                        <span className="text-sm">Tổng lượt đặt sân</span>
-                      </div>
-                      <span className="font-bold text-slate-800">12 lượt</span>
-                    </div>
-                    <div className="flex items-center justify-between py-2 border-b border-slate-50">
-                      <div className="flex items-center gap-2 text-slate-500">
-                        <Star className="h-4.5 w-4.5 text-amber-400" />
-                        <span className="text-sm">Đánh giá đã gửi</span>
-                      </div>
-                      <span className="font-bold text-slate-800">5 lượt</span>
+                      <Progress value={progressPercent} className="h-2.5 bg-slate-100" />
                     </div>
                   </CardContent>
                 </Card>
@@ -493,53 +381,44 @@ function UserProfilePage() {
             </div>
           </TabsContent>
 
-          {/* Bookings Tab */}
           <TabsContent value="bookings">
             <Card className="border-none shadow-sm bg-white p-8 text-center">
               <Calendar className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-slate-800 mb-2">Xem lịch sử đặt sân</h3>
+              <h3 className="text-lg font-bold text-slate-800 mb-2">Lịch sử đặt sân</h3>
               <p className="text-slate-500 text-sm max-w-sm mx-auto mb-6">
-                Tất cả thông tin về lịch sử đặt sân bóng, hóa đơn giao dịch được quản lý tập trung ở trang Đơn hàng của tôi.
+                Xem lịch sử đặt sân tại trang đơn hàng của bạn.
               </p>
-              <Button variant="outline" onClick={() => router.push("/bookings")} className="border-slate-200">
-                Đi tới Lịch sử đặt sân
+              <Button variant="outline" onClick={() => router.push("/bookings")}>
+                Đi tới lịch sử đặt sân
               </Button>
             </Card>
           </TabsContent>
 
-          {/* Reviews Tab */}
           <TabsContent value="reviews">
             <Card className="border-none shadow-sm bg-white p-8 text-center">
               <Star className="h-16 w-16 text-amber-300 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-slate-800 mb-2">Đánh giá chất lượng sân</h3>
-              <p className="text-slate-500 text-sm max-w-sm mx-auto mb-6">
-                Bạn đã thực hiện đánh giá cho 5 lượt đặt sân. Các nhận xét của bạn giúp ích rất nhiều cho cộng đồng người chơi!
-              </p>
-              <Button variant="outline" className="border-slate-200">
-                Xem toàn bộ đánh giá
-              </Button>
+              <h3 className="text-lg font-bold text-slate-800 mb-2">Đánh giá của tôi</h3>
+              <p className="text-slate-500 text-sm">Tính năng đang được phát triển.</p>
             </Card>
           </TabsContent>
 
-          {/* Settings Tab */}
           <TabsContent value="settings">
             <Card className="border-none shadow-sm bg-white">
               <CardHeader>
                 <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                   <Settings className="h-5 w-5 text-primary" />
-                  Cài đặt bảo mật nâng cao
+                  Bảo mật & Cài đặt
                 </h3>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <h4 className="font-bold text-slate-800 mb-4 text-sm uppercase tracking-wide">Tài khoản & Xác thực</h4>
+                  <h4 className="font-bold text-slate-800 mb-4 text-sm uppercase tracking-wide">
+                    Tài khoản & Xác thực
+                  </h4>
                   {isChangingPassword ? (
                     <Card className="border border-slate-100 shadow-sm">
                       <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                        <div>
-                          <h4 className="font-bold text-slate-800 text-sm">Thay đổi mật khẩu tài khoản</h4>
-                          <p className="text-xs text-slate-400 mt-0.5">Mật khẩu mới phải chứa ít nhất 6 ký tự</p>
-                        </div>
+                        <h4 className="font-bold text-slate-800 text-sm">Thay đổi mật khẩu</h4>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -551,111 +430,83 @@ function UserProfilePage() {
                             setChangePasswordError(null);
                             setChangePasswordSuccess(null);
                           }}
-                          className="text-slate-400 hover:text-slate-600 text-xs"
                         >
-                          Hủy bỏ
+                          Hủy
                         </Button>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         {changePasswordError && (
-                          <div className="p-3 bg-red-50 text-red-600 border border-red-100 text-xs rounded-xl font-medium">
-                            {changePasswordError}
-                          </div>
+                          <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg">{changePasswordError}</div>
                         )}
                         {changePasswordSuccess && (
-                          <div className="p-3 bg-emerald-50 text-emerald-700 border border-emerald-100 text-xs rounded-xl font-medium">
-                            {changePasswordSuccess}
-                          </div>
+                          <div className="p-3 bg-emerald-50 text-emerald-700 text-xs rounded-lg">{changePasswordSuccess}</div>
                         )}
                         <form onSubmit={handleChangePassword} className="space-y-4">
                           <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-slate-600">Mật khẩu hiện tại</Label>
+                            <Label className="text-xs">Mật khẩu hiện tại</Label>
                             <div className="relative">
                               <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                               <Input
                                 type={showOldPassword ? "text" : "password"}
-                                placeholder="••••••••"
-                                className="pl-10 pr-10 border-slate-200 focus-visible:ring-primary h-9 text-sm"
+                                className="pl-10 pr-10"
                                 value={oldPassword}
                                 onChange={(e) => setOldPassword(e.target.value)}
                                 required
                               />
                               <button
                                 type="button"
-                                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                                className="absolute right-3 top-2.5 text-slate-400"
                                 onClick={() => setShowOldPassword(!showOldPassword)}
                               >
                                 {showOldPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                               </button>
                             </div>
                           </div>
-
                           <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-slate-600">Mật khẩu mới</Label>
+                            <Label className="text-xs">Mật khẩu mới</Label>
                             <div className="relative">
                               <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                               <Input
                                 type={showNewPassword ? "text" : "password"}
-                                placeholder="••••••••"
-                                className="pl-10 pr-10 border-slate-200 focus-visible:ring-primary h-9 text-sm"
+                                className="pl-10 pr-10"
                                 value={newPassword}
                                 onChange={(e) => setNewPassword(e.target.value)}
                                 required
                               />
                               <button
                                 type="button"
-                                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                                className="absolute right-3 top-2.5 text-slate-400"
                                 onClick={() => setShowNewPassword(!showNewPassword)}
                               >
                                 {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                               </button>
                             </div>
-                            {newPassword && (() => {
-                              const strength = getPasswordStrength(newPassword);
-                              return (
-                                <div className="space-y-1 mt-1.5">
-                                  <div className="flex justify-between items-center text-[10px]">
-                                    <span className="text-slate-400">Độ mạnh mật khẩu:</span>
-                                    <span className={`font-semibold ${strength.color}`}>{strength.label}</span>
-                                  </div>
-                                  <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
-                                    <div
-                                      className={`h-full ${strength.progressColor} transition-all duration-300`}
-                                      style={{ width: `${strength.percentage}%` }}
-                                    ></div>
-                                  </div>
-                                </div>
-                              );
-                            })()}
                           </div>
-
                           <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-slate-600">Xác nhận mật khẩu mới</Label>
+                            <Label className="text-xs">Xác nhận mật khẩu mới</Label>
                             <div className="relative">
                               <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                               <Input
                                 type={showConfirmPassword ? "text" : "password"}
-                                placeholder="••••••••"
-                                className="pl-10 pr-10 border-slate-200 focus-visible:ring-primary h-9 text-sm"
+                                className="pl-10 pr-10"
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                 required
                               />
                               <button
                                 type="button"
-                                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                                className="absolute right-3 top-2.5 text-slate-400"
                                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                               >
                                 {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                               </button>
                             </div>
                           </div>
-
-                          <Button type="submit" disabled={changePasswordLoading} className="w-full mt-2 h-9 text-sm">
+                          <Button type="submit" disabled={changePasswordLoading} className="w-full">
                             {changePasswordLoading ? (
                               <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Đang lưu mật khẩu mới...
+                                Đang lưu...
                               </>
                             ) : (
                               "Lưu mật khẩu mới"
@@ -669,49 +520,25 @@ function UserProfilePage() {
                       <Button
                         variant="outline"
                         onClick={() => setIsChangingPassword(true)}
-                        className="justify-start border-slate-200 py-6 h-auto hover:bg-slate-50 transition-colors"
+                        className="justify-start py-6 h-auto"
                       >
                         <Lock className="h-5 w-5 mr-3 text-slate-500" />
                         <div className="text-left">
-                          <div className="font-semibold text-slate-800 text-sm">Đổi mật khẩu</div>
-                          <div className="text-slate-400 text-xs mt-0.5">Nên thay đổi mật khẩu định kỳ để an toàn</div>
+                          <div className="font-semibold text-sm">Đổi mật khẩu</div>
+                          <div className="text-slate-400 text-xs">Thay đổi mật khẩu đăng nhập</div>
                         </div>
                       </Button>
-                      <Button
-                        variant="outline"
-                        disabled
-                        className="justify-start border-slate-200 py-6 h-auto opacity-75"
-                      >
-                        <Shield className="h-5 w-5 mr-3 text-slate-400" />
-                        <div className="text-left">
-                          <div className="font-semibold text-slate-500 text-sm">Bảo mật 2 lớp (2FA)</div>
-                          <div className="text-slate-400 text-xs mt-0.5">Đang phát triển thiết lập an toàn SMS</div>
-                        </div>
+                      <Button variant="outline" asChild className="justify-start py-6 h-auto">
+                        <Link href="/profile/edit">
+                          <Edit className="h-5 w-5 mr-3 text-slate-500" />
+                          <div className="text-left">
+                            <div className="font-semibold text-sm">Chỉnh sửa hồ sơ</div>
+                            <div className="text-slate-400 text-xs">Tên, SĐT, ảnh đại diện</div>
+                          </div>
+                        </Link>
                       </Button>
                     </div>
                   )}
-                </div>
-
-                <Separator className="bg-slate-100" />
-
-                <div>
-                  <h4 className="font-bold text-slate-800 mb-4 text-sm uppercase tracking-wide">Cấu hình Nhận Thông báo</h4>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                      <div>
-                        <Label className="font-bold text-slate-800 text-sm block">Email thông báo đặt sân</Label>
-                        <span className="text-xs text-slate-500">Nhận thông tin xác nhận và hóa đơn thanh toán đặt sân</span>
-                      </div>
-                      <input type="checkbox" defaultChecked className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary" />
-                    </div>
-                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                      <div>
-                        <Label className="font-bold text-slate-800 text-sm block">Thông báo khuyến mãi & Sự kiện</Label>
-                        <span className="text-xs text-slate-500">Cập nhật tin ưu đãi Voucher đặt sân mới nhất</span>
-                      </div>
-                      <input type="checkbox" defaultChecked className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary" />
-                    </div>
-                  </div>
                 </div>
               </CardContent>
             </Card>

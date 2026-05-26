@@ -43,12 +43,23 @@ export const authOptions: NextAuthOptions = {
     }),
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? ""
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+      authorization: {
+        params: {
+          scope:
+            "openid email profile https://www.googleapis.com/auth/drive.readonly",
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code",
+        },
+      },
     })
   ],
   callbacks: {
-    async jwt({ token, user, account }) {
-      if (account?.provider === "google") {
+    async jwt({ token, user, account, trigger, session }) {
+      if (trigger === "update" && session?.user) {
+        token.user = session.user;
+      } else if (account?.provider === "google") {
         try {
           const response = await axios.post(`${BACKEND_URL}/api/v1/auth/google`, {
             idToken: account.id_token
@@ -57,6 +68,9 @@ export const authOptions: NextAuthOptions = {
           if (response.data) {
             token.accessToken = response.data.accessToken;
             token.user = response.data.user;
+          }
+          if (account.access_token) {
+            token.googleAccessToken = account.access_token;
           }
         } catch (error: any) {
           console.error("Error signing in with Google to backend:", error.response?.data ?? error.message);
@@ -71,6 +85,7 @@ export const authOptions: NextAuthOptions = {
       if (token) {
         session.accessToken = token.accessToken;
         session.user = token.user;
+        session.googleAccessToken = token.googleAccessToken;
       }
       return session;
     }

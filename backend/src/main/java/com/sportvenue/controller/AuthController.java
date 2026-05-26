@@ -2,13 +2,13 @@ package com.sportvenue.controller;
 
 import com.sportvenue.dto.ForgotPasswordRequest;
 import com.sportvenue.dto.ResetPasswordRequest;
+import com.sportvenue.dto.UpdateProfileRequest;
 import com.sportvenue.dto.request.GoogleLoginRequest;
 import com.sportvenue.dto.request.LoginRequest;
 import com.sportvenue.dto.request.RegisterRequest;
 import com.sportvenue.dto.response.AuthResponse;
 import com.sportvenue.dto.response.MessageResponse;
 import com.sportvenue.dto.response.UserResponse;
-import com.sportvenue.entity.User;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -73,20 +74,18 @@ public class AuthController {
         if (userPrincipal == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        User user = userPrincipal.getUser();
-        UserResponse response = UserResponse.builder()
-                .userId(user.getUserId())
-                .email(user.getEmail())
-                .firstName(user.getFirstName())
-                .lastName(user.getLastName())
-                .roleName(user.getRole().getRoleName())
-                .avatarUrl(user.getAvatarUrl())
-                .phoneNumber(user.getPhoneNumber())
-                .userRank(user.getUserRank())
-                .userPoint(user.getUserPoint())
-                .accountStatus(user.getAccountStatus())
-                .build();
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(authService.getCurrentUser(userPrincipal));
+    }
+
+    @PutMapping("/me")
+    @Operation(summary = "Cập nhật hồ sơ cá nhân", description = "Chỉnh sửa tên, số điện thoại và ảnh đại diện của tài khoản đang đăng nhập")
+    public ResponseEntity<UserResponse> updateProfile(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @Valid @RequestBody UpdateProfileRequest request) {
+        if (userPrincipal == null) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.ok(authService.updateProfile(userPrincipal, request));
     }
 
     @PostMapping("/forgot-password")
