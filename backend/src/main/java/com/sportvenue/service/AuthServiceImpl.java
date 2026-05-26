@@ -200,8 +200,18 @@ public class AuthServiceImpl implements AuthService {
             if ("Blocked".equalsIgnoreCase(user.getAccountStatus())) {
                 throw new BadRequestException("Tài khoản của bạn đã bị khóa.");
             }
+            boolean updated = false;
+            if (!user.getIsVerified()) {
+                user.setIsVerified(true);
+                user.setAccountStatus("Active");
+                updated = true;
+                log.info("Verified previously unverified user via Google login: {}", email);
+            }
             if (avatarUrl != null && !avatarUrl.equals(user.getAvatarUrl())) {
                 user.setAvatarUrl(avatarUrl);
+                updated = true;
+            }
+            if (updated) {
                 user = userRepository.save(user);
             }
         }
