@@ -1,8 +1,7 @@
 package com.sportvenue.job;
 
 import com.sportvenue.repository.UserRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,9 +12,8 @@ import java.time.LocalDateTime;
  * Job định kỳ dọn dẹp các tài khoản chưa xác thực quá 24h.
  */
 @Component
+@Slf4j
 public class PendingUserCleanupJob {
-
-    private static final Logger LOG = LoggerFactory.getLogger(PendingUserCleanupJob.class);
 
     private final UserRepository userRepository;
 
@@ -31,13 +29,13 @@ public class PendingUserCleanupJob {
     @Transactional
     public void cleanupPendingUsers() {
         LocalDateTime threshold = LocalDateTime.now().minusHours(24);
-        LOG.info("Starting cleanup of unverified users created before {}", threshold);
+        log.info("Starting cleanup of unverified users created before {}", threshold);
         
         try {
             userRepository.deleteAllByIsVerifiedFalseAndCreatedAtBefore(threshold);
-            LOG.info("Cleanup of pending users completed successfully");
+            log.info("Cleanup of pending users completed successfully");
         } catch (Exception e) {
-            LOG.error("Error occurred during pending user cleanup", e);
+            log.error("Error occurred during pending user cleanup", e);
         }
     }
 }

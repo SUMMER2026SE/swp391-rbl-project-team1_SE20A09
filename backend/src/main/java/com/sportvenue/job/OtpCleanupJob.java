@@ -2,8 +2,7 @@ package com.sportvenue.job;
 
 import com.sportvenue.repository.OtpTokenRepository;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -14,9 +13,8 @@ import java.time.LocalDateTime;
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class OtpCleanupJob {
-
-    private static final Logger LOG = LoggerFactory.getLogger(OtpCleanupJob.class);
 
     private final OtpTokenRepository otpTokenRepository;
 
@@ -25,12 +23,12 @@ public class OtpCleanupJob {
      */
     @Scheduled(cron = "0 0 * * * *")
     public void cleanupExpiredOtps() {
-        LOG.info("Starting cleanup of expired OTP tokens...");
+        log.info("Starting cleanup of expired OTP tokens...");
         try {
             otpTokenRepository.deleteExpiredTokens(LocalDateTime.now());
-            LOG.info("Expired OTP tokens cleaned up successfully.");
+            log.info("Expired OTP tokens cleaned up successfully.");
         } catch (Exception e) {
-            LOG.error("Error cleaning up expired OTPs: {}", e.getMessage());
+            log.error("Error cleaning up expired OTPs: {}", e.getMessage());
         }
     }
 }
