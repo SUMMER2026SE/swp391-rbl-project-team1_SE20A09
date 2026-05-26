@@ -44,3 +44,4 @@ app:
   files:
     upload-dir: ${FILE_UPLOAD_DIR:uploads}
     base-url: ${FILE_BASE_URL:http://localhost:8080}
+    max-size-bytes: ${FILE_MAX_SIZE_BYTES:5242880}

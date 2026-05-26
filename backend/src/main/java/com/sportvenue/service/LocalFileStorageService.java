@@ -1,7 +1,11 @@
 package com.sportvenue.service;
 
+import com.sportvenue.config.FileStorageProperties;
 import com.sportvenue.exception.BadRequestException;
+import com.sportvenue.util.ImageContentValidator;
+import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -9,8 +13,8 @@ import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -19,34 +23,23 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 public class LocalFileStorageService implements FileStorageService {
 
-    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
-            "image/jpeg",
-            "image/jpg",
-            "image/png",
-            "image/webp",
-            "image/gif",
-            "image/bmp",
-            "image/heic",
-            "image/heif",
-            "application/octet-stream"
-    );
-
-    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
-            ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".heic", ".heif"
-    );
-
-    private static final long MAX_BYTES = 5 * 1024 * 1024;
-
     private final Path avatarDir;
     private final String publicBaseUrl;
+    private final long maxBytes;
+    private final Set<String> allowedContentTypes;
+    private final Set<String> allowedExtensions;
 
-    public LocalFileStorageService(
-            @Value("${app.files.upload-dir:uploads}") String uploadDir,
-            @Value("${app.files.base-url:http://localhost:8080}") String publicBaseUrl) {
-        this.avatarDir = Paths.get(uploadDir, "avatars").toAbsolutePath().normalize();
-        this.publicBaseUrl = publicBaseUrl.endsWith("/")
-                ? publicBaseUrl.substring(0, publicBaseUrl.length() - 1)
-                : publicBaseUrl;
+    public LocalFileStorageService(FileStorageProperties properties) {
+        this.avatarDir = Paths.get(properties.getUploadDir(), "avatars").toAbsolutePath().normalize();
+        String baseUrl = properties.getBaseUrl();
+        this.publicBaseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        this.maxBytes = properties.getMaxSizeBytes();
+        this.allowedContentTypes = properties.getAllowedContentTypes().stream()
+                .map(s -> s.toLowerCase(Locale.ROOT))
+                .collect(Collectors.toUnmodifiableSet());
+        this.allowedExtensions = properties.getAllowedExtensions().stream()
+                .map(s -> s.toLowerCase(Locale.ROOT))
+                .collect(Collectors.toUnmodifiableSet());
         initDirectory();
     }
 
@@ -63,16 +56,18 @@ public class LocalFileStorageService implements FileStorageService {
         validateFile(file);
 
         String extension = resolveExtension(file);
-        String storedName = userId + "_" + UUID.randomUUID() + extension;
+        String storedName = UUID.randomUUID() + extension;
         Path target = avatarDir.resolve(storedName).normalize();
 
         if (!target.startsWith(avatarDir)) {
             throw new BadRequestException("Tên file không hợp lệ.");
         }
 
-        try {
-            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-            log.info("Avatar saved: {}", target);
+        try (InputStream raw = file.getInputStream();
+                BufferedInputStream in = new BufferedInputStream(raw)) {
+            ImageContentValidator.validateImageContent(in, extension);
+            Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+            log.info("Avatar saved for user {}: {}", userId, target);
         } catch (IOException e) {
             throw new BadRequestException("Không thể lưu ảnh. Vui lòng thử lại.");
         }
@@ -84,19 +79,24 @@ public class LocalFileStorageService implements FileStorageService {
         if (file == null || file.isEmpty()) {
             throw new BadRequestException("Vui lòng chọn ảnh để tải lên.");
         }
-        if (file.getSize() > MAX_BYTES) {
-            throw new BadRequestException("Ảnh không được vượt quá 5MB.");
+        if (file.getSize() > maxBytes) {
+            long maxMb = maxBytes / (1024 * 1024);
+            throw new BadRequestException("Ảnh không được vượt quá " + maxMb + "MB.");
         }
+
+        String extension = extractExtension(file);
+        if (!allowedExtensions.contains(extension)) {
+            throw new BadRequestException(
+                    "Chỉ chấp nhận ảnh JPG, PNG, WEBP, GIF hoặc BMP. "
+                            + "Ảnh HEIC từ iPhone nên chuyển sang JPG trước khi tải.");
+        }
+
         String contentType = file.getContentType() != null
                 ? file.getContentType().toLowerCase(Locale.ROOT)
                 : "";
-        String extension = extractExtension(file);
-
-        boolean typeAllowed = !contentType.isBlank()
-                && ALLOWED_CONTENT_TYPES.contains(contentType);
-        boolean extensionAllowed = ALLOWED_EXTENSIONS.contains(extension);
-
-        if (!typeAllowed && !extensionAllowed) {
+        if (!contentType.isBlank()
+                && !"application/octet-stream".equals(contentType)
+                && !allowedContentTypes.contains(contentType)) {
             throw new BadRequestException(
                     "Chỉ chấp nhận ảnh JPG, PNG, WEBP, GIF hoặc BMP. "
                             + "Ảnh HEIC từ iPhone nên chuyển sang JPG trước khi tải.");
@@ -127,7 +127,7 @@ public class LocalFileStorageService implements FileStorageService {
 
     private String resolveExtension(MultipartFile file) {
         String ext = extractExtension(file);
-        if (ext.isBlank() || !ALLOWED_EXTENSIONS.contains(ext)) {
+        if (ext.isBlank() || !allowedExtensions.contains(ext)) {
             return ".jpg";
         }
         return ext;

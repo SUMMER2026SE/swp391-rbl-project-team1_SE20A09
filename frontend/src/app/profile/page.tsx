@@ -129,11 +129,10 @@ function UserProfilePage() {
     }
   };
 
-  const fetchUserProfile = async (accessToken: string) => {
+  const fetchUserProfile = async () => {
     try {
       setLoading(true);
       setError(null);
-      localStorage.setItem("access_token", accessToken);
       const data = await get<UserProfileResponse>("/users/me");
       setProfile(data);
     } catch (err: unknown) {
@@ -155,7 +154,7 @@ function UserProfilePage() {
       return;
     }
     if (status === "authenticated" && session?.accessToken) {
-      fetchUserProfile(session.accessToken);
+      fetchUserProfile();
     }
   }, [status, session?.accessToken, router]);
 
@@ -197,7 +196,7 @@ function UserProfilePage() {
               {error ?? "Đã xảy ra lỗi không xác định khi truy xuất thông tin của bạn."}
             </p>
             <Button
-              onClick={() => session?.accessToken && fetchUserProfile(session.accessToken)}
+              onClick={() => session?.accessToken && fetchUserProfile()}
               className="w-full"
             >
               Thử tải lại trang
