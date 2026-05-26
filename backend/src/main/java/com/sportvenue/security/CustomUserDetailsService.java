@@ -20,6 +20,10 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với email: " + email));
+        // Khởi tạo role trong transaction — tránh LazyInitializationException khi JWT filter gọi getAuthorities()
+        if (user.getRole() != null) {
+            user.getRole().getRoleName();
+        }
         return new UserPrincipal(user);
     }
 }

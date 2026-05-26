@@ -1,23 +1,14 @@
 package com.sportvenue.controller;
 
-<<<<<<< HEAD
-import com.sportvenue.dto.AuthResponse;
-import com.sportvenue.dto.GoogleLoginRequest;
-import com.sportvenue.dto.LoginRequest;
-import com.sportvenue.dto.RegisterRequest;
-import com.sportvenue.dto.UpdateProfileRequest;
-import com.sportvenue.dto.UserResponse;
-=======
 import com.sportvenue.dto.ForgotPasswordRequest;
 import com.sportvenue.dto.ResetPasswordRequest;
+import com.sportvenue.dto.UpdateProfileRequest;
 import com.sportvenue.dto.request.GoogleLoginRequest;
 import com.sportvenue.dto.request.LoginRequest;
 import com.sportvenue.dto.request.RegisterRequest;
 import com.sportvenue.dto.response.AuthResponse;
 import com.sportvenue.dto.response.MessageResponse;
 import com.sportvenue.dto.response.UserResponse;
-import com.sportvenue.entity.User;
->>>>>>> main
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;

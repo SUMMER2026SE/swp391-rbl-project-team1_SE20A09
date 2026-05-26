@@ -21,13 +21,14 @@ function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("error") === "SessionExpired") {
-        setError("Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.");
-      }
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const authError = params.get("error");
+    if (authError === "session_expired" || authError === "SessionExpired") {
+      setError("Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại.");
+      router.replace("/login", { scroll: false });
     }
-  }, []);
+  }, [router]);
 
   const getLoginErrorMessage = (message: string) => {
     if (message === "Bad credentials" || message.includes("Bad credentials")) {
@@ -57,6 +58,7 @@ function LoginPage() {
       if (result?.error) {
         setError(getLoginErrorMessage(result.error));
       } else {
+        setError(null);
         router.push("/");
         router.refresh();
       }

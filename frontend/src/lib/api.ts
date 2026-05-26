@@ -17,7 +17,6 @@ const api: AxiosInstance = axios.create({
 // ── Request interceptor: đính kèm JWT token ──────────────
 api.interceptors.request.use(
   (config) => {
-    // FormData: để trình duyệt tự gắn boundary (tránh lỗi upload multipart)
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type']
     }
@@ -38,58 +37,42 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean }
 
-    // 401: thử refresh token một lần
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
-      // TODO: implement token refresh logic
-      // const newToken = await refreshToken()
-      // if (newToken) { ... retry ... }
     }
 
-<<<<<<< HEAD
     const data = error.response?.data as {
       message?: string
-      errors?: Record<string, string>
-    }
-    const validationMessage = data?.errors
+      errors?: Record<string, string> | string[]
+      error?: string
+    } | undefined
+
+    const validationFromRecord = data?.errors && !Array.isArray(data.errors)
       ? Object.values(data.errors)[0]
       : undefined
+    const validationFromArray = Array.isArray(data?.errors)
+      ? data.errors.filter(Boolean).join('; ')
+      : undefined
+
     let message =
-      validationMessage ??
+      validationFromRecord ??
+      validationFromArray ??
       data?.message ??
+      data?.error ??
       error.message ??
       'Đã xảy ra lỗi, vui lòng thử lại'
 
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      message = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng xuất và đăng nhập lại.'
+    if (error.response?.status === 401) {
+      message = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
     }
 
-    return Promise.reject(new Error(message))
-=======
-    // Chuẩn hóa error message (ưu tiên chi tiết validation từ BE)
-    const data = error.response?.data as {
-      message?: string
-      errors?: string[]
-      error?: string
-    } | undefined
-    const validationDetail = data?.errors?.filter(Boolean).join('; ')
-    const message =
-      validationDetail ||
-      data?.message ||
-      data?.error ||
-      error.message ||
-      'Đã xảy ra lỗi, vui lòng thử lại'
-
-    const customError = new Error(message) as any;
-    customError.status = error.response?.status;
+    const customError = new Error(message) as Error & { status?: number }
+    customError.status = error.response?.status
     return Promise.reject(customError)
->>>>>>> main
   }
 )
 
 export default api
-
-// ── Typed helpers ─────────────────────────────────────────
 
 export async function get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
   const res = await api.get<T>(url, config)
@@ -121,14 +104,9 @@ export type FileUploadResult = {
   fileName: string
 }
 
-/** Upload ảnh đại diện (multipart) */
 export async function uploadAvatar(file: File): Promise<FileUploadResult> {
   const formData = new FormData()
   formData.append('file', file)
-
-  const token =
-    typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
-
   const res = await api.post<FileUploadResult>('/files/avatar', formData, {
     timeout: 60_000,
   })

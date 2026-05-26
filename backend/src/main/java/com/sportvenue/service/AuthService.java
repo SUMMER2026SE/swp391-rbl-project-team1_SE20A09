@@ -1,22 +1,15 @@
 package com.sportvenue.service;
 
-<<<<<<< HEAD
-import com.sportvenue.dto.AuthResponse;
-import com.sportvenue.dto.GoogleLoginRequest;
-import com.sportvenue.dto.LoginRequest;
-import com.sportvenue.dto.RegisterRequest;
-import com.sportvenue.dto.UpdateProfileRequest;
-import com.sportvenue.dto.UserResponse;
-import com.sportvenue.security.UserPrincipal;
-=======
 import com.sportvenue.dto.ForgotPasswordRequest;
 import com.sportvenue.dto.ResetPasswordRequest;
+import com.sportvenue.dto.UpdateProfileRequest;
 import com.sportvenue.dto.request.GoogleLoginRequest;
 import com.sportvenue.dto.request.LoginRequest;
 import com.sportvenue.dto.request.RegisterRequest;
 import com.sportvenue.dto.response.AuthResponse;
 import com.sportvenue.dto.response.MessageResponse;
->>>>>>> main
+import com.sportvenue.dto.response.UserResponse;
+import com.sportvenue.security.UserPrincipal;
 
 public interface AuthService {
     MessageResponse register(RegisterRequest request);
@@ -29,13 +22,11 @@ public interface AuthService {
 
     AuthResponse googleLogin(GoogleLoginRequest request);
 
-<<<<<<< HEAD
     UserResponse getCurrentUser(UserPrincipal userPrincipal);
 
     UserResponse updateProfile(UserPrincipal userPrincipal, UpdateProfileRequest request);
-=======
+
     void forgotPassword(ForgotPasswordRequest request);
 
     void resetPassword(ResetPasswordRequest request);
->>>>>>> main
 }

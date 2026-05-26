@@ -45,19 +45,16 @@ spring:
       password: ${SPRING_DATA_REDIS_PASSWORD:}
       timeout: 2000ms
 
-<<<<<<< HEAD
   servlet:
     multipart:
       max-file-size: 5MB
       max-request-size: 5MB
-=======
-  # ── Caching (Redis) ────────────────────────────────────
+
   cache:
     type: redis
     redis:
-      time-to-live: 3600000       # TTL: 1 giờ
+      time-to-live: 3600000
       cache-null-values: false
->>>>>>> main
 
   # ── Mail ───────────────────────────────────────────────
   mail:

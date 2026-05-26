@@ -4,33 +4,21 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/sportvenue}
     username: ${SPRING_DATASOURCE_USERNAME:sportvenue_user}
     password: ${SPRING_DATASOURCE_PASSWORD:changeme}
-  data:
-    redis:
-      password: ${SPRING_DATA_REDIS_PASSWORD:changeme}
   jpa:
     show-sql: true
-<<<<<<< HEAD
-
-app:
-  jwt:
-    access-token-expiry: 86400
-=======
     hibernate:
       ddl-auto: validate
-
   flyway:
     enabled: true
-
   data:
     redis:
       host: localhost
       port: 6379
       password: ${REDIS_PASSWORD:changeme}
-
   mail:
-    host: ${MAIL_HOST:smtp.resend.com}
+    host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:resend}
+    username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
     properties:
       mail:
@@ -38,22 +26,21 @@ app:
           auth: true
           starttls:
             enable: true
-            required: true
-        debug: true
 
 logging:
   level:
     com.sportvenue: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.orm.jdbc.bind: TRACE
 
 springdoc:
   swagger-ui:
     enabled: true
 
-# Dev: MAIL_MOCK=true → chỉ in OTP ra console; false → gửi SMTP (cần MAIL_USERNAME/PASSWORD trong .env)
 app:
+  jwt:
+    access-token-expiry: 86400
   mail:
     from: ${MAIL_FROM:noreply@sportvenue.com}
-    mock: ${MAIL_MOCK:false}
->>>>>>> main
+    mock: ${MAIL_MOCK:true}
+  files:
+    upload-dir: ${FILE_UPLOAD_DIR:uploads}
+    base-url: ${FILE_BASE_URL:http://localhost:8080}

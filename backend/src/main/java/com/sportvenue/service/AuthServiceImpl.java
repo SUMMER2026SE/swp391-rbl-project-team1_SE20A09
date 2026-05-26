@@ -6,6 +6,8 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.sportvenue.dto.ForgotPasswordRequest;
 import com.sportvenue.dto.ResetPasswordRequest;
+import com.sportvenue.dto.UpdateProfileRequest;
+import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.dto.request.GoogleLoginRequest;
 import com.sportvenue.dto.request.LoginRequest;
 import com.sportvenue.dto.request.RegisterRequest;
