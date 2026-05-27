@@ -198,9 +198,14 @@ public class AuthServiceImpl implements AuthService {
             if ("Blocked".equalsIgnoreCase(user.getAccountStatus())) {
                 throw new BadRequestException("Tài khoản của bạn đã bị khóa.");
             }
-            if (avatarUrl != null && !avatarUrl.equals(user.getAvatarUrl())) {
-                user.setAvatarUrl(avatarUrl);
-                user = userRepository.save(user);
+            if (avatarUrl != null) {
+                String currentAvatar = user.getAvatarUrl();
+                if (currentAvatar == null || currentAvatar.isBlank() || currentAvatar.contains("googleusercontent.com")) {
+                    if (!avatarUrl.equals(currentAvatar)) {
+                        user.setAvatarUrl(avatarUrl);
+                        user = userRepository.save(user);
+                    }
+                }
             }
         }
 
