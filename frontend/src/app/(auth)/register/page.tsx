@@ -304,7 +304,7 @@ function RegisterPage() {
             ) : (
               <Chrome className="mr-2 h-5 w-5" />
             )}
-            Đăng ký với Google
+            Đăng nhập bằng Google
           </Button>
 
           <p className="text-center text-sm text-muted-foreground mt-6">

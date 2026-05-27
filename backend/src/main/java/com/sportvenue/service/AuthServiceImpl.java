@@ -105,7 +105,7 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse verifyOtp(String email, String otpCode) {
         String normalizedEmail = email.trim().toLowerCase();
         otpService.verify(normalizedEmail, otpCode);
-        
+
         User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
 
@@ -122,7 +122,7 @@ public class AuthServiceImpl implements AuthService {
         String normalizedEmail = email.trim().toLowerCase();
         User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
-        
+
         if (user.getIsVerified()) {
             throw new BadRequestException("Tài khoản đã được xác thực.");
         }
@@ -135,7 +135,7 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse login(LoginRequest request) {
         String email = request.getEmail().trim().toLowerCase();
         log.info("Attempting login for email: {}", email);
-        
+
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
 
@@ -146,9 +146,7 @@ public class AuthServiceImpl implements AuthService {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         email,
-                        request.getPassword()
-                )
-        );
+                        request.getPassword()));
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
         String jwt = tokenProvider.generateToken(authentication);
@@ -200,8 +198,23 @@ public class AuthServiceImpl implements AuthService {
             if ("Blocked".equalsIgnoreCase(user.getAccountStatus())) {
                 throw new BadRequestException("Tài khoản của bạn đã bị khóa.");
             }
-            if (avatarUrl != null && !avatarUrl.equals(user.getAvatarUrl())) {
-                user.setAvatarUrl(avatarUrl);
+            boolean updated = false;
+            if (!user.getIsVerified()) {
+                user.setIsVerified(true);
+                user.setAccountStatus("Active");
+                updated = true;
+                log.info("Verified previously unverified user via Google login: {}", email);
+            }
+            if (avatarUrl != null) {
+                String currentAvatar = user.getAvatarUrl();
+                if (currentAvatar == null || currentAvatar.isBlank() || currentAvatar.contains("googleusercontent.com")) {
+                    if (!avatarUrl.equals(currentAvatar)) {
+                        user.setAvatarUrl(avatarUrl);
+                        updated = true;
+                    }
+                }
+            }
+            if (updated) {
                 user = userRepository.save(user);
             }
         }
@@ -215,6 +228,11 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private GoogleIdToken.Payload verifyGoogleIdToken(String idTokenString) {
+        if (googleClientId == null || googleClientId.isBlank()) {
+            log.error("Google Client ID chưa được cấu hình — kiểm tra biến GOOGLE_CLIENT_ID trong .env");
+            throw new BadRequestException("Tính năng đăng nhập Google chưa được cấu hình trên server.");
+        }
+
         try {
             GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(
                     new NetHttpTransport(), GsonFactory.getDefaultInstance())
@@ -232,9 +250,14 @@ public class AuthServiceImpl implements AuthService {
             }
 
             return payload;
+        } catch (BadRequestException e) {
+            throw e;
         } catch (GeneralSecurityException | IOException e) {
-            log.error("Lỗi xác thực Google ID Token: {}", e.getMessage());
+            log.error("Lỗi xác thực Google ID Token (security/IO): {}", e.getMessage());
             throw new BadRequestException("Không thể xác thực Google ID Token: " + e.getMessage());
+        } catch (Exception e) {
+            log.error("Lỗi không xác định khi verify Google token [{}: {}]", e.getClass().getSimpleName(), e.getMessage(), e);
+            throw new BadRequestException("Xác thực Google thất bại: " + e.getMessage());
         }
     }
 
@@ -311,7 +334,8 @@ public class AuthServiceImpl implements AuthService {
         String email = request.getEmail().trim().toLowerCase();
         log.info("Received forgot password request for email: {}", email);
 
-        // Security mitigation: Rate Limiting to prevent email flooding (limit 1 request per 2 minutes per email)
+        // Security mitigation: Rate Limiting to prevent email flooding (limit 1 request
+        // per 2 minutes per email)
         String rateLimitKey = "forgot-password:rate-limit:" + email;
         Boolean isRateLimited = redisTemplate.hasKey(rateLimitKey);
         if (Boolean.TRUE.equals(isRateLimited)) {
@@ -322,9 +346,11 @@ public class AuthServiceImpl implements AuthService {
         // Check if user exists
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null) {
-            // Mitigate User Enumeration: Log but do not throw exception, return successfully to the client
+            // Mitigate User Enumeration: Log but do not throw exception, return
+            // successfully to the client
             log.warn("Forgot password request for non-existent email: {}", email);
-            // Still set a generic rate limit key to match response times and prevent timing attacks
+            // Still set a generic rate limit key to match response times and prevent timing
+            // attacks
             redisTemplate.opsForValue().set(rateLimitKey, "true", 2, TimeUnit.MINUTES);
             return;
         }

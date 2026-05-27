@@ -29,12 +29,11 @@ public class JwtTokenProvider {
     @PostConstruct
     public void init() {
         // Ensure secret key is long enough for HS256 (min 256 bits / 32 bytes)
-        byte[] keyBytes;
         if (jwtSecret.length() < 32) {
             log.warn("JWT Secret is too short. Generating a secure key for local development.");
             this.key = Jwts.SIG.HS256.key().build();
         } else {
-            keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+            byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
             this.key = Keys.hmacShaKeyFor(keyBytes);
         }
     }

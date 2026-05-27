@@ -35,7 +35,7 @@ function VerifyOTPForm() {
 
     setIsLoading(true);
     try {
-      await api.post(`/auth/verify-otp?email=${encodeURIComponent(email)}&otpCode=${otp}`);
+      await api.post("/auth/verify-otp", { email, otpCode: otp });
       setIsSuccess(true);
       toast.success("Xác thực thành công! Đang đăng nhập...");
 
@@ -73,7 +73,7 @@ function VerifyOTPForm() {
 
     setIsResending(true);
     try {
-      await api.post(`/auth/resend-otp?email=${encodeURIComponent(email)}`);
+      await api.post("/auth/resend-otp", { email });
       toast.success("Mã OTP mới đã được gửi!");
       setCountdown(60);
       setOtp("");
