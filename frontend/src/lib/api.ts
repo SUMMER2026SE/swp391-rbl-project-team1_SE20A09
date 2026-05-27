@@ -47,19 +47,19 @@ api.interceptors.response.use(
       error?: string
     } | undefined
 
-    const validationFromRecord = data?.errors && !Array.isArray(data.errors)
+    const validationFromRecord = data?.errors && !Array.isArray(data.errors) && Object.keys(data.errors).length > 0
       ? Object.values(data.errors)[0]
       : undefined
-    const validationFromArray = Array.isArray(data?.errors)
+    const validationFromArray = Array.isArray(data?.errors) && data.errors.length > 0
       ? data.errors.filter(Boolean).join('; ')
       : undefined
 
     let message =
-      validationFromRecord ??
-      validationFromArray ??
-      data?.message ??
-      data?.error ??
-      error.message ??
+      validationFromRecord ||
+      validationFromArray ||
+      data?.message ||
+      data?.error ||
+      error.message ||
       'Đã xảy ra lỗi, vui lòng thử lại'
 
     if (error.response?.status === 401) {
