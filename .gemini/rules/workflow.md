@@ -1,87 +1,121 @@
 # Workflow — Git & Development Process
 
-## Branch Strategy
+## Branch Strategy (Simplified)
+
+> Team lần đầu làm việc với Git — giữ đơn giản, dễ hiểu.
 
 ```
-main                    ← production-ready, protected
-├── develop             ← integration branch
-│   ├── feature/auth-jwt         ← new features
-│   ├── feature/stadium-crud
-│   ├── feature/booking-flow
-│   ├── fix/postgres-port-conflict  ← bug fixes
-│   └── chore/update-dependencies   ← maintenance
+main  ← nhánh duy nhất được bảo vệ
+  ├── feature/stadium/add-new         ← tính năng mới
+  ├── feature/booking/confirm-reject
+  ├── fix/booking-null-status         ← sửa lỗi
+  └── chore/add-seed-data             ← maintenance
 ```
+
+**Quy tắc cốt lõi:** Mọi thay đổi đều đi qua **Pull Request → main**. Không ai được push thẳng lên `main`.
 
 ### Branch Naming
 
 ```
-feature/<ticket-or-description>   → feature/auth-jwt-filter
-fix/<what-was-fixed>              → fix/flyway-migration-error
-chore/<task>                      → chore/upgrade-spring-boot
-docs/<what>                       → docs/api-endpoints
+feature/<scope>/<mô-tả-ngắn>   → feature/stadium/crud
+fix/<mô-tả-lỗi>                → fix/booking-status-null
+chore/<việc>                   → chore/add-seed-data
+docs/<gì>                      → docs/swagger-annotations
 ```
+
+---
 
 ## Commit Convention (Conventional Commits)
 
 ```
-<type>(<scope>): <short description>
+<type>(<scope>): <mô tả ngắn>
 
 Types:
   feat     → tính năng mới
   fix      → sửa lỗi
-  chore    → không ảnh hưởng production (deps, config)
+  chore    → không ảnh hưởng production (deps, config, seed data)
   docs     → chỉ documentation
   refactor → refactor không thay đổi behavior
   test     → thêm/sửa tests
   style    → format, whitespace (không đổi logic)
   perf     → cải thiện performance
 
-Scopes: auth, stadium, booking, payment, user, review, chat, social, infra, ci
+Scopes: auth, stadium, booking, payment, user, review, complaint,
+        accessory, report, search, notification, infra, ci
 ```
 
 ### Ví dụ commit tốt
 
 ```
-feat(auth): add JWT authentication filter
-fix(booking): correct time slot overlap validation
-chore(deps): upgrade Spring Boot to 3.3.1
+feat(stadium): implement add new stadium API
+feat(booking): add confirm and reject booking endpoint
+fix(slot): slot status not updated after booking confirmed
+chore(db): add V6 seed data for venues and bookings
 docs(api): add Swagger annotations to StadiumController
-refactor(service): extract payment logic to PaymentService
+refactor(service): extract revenue calculation to RevenueService
 test(stadium): add unit tests for StadiumService
 ```
 
+---
+
+## Development Flow (Từng Bước)
+
+```bash
+# 1. Luôn bắt đầu từ main mới nhất
+git checkout main
+git pull
+
+# 2. Tạo nhánh mới cho task của bạn
+git checkout -b feature/stadium/add-new
+
+# 3. Code, commit thường xuyên — mỗi commit 1 việc nhỏ
+git add .
+git commit -m "feat(stadium): add Stadium entity and repository stub"
+git commit -m "feat(stadium): implement StadiumService.create()"
+git commit -m "feat(stadium): add POST /api/v1/stadiums endpoint"
+
+# 4. Push lên GitHub
+git push -u origin feature/stadium/add-new   # lần đầu
+git push                                       # các lần sau
+
+# 5. Vào GitHub → tạo Pull Request → main
+# 6. Nhờ 1 teammate review
+# 7. Sau khi approve → Merge (Squash merge)
+# 8. Xóa branch sau merge
+```
+
+---
+
 ## Pull Request Rules
 
-1. **Tên PR** theo format: `feat(auth): Add JWT filter and UserDetailsService`
-2. **Mô tả** phải có: Changes, Testing steps, Screenshots (nếu UI)
+1. **Tên PR** theo format: `feat(stadium): Add new venue CRUD API`
+2. **Mô tả** phải có: Làm gì, Test thế nào, Link UC liên quan
 3. **Minimum 1 reviewer** trước khi merge
 4. **CI phải pass** (backend build + frontend lint)
-5. **Không merge** nếu có conflict chưa resolve
+5. **Resolve conflict** trước khi request review
 
-## Development Flow
+---
 
-```
-1. Pull develop mới nhất
-   git checkout develop && git pull
+## Xử Lý Conflict (Khi Bị Conflict Với Main)
 
-2. Tạo branch mới
-   git checkout -b feature/my-feature
+```bash
+# Trong nhánh feature của bạn
+git fetch origin
+git merge origin/main
 
-3. Code + commit thường xuyên (nhỏ, rõ ràng)
-
-4. Push và tạo PR → develop
-   git push -u origin feature/my-feature
-
-5. Request review từ teammate
-
-6. Sau khi approve + CI pass → Merge (Squash merge)
-
-7. Xóa branch sau merge
+# Resolve conflict thủ công → sau đó
+git add .
+git commit -m "chore: resolve merge conflict with main"
+git push
 ```
 
-## Quy tắc quan trọng
+---
+
+## Quy Tắc Quan Trọng
 
 - ❌ **Không push trực tiếp lên `main`**
-- ❌ **Không commit file nhạy cảm** (`.env`, credentials)
-- ✅ **Commit nhỏ, thường xuyên** — 1 commit = 1 việc
-- ✅ **Sync với develop hàng ngày** để tránh conflict lớn
+- ❌ **Không commit file nhạy cảm** (`.env`, credentials, API keys)
+- ❌ **Không commit** `target/`, `node_modules/`, `.class`, `.env`
+- ✅ **Commit nhỏ, thường xuyên** — 1 commit = 1 việc cụ thể
+- ✅ **Pull main mới nhất** trước khi bắt đầu task mới
+- ✅ **Luôn test** qua Swagger trước khi tạo PR
