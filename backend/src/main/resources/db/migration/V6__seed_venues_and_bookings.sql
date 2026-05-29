@@ -3,9 +3,14 @@
 -- Dữ liệu mẫu để mọi thành viên test độc lập không cần chờ nhau
 -- Mật khẩu tất cả tài khoản: password123
 -- BCrypt hash: $2a$10$dY/hQd0G/jQoN5uJ9V2OSe2P5xM2lB6e6gN3xVwz1H9h1dE7I5bK.
+--
+-- Lưu ý về owner@sportvenue.com:
+--   User + owner profile này đã được seed trong V4__seed_users.sql.
+--   V6 chỉ tham chiếu (SELECT) tới bản ghi đó, KHÔNG insert lại.
+--   Các sân thuộc 'Sport Venue Owner Corp' đều gắn với owner@sportvenue.com từ V4.
 -- ══════════════════════════════════════════════════════════════════════════
 
--- ── 1. Thêm Owner Users (để Huy test Owner flow) ──────────────────────────
+-- ── 1. Thêm Owner/Customer Users bổ sung (V4 đã có Admin/Owner/Customer đầu tiên) ───
 INSERT INTO users (role_id, first_name, last_name, phone_number, email, password_hash, user_rank, account_status, is_verified)
 VALUES
     ((SELECT role_id FROM roles WHERE role_name = 'Owner'), 'Xuân', 'Nguyễn Huy', '0900000003', 'owner2@sportvenue.com',
@@ -76,6 +81,8 @@ SELECT
     s.stadium_id,
     CURRENT_DATE + INTERVAL '1 day' + make_interval(hours => h),
     CURRENT_DATE + INTERVAL '1 day' + make_interval(hours => h + 1),
+    -- Chú ý: giá trị phải khớp CHÍNH XÁC với CHECK constraint trong V1
+    -- slot_status IN ('Available', 'Booked', 'Maintenance')
     CASE
         WHEN h IN (7, 9) THEN 'Booked'      -- Giả lập một số slot đã đặt
         ELSE 'Available'
@@ -96,6 +103,9 @@ FROM stadiums s,
 WHERE s.stadium_name = 'Sân Cầu Lông Quận 1';
 
 -- ── 6. Bookings — Các trạng thái khác nhau để test ────────────────────────
+-- Chú ý: giá trị phải khớp CHÍNH XÁC với CHECK constraint trong V1
+-- booking_status IN ('Pending', 'Confirmed', 'Completed', 'Cancelled')
+-- payment_status IN ('Unpaid', 'Paid', 'Refunded')
 INSERT INTO bookings (user_id, stadium_id, slot_id, total_price, booking_status, payment_status, note)
 SELECT
     (SELECT user_id FROM users WHERE email = 'customer@sportvenue.com'),

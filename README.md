@@ -284,11 +284,7 @@ docker compose -f docker-compose.infra.yml ps
 ```bash
 cd backend
 
-# Lần đầu: đảm bảo Maven Wrapper có quyền thực thi
-chmod +x mvnw
-
-# Chạy với profile dev (dùng config application-dev.yml)
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+./mvnw spring-boot:run 
 ```
 
 **Bước 3 — Chạy Frontend** *(terminal mới)*
