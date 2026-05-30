@@ -41,4 +41,6 @@ public class CreateStadiumRequest {
     private LocalTime openTime;
 
     private LocalTime closeTime;
+
+    private java.util.List<String> imageUrls;
 }

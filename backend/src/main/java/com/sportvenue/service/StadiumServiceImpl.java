@@ -43,6 +43,19 @@ public class StadiumServiceImpl implements StadiumService {
         stadium.setStadiumStatus(StadiumStatus.AVAILABLE);
 
         Stadium savedStadium = stadiumRepository.save(stadium);
+
+        if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
+            java.util.List<com.sportvenue.entity.StadiumImage> images = request.getImageUrls().stream()
+                    .map(url -> com.sportvenue.entity.StadiumImage.builder()
+                            .stadium(savedStadium)
+                            .imageUrl(url)
+                            .uploadedAt(java.time.LocalDateTime.now())
+                            .build())
+                    .toList();
+            savedStadium.setImages(images);
+            stadiumRepository.save(savedStadium);
+        }
+
         log.info("Successfully created stadium with ID: {}", savedStadium.getStadiumId());
 
         return stadiumMapper.toResponse(savedStadium);
