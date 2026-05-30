@@ -42,4 +42,22 @@ public class FileController {
                 .fileName(fileName)
                 .build());
     }
+
+    @PostMapping(value = "/stadium", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Tải ảnh sân vận động", description = "Upload ảnh sân vận động. Yêu cầu ROLE_OWNER.")
+    public ResponseEntity<FileUploadResponse> uploadStadiumImage(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestParam("file") MultipartFile file) {
+        if (userPrincipal == null) {
+            throw new BadRequestException("Bạn cần đăng nhập để tải ảnh.");
+        }
+
+        String url = fileStorageService.storeStadiumImage(file, userPrincipal.getUser().getUserId());
+        String fileName = url.substring(url.lastIndexOf('/') + 1);
+
+        return ResponseEntity.ok(FileUploadResponse.builder()
+                .url(url)
+                .fileName(fileName)
+                .build());
+    }
 }
