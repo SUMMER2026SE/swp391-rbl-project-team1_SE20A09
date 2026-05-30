@@ -74,4 +74,22 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
 
     /** Đếm số lượng đặt sân theo trạng thái — dùng cho Dashboard. */
     long countByStadiumStadiumIdAndBookingStatus(Integer stadiumId, BookingStatus status);
+
+    /** Lấy tất cả booking của tất cả sân thuộc Owner — dùng cho UC-OWN-06 overview. */
+    @EntityGraph(attributePaths = {"user", "stadium", "slot"})
+    Page<Booking> findByStadiumOwnerOwnerIdOrderByBookingDateDesc(Integer ownerId, Pageable pageable);
+
+    /** Lấy booking theo owner + filter status — dùng cho UC-OWN-06 filter. */
+    @EntityGraph(attributePaths = {"user", "stadium", "slot"})
+    Page<Booking> findByStadiumOwnerOwnerIdAndBookingStatusOrderByBookingDateDesc(
+            Integer ownerId, BookingStatus status, Pageable pageable);
+
+    /** Lấy tất cả booking của một sân (không filter status) — dùng cho UC-OWN-06. */
+    @EntityGraph(attributePaths = {"user", "slot"})
+    Page<Booking> findByStadiumStadiumIdOrderByBookingDateDesc(Integer stadiumId, Pageable pageable);
+
+    /** Lấy booking theo sân + filter status — dùng cho UC-OWN-06. */
+    @EntityGraph(attributePaths = {"user", "slot"})
+    Page<Booking> findByStadiumStadiumIdAndBookingStatusOrderByBookingDateDesc(
+            Integer stadiumId, BookingStatus status, Pageable pageable);
 }
