@@ -1,0 +1,29 @@
+export interface CreateStadiumRequest {
+  stadiumName: string;
+  address: string;
+  sportTypeId: number;
+  pricePerHour: number;
+  description?: string;
+  capacity?: number;
+  openTime?: string; // Format HH:mm:ss
+  closeTime?: string; // Format HH:mm:ss
+}
+
+export interface StadiumResponse {
+  stadiumId: number;
+  stadiumName: string;
+  address: string;
+  description: string;
+  sportName: string;
+  pricePerHour: number;
+  capacity: number;
+  openTime: string;
+  closeTime: string;
+  stadiumStatus: string;
+  averageRating: number;
+}
+
+export interface SportType {
+  sportTypeId: number;
+  sportName: string;
+}
