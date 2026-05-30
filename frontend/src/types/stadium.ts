@@ -7,6 +7,7 @@ export interface CreateStadiumRequest {
   capacity?: number;
   openTime?: string; // Format HH:mm:ss
   closeTime?: string; // Format HH:mm:ss
+  imageUrls?: string[];
 }
 
 export interface StadiumResponse {
