@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
@@ -38,11 +39,29 @@ type StadiumFormValues = z.infer<typeof stadiumSchema>;
 
 function AddVenuePage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [currentStep, setCurrentStep] = useState(1);
   const [sportTypes, setSportTypes] = useState<SportType[]>([]);
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Auth guard — redirect to login if not authenticated
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/login");
+    }
+  }, [status, router]);
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!session) return null;
 
   const form = useForm<StadiumFormValues>({
     resolver: zodResolver(stadiumSchema),
