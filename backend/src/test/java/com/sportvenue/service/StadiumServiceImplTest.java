@@ -116,6 +116,54 @@ class StadiumServiceImplTest {
         verify(stadiumRepository, never()).save(any(Stadium.class));
     }
 
+    @Test
+    void createStadiumRejectsBlankImageUrls() {
+        CreateStadiumRequest request = validRequest();
+        request.setImageUrls(List.of("http://localhost:8080/api/v1/files/stadiums/ ", "  "));
+
+        assertThrows(BadRequestException.class, () -> stadiumService.createStadium(request, 1));
+        verify(stadiumRepository, never()).save(any(Stadium.class));
+    }
+
+    @Test
+    void createStadiumRejectsEmptyImageUrls() {
+        CreateStadiumRequest request = validRequest();
+        request.setImageUrls(List.of());
+
+        assertThrows(BadRequestException.class, () -> stadiumService.createStadium(request, 1));
+        verify(stadiumRepository, never()).save(any(Stadium.class));
+    }
+
+    @Test
+    void createStadiumRejectsTooManyImages() {
+        CreateStadiumRequest request = validRequest();
+        request.setImageUrls(java.util.stream.IntStream.range(0, 11)
+                .mapToObj(i -> "http://localhost:8080/api/v1/files/stadiums/image" + i + ".jpg")
+                .toList());
+
+        assertThrows(BadRequestException.class, () -> stadiumService.createStadium(request, 1));
+        verify(stadiumRepository, never()).save(any(Stadium.class));
+    }
+
+    @Test
+    void createStadiumRejectsInvalidOpenCloseTime() {
+        CreateStadiumRequest request = validRequest();
+        request.setOpenTime(LocalTime.of(22, 0));
+        request.setCloseTime(LocalTime.of(6, 0));
+
+        assertThrows(BadRequestException.class, () -> stadiumService.createStadium(request, 1));
+        verify(stadiumRepository, never()).save(any(Stadium.class));
+    }
+
+    @Test
+    void createStadiumRejectsPathTraversalInImageUrl() {
+        CreateStadiumRequest request = validRequest();
+        request.setImageUrls(List.of("http://localhost:8080/api/v1/files/stadiums/../../../etc/passwd"));
+
+        assertThrows(BadRequestException.class, () -> stadiumService.createStadium(request, 1));
+        verify(stadiumRepository, never()).save(any(Stadium.class));
+    }
+
     private static CreateStadiumRequest validRequest() {
         return CreateStadiumRequest.builder()
                 .stadiumName(" Stadium A ")
