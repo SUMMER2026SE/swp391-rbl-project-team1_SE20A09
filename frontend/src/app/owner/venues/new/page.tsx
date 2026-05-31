@@ -85,16 +85,18 @@ function AddVenuePage() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     setIsUploading(true);
-    try {
-      const results = await Promise.all(Array.from(files).map(file => uploadStadiumImage(file)));
-      const newUrls = results.map(r => r.url);
-      setUploadedPhotos(prev => [...prev, ...newUrls]);
-      toast.success(`Đã tải lên ${newUrls.length} ảnh`);
-    } catch {
-      toast.error("Lỗi khi tải ảnh lên");
-    } finally {
-      setIsUploading(false);
+    let successCount = 0;
+    for (const file of Array.from(files)) {
+      try {
+        const result = await uploadStadiumImage(file);
+        setUploadedPhotos(prev => [...prev, result.url]);
+        successCount++;
+      } catch {
+        toast.error(`Không thể tải lên ảnh "${file.name}". Bỏ qua và tiếp tục.`);
+      }
     }
+    if (successCount > 0) toast.success(`Đã tải lên ${successCount} ảnh`);
+    setIsUploading(false);
   };
 
   const onSubmit = async (data: StadiumFormValues) => {
