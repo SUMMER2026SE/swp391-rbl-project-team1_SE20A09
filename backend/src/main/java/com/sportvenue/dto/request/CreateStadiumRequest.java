@@ -4,10 +4,12 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,6 +28,7 @@ public class CreateStadiumRequest {
 
     @NotBlank(message = "Stadium name is required")
     @Size(min = 3, max = 100, message = "Stadium name must be between 3 and 100 characters")
+    @Pattern(regexp = "^[^\\s].*[^\\s]$", message = "Stadium name cannot start or end with whitespace")
     private String stadiumName;
 
     @NotBlank(message = "Address is required")
