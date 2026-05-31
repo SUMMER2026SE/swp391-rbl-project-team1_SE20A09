@@ -59,8 +59,8 @@ function AddVenuePage() {
       address: "",
       pricePerHour: 100000,
       description: "",
-      openTime: "06:00:00",
-      closeTime: "22:00:00",
+      openTime: "06:00",
+      closeTime: "22:00",
     },
   });
 
@@ -114,8 +114,15 @@ function AddVenuePage() {
     setIsSubmitting(true);
     try {
       // Normalize HH:mm → HH:mm:ss for backend LocalTime deserialization
-      const openTime = data.openTime ? `${data.openTime}:00` : undefined;
-      const closeTime = data.closeTime ? `${data.closeTime}:00` : undefined;
+      const normalizeTime = (t?: string) => {
+        if (!t) return undefined;
+        // Already HH:mm:ss
+        if (/^\d{2}:\d{2}:\d{2}$/.test(t)) return t;
+        // HH:mm → append :00
+        return `${t}:00`;
+      };
+      const openTime = normalizeTime(data.openTime);
+      const closeTime = normalizeTime(data.closeTime);
       await stadiumService.createStadium({ ...data, openTime, closeTime, imageUrls: uploadedPhotos });
       toast.success("Thêm sân thành công!");
       router.push("/owner/venues");
