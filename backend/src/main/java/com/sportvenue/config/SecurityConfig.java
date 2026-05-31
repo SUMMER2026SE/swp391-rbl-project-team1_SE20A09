@@ -70,6 +70,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/avatars/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/files/stadiums/**").permitAll()
                         .requestMatchers("/api/v1/files/**").authenticated()
                         .anyRequest().authenticated()
                 )
