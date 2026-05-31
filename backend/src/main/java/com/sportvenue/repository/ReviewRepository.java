@@ -28,4 +28,15 @@ public interface ReviewRepository extends JpaRepository<Review, Integer> {
     /** Tính điểm trung bình của sân — gọi sau khi có review mới để cập nhật Stadium. */
     @Query("SELECT AVG(r.ratingScore) FROM Review r WHERE r.stadium.stadiumId = :stadiumId")
     Optional<Double> calculateAverageRating(@Param("stadiumId") Integer stadiumId);
+
+    /** Lấy reviews của nhiều sân — dùng cho Owner xem tất cả reviews. */
+    @EntityGraph(attributePaths = {"user", "stadium", "booking"})
+    @Query("""
+            SELECT r FROM Review r
+            WHERE r.stadium.stadiumId IN :stadiumIds
+            ORDER BY r.createdAt DESC
+            """)
+    Page<Review> findByStadiumStadiumIdInOrderByCreatedAtDesc(
+            @Param("stadiumIds") java.util.List<Integer> stadiumIds,
+            Pageable pageable);
 }
