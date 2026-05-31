@@ -5,8 +5,12 @@ export const stadiumService = {
   createStadium: (data: CreateStadiumRequest) => {
     return post<StadiumResponse>('/stadiums', data);
   },
-  
+
   getSportTypes: () => {
     return get<SportType[]>('/sport-types');
-  }
+  },
+
+  getMyStadiums: () => {
+    return get<StadiumResponse[]>('/stadiums/my');
+  },
 };

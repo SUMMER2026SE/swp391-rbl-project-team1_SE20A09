@@ -2,7 +2,7 @@ package com.sportvenue.entity.enums;
 
 /**
  * Trạng thái hoạt động của sân thể thao.
- * Ánh xạ CHECK constraint: ('Available', 'Maintenance', 'Closed') trong bảng stadiums.
+ * Ánh xạ CHECK constraint: ('AVAILABLE', 'MAINTENANCE', 'CLOSED') trong bảng stadiums.
  */
 public enum StadiumStatus {
     AVAILABLE,    // Sân đang hoạt động, có thể đặt

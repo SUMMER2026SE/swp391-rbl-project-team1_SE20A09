@@ -58,8 +58,8 @@ CREATE TABLE owners (
     business_name       VARCHAR(100),
     tax_code            VARCHAR(30),
     business_address    TEXT,
-    approved_status     VARCHAR(20)     NOT NULL DEFAULT 'Pending'
-                            CHECK (approved_status IN ('Pending', 'Approved', 'Rejected')),
+    approved_status     VARCHAR(20)     NOT NULL DEFAULT 'PENDING'
+                            CHECK (approved_status IN ('PENDING', 'APPROVED', 'REJECTED')),
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -75,8 +75,8 @@ CREATE TABLE stadiums (
     capacity        INT,
     open_time       TIME,
     close_time      TIME,
-    stadium_status  VARCHAR(20)     NOT NULL DEFAULT 'Available'
-                        CHECK (stadium_status IN ('Available', 'Maintenance', 'Closed')),
+    stadium_status  VARCHAR(20)     NOT NULL DEFAULT 'AVAILABLE'
+                        CHECK (stadium_status IN ('AVAILABLE', 'MAINTENANCE', 'CLOSED')),
     average_rating  DECIMAL(3, 2)   NOT NULL DEFAULT 5.0,
     created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -95,8 +95,8 @@ CREATE TABLE time_slots (
     stadium_id      INT             NOT NULL REFERENCES stadiums(stadium_id) ON DELETE CASCADE,
     start_time      TIMESTAMP       NOT NULL,
     end_time        TIMESTAMP       NOT NULL,
-    slot_status     VARCHAR(20)     NOT NULL DEFAULT 'Available'
-                        CHECK (slot_status IN ('Available', 'Booked', 'Maintenance'))
+    slot_status     VARCHAR(20)     NOT NULL DEFAULT 'AVAILABLE'
+                        CHECK (slot_status IN ('AVAILABLE', 'BOOKED', 'MAINTENANCE'))
 );
 
 -- ── 9. Bookings ───────────────────────────────────────────────────────────
@@ -106,10 +106,10 @@ CREATE TABLE bookings (
     stadium_id      INT             NOT NULL REFERENCES stadiums(stadium_id),
     slot_id         INT             NOT NULL REFERENCES time_slots(slot_id),
     total_price     DECIMAL(10, 2)  NOT NULL,
-    booking_status  VARCHAR(20)     NOT NULL DEFAULT 'Pending'
-                        CHECK (booking_status IN ('Pending', 'Confirmed', 'Completed', 'Cancelled')),
-    payment_status  VARCHAR(20)     NOT NULL DEFAULT 'Unpaid'
-                        CHECK (payment_status IN ('Unpaid', 'Paid', 'Refunded')),
+    booking_status  VARCHAR(20)     NOT NULL DEFAULT 'PENDING'
+                        CHECK (booking_status IN ('PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED')),
+    payment_status  VARCHAR(20)     NOT NULL DEFAULT 'UNPAID'
+                        CHECK (payment_status IN ('UNPAID', 'PAID', 'REFUNDED')),
     booking_date    TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     note            TEXT
 );
@@ -119,11 +119,11 @@ CREATE TABLE payments (
     payment_id      SERIAL PRIMARY KEY,
     booking_id      INT             NOT NULL REFERENCES bookings(booking_id),
     payment_method  VARCHAR(20)     NOT NULL
-                        CHECK (payment_method IN ('Cash', 'VNPay', 'Momo', 'Banking')),
+                        CHECK (payment_method IN ('CASH', 'VNPAY', 'MOMO', 'BANKING')),
     amount          DECIMAL(10, 2)  NOT NULL,
     transaction_code VARCHAR(100),
-    payment_status  VARCHAR(20)     NOT NULL DEFAULT 'Pending'
-                        CHECK (payment_status IN ('Pending', 'Success', 'Failed')),
+    payment_status  VARCHAR(20)     NOT NULL DEFAULT 'PENDING'
+                        CHECK (payment_status IN ('PENDING', 'SUCCESS', 'FAILED')),
     paid_at         TIMESTAMP
 );
 
@@ -145,7 +145,7 @@ CREATE TABLE notifications (
     title               VARCHAR(255)    NOT NULL,
     content             TEXT            NOT NULL,
     notification_type   VARCHAR(20)
-                            CHECK (notification_type IN ('Booking', 'Payment', 'Promotion', 'System')),
+                            CHECK (notification_type IN ('BOOKING', 'PAYMENT', 'PROMOTION', 'SYSTEM')),
     is_read             BOOLEAN         NOT NULL DEFAULT FALSE,
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

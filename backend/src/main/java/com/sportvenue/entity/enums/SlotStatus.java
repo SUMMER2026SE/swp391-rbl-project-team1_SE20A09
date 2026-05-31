@@ -2,7 +2,7 @@ package com.sportvenue.entity.enums;
 
 /**
  * Trạng thái khung giờ (time slot) của sân.
- * Ánh xạ CHECK constraint: ('Available', 'Booked', 'Maintenance') trong bảng time_slots.
+ * Ánh xạ CHECK constraint: ('AVAILABLE', 'BOOKED', 'MAINTENANCE') trong bảng time_slots.
  */
 public enum SlotStatus {
     AVAILABLE,    // Còn trống — có thể đặt

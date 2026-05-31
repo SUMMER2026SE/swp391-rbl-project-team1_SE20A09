@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -24,4 +25,5 @@ public class StadiumResponse {
     private LocalTime closeTime;
     private String stadiumStatus;
     private BigDecimal averageRating;
+    private List<String> imageUrls;
 }

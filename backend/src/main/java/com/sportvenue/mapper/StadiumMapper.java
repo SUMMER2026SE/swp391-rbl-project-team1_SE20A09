@@ -21,5 +21,6 @@ public interface StadiumMapper {
     Stadium toEntity(CreateStadiumRequest request);
 
     @Mapping(target = "sportName", source = "sportType.sportName")
+    @Mapping(target = "imageUrls", expression = "java(stadium.getImages() == null ? java.util.Collections.emptyList() : stadium.getImages().stream().map(img -> img.getImageUrl()).toList())")
     StadiumResponse toResponse(Stadium stadium);
 }

@@ -25,41 +25,41 @@ ON CONFLICT (email) DO NOTHING;
 INSERT INTO owners (user_id, business_name, tax_code, business_address, approved_status)
 VALUES
     ((SELECT user_id FROM users WHERE email = 'owner2@sportvenue.com'),
-     'Huy Sport Center', 'TAX-987654321', '456 Sports Ave, District 3, HCMC', 'Approved')
+     'Huy Sport Center', 'TAX-987654321', '456 Sports Ave, District 3, HCMC', 'APPROVED')
 ON CONFLICT (user_id) DO NOTHING;
 
 -- ── 3. Stadiums — Đa dạng loại sân và trạng thái ──────────────────────────
 INSERT INTO stadiums (owner_id, sport_type_id, stadium_name, description, address, price_per_hour, capacity, open_time, close_time, stadium_status, average_rating)
 VALUES
-    -- Sân bóng đá 1 (Available) — thuộc owner@sportvenue.com
+    -- Sân bóng đá 1 (AVAILABLE) — thuộc owner@sportvenue.com
     ((SELECT owner_id FROM owners WHERE business_name = 'Sport Venue Owner Corp'),
      (SELECT sport_type_id FROM sport_types WHERE sport_name = 'Football'),
      'Sân Bóng Đá Thủ Đức', 'Sân bóng đá mini 5vs5 chất lượng cao, cỏ nhân tạo thế hệ 3',
-     '123 Võ Văn Ngân, Thủ Đức, TP.HCM', 300000.00, 10, '06:00', '22:00', 'Available', 4.5),
+     '123 Võ Văn Ngân, Thủ Đức, TP.HCM', 300000.00, 10, '06:00', '22:00', 'AVAILABLE', 4.5),
 
-    -- Sân cầu lông (Available) — thuộc owner@sportvenue.com
+    -- Sân cầu lông (AVAILABLE) — thuộc owner@sportvenue.com
     ((SELECT owner_id FROM owners WHERE business_name = 'Sport Venue Owner Corp'),
      (SELECT sport_type_id FROM sport_types WHERE sport_name = 'Badminton'),
      'Sân Cầu Lông Quận 1', 'Hệ thống 6 sân cầu lông trong nhà, sàn gỗ chuyên nghiệp',
-     '45 Lê Lợi, Quận 1, TP.HCM', 120000.00, 4, '07:00', '23:00', 'Available', 4.8),
+     '45 Lê Lợi, Quận 1, TP.HCM', 120000.00, 4, '07:00', '23:00', 'AVAILABLE', 4.8),
 
-    -- Sân bóng rổ (Available) — thuộc owner2@sportvenue.com
+    -- Sân bóng rổ (AVAILABLE) — thuộc owner2@sportvenue.com
     ((SELECT owner_id FROM owners WHERE business_name = 'Huy Sport Center'),
      (SELECT sport_type_id FROM sport_types WHERE sport_name = 'Basketball'),
      'Sân Bóng Rổ Bình Thạnh', 'Sân bóng rổ ngoài trời có mái che, đèn LED chơi đêm',
-     '78 Đinh Tiên Hoàng, Bình Thạnh, TP.HCM', 200000.00, 10, '06:00', '22:00', 'Available', 4.2),
+     '78 Đinh Tiên Hoàng, Bình Thạnh, TP.HCM', 200000.00, 10, '06:00', '22:00', 'AVAILABLE', 4.2),
 
-    -- Sân tennis (Maintenance) — để test filter trạng thái
+    -- Sân tennis (MAINTENANCE) — để test filter trạng thái
     ((SELECT owner_id FROM owners WHERE business_name = 'Sport Venue Owner Corp'),
      (SELECT sport_type_id FROM sport_types WHERE sport_name = 'Tennis'),
      'Sân Tennis Phú Mỹ Hưng', 'Sân tennis tiêu chuẩn quốc tế, mặt sân clay',
-     '10 Nguyễn Văn Linh, Quận 7, TP.HCM', 250000.00, 4, '06:00', '21:00', 'Maintenance', 4.6),
+     '10 Nguyễn Văn Linh, Quận 7, TP.HCM', 250000.00, 4, '06:00', '21:00', 'MAINTENANCE', 4.6),
 
-    -- Sân bóng đá lớn (Available) — thuộc owner2@sportvenue.com
+    -- Sân bóng đá lớn (AVAILABLE) — thuộc owner2@sportvenue.com
     ((SELECT owner_id FROM owners WHERE business_name = 'Huy Sport Center'),
      (SELECT sport_type_id FROM sport_types WHERE sport_name = 'Football'),
      'Sân Bóng Đá Gò Vấp', 'Sân 7vs7 mặt cỏ tự nhiên, phòng thay đồ riêng',
-     '99 Quang Trung, Gò Vấp, TP.HCM', 500000.00, 14, '05:30', '22:30', 'Available', 4.3)
+     '99 Quang Trung, Gò Vấp, TP.HCM', 500000.00, 14, '05:30', '22:30', 'AVAILABLE', 4.3)
 ON CONFLICT DO NOTHING;
 
 -- ── 4. StadiumImages — Ảnh mẫu ────────────────────────────────────────────
@@ -81,11 +81,9 @@ SELECT
     s.stadium_id,
     CURRENT_DATE + INTERVAL '1 day' + make_interval(hours => h),
     CURRENT_DATE + INTERVAL '1 day' + make_interval(hours => h + 1),
-    -- Chú ý: giá trị phải khớp CHÍNH XÁC với CHECK constraint trong V1
-    -- slot_status IN ('Available', 'Booked', 'Maintenance')
     CASE
-        WHEN h IN (7, 9) THEN 'Booked'      -- Giả lập một số slot đã đặt
-        ELSE 'Available'
+        WHEN h IN (7, 9) THEN 'BOOKED'
+        ELSE 'AVAILABLE'
     END
 FROM stadiums s,
      generate_series(6, 21) AS h
@@ -97,26 +95,23 @@ SELECT
     s.stadium_id,
     CURRENT_DATE + INTERVAL '1 day' + make_interval(hours => h),
     CURRENT_DATE + INTERVAL '1 day' + make_interval(hours => h + 1),
-    CASE WHEN h = 8 THEN 'Booked' ELSE 'Available' END
+    CASE WHEN h = 8 THEN 'BOOKED' ELSE 'AVAILABLE' END
 FROM stadiums s,
      generate_series(7, 22) AS h
 WHERE s.stadium_name = 'Sân Cầu Lông Quận 1';
 
 -- ── 6. Bookings — Các trạng thái khác nhau để test ────────────────────────
--- Chú ý: giá trị phải khớp CHÍNH XÁC với CHECK constraint trong V1
--- booking_status IN ('Pending', 'Confirmed', 'Completed', 'Cancelled')
--- payment_status IN ('Unpaid', 'Paid', 'Refunded')
 INSERT INTO bookings (user_id, stadium_id, slot_id, total_price, booking_status, payment_status, note)
 SELECT
     (SELECT user_id FROM users WHERE email = 'customer@sportvenue.com'),
     s.stadium_id,
     t.slot_id,
     s.price_per_hour,
-    'Confirmed',
-    'Paid',
+    'CONFIRMED',
+    'PAID',
     'Đặt sân cho trận giao hữu cuối tuần'
 FROM stadiums s
-JOIN time_slots t ON t.stadium_id = s.stadium_id AND t.slot_status = 'Booked'
+JOIN time_slots t ON t.stadium_id = s.stadium_id AND t.slot_status = 'BOOKED'
 WHERE s.stadium_name = 'Sân Bóng Đá Thủ Đức'
 LIMIT 1;
 
@@ -126,10 +121,10 @@ SELECT
     s.stadium_id,
     t.slot_id,
     s.price_per_hour,
-    'Pending',
-    'Unpaid'
+    'PENDING',
+    'UNPAID'
 FROM stadiums s
-JOIN time_slots t ON t.stadium_id = s.stadium_id AND t.slot_status = 'Available'
+JOIN time_slots t ON t.stadium_id = s.stadium_id AND t.slot_status = 'AVAILABLE'
 WHERE s.stadium_name = 'Sân Cầu Lông Quận 1'
 LIMIT 1;
 
@@ -139,10 +134,10 @@ SELECT
     s.stadium_id,
     t.slot_id,
     s.price_per_hour,
-    'Completed',
-    'Paid'
+    'COMPLETED',
+    'PAID'
 FROM stadiums s
-JOIN time_slots t ON t.stadium_id = s.stadium_id AND t.slot_status = 'Available'
+JOIN time_slots t ON t.stadium_id = s.stadium_id AND t.slot_status = 'AVAILABLE'
 WHERE s.stadium_name = 'Sân Cầu Lông Quận 1'
 LIMIT 1 OFFSET 1;
 
@@ -152,10 +147,10 @@ SELECT
     s.stadium_id,
     t.slot_id,
     s.price_per_hour,
-    'Cancelled',
-    'Refunded'
+    'CANCELLED',
+    'REFUNDED'
 FROM stadiums s
-JOIN time_slots t ON t.stadium_id = s.stadium_id AND t.slot_status = 'Available'
+JOIN time_slots t ON t.stadium_id = s.stadium_id AND t.slot_status = 'AVAILABLE'
 WHERE s.stadium_name = 'Sân Bóng Đá Thủ Đức'
 LIMIT 1 OFFSET 2;
 
@@ -168,7 +163,7 @@ SELECT
     5,
     'Sân đẹp, nhân viên nhiệt tình. Sẽ quay lại lần sau!'
 FROM bookings b
-WHERE b.booking_status = 'Completed'
+WHERE b.booking_status = 'COMPLETED'
 LIMIT 1
 ON CONFLICT DO NOTHING;
 
@@ -195,7 +190,7 @@ SELECT
     u.user_id,
     'Đơn đặt sân mới',
     'Bạn có một đơn đặt sân mới đang chờ xác nhận.',
-    'Booking',
+    'BOOKING',
     FALSE
 FROM users u WHERE u.email = 'owner@sportvenue.com';
 
@@ -204,6 +199,6 @@ SELECT
     u.user_id,
     'Đánh giá mới từ khách hàng',
     'Khách hàng vừa để lại đánh giá 5 sao cho sân của bạn.',
-    'Booking',
+    'BOOKING',
     FALSE
 FROM users u WHERE u.email = 'owner@sportvenue.com';

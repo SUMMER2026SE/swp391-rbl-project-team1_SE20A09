@@ -4,7 +4,6 @@ export interface CreateStadiumRequest {
   sportTypeId: number;
   pricePerHour: number;
   description?: string;
-  capacity?: number;
   openTime?: string; // Format HH:mm:ss
   closeTime?: string; // Format HH:mm:ss
   imageUrls?: string[];
@@ -22,6 +21,7 @@ export interface StadiumResponse {
   closeTime: string;
   stadiumStatus: string;
   averageRating: number;
+  imageUrls: string[];
 }
 
 export interface SportType {
