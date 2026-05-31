@@ -14,6 +14,7 @@ public interface StadiumMapper {
     @Mapping(target = "stadiumId", ignore = true)
     @Mapping(target = "stadiumStatus", ignore = true)
     @Mapping(target = "averageRating", ignore = true)
+    @Mapping(target = "capacity", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "images", ignore = true)
     @Mapping(target = "timeSlots", ignore = true)

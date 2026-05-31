@@ -5,8 +5,10 @@ import com.sportvenue.dto.response.StadiumResponse;
 import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.SportType;
 import com.sportvenue.entity.Stadium;
+import com.sportvenue.entity.StadiumImage;
 import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.entity.enums.StadiumStatus;
+import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.mapper.StadiumMapper;
 import com.sportvenue.repository.OwnerRepository;
@@ -18,6 +20,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -32,7 +36,8 @@ public class StadiumServiceImpl implements StadiumService {
     @Override
     @Transactional
     public StadiumResponse createStadium(CreateStadiumRequest request, Integer userId) {
-        log.info("Creating stadium: {} for user: {}", request.getStadiumName(), userId);
+        normalizeRequest(request);
+        log.info("Creating stadium for user: {}", userId);
 
         Owner owner = ownerRepository.findByUserUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Owner profile not found for user ID: " + userId));
@@ -50,23 +55,15 @@ public class StadiumServiceImpl implements StadiumService {
         stadium.setSportType(sportType);
         stadium.setStadiumStatus(StadiumStatus.AVAILABLE);
 
+        List<StadiumImage> images = request.getImageUrls().stream()
+                .map(url -> StadiumImage.builder()
+                        .stadium(stadium)
+                        .imageUrl(url)
+                        .build())
+                .toList();
+        stadium.getImages().addAll(images);
+
         Stadium savedStadium = stadiumRepository.save(stadium);
-
-        if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
-            java.util.List<com.sportvenue.entity.StadiumImage> images = new java.util.ArrayList<>(
-                request.getImageUrls().stream()
-                    .map(url -> com.sportvenue.entity.StadiumImage.builder()
-                            .stadium(savedStadium)
-                            .imageUrl(url)
-                            .uploadedAt(java.time.LocalDateTime.now())
-                            .build())
-                    .toList()
-            );
-            savedStadium.getImages().clear();
-            savedStadium.getImages().addAll(images);
-            stadiumRepository.save(savedStadium);
-        }
-
         log.info("Successfully created stadium with ID: {}", savedStadium.getStadiumId());
 
         return stadiumMapper.toResponse(savedStadium);
@@ -83,5 +80,32 @@ public class StadiumServiceImpl implements StadiumService {
                 .stream()
                 .map(stadiumMapper::toResponse)
                 .toList();
+    }
+
+    private void normalizeRequest(CreateStadiumRequest request) {
+        request.setStadiumName(trimToNull(request.getStadiumName()));
+        request.setAddress(trimToNull(request.getAddress()));
+        request.setDescription(trimToNull(request.getDescription()));
+        if (request.getOpenTime() != null && request.getCloseTime() != null
+                && !request.getCloseTime().isAfter(request.getOpenTime())) {
+            throw new BadRequestException("Close time must be after open time");
+        }
+        if (request.getImageUrls() == null || request.getImageUrls().isEmpty()) {
+            throw new BadRequestException("At least one stadium image is required");
+        }
+        request.setImageUrls(request.getImageUrls().stream()
+                .map(this::trimToNull)
+                .toList());
+        if (request.getImageUrls().stream().anyMatch(url -> url == null)) {
+            throw new BadRequestException("Image URL cannot be blank");
+        }
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }
