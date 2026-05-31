@@ -33,7 +33,13 @@ const stadiumSchema = z.object({
   description: z.string().optional(),
   openTime: z.string().optional(),
   closeTime: z.string().optional(),
-});
+}).refine(
+  (data) => {
+    if (!data.openTime || !data.closeTime) return true;
+    return data.closeTime > data.openTime;
+  },
+  { message: "Giờ đóng cửa phải sau giờ mở cửa", path: ["closeTime"] }
+);
 
 type StadiumFormValues = z.infer<typeof stadiumSchema>;
 
@@ -321,6 +327,9 @@ function AddVenuePage() {
                         id="closeTime"
                         type="time"
                       />
+                      {form.formState.errors.closeTime && (
+                        <p className="text-sm text-destructive">{form.formState.errors.closeTime.message}</p>
+                      )}
                     </div>
                   </div>
                 </CardContent>
