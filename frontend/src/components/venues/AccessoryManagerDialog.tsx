@@ -179,67 +179,67 @@ export function AccessoryManagerDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl bg-background/95 backdrop-blur-md border border-border/80 shadow-2xl p-6 sm:rounded-xl">
-        <DialogHeader className="mb-4">
+      <DialogContent className="sm:max-w-4xl w-full bg-background/95 backdrop-blur-md border border-border/80 shadow-2xl p-6 sm:p-8 sm:rounded-xl">
+        <DialogHeader className="mb-6">
           <DialogTitle className="flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground">
-            <Package className="h-6 w-6 text-primary animate-pulse" />
+            <Package className="h-7 w-7 text-primary animate-pulse" />
             Quản lý phụ kiện cho thuê
           </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
+          <DialogDescription className="text-muted-foreground text-sm mt-1">
             Sân đang cấu hình: <span className="font-semibold text-foreground">{stadiumName}</span> (ID: {stadiumId})
           </DialogDescription>
         </DialogHeader>
 
         {/* Cấu trúc chia 2 phần: Danh sách & Thêm mới */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-2">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 mt-2">
           
           {/* Phần bên trái: Danh sách phụ kiện hiện có */}
           <div className="md:col-span-7 flex flex-col space-y-4">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <Boxes className="h-4 w-4" /> Danh sách phụ kiện ({accessories.length})
+              <Boxes className="h-4 w-4 text-primary" /> Danh sách phụ kiện hiện có ({accessories.length})
             </h3>
             
-            <div className="border border-border/50 rounded-lg overflow-hidden bg-card max-h-[320px] overflow-y-auto">
+            <div className="border border-border/50 rounded-lg overflow-hidden bg-card max-h-[380px] overflow-y-auto shadow-xs">
               {loading ? (
-                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
+                <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   <p className="text-xs">Đang tải danh sách phụ kiện...</p>
                 </div>
               ) : accessories.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground text-center px-4">
-                  <Package className="h-10 w-10 text-muted-foreground/45 mb-2" />
-                  <p className="text-sm font-medium">Chưa có phụ kiện nào</p>
-                  <p className="text-xs text-muted-foreground/80 mt-1">Dùng bảng bên phải để thêm phụ kiện cho thuê đầu tiên.</p>
+                <div className="flex flex-col items-center justify-center py-24 text-muted-foreground text-center px-4">
+                  <Package className="h-12 w-12 text-muted-foreground/35 mb-2" />
+                  <p className="text-sm font-medium">Chưa có phụ kiện nào được thêm</p>
+                  <p className="text-xs text-muted-foreground/80 mt-1">Sử dụng biểu mẫu bên phải để thêm phụ kiện cho thuê đầu tiên của bạn.</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader className="bg-muted/40 sticky top-0 z-10">
+                <Table className="w-full table-fixed">
+                  <TableHeader className="bg-muted/50 sticky top-0 z-10">
                     <TableRow>
-                      <TableHead className="text-xs font-semibold">Tên</TableHead>
-                      <TableHead className="text-xs font-semibold text-right">Đơn giá</TableHead>
-                      <TableHead className="text-xs font-semibold text-center">SL</TableHead>
-                      <TableHead className="text-xs font-semibold text-center">Trạng thái</TableHead>
+                      <TableHead className="text-xs font-bold text-muted-foreground py-3 pl-4 w-[40%]">Tên phụ kiện</TableHead>
+                      <TableHead className="text-xs font-bold text-muted-foreground text-right py-3 w-[25%]">Giá thuê</TableHead>
+                      <TableHead className="text-xs font-bold text-muted-foreground text-center py-3 w-[15%]">SL</TableHead>
+                      <TableHead className="text-xs font-bold text-muted-foreground text-center py-3 pr-4 w-[20%]">Trạng thái</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {accessories.map((item) => (
-                      <TableRow key={item.accessoryId} className="hover:bg-muted/30 transition-colors">
-                        <TableCell className="font-medium text-sm py-3 max-w-[120px] truncate" title={item.name}>
+                      <TableRow key={item.accessoryId} className="hover:bg-muted/40 transition-colors border-b border-border/40">
+                        <TableCell className="font-semibold text-sm py-4 pl-4 text-foreground break-words whitespace-normal">
                           {item.name}
                         </TableCell>
-                        <TableCell className="text-right text-sm text-primary py-3">
+                        <TableCell className="text-right text-sm text-primary font-medium py-4">
                           {formatVND(item.pricePerUnit)}
                         </TableCell>
-                        <TableCell className="text-center text-sm py-3">
+                        <TableCell className="text-center text-sm py-4 text-foreground">
                           {item.quantity}
                         </TableCell>
-                        <TableCell className="text-center py-3">
+                        <TableCell className="text-center py-4 pr-4">
                           {item.isAvailable ? (
-                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] px-1.5 py-0">
+                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-semibold px-2 py-0.5">
                               Đang thuê
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 text-[10px] px-1.5 py-0">
+                            <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20 text-[10px] font-semibold px-2 py-0.5">
                               Tạm ngưng
                             </Badge>
                           )}
