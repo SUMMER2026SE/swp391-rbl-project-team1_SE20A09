@@ -88,7 +88,6 @@ public class Stadium implements Serializable {
     private LocalTime closeTime;
 
     /** Trạng thái hoạt động của sân. */
-    @Enumerated(EnumType.STRING)
     @Column(name = "stadium_status", nullable = false, length = 20)
     @Builder.Default
     private StadiumStatus stadiumStatus = StadiumStatus.AVAILABLE;

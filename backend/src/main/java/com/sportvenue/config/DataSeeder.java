@@ -32,6 +32,10 @@ public class DataSeeder implements CommandLineRunner {
         seedUser("admin@sportvenue.com", "Admin", "System", "0900000001", "Admin");
         seedUser("owner@sportvenue.com", "Hoàng", "Mai Huy", "0900000002", "Owner");
         seedUser("customer@sportvenue.com", "Hoàng", "Mai Huy", "0912345678", "Customer");
+        // V6 seed accounts
+        seedUser("owner2@sportvenue.com", "Xuân", "Nguyễn Huy", "0900000003", "Owner");
+        seedUser("customer2@sportvenue.com", "Chí Anh", "Lý Hào", "0912345679", "Customer");
+        seedUser("customer3@sportvenue.com", "Minh", "Trần An", "0912345680", "Customer");
         log.info("✅ DataSeeder: Seed accounts verified/updated.");
     }
 

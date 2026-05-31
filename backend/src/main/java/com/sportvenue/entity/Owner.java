@@ -56,7 +56,6 @@ public class Owner implements Serializable {
     private String businessAddress;
 
     /** Trạng thái phê duyệt chủ sân từ Admin. */
-    @Enumerated(EnumType.STRING)
     @Column(name = "approved_status", nullable = false, length = 20)
     @Builder.Default
     private ApprovedStatus approvedStatus = ApprovedStatus.PENDING;
