@@ -1,199 +1,226 @@
-﻿'use client'
+'use client'
 
-import { useState } from "react";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/landing/Footer";
-import { VenueCard } from "@/components/landing/VenueCard";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Search } from "lucide-react";
+import { useState, useEffect, useCallback } from 'react'
+import { searchStadiums, getAmenities, getSportTypes, StadiumResponse, StadiumSearchRequest, Amenity } from '@/lib/api/stadium'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Card, CardContent, CardFooter } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { MapPin, Navigation, Filter } from 'lucide-react'
 
-function VenueSearchPage() {
-  const [priceRange, setPriceRange] = useState([0, 1000000]);
+export default function SearchPage() {
+  const [stadiums, setStadiums] = useState<StadiumResponse[]>([])
+  const [amenitiesList, setAmenitiesList] = useState<Amenity[]>([])
+  const [sportTypes, setSportTypes] = useState<{ sportTypeId: number, sportName: string }[]>([])
+  const [loading, setLoading] = useState(false)
 
-  const venues = [
-    {
-      id: 1,
-      image: "https://images.unsplash.com/photo-1705593813682-033ee2991df6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-      name: "Sân bóng Thành Công",
-      sportType: "Bóng đá",
-      price: 500000,
-      rating: 4.8,
-      location: "Quận 1, TP.HCM",
-    },
-    {
-      id: 2,
-      image: "https://images.unsplash.com/photo-1764703666646-acc2f7d48857?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-      name: "Arena Sports Center",
-      sportType: "Bóng đá",
-      price: 700000,
-      rating: 4.9,
-      location: "Quận 3, TP.HCM",
-    },
-    {
-      id: 3,
-      image: "https://images.unsplash.com/photo-1767729790212-661953ecaa90?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-      name: "Sân Vận Động Quận 7",
-      sportType: "Bóng đá",
-      price: 600000,
-      rating: 4.7,
-      location: "Quận 7, TP.HCM",
-    },
-    {
-      id: 4,
-      image: "https://images.unsplash.com/photo-1765305460539-edf7a0838dad?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-      name: "Sân bóng Phú Mỹ Hưng",
-      sportType: "Bóng đá",
-      price: 550000,
-      rating: 4.6,
-      location: "Quận 7, TP.HCM",
-    },
-    {
-      id: 5,
-      image: "https://images.unsplash.com/photo-1771344164616-3582e4dc2f07?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-      name: "Sân bóng Bình Thạnh",
-      sportType: "Bóng đá",
-      price: 450000,
-      rating: 4.5,
-      location: "Quận Bình Thạnh, TP.HCM",
-    },
-  ];
+  const [filters, setFilters] = useState<StadiumSearchRequest>({
+    keyword: '',
+    sportTypeId: undefined,
+    targetDate: '',
+    startTime: '',
+    endTime: '',
+    amenityIds: [],
+    userLat: undefined,
+    userLng: undefined,
+    radiusInKm: undefined,
+    page: 0,
+    size: 10,
+  })
+
+  useEffect(() => {
+    Promise.all([getAmenities(), getSportTypes()])
+      .then(([amenitiesRes, sportTypesRes]) => {
+        setAmenitiesList(amenitiesRes)
+        setSportTypes(sportTypesRes)
+      })
+      .catch(console.error)
+  }, [])
+
+  const fetchStadiums = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await searchStadiums(filters)
+      setStadiums(res.content)
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setLoading(false)
+    }
+  }, [filters])
+
+  useEffect(() => {
+    fetchStadiums()
+  }, [fetchStadiums])
+
+  const handleFilterChange = (key: keyof StadiumSearchRequest, value: any) => {
+    setFilters(prev => ({ ...prev, [key]: value, page: 0 }))
+  }
+
+  const handleAmenityChange = (id: number, checked: boolean) => {
+    setFilters(prev => {
+      const ids = prev.amenityIds || []
+      return {
+        ...prev,
+        amenityIds: checked ? [...ids, id] : ids.filter(i => i !== id),
+        page: 0
+      }
+    })
+  }
+
+  const getLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          handleFilterChange('userLat', position.coords.latitude)
+          handleFilterChange('userLng', position.coords.longitude)
+          handleFilterChange('radiusInKm', 10) // default 10km radius
+        },
+        (error) => alert("Không thể lấy vị trí của bạn")
+      )
+    } else {
+      alert("Trình duyệt của bạn không hỗ trợ định vị")
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Filter Sidebar */}
-          <aside className="lg:col-span-1">
-            <div className="bg-card border rounded-lg p-6 sticky top-24">
-              <h3 className="mb-6">Bộ lọc</h3>
-
-              {/* Price Range */}
-              <div className="mb-6">
-                <Label className="mb-3 block">Khoảng giá</Label>
-                <Slider
-                  value={priceRange}
-                  onValueChange={setPriceRange}
-                  max={1000000}
-                  step={50000}
-                  className="mb-3"
-                />
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>{priceRange[0].toLocaleString('vi-VN')}đ</span>
-                  <span>{priceRange[1].toLocaleString('vi-VN')}đ</span>
-                </div>
-              </div>
-
-              {/* Sport Category */}
-              <div className="mb-6">
-                <Label className="mb-3 block">Loại sân</Label>
-                <div className="space-y-3">
-                  {["Bóng đá", "Cầu lông", "Quần vợt", "Bóng rổ"].map((sport) => (
-                    <div key={sport} className="flex items-center space-x-2">
-                      <Checkbox id={sport} />
-                      <label htmlFor={sport} className="text-sm cursor-pointer">
-                        {sport}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Amenities */}
-              <div className="mb-6">
-                <Label className="mb-3 block">Tiện ích</Label>
-                <div className="space-y-3">
-                  {["Bãi đỗ xe", "Phòng thay đồ", "Đèn chiếu sáng", "Wifi", "Căng tin"].map((amenity) => (
-                    <div key={amenity} className="flex items-center space-x-2">
-                      <Checkbox id={amenity} />
-                      <label htmlFor={amenity} className="text-sm cursor-pointer">
-                        {amenity}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Distance */}
-              <div>
-                <Label className="mb-3 block">Khoảng cách</Label>
-                <Select defaultValue="10">
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">Trong vòng 5km</SelectItem>
-                    <SelectItem value="10">Trong vòng 10km</SelectItem>
-                    <SelectItem value="20">Trong vòng 20km</SelectItem>
-                    <SelectItem value="50">Trong vòng 50km</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button className="w-full mt-6">Áp dụng bộ lọc</Button>
+    <div className="container mx-auto py-8 px-4">
+      <div className="flex flex-col md:flex-row gap-8">
+        
+        {/* Sidebar Filters */}
+        <div className="w-full md:w-80 shrink-0 space-y-6 bg-card p-6 rounded-xl border shadow-sm h-fit">
+          <h3 className="text-xl font-bold flex items-center mb-6 text-primary"><Filter className="mr-2 h-5 w-5"/> Bộ Lọc Tìm Kiếm</h3>
+          
+          <div className="space-y-4">
+            <div>
+              <Input 
+                placeholder="Tìm tên sân, khu vực..." 
+                value={filters.keyword || ''}
+                onChange={(e) => handleFilterChange('keyword', e.target.value)}
+                className="bg-background"
+              />
             </div>
-          </aside>
 
-          {/* Results */}
-          <main className="lg:col-span-3">
-            {/* Search Bar */}
-            <div className="flex gap-4 mb-6">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                <Input placeholder="Tìm kiếm sân..." className="pl-10" />
-              </div>
-              <Select defaultValue="rating">
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Sắp xếp" />
+            <div>
+              <h4 className="font-semibold text-sm mb-2 text-foreground/80">Môn thể thao</h4>
+              <Select onValueChange={(v) => handleFilterChange('sportTypeId', v === 'all' ? undefined : Number(v))}>
+                <SelectTrigger className="bg-background">
+                  <SelectValue placeholder="Tất cả môn" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="rating">Đánh giá cao nhất</SelectItem>
-                  <SelectItem value="price-low">Giá thấp đến cao</SelectItem>
-                  <SelectItem value="price-high">Giá cao đến thấp</SelectItem>
-                  <SelectItem value="distance">Khoảng cách</SelectItem>
+                  <SelectItem value="all">Tất cả môn</SelectItem>
+                  {sportTypes.map(st => (
+                    <SelectItem key={st.sportTypeId} value={st.sportTypeId.toString()}>{st.sportName}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Results Count */}
-            <p className="text-muted-foreground mb-4">
-              Tìm thấy <strong>{venues.length}</strong> sân thể thao
-            </p>
+            <div>
+              <h4 className="font-semibold text-sm mb-2 text-foreground/80">Gần bạn</h4>
+              <Button variant={filters.userLat ? "default" : "outline"} className="w-full justify-start" onClick={getLocation}>
+                <Navigation className="mr-2 h-4 w-4" /> 
+                {filters.userLat ? 'Đã lấy vị trí (Bán kính 10km)' : 'Sử dụng vị trí của tôi'}
+              </Button>
+            </div>
 
-            {/* Venue List */}
-            <div className="space-y-4">
-              {venues.map((venue) => (
-                <VenueCard key={venue.id} {...venue} />
+            <div className="pt-4 border-t">
+              <h4 className="font-semibold text-sm mb-3 text-foreground/80">Khung giờ trống</h4>
+              <div className="space-y-3">
+                <Input type="date" value={filters.targetDate || ''} onChange={(e) => handleFilterChange('targetDate', e.target.value)} className="bg-background" />
+                <div className="flex gap-2">
+                  <Input type="time" placeholder="Từ" value={filters.startTime || ''} onChange={(e) => handleFilterChange('startTime', e.target.value)} className="bg-background" />
+                  <Input type="time" placeholder="Đến" value={filters.endTime || ''} onChange={(e) => handleFilterChange('endTime', e.target.value)} className="bg-background" />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t">
+              <h4 className="font-semibold text-sm mb-3 text-foreground/80">Tiện ích bắt buộc</h4>
+              <div className="space-y-3 max-h-48 overflow-y-auto pr-2">
+                {amenitiesList.map(amenity => (
+                  <div key={amenity.amenityId} className="flex items-center space-x-3">
+                    <Checkbox 
+                      id={`amenity-${amenity.amenityId}`} 
+                      checked={filters.amenityIds?.includes(amenity.amenityId) || false}
+                      onCheckedChange={(checked) => handleAmenityChange(amenity.amenityId, checked as boolean)}
+                    />
+                    <label htmlFor={`amenity-${amenity.amenityId}`} className="text-sm cursor-pointer hover:text-primary transition-colors">{amenity.name}</label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Results */}
+        <div className="flex-1">
+          <div className="mb-6 flex justify-between items-end">
+            <h2 className="text-2xl font-bold tracking-tight">Kết quả tìm kiếm</h2>
+            <span className="text-muted-foreground font-medium bg-muted px-3 py-1 rounded-full text-sm">{stadiums.length} sân phù hợp</span>
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center items-center py-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : stadiums.length === 0 ? (
+            <div className="text-center py-32 bg-card rounded-xl border border-dashed">
+              <div className="text-muted-foreground mb-2">Không tìm thấy sân thể thao nào phù hợp với bộ lọc.</div>
+              <Button variant="link" onClick={() => setFilters({ keyword: '', page: 0, size: 10, amenityIds: [] })}>Xóa bộ lọc</Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              {stadiums.map((stadium) => (
+                <Card key={stadium.stadiumId} className="overflow-hidden hover:shadow-xl transition-all duration-300 border-border group cursor-pointer">
+                  <div className="relative h-56 w-full bg-muted overflow-hidden">
+                    {stadium.firstImageUrl ? (
+                      <img src={stadium.firstImageUrl} alt={stadium.stadiumName} className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-muted-foreground bg-secondary/50">Không có ảnh</div>
+                    )}
+                    <div className="absolute top-3 left-3 bg-background/90 backdrop-blur-sm text-foreground px-3 py-1 rounded-full text-sm font-semibold shadow-sm border">
+                      {stadium.sportTypeName}
+                    </div>
+                  </div>
+                  <CardContent className="p-5">
+                    <h3 className="text-xl font-bold truncate mb-2 group-hover:text-primary transition-colors">{stadium.stadiumName}</h3>
+                    <p className="text-sm text-muted-foreground flex items-start gap-1.5 mb-3">
+                      <MapPin className="h-4 w-4 shrink-0 mt-0.5 text-primary/70" /> 
+                      <span className="line-clamp-2">{stadium.address}</span>
+                    </p>
+                    
+                    {stadium.distanceInKm && (
+                      <div className="mb-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                        <Navigation className="h-3 w-3 mr-1" />
+                        Cách bạn {stadium.distanceInKm.toFixed(1)} km
+                      </div>
+                    )}
+                    
+                    <div className="flex flex-wrap gap-1.5 mt-4">
+                      {stadium.amenities.slice(0, 4).map(a => (
+                        <span key={a.amenityId} className="text-[11px] bg-secondary/80 text-secondary-foreground px-2 py-1 rounded-md font-medium border border-border/50">{a.name}</span>
+                      ))}
+                      {stadium.amenities.length > 4 && (
+                        <span className="text-[11px] bg-secondary/80 px-2 py-1 rounded-md font-medium">+{stadium.amenities.length - 4}</span>
+                      )}
+                    </div>
+                  </CardContent>
+                  <CardFooter className="p-5 border-t flex justify-between items-center bg-muted/20">
+                    <div>
+                      <div className="font-bold text-xl text-primary">{stadium.pricePerHour.toLocaleString('vi-VN')}đ</div>
+                      <div className="text-xs text-muted-foreground">mỗi giờ</div>
+                    </div>
+                    <Button className="rounded-full px-6 font-semibold shadow-md">Đặt sân ngay</Button>
+                  </CardFooter>
+                </Card>
               ))}
             </div>
-
-            {/* Pagination */}
-            <div className="flex justify-center gap-2 mt-8">
-              <Button variant="outline" size="sm">Trước</Button>
-              <Button variant="outline" size="sm">1</Button>
-              <Button size="sm">2</Button>
-              <Button variant="outline" size="sm">3</Button>
-              <Button variant="outline" size="sm">Sau</Button>
-            </div>
-          </main>
+          )}
         </div>
+        
       </div>
-
-      <Footer />
     </div>
-  );
+  )
 }
-
-export default VenueSearchPage;
