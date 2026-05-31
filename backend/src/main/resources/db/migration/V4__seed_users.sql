@@ -38,7 +38,7 @@ VALUES (
     'Sport Venue Owner Corp',
     'TAX-123456789',
     '123 Sports Road, District 1, HCMC',
-    'APPROVED'
+    'Approved'
 ) ON CONFLICT (user_id) DO NOTHING;
 
 -- Customer User

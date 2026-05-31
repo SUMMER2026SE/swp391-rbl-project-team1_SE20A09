@@ -12,6 +12,8 @@ spring:
 
   flyway:
     enabled: true
+    clean-disabled: false
+    clean-on-validation-error: true
 
   # Dùng embedded Redis nếu có, hoặc connect localhost khi CI
   data:
