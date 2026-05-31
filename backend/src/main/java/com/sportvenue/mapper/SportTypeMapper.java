@@ -9,5 +9,6 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface SportTypeMapper {
     SportTypeResponse toResponse(SportType sportType);
+
     List<SportTypeResponse> toResponseList(List<SportType> sportTypes);
 }

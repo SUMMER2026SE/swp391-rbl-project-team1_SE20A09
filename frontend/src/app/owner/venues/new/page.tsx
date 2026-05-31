@@ -29,11 +29,9 @@ const stadiumSchema = z.object({
   address: z.string()
     .min(5, "Địa chỉ phải có ít nhất 5 ký tự")
     .max(500, "Địa chỉ không được quá 500 ký tự"),
-  sportTypeId: z.number({
-    required_error: "Vui lòng chọn môn thể thao",
-    invalid_type_error: "Vui lòng chọn môn thể thao",
-  }).min(1, "Vui lòng chọn môn thể thao"),
-  pricePerHour: z.number({ invalid_type_error: "Vui lòng nhập giá" })
+  sportTypeId: z.number({ message: "Vui lòng chọn môn thể thao" })
+    .min(1, "Vui lòng chọn môn thể thao"),
+  pricePerHour: z.number({ message: "Vui lòng nhập giá" })
     .min(1000, "Giá tối thiểu là 1,000đ")
     .max(99999999.99, "Giá không được vượt quá 99,999,999.99đ"),
   description: z.string().max(2000, "Mô tả không được quá 2000 ký tự").optional(),
