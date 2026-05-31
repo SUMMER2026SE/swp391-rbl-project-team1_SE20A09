@@ -1,7 +1,7 @@
 package com.sportvenue.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -35,11 +35,10 @@ public class CreateStadiumRequest {
 
     private String description;
 
-    @Min(value = 1, message = "Capacity must be at least 1")
-    private Integer capacity;
-
+    @JsonFormat(pattern = "HH:mm:ss")
     private LocalTime openTime;
 
+    @JsonFormat(pattern = "HH:mm:ss")
     private LocalTime closeTime;
 
     private java.util.List<String> imageUrls;

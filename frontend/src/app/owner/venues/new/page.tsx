@@ -24,10 +24,12 @@ import { toast } from "sonner";
 const stadiumSchema = z.object({
   stadiumName: z.string().min(3, "Tên sân phải có ít nhất 3 ký tự").max(100),
   address: z.string().min(5, "Địa chỉ không hợp lệ"),
-  sportTypeId: z.number({ required_error: "Vui lòng chọn môn thể thao" }),
-  pricePerHour: z.number().min(1000, "Giá tối thiểu là 1,000đ"),
+  sportTypeId: z.number({
+    required_error: "Vui lòng chọn môn thể thao",
+    invalid_type_error: "Vui lòng chọn môn thể thao",
+  }).min(1, "Vui lòng chọn môn thể thao"),
+  pricePerHour: z.number({ invalid_type_error: "Vui lòng nhập giá" }).min(1000, "Giá tối thiểu là 1,000đ"),
   description: z.string().optional(),
-  capacity: z.number().min(1).optional(),
   openTime: z.string().optional(),
   closeTime: z.string().optional(),
 });
@@ -49,7 +51,6 @@ function AddVenuePage() {
       address: "",
       pricePerHour: 100000,
       description: "",
-      capacity: 10,
       openTime: "06:00:00",
       closeTime: "22:00:00",
     },
@@ -64,15 +65,13 @@ function AddVenuePage() {
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-
     setIsUploading(true);
     try {
-      const uploadPromises = Array.from(files).map(file => uploadStadiumImage(file));
-      const results = await Promise.all(uploadPromises);
+      const results = await Promise.all(Array.from(files).map(file => uploadStadiumImage(file)));
       const newUrls = results.map(r => r.url);
       setUploadedPhotos(prev => [...prev, ...newUrls]);
       toast.success(`Đã tải lên ${newUrls.length} ảnh`);
-    } catch (error) {
+    } catch {
       toast.error("Lỗi khi tải ảnh lên");
     } finally {
       setIsUploading(false);
@@ -85,13 +84,12 @@ function AddVenuePage() {
       setCurrentStep(2);
       return;
     }
-
     setIsSubmitting(true);
     try {
-      await stadiumService.createStadium({
-        ...data,
-        imageUrls: uploadedPhotos,
-      });
+      // Normalize HH:mm → HH:mm:ss for backend LocalTime deserialization
+      const openTime = data.openTime ? `${data.openTime}:00` : undefined;
+      const closeTime = data.closeTime ? `${data.closeTime}:00` : undefined;
+      await stadiumService.createStadium({ ...data, openTime, closeTime, imageUrls: uploadedPhotos });
       toast.success("Thêm sân thành công!");
       router.push("/owner/venues");
     } catch (error: any) {
@@ -101,11 +99,17 @@ function AddVenuePage() {
     }
   };
 
-  const steps = [
-    "Thông tin cơ bản",
-    "Hình ảnh",
-    "Giá & Giờ mở cửa",
-  ];
+  const steps = ["Thông tin cơ bản", "Hình ảnh", "Giá & Giờ mở cửa"];
+
+  const handleNext = async () => {
+    let valid = false;
+    if (currentStep === 1) {
+      valid = await form.trigger(["stadiumName", "address", "sportTypeId"]);
+    } else if (currentStep === 2) {
+      valid = true;
+    }
+    if (valid) setCurrentStep(prev => prev + 1);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -121,9 +125,7 @@ function AddVenuePage() {
               {steps.map((step, idx) => (
                 <div
                   key={idx}
-                  className={`flex-1 text-center ${
-                    idx + 1 === currentStep ? "text-primary font-medium" : "text-muted-foreground"
-                  }`}
+                  className={`flex-1 text-center ${idx + 1 === currentStep ? "text-primary font-medium" : "text-muted-foreground"}`}
                 >
                   <div
                     className={`w-10 h-10 rounded-full mx-auto mb-2 flex items-center justify-center border-2 ${
@@ -139,7 +141,8 @@ function AddVenuePage() {
             <Progress value={(currentStep / steps.length) * 100} className="h-2" />
           </div>
 
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          {/* Dùng div thay vì form để tránh browser auto-submit khi nhấn Enter */}
+          <div>
             {/* Step 1: Basic Info */}
             {currentStep === 1 && (
               <Card>
@@ -149,10 +152,10 @@ function AddVenuePage() {
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="stadiumName">Tên sân *</Label>
-                    <Input 
+                    <Input
                       {...form.register("stadiumName")}
-                      id="stadiumName" 
-                      placeholder="VD: Sân bóng Thành Công" 
+                      id="stadiumName"
+                      placeholder="VD: Sân bóng Thành Công"
                     />
                     {form.formState.errors.stadiumName && (
                       <p className="text-sm text-destructive">{form.formState.errors.stadiumName.message}</p>
@@ -161,9 +164,7 @@ function AddVenuePage() {
 
                   <div className="space-y-2">
                     <Label>Loại môn thể thao *</Label>
-                    <Select 
-                      onValueChange={(val) => form.setValue("sportTypeId", parseInt(val))}
-                    >
+                    <Select onValueChange={(val) => form.setValue("sportTypeId", parseInt(val), { shouldValidate: true })}>
                       <SelectTrigger>
                         <SelectValue placeholder="Chọn môn thể thao" />
                       </SelectTrigger>
@@ -246,11 +247,11 @@ function AddVenuePage() {
                           <span className="text-xs sm:text-sm">Tải ảnh lên</span>
                         </>
                       )}
-                      <input 
-                        type="file" 
-                        multiple 
-                        accept="image/*" 
-                        className="hidden" 
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        className="hidden"
                         onChange={handlePhotoUpload}
                         disabled={isUploading}
                       />
@@ -290,7 +291,6 @@ function AddVenuePage() {
                         {...form.register("openTime")}
                         id="openTime"
                         type="time"
-                        step="1"
                       />
                     </div>
                     <div className="space-y-2">
@@ -299,19 +299,8 @@ function AddVenuePage() {
                         {...form.register("closeTime")}
                         id="closeTime"
                         type="time"
-                        step="1"
                       />
                     </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="capacity">Sức chứa (người)</Label>
-                    <Input
-                      {...form.register("capacity", { valueAsNumber: true })}
-                      id="capacity"
-                      type="number"
-                      placeholder="VD: 10"
-                    />
                   </div>
                 </CardContent>
               </Card>
@@ -329,20 +318,21 @@ function AddVenuePage() {
               </Button>
 
               {currentStep < steps.length ? (
-                <Button 
-                  type="button"
-                  onClick={() => setCurrentStep(prev => prev + 1)}
-                >
+                <Button type="button" onClick={handleNext}>
                   Tiếp tục
                 </Button>
               ) : (
-                <Button type="submit" disabled={isSubmitting}>
+                <Button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={form.handleSubmit(onSubmit)}
+                >
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Hoàn tất & Thêm sân
                 </Button>
               )}
             </div>
-          </form>
+          </div>
         </div>
       </div>
 
