@@ -52,23 +52,6 @@ function AddVenuePage() {
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Auth guard — redirect to login if not authenticated
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.replace("/login");
-    }
-  }, [status, router]);
-
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (!session) return null;
-
   const form = useForm<StadiumFormValues>({
     resolver: zodResolver(stadiumSchema),
     defaultValues: {
@@ -81,11 +64,28 @@ function AddVenuePage() {
     },
   });
 
+  // Auth guard — redirect to login if not authenticated
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/login");
+    }
+  }, [status, router]);
+
   useEffect(() => {
     stadiumService.getSportTypes()
       .then(setSportTypes)
       .catch(() => toast.error("Không thể tải danh sách môn thể thao"));
   }, []);
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!session) return null;
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
