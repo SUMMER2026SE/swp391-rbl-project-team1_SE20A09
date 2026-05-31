@@ -40,4 +40,18 @@ public class AccessoryController {
         AccessoryResponse response = accessoryService.addAccessory(stadiumId, request, userPrincipal.getUsername());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
+
+    @org.springframework.web.bind.annotation.GetMapping("/{stadiumId}/accessories")
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(
+            summary = "Lấy danh sách phụ kiện cho thuê của sân",
+            description = "Yêu cầu tài khoản đăng nhập có vai trò Owner và sở hữu đúng sân này. Trả về tất cả phụ kiện kèm sân."
+    )
+    public ResponseEntity<java.util.List<AccessoryResponse>> getAccessories(
+            @PathVariable Integer stadiumId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+
+        java.util.List<AccessoryResponse> response = accessoryService.getAccessoriesByStadium(stadiumId, userPrincipal.getUsername());
+        return ResponseEntity.ok(response);
+    }
 }

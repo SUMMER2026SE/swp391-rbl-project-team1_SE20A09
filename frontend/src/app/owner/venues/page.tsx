@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
@@ -10,9 +10,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreVertical, Edit, Settings, Eye, Pause, Trash } from "lucide-react";
+import { useState } from "react";
+import { Plus, MoreVertical, Edit, Settings, Eye, Pause, Trash, Package } from "lucide-react";
+import { AccessoryManagerDialog } from "@/components/venues/AccessoryManagerDialog";
 
 function VenueManagementPage() {
+  const [isAccessoryOpen, setIsAccessoryOpen] = useState(false);
+  const [selectedVenueForAccessory, setSelectedVenueForAccessory] = useState<{ id: number, name: string } | null>(null);
+
   const venues = [
     {
       id: 1,
@@ -105,6 +110,13 @@ function VenueManagementPage() {
                         <Eye className="mr-2 h-4 w-4" />
                         Xem đặt sân
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        setSelectedVenueForAccessory({ id: venue.id, name: venue.name });
+                        setIsAccessoryOpen(true);
+                      }}>
+                        <Package className="mr-2 h-4 w-4" />
+                        Quản lý phụ kiện
+                      </DropdownMenuItem>
                       <DropdownMenuItem>
                         <Pause className="mr-2 h-4 w-4" />
                         Tạm dừng
@@ -134,8 +146,17 @@ function VenueManagementPage() {
                   <Button variant="outline" size="sm" className="flex-1">
                     Chỉnh sửa
                   </Button>
-                  <Button variant="outline" size="sm" className="flex-1">
-                    Xem đặt sân
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-primary hover:text-primary hover:bg-primary/5 border-primary/20"
+                    onClick={() => {
+                      setSelectedVenueForAccessory({ id: venue.id, name: venue.name });
+                      setIsAccessoryOpen(true);
+                    }}
+                  >
+                    <Package className="mr-1 h-4 w-4" />
+                    Phụ kiện
                   </Button>
                 </div>
               </CardContent>
@@ -143,6 +164,18 @@ function VenueManagementPage() {
           ))}
         </div>
       </div>
+
+      {selectedVenueForAccessory && (
+        <AccessoryManagerDialog
+          stadiumId={selectedVenueForAccessory.id}
+          stadiumName={selectedVenueForAccessory.name}
+          isOpen={isAccessoryOpen}
+          onClose={() => {
+            setIsAccessoryOpen(false);
+            setSelectedVenueForAccessory(null);
+          }}
+        />
+      )}
     </div>
   );
 }

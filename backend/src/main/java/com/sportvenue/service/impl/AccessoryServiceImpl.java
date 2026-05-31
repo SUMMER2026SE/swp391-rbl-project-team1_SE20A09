@@ -70,4 +70,34 @@ public class AccessoryServiceImpl implements AccessoryService {
         // 7. Chuyển đổi và trả về Response DTO
         return accessoryMapper.toResponse(savedAccessory);
     }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public java.util.List<AccessoryResponse> getAccessoriesByStadium(Integer stadiumId, String ownerEmail) {
+        log.info("Starting getAccessoriesByStadium for stadiumId: {} by user: {}", stadiumId, ownerEmail);
+
+        // 1. Tìm thông tin User từ email đăng nhập
+        User user = userRepository.findByEmail(ownerEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với email: " + ownerEmail));
+
+        // 2. Tìm Owner profile từ userId
+        Owner owner = ownerRepository.findByUserUserId(user.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không có profile chủ sân (Owner)"));
+
+        // 3. Tìm thông tin sân
+        Stadium stadium = stadiumRepository.findById(stadiumId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân thể thao với ID: " + stadiumId));
+
+        // 4. Kiểm tra xem sân này có thuộc về Owner hiện tại không (Bảo mật chéo)
+        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+            log.warn("Security alert! Owner ID {} with email {} tried to access stadium ID {} owned by Owner ID {}",
+                    owner.getOwnerId(), ownerEmail, stadiumId, stadium.getOwner().getOwnerId());
+            throw new BadRequestException("Bạn không có quyền quản lý sân thể thao này!");
+        }
+
+        // 5. Lấy danh sách phụ kiện và map sang DTO
+        return accessoryRepository.findByStadiumStadiumId(stadiumId).stream()
+                .map(accessoryMapper::toResponse)
+                .collect(java.util.stream.Collectors.toList());
+    }
 }
