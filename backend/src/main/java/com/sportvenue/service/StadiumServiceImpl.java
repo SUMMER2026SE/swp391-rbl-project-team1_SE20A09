@@ -2,6 +2,7 @@ package com.sportvenue.service;
 
 import com.sportvenue.dto.request.CreateStadiumRequest;
 import com.sportvenue.dto.response.StadiumResponse;
+import com.sportvenue.config.FileStorageProperties;
 import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.SportType;
 import com.sportvenue.entity.Stadium;
@@ -32,6 +33,7 @@ public class StadiumServiceImpl implements StadiumService {
     private final OwnerRepository ownerRepository;
     private final SportTypeRepository sportTypeRepository;
     private final StadiumMapper stadiumMapper;
+    private final FileStorageProperties fileStorageProperties;
 
     @Override
     @Transactional
@@ -98,6 +100,21 @@ public class StadiumServiceImpl implements StadiumService {
                 .toList());
         if (request.getImageUrls().stream().anyMatch(url -> url == null)) {
             throw new BadRequestException("Image URL cannot be blank");
+        }
+        validateStadiumImageUrls(request.getImageUrls());
+    }
+
+    private void validateStadiumImageUrls(List<String> imageUrls) {
+        String baseUrl = fileStorageProperties.getBaseUrl();
+        String normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        String allowedPrefix = normalizedBaseUrl + "/api/v1/files/stadiums/";
+
+        boolean hasInvalidUrl = imageUrls.stream()
+                .anyMatch(url -> !url.startsWith(allowedPrefix)
+                        || url.contains("..")
+                        || url.length() <= allowedPrefix.length());
+        if (hasInvalidUrl) {
+            throw new BadRequestException("Image URLs must be uploaded through the stadium image endpoint");
         }
     }
 
