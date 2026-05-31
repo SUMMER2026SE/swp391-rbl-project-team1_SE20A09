@@ -23,14 +23,20 @@ import { uploadStadiumImage } from "@/lib/api";
 import { toast } from "sonner";
 
 const stadiumSchema = z.object({
-  stadiumName: z.string().min(3, "Tên sân phải có ít nhất 3 ký tự").max(100),
-  address: z.string().min(5, "Địa chỉ không hợp lệ"),
+  stadiumName: z.string()
+    .min(3, "Tên sân phải có ít nhất 3 ký tự")
+    .max(100, "Tên sân không được quá 100 ký tự"),
+  address: z.string()
+    .min(5, "Địa chỉ phải có ít nhất 5 ký tự")
+    .max(500, "Địa chỉ không được quá 500 ký tự"),
   sportTypeId: z.number({
     required_error: "Vui lòng chọn môn thể thao",
     invalid_type_error: "Vui lòng chọn môn thể thao",
   }).min(1, "Vui lòng chọn môn thể thao"),
-  pricePerHour: z.number({ invalid_type_error: "Vui lòng nhập giá" }).min(1000, "Giá tối thiểu là 1,000đ"),
-  description: z.string().optional(),
+  pricePerHour: z.number({ invalid_type_error: "Vui lòng nhập giá" })
+    .min(1000, "Giá tối thiểu là 1,000đ")
+    .max(99999999.99, "Giá không được vượt quá 99,999,999.99đ"),
+  description: z.string().max(2000, "Mô tả không được quá 2000 ký tự").optional(),
   openTime: z.string().optional(),
   closeTime: z.string().optional(),
 }).refine(
@@ -39,9 +45,33 @@ const stadiumSchema = z.object({
     return data.closeTime > data.openTime;
   },
   { message: "Giờ đóng cửa phải sau giờ mở cửa", path: ["closeTime"] }
+).refine(
+  (data) => {
+    if (!data.stadiumName) return true;
+    return data.stadiumName.trim() === data.stadiumName;
+  },
+  { message: "Tên sân không được bắt đầu hoặc kết thúc bằng khoảng trắng", path: ["stadiumName"] }
 );
 
-type StadiumFormValues = z.infer<typeof stadiumSchema>;
+const validatedStadiumSchema = stadiumSchema.superRefine((data, ctx) => {
+  if (data.stadiumName.trim().length < 3) {
+    ctx.addIssue({ code: "custom", message: "Tên sân phải có ít nhất 3 ký tự", path: ["stadiumName"] });
+  }
+  if (data.address.trim().length > 500) {
+    ctx.addIssue({ code: "custom", message: "Địa chỉ không được quá 500 ký tự", path: ["address"] });
+  }
+  if (data.description && data.description.trim().length > 2000) {
+    ctx.addIssue({ code: "custom", message: "Mô tả không được quá 2000 ký tự", path: ["description"] });
+  }
+  if (!data.openTime) {
+    ctx.addIssue({ code: "custom", message: "Vui lòng chọn giờ mở cửa", path: ["openTime"] });
+  }
+  if (!data.closeTime) {
+    ctx.addIssue({ code: "custom", message: "Vui lòng chọn giờ đóng cửa", path: ["closeTime"] });
+  }
+});
+
+type StadiumFormValues = z.infer<typeof validatedStadiumSchema>;
 
 function AddVenuePage() {
   const router = useRouter();
@@ -53,7 +83,7 @@ function AddVenuePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<StadiumFormValues>({
-    resolver: zodResolver(stadiumSchema),
+    resolver: zodResolver(validatedStadiumSchema),
     defaultValues: {
       stadiumName: "",
       address: "",
@@ -90,6 +120,11 @@ function AddVenuePage() {
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    if (uploadedPhotos.length + files.length > 10) {
+      toast.error("Chỉ được tải lên tối đa 10 ảnh");
+      e.target.value = "";
+      return;
+    }
     setIsUploading(true);
     let successCount = 0;
     for (const file of Array.from(files)) {
