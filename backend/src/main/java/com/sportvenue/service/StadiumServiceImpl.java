@@ -95,6 +95,9 @@ public class StadiumServiceImpl implements StadiumService {
         if (request.getImageUrls() == null || request.getImageUrls().isEmpty()) {
             throw new BadRequestException("At least one stadium image is required");
         }
+        if (request.getImageUrls().size() > 10) {
+            throw new BadRequestException("Cannot upload more than 10 images");
+        }
         request.setImageUrls(request.getImageUrls().stream()
                 .map(this::trimToNull)
                 .toList());
