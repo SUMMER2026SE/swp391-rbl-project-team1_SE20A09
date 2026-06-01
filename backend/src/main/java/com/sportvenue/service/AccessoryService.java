@@ -3,6 +3,8 @@ package com.sportvenue.service;
 import com.sportvenue.dto.request.CreateAccessoryRequest;
 import com.sportvenue.dto.response.AccessoryResponse;
 
+import java.util.List;
+
 public interface AccessoryService {
     
     /**
@@ -22,5 +24,5 @@ public interface AccessoryService {
      * @param ownerEmail email của Owner để kiểm tra quyền sở hữu sân
      * @return danh sách DTO của các phụ kiện thuộc sân
      */
-    java.util.List<AccessoryResponse> getAccessoriesByStadium(Integer stadiumId, String ownerEmail);
+    List<AccessoryResponse> getAccessoriesByStadium(Integer stadiumId, String ownerEmail);
 }
