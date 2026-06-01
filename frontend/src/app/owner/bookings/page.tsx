@@ -364,7 +364,8 @@ function BookingManagementPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
+    <>
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Quản lý Đơn đặt sân</h1>
@@ -762,6 +763,7 @@ function BookingManagementPage() {
           </div>
         </DialogContent>
       </Dialog>
+    </>
   );
 }
 

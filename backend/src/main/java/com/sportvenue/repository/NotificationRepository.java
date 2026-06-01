@@ -14,11 +14,11 @@ import java.util.List;
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
     
-    Page<Notification> findByUser_UserId(Integer userId, Pageable pageable);
+    Page<Notification> findByUserUserId(Integer userId, Pageable pageable);
     
-    Page<Notification> findByUser_UserIdAndIsRead(Integer userId, Boolean isRead, Pageable pageable);
+    Page<Notification> findByUserUserIdAndIsRead(Integer userId, Boolean isRead, Pageable pageable);
     
-    long countByUser_UserIdAndIsReadFalse(Integer userId);
+    long countByUserUserIdAndIsReadFalse(Integer userId);
 
     @Modifying
     @Query("UPDATE Notification n SET n.isRead = true WHERE n.user.userId = :userId AND n.isRead = false")

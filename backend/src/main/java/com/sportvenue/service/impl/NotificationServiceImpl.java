@@ -33,9 +33,9 @@ public class NotificationServiceImpl implements NotificationService {
     public PageResponse<NotificationResponse> getMyNotifications(Integer userId, Boolean unreadOnly, Pageable pageable) {
         Page<Notification> notificationPage;
         if (Boolean.TRUE.equals(unreadOnly)) {
-            notificationPage = notificationRepository.findByUser_UserIdAndIsRead(userId, false, pageable);
+            notificationPage = notificationRepository.findByUserUserIdAndIsRead(userId, false, pageable);
         } else {
-            notificationPage = notificationRepository.findByUser_UserId(userId, pageable);
+            notificationPage = notificationRepository.findByUserUserId(userId, pageable);
         }
 
         List<NotificationResponse> content = notificationPage.getContent().stream()
@@ -48,7 +48,7 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional(readOnly = true)
     public long countUnread(Integer userId) {
-        return notificationRepository.countByUser_UserIdAndIsReadFalse(userId);
+        return notificationRepository.countByUserUserIdAndIsReadFalse(userId);
     }
 
     @Override

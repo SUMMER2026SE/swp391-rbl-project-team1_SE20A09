@@ -58,7 +58,7 @@ class NotificationServiceTest {
                 .build();
         Page<Notification> page = new PageImpl<>(Collections.singletonList(notification));
 
-        when(notificationRepository.findByUser_UserId(eq(testUserId), any(Pageable.class))).thenReturn(page);
+        when(notificationRepository.findByUserUserId(eq(testUserId), any(Pageable.class))).thenReturn(page);
 
         // When
         PageResponse<NotificationResponse> result = notificationService.getMyNotifications(testUserId, false, pageable);
@@ -67,7 +67,7 @@ class NotificationServiceTest {
         assertNotNull(result);
         assertEquals(1, result.getContent().size());
         assertEquals("Test Title", result.getContent().get(0).getTitle());
-        verify(notificationRepository).findByUser_UserId(testUserId, pageable);
+        verify(notificationRepository).findByUserUserId(testUserId, pageable);
     }
 
     @Test
