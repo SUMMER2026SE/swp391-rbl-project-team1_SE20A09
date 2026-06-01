@@ -2,12 +2,24 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { searchStadiums, getAmenities, getSportTypes, StadiumResponse, StadiumSearchRequest, Amenity } from '@/lib/api/stadium'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Card, CardContent, CardFooter } from '@/components/ui/card'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { MapPin, Navigation, Filter } from 'lucide-react'
+import { Map, X } from 'lucide-react'
+
+// Import New Components
+import { HorizontalSearch } from './components/HorizontalSearch'
+import { SportTypeTabs } from './components/SportTypeTabs'
+import { FilterModal } from './components/FilterModal'
+import { StadiumCard } from './components/StadiumCard'
+
+// Hook debounce
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value)
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay)
+    return () => clearTimeout(handler)
+  }, [value, delay])
+  return debouncedValue
+}
 
 export default function SearchPage() {
   const [stadiums, setStadiums] = useState<StadiumResponse[]>([])
@@ -25,9 +37,13 @@ export default function SearchPage() {
     userLat: undefined,
     userLng: undefined,
     radiusInKm: undefined,
+    minPrice: 0,
+    maxPrice: 1000000,
     page: 0,
-    size: 10,
+    size: 12,
   })
+
+  const debouncedFilters = useDebounce(filters, 500)
 
   useEffect(() => {
     Promise.all([getAmenities(), getSportTypes()])
@@ -38,34 +54,51 @@ export default function SearchPage() {
       .catch(console.error)
   }, [])
 
-  const fetchStadiums = useCallback(async () => {
+  const fetchStadiums = useCallback(async (currentFilters: StadiumSearchRequest) => {
     setLoading(true)
     try {
-      const res = await searchStadiums(filters)
+      // Loại bỏ các trường rỗng (empty string) để tránh lỗi parse ở Backend
+      const cleanFilters: any = { ...currentFilters }
+      if (!cleanFilters.targetDate) delete cleanFilters.targetDate
+      if (!cleanFilters.startTime) delete cleanFilters.startTime
+      if (!cleanFilters.endTime) delete cleanFilters.endTime
+      if (!cleanFilters.keyword) delete cleanFilters.keyword
+      if (cleanFilters.sportTypeId === undefined) delete cleanFilters.sportTypeId
+
+      const res = await searchStadiums(cleanFilters)
       setStadiums(res.content)
     } catch (error) {
       console.error(error)
     } finally {
       setLoading(false)
     }
-  }, [filters])
+  }, [])
 
   useEffect(() => {
-    fetchStadiums()
-  }, [fetchStadiums])
+    fetchStadiums(debouncedFilters)
+  }, [debouncedFilters, fetchStadiums])
 
   const handleFilterChange = (key: keyof StadiumSearchRequest, value: any) => {
     setFilters(prev => ({ ...prev, [key]: value, page: 0 }))
   }
 
-  const handleAmenityChange = (id: number, checked: boolean) => {
+  const handleAmenityToggle = (id: number) => {
     setFilters(prev => {
       const ids = prev.amenityIds || []
-      return {
-        ...prev,
-        amenityIds: checked ? [...ids, id] : ids.filter(i => i !== id),
-        page: 0
-      }
+      const newIds = ids.includes(id) ? ids.filter(i => i !== id) : [...ids, id]
+      return { ...prev, amenityIds: newIds, page: 0 }
+    })
+  }
+
+  const handleClearFilters = () => {
+    setFilters({
+      keyword: '',
+      sportTypeId: undefined,
+      amenityIds: [],
+      minPrice: 0,
+      maxPrice: 1000000,
+      page: 0,
+      size: 12,
     })
   }
 
@@ -73,11 +106,15 @@ export default function SearchPage() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          handleFilterChange('userLat', position.coords.latitude)
-          handleFilterChange('userLng', position.coords.longitude)
-          handleFilterChange('radiusInKm', 10) // default 10km radius
+          setFilters(prev => ({
+            ...prev,
+            userLat: position.coords.latitude,
+            userLng: position.coords.longitude,
+            radiusInKm: 15,
+            page: 0
+          }))
         },
-        (error) => alert("Không thể lấy vị trí của bạn")
+        (error) => alert("Không thể lấy vị trí của bạn. Vui lòng cấp quyền.")
       )
     } else {
       alert("Trình duyệt của bạn không hỗ trợ định vị")
@@ -85,141 +122,102 @@ export default function SearchPage() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="flex flex-col md:flex-row gap-8">
-        
-        {/* Sidebar Filters */}
-        <div className="w-full md:w-80 shrink-0 space-y-6 bg-card p-6 rounded-xl border shadow-sm h-fit">
-          <h3 className="text-xl font-bold flex items-center mb-6 text-primary"><Filter className="mr-2 h-5 w-5"/> Bộ Lọc Tìm Kiếm</h3>
-          
-          <div className="space-y-4">
-            <div>
-              <Input 
-                placeholder="Tìm tên sân, khu vực..." 
-                value={filters.keyword || ''}
-                onChange={(e) => handleFilterChange('keyword', e.target.value)}
-                className="bg-background"
+    <div className="min-h-screen bg-gray-50/50 dark:bg-background pb-20">
+
+      {/* 1. Hero Banner */}
+      <div className="relative h-[300px] md:h-[400px] w-full bg-gray-900 overflow-hidden">
+        <img
+          src="https://images.unsplash.com/photo-1579952363873-27f3bade9f55?q=80&w=2000&auto=format&fit=crop"
+          alt="Sport Banner"
+          className="w-full h-full object-cover opacity-60"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent"></div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white tracking-tight mb-4 drop-shadow-lg">
+            Khám phá Sân Thể Thao Đỉnh Cao
+          </h1>
+          <p className="text-lg md:text-xl text-gray-200 font-medium max-w-2xl drop-shadow-md">
+            Tìm kiếm, xem giá và đặt sân ngay lập tức với hàng trăm lựa chọn tốt nhất xung quanh bạn.
+          </p>
+        </div>
+      </div>
+
+      {/* 2. Horizontal Search Bar */}
+      <HorizontalSearch
+        filters={filters}
+        onFilterChange={handleFilterChange}
+        onGetLocation={getLocation}
+      />
+
+      {/* 3. Sport Type Tabs */}
+      <SportTypeTabs
+        sportTypes={sportTypes}
+        selectedId={filters.sportTypeId}
+        onSelect={(id) => handleFilterChange('sportTypeId', id)}
+      />
+
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+
+        {/* 4. Filter Info & Modal Trigger */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Danh sách sân</h2>
+            <p className="text-muted-foreground text-sm mt-1">Tìm thấy <strong className="text-foreground">{stadiums.length}</strong> sân phù hợp với bạn</p>
+          </div>
+
+          <div className="flex gap-3">
+            <Button variant="ghost" size="sm" onClick={handleClearFilters} className="text-muted-foreground hover:text-destructive hidden sm:flex">
+              <X className="h-4 w-4 mr-1" /> Xóa bộ lọc
+            </Button>
+
+            <FilterModal
+              filters={filters}
+              amenitiesList={amenitiesList}
+              totalResults={stadiums.length}
+              onFilterChange={handleFilterChange}
+              onAmenityToggle={handleAmenityToggle}
+              onClearFilters={handleClearFilters}
+            />
+
+            <Button variant="outline" className="hidden sm:flex border-gray-200 dark:border-border font-semibold hover:bg-gray-50 dark:hover:bg-muted shadow-sm">
+              <Map className="mr-2 h-4 w-4" /> Bản đồ
+            </Button>
+          </div>
+        </div>
+
+        {/* 5. Stadium Grid Area */}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className="animate-pulse bg-card rounded-2xl h-[420px] border border-gray-100 dark:border-border"></div>
+            ))}
+          </div>
+        ) : stadiums.length === 0 ? (
+          <div className="text-center py-20 bg-white dark:bg-card/50 rounded-3xl border border-dashed border-gray-200 dark:border-border shadow-sm flex flex-col items-center justify-center">
+            <div className="w-40 h-40 mb-6 opacity-50">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-gray-400 w-full h-full">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M12 6v6l4 4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Không tìm thấy sân</h3>
+            <p className="text-muted-foreground mb-8 max-w-md">Rất tiếc, chúng tôi không tìm thấy sân nào khớp với điều kiện lọc của bạn. Vui lòng thử nới lỏng các yêu cầu nhé!</p>
+            <Button onClick={handleClearFilters} className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 rounded-full px-8 py-6 text-base font-bold shadow-lg transition-all hover:scale-105 active:scale-95">
+              Xóa tất cả bộ lọc
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {stadiums.map((stadium) => (
+              <StadiumCard
+                key={stadium.stadiumId}
+                stadium={stadium}
+                isUrgent={!!(filters.targetDate && filters.startTime && Math.random() > 0.5)}
               />
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-sm mb-2 text-foreground/80">Môn thể thao</h4>
-              <Select onValueChange={(v) => handleFilterChange('sportTypeId', v === 'all' ? undefined : Number(v))}>
-                <SelectTrigger className="bg-background">
-                  <SelectValue placeholder="Tất cả môn" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả môn</SelectItem>
-                  {sportTypes.map(st => (
-                    <SelectItem key={st.sportTypeId} value={st.sportTypeId.toString()}>{st.sportName}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-sm mb-2 text-foreground/80">Gần bạn</h4>
-              <Button variant={filters.userLat ? "default" : "outline"} className="w-full justify-start" onClick={getLocation}>
-                <Navigation className="mr-2 h-4 w-4" /> 
-                {filters.userLat ? 'Đã lấy vị trí (Bán kính 10km)' : 'Sử dụng vị trí của tôi'}
-              </Button>
-            </div>
-
-            <div className="pt-4 border-t">
-              <h4 className="font-semibold text-sm mb-3 text-foreground/80">Khung giờ trống</h4>
-              <div className="space-y-3">
-                <Input type="date" value={filters.targetDate || ''} onChange={(e) => handleFilterChange('targetDate', e.target.value)} className="bg-background" />
-                <div className="flex gap-2">
-                  <Input type="time" placeholder="Từ" value={filters.startTime || ''} onChange={(e) => handleFilterChange('startTime', e.target.value)} className="bg-background" />
-                  <Input type="time" placeholder="Đến" value={filters.endTime || ''} onChange={(e) => handleFilterChange('endTime', e.target.value)} className="bg-background" />
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t">
-              <h4 className="font-semibold text-sm mb-3 text-foreground/80">Tiện ích bắt buộc</h4>
-              <div className="space-y-3 max-h-48 overflow-y-auto pr-2">
-                {amenitiesList.map(amenity => (
-                  <div key={amenity.amenityId} className="flex items-center space-x-3">
-                    <Checkbox 
-                      id={`amenity-${amenity.amenityId}`} 
-                      checked={filters.amenityIds?.includes(amenity.amenityId) || false}
-                      onCheckedChange={(checked) => handleAmenityChange(amenity.amenityId, checked as boolean)}
-                    />
-                    <label htmlFor={`amenity-${amenity.amenityId}`} className="text-sm cursor-pointer hover:text-primary transition-colors">{amenity.name}</label>
-                  </div>
-                ))}
-              </div>
-            </div>
+            ))}
           </div>
-        </div>
+        )}
 
-        {/* Results */}
-        <div className="flex-1">
-          <div className="mb-6 flex justify-between items-end">
-            <h2 className="text-2xl font-bold tracking-tight">Kết quả tìm kiếm</h2>
-            <span className="text-muted-foreground font-medium bg-muted px-3 py-1 rounded-full text-sm">{stadiums.length} sân phù hợp</span>
-          </div>
-
-          {loading ? (
-            <div className="flex justify-center items-center py-32">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-          ) : stadiums.length === 0 ? (
-            <div className="text-center py-32 bg-card rounded-xl border border-dashed">
-              <div className="text-muted-foreground mb-2">Không tìm thấy sân thể thao nào phù hợp với bộ lọc.</div>
-              <Button variant="link" onClick={() => setFilters({ keyword: '', page: 0, size: 10, amenityIds: [] })}>Xóa bộ lọc</Button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              {stadiums.map((stadium) => (
-                <Card key={stadium.stadiumId} className="overflow-hidden hover:shadow-xl transition-all duration-300 border-border group cursor-pointer">
-                  <div className="relative h-56 w-full bg-muted overflow-hidden">
-                    {stadium.firstImageUrl ? (
-                      <img src={stadium.firstImageUrl} alt={stadium.stadiumName} className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500" />
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-muted-foreground bg-secondary/50">Không có ảnh</div>
-                    )}
-                    <div className="absolute top-3 left-3 bg-background/90 backdrop-blur-sm text-foreground px-3 py-1 rounded-full text-sm font-semibold shadow-sm border">
-                      {stadium.sportTypeName}
-                    </div>
-                  </div>
-                  <CardContent className="p-5">
-                    <h3 className="text-xl font-bold truncate mb-2 group-hover:text-primary transition-colors">{stadium.stadiumName}</h3>
-                    <p className="text-sm text-muted-foreground flex items-start gap-1.5 mb-3">
-                      <MapPin className="h-4 w-4 shrink-0 mt-0.5 text-primary/70" /> 
-                      <span className="line-clamp-2">{stadium.address}</span>
-                    </p>
-                    
-                    {stadium.distanceInKm && (
-                      <div className="mb-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
-                        <Navigation className="h-3 w-3 mr-1" />
-                        Cách bạn {stadium.distanceInKm.toFixed(1)} km
-                      </div>
-                    )}
-                    
-                    <div className="flex flex-wrap gap-1.5 mt-4">
-                      {stadium.amenities.slice(0, 4).map(a => (
-                        <span key={a.amenityId} className="text-[11px] bg-secondary/80 text-secondary-foreground px-2 py-1 rounded-md font-medium border border-border/50">{a.name}</span>
-                      ))}
-                      {stadium.amenities.length > 4 && (
-                        <span className="text-[11px] bg-secondary/80 px-2 py-1 rounded-md font-medium">+{stadium.amenities.length - 4}</span>
-                      )}
-                    </div>
-                  </CardContent>
-                  <CardFooter className="p-5 border-t flex justify-between items-center bg-muted/20">
-                    <div>
-                      <div className="font-bold text-xl text-primary">{stadium.pricePerHour.toLocaleString('vi-VN')}đ</div>
-                      <div className="text-xs text-muted-foreground">mỗi giờ</div>
-                    </div>
-                    <Button className="rounded-full px-6 font-semibold shadow-md">Đặt sân ngay</Button>
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
-        
       </div>
     </div>
   )
