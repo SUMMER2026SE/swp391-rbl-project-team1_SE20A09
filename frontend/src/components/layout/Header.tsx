@@ -5,6 +5,8 @@ import type { Session } from "next-auth";
 import { Menu, LogOut, User as UserIcon, Settings, BarChart2 } from "lucide-react";
 import { Button } from "../ui/button";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { NotificationBell } from "../notifications/NotificationBell";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import {
   DropdownMenu,
@@ -205,6 +207,8 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
 export function Header() {
   const { data: session, status } = useSession();
   const user = session?.user;
+  const pathname = usePathname();
+  const isOwnerArea = pathname.startsWith("/owner");
 
   return (
     <header className="border-b bg-card sticky top-0 z-50">
@@ -230,7 +234,10 @@ export function Header() {
             {status === "loading" ? (
               <div className="w-10 h-10 rounded-full bg-muted animate-pulse" />
             ) : user ? (
-              <UserAccountMenu user={user} />
+              <div className="flex items-center gap-3">
+                {isOwnerArea && user.roleName === "Owner" && <NotificationBell />}
+                <UserAccountMenu user={user} />
+              </div>
             ) : (
               <div className="hidden md:flex items-center space-x-3">
                 <Link href="/login">

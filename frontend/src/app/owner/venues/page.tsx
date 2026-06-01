@@ -1,6 +1,5 @@
 'use client'
 
-import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -58,10 +57,7 @@ function VenueManagementPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-
-      <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl">Quản lý sân</h1>
           <Button>
@@ -176,7 +172,6 @@ function VenueManagementPage() {
           }}
         />
       )}
-    </div>
   );
 }
 

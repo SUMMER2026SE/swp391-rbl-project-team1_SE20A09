@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { Header } from '@/components/layout/Header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -109,10 +108,7 @@ export default function OwnerNotificationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-10 font-sans">
-      <Header />
-      
-      <main className="container mx-auto mt-8 px-4 max-w-4xl">
+    <main className="container mx-auto mt-8 px-4 max-w-4xl">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-extrabold flex items-center gap-3 text-foreground tracking-tight">
@@ -257,8 +253,7 @@ export default function OwnerNotificationsPage() {
               <ChevronRight className="h-5 w-5" />
             </Button>
           </div>
-        )}
-      </main>
-    </div>
-  )
-}
+          )}
+          </main>
+          );
+          }
