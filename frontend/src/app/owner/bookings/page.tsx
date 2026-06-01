@@ -1,9 +1,9 @@
-﻿'use client'
+'use client'
 
 import { useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -14,104 +14,315 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CheckCircle, XCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { 
+  CheckCircle, 
+  XCircle, 
+  ChevronDown, 
+  ChevronUp, 
+  RotateCcw, 
+  Clock, 
+  DollarSign, 
+  Info, 
+  User, 
+  Calendar,
+  AlertCircle,
+  HelpCircle
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { post } from "@/lib/api";
+
+interface BookingItem {
+  id: number;
+  displayId: string;
+  customer: {
+    name: string;
+    phone: string;
+    email: string;
+  };
+  venue: string;
+  date: string;
+  time: string;
+  amount: number;
+  paymentStatus: string;
+  status: string;
+  notes: string;
+  playTimeRaw: string;
+}
 
 function BookingManagementPage() {
-  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
-  const bookings = [
+  // 1. Dữ liệu mẫu đồng bộ 100% với Seed Data dưới cơ sở dữ liệu để test thực tế
+  const [bookingList, setBookingList] = useState<BookingItem[]>([
     {
-      id: "BK001234",
+      id: 5,
+      displayId: "BK000005",
       customer: {
-        name: "Nguyễn Văn A",
-        phone: "0901234567",
-        email: "nguyenvana@email.com",
+        name: "Hoàng Mai Huy",
+        phone: "0900000003",
+        email: "customer@sportvenue.com",
       },
-      venue: "Sân 1",
-      date: "22/05/2024",
-      time: "18:00 - 20:00",
-      amount: 500000,
-      paymentStatus: "paid",
-      status: "pending",
-      notes: "Khách hàng muốn thuê thêm bóng",
-    },
-    {
-      id: "BK001235",
-      customer: {
-        name: "Trần Thị B",
-        phone: "0909876543",
-        email: "tranthib@email.com",
-      },
-      venue: "Sân 2",
-      date: "22/05/2024",
-      time: "20:00 - 22:00",
-      amount: 600000,
+      venue: "Sân Bóng Đá Thủ Đức (Sân 1)",
+      date: "Ngày mai",
+      time: "18:00 - 19:00",
+      amount: 300000,
       paymentStatus: "paid",
       status: "confirmed",
-      notes: "",
+      notes: "Đơn đặt thử nghiệm - Điều kiện hoàn tiền 100% (Thời gian chơi >= 24h nữa)",
+      playTimeRaw: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
     },
     {
-      id: "BK001236",
+      id: 6,
+      displayId: "BK000006",
       customer: {
-        name: "Lê Văn C",
-        phone: "0903456789",
-        email: "levanc@email.com",
+        name: "Trần Minh An",
+        phone: "0900000004",
+        email: "customer2@sportvenue.com",
       },
-      venue: "Sân 1",
-      date: "23/05/2024",
-      time: "16:00 - 18:00",
-      amount: 500000,
+      venue: "Sân Bóng Đá Thủ Đức (Sân 1)",
+      date: "Trong vòng 24 giờ",
+      time: "20:00 - 21:00",
+      amount: 300000,
       paymentStatus: "paid",
-      status: "completed",
-      notes: "",
+      status: "confirmed",
+      notes: "Đơn đặt thử nghiệm - Điều kiện hoàn tiền 50% (Thời gian chơi 12h - 24h nữa)",
+      playTimeRaw: new Date(Date.now() + 18 * 60 * 60 * 1000).toISOString(),
     },
-  ];
+    {
+      id: 7,
+      displayId: "BK000007",
+      customer: {
+        name: "Lý Chí Anh Hào",
+        phone: "0900000005",
+        email: "customer3@sportvenue.com",
+      },
+      venue: "Sân Bóng Đá Thủ Đức (Sân 1)",
+      date: "Hôm nay (Sát giờ)",
+      time: "16:00 - 17:00",
+      amount: 300000,
+      paymentStatus: "paid",
+      status: "confirmed",
+      notes: "Đơn đặt thử nghiệm - Điều kiện hoàn tiền 0% (Thời gian chơi < 12h nữa)",
+      playTimeRaw: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 1,
+      displayId: "BK000001",
+      customer: {
+        name: "Hoàng Mai Huy",
+        phone: "0900000003",
+        email: "customer@sportvenue.com",
+      },
+      venue: "Sân Bóng Đá Thủ Đức (Sân 1)",
+      date: "Đã diễn ra",
+      time: "07:00 - 08:00",
+      amount: 300000,
+      paymentStatus: "refunded",
+      status: "cancelled",
+      notes: "Đơn đặt trong quá khứ đã được hủy và hoàn tiền 0đ",
+      playTimeRaw: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    },
+  ]);
+
+  // States phục vụ Hoàn Tiền (UC-OWN-12)
+  const [selectedBooking, setSelectedBooking] = useState<BookingItem | null>(null);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // States phục vụ hiển thị kết quả thành công Premium
+  const [successData, setSuccessData] = useState<any>(null);
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+
+  // Quick Debug / Tester tools
+  const [quickInputId, setQuickInputId] = useState("");
+
+  // Hàm tính toán dự phóng hoàn tiền ở Frontend để thông báo trước cho Owner
+  const calculateExpectedRefund = (playTimeStr: string, price: number) => {
+    const playTime = new Date(playTimeStr);
+    const now = new Date();
+    const diffMs = playTime.getTime() - now.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+
+    if (diffHours >= 24) {
+      return { 
+        percentage: 100, 
+        amount: price, 
+        label: "Hoàn 100%", 
+        desc: "Hủy trước giờ chơi >= 24 giờ. Khách hàng nhận lại toàn bộ tiền sân.",
+        badgeClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400"
+      };
+    } else if (diffHours >= 12) {
+      return { 
+        percentage: 50, 
+        amount: price * 0.5, 
+        label: "Hoàn 50%", 
+        desc: "Hủy trước giờ chơi từ 12 giờ đến dưới 24 giờ. Khách hàng nhận lại 50% tiền sân.",
+        badgeClass: "bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400"
+      };
+    } else {
+      return { 
+        percentage: 0, 
+        amount: 0, 
+        label: "Hoàn 0%", 
+        desc: "Hủy quá sát giờ chơi (< 12 giờ hoặc đã diễn ra). Khách hàng không được hoàn tiền theo điều khoản.",
+        badgeClass: "bg-rose-100 text-rose-800 dark:bg-rose-950/30 dark:text-rose-400"
+      };
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     const config = {
-      pending: { label: "Chờ xác nhận", className: "bg-yellow-100 text-yellow-700" },
-      confirmed: { label: "Đã xác nhận", className: "bg-green-100 text-green-700" },
-      rejected: { label: "Đã từ chối", className: "bg-red-100 text-red-700" },
-      completed: { label: "Hoàn thành", className: "bg-gray-100 text-gray-700" },
+      pending: { label: "Chờ xác nhận", className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/30 dark:text-yellow-400" },
+      confirmed: { label: "Đã xác nhận", className: "bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400" },
+      rejected: { label: "Đã từ chối", className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400" },
+      completed: { label: "Hoàn thành", className: "bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400" },
+      cancelled: { label: "Đã hủy", className: "bg-rose-100 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400" },
     };
-    const item = config[status as keyof typeof config];
-    return <Badge className={item.className}>{item.label}</Badge>;
+    const item = config[status.toLowerCase() as keyof typeof config] || { label: status, className: "bg-gray-100 text-gray-700" };
+    return <Badge className={`${item.className} border-none shadow-none font-medium px-2.5 py-0.5`}>{item.label}</Badge>;
+  };
+
+  const getPaymentBadge = (status: string) => {
+    const config = {
+      unpaid: { label: "Chưa thanh toán", className: "bg-orange-100 text-orange-700 dark:bg-orange-950/30 dark:text-orange-400" },
+      paid: { label: "Đã thanh toán", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" },
+      refunded: { label: "Đã hoàn tiền", className: "bg-purple-100 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400" },
+    };
+    const item = config[status.toLowerCase() as keyof typeof config] || { label: status, className: "bg-gray-100 text-gray-700" };
+    return <Badge className={`${item.className} border-none shadow-none font-medium px-2.5 py-0.5`}>{item.label}</Badge>;
   };
 
   const filterBookings = (status?: string) => {
-    if (!status) return bookings;
-    return bookings.filter((b) => b.status === status);
+    if (!status) return bookingList;
+    return bookingList.filter((b) => b.status.toLowerCase() === status.toLowerCase());
   };
 
-  const BookingRow = ({ booking }: { booking: typeof bookings[0] }) => {
+  // Mở modal hoàn tiền cho Booking cụ thể
+  const handleOpenRefundModal = (booking: BookingItem) => {
+    setSelectedBooking(booking);
+    setCancelReason("");
+    setIsCancelModalOpen(true);
+  };
+
+  // Gọi nhanh bằng mã đơn (Chế độ Tester)
+  const handleQuickRefundSubmit = () => {
+    const parsedId = parseInt(quickInputId.trim());
+    if (isNaN(parsedId)) {
+      toast.error("Vui lòng nhập Mã đơn đặt sân hợp lệ (dạng số)!");
+      return;
+    }
+    
+    // Tìm xem đơn đó có sẵn trong list mock không
+    const found = bookingList.find(b => b.id === parsedId);
+    if (found) {
+      handleOpenRefundModal(found);
+    } else {
+      // Nếu không có trong list mock, tạo một thực thể giả lập để gửi lên backend thật
+      const mockCustom: BookingItem = {
+        id: parsedId,
+        displayId: `BK${String(parsedId).padStart(6, '0')}`,
+        customer: { name: "Khách hàng thử nghiệm", phone: "N/A", email: "N/A" },
+        venue: "Sân Bóng Đá Thủ Đức",
+        date: "Động",
+        time: "Động",
+        amount: 300000,
+        paymentStatus: "paid",
+        status: "confirmed",
+        notes: "Đơn đặt sân tuỳ biến qua cổng nhập mã nhanh",
+        playTimeRaw: new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString(),
+      };
+      handleOpenRefundModal(mockCustom);
+    }
+  };
+
+  // Hàm gửi Request thực tế lên Backend để thực hiện hoàn tiền
+  const handleConfirmRefund = async () => {
+    if (!selectedBooking) return;
+    if (!cancelReason.trim()) {
+      toast.error("Vui lòng nhập lý do hủy đặt sân!");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      toast.loading("Đang kết nối backend xử lý hoàn tiền...", { id: "refund-process" });
+
+      // Gọi API thật
+      const response = await post<any>(`/owner/bookings/${selectedBooking.id}/refund`, {
+        reason: cancelReason.trim()
+      });
+
+      // Thành công: Cập nhật state ở local
+      setBookingList(prev => prev.map(b => {
+        if (b.id === selectedBooking.id) {
+          return {
+            ...b,
+            status: "cancelled",
+            paymentStatus: "refunded"
+          };
+        }
+        return b;
+      }));
+
+      // Đưa dữ liệu kết quả từ server trả về vào State thành công để show Popup Premium
+      setSuccessData(response);
+      setIsCancelModalOpen(false);
+      setIsSuccessModalOpen(true);
+      toast.success("Đã hoàn tiền và giải phóng sân thành công!", { id: "refund-process" });
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message || "Không thể thực hiện hoàn tiền. Vui lòng kiểm tra lại quyền sở hữu hoặc trạng thái đơn hàng!", { id: "refund-process" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const BookingRow = ({ booking }: { booking: BookingItem }) => {
     const isExpanded = expandedRow === booking.id;
+    const canRefund = booking.status.toLowerCase() === "confirmed" && booking.paymentStatus.toLowerCase() === "paid";
 
     return (
       <>
-        <tr className="border-b hover:bg-muted">
-          <td className="p-3">
+        <tr className="border-b hover:bg-muted/40 transition-colors duration-150">
+          <td className="p-4 align-middle">
             <Checkbox />
           </td>
-          <td className="p-3 font-mono text-sm">{booking.id}</td>
-          <td className="p-3">{booking.customer.name}</td>
-          <td className="p-3">{booking.venue}</td>
-          <td className="p-3">{booking.date}</td>
-          <td className="p-3">{booking.time}</td>
-          <td className="p-3 text-right">{booking.amount.toLocaleString('vi-VN')}đ</td>
-          <td className="p-3">{getStatusBadge(booking.status)}</td>
-          <td className="p-3">
-            <div className="flex gap-2">
-              {booking.status === "pending" && (
-                <>
-                  <Button size="sm" variant="default">
-                    <CheckCircle className="h-4 w-4 mr-1" />
-                    Duyệt
-                  </Button>
-                  <Button size="sm" variant="destructive">
-                    <XCircle className="h-4 w-4 mr-1" />
-                    Từ chối
-                  </Button>
-                </>
+          <td className="p-4 align-middle font-mono text-sm font-semibold text-primary">{booking.displayId}</td>
+          <td className="p-4 align-middle font-medium">{booking.customer.name}</td>
+          <td className="p-4 align-middle text-muted-foreground">{booking.venue}</td>
+          <td className="p-4 align-middle text-sm">{booking.date}</td>
+          <td className="p-4 align-middle text-sm font-medium">{booking.time}</td>
+          <td className="p-4 align-middle text-right font-semibold text-slate-900 dark:text-slate-100">
+            {booking.amount.toLocaleString('vi-VN')}đ
+          </td>
+          <td className="p-4 align-middle">
+            <div className="flex flex-col gap-1 items-start">
+              {getStatusBadge(booking.status)}
+              {getPaymentBadge(booking.paymentStatus)}
+            </div>
+          </td>
+          <td className="p-4 align-middle">
+            <div className="flex gap-2 items-center justify-end">
+              {canRefund && (
+                <Button 
+                  size="sm" 
+                  variant="destructive"
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-medium shadow-sm transition-all duration-200"
+                  onClick={() => handleOpenRefundModal(booking)}
+                >
+                  <RotateCcw className="h-3.5 w-3.5 mr-1.5 animate-spin-reverse" />
+                  Hủy & Hoàn Tiền
+                </Button>
               )}
               <Button
                 size="sm"
@@ -119,6 +330,7 @@ function BookingManagementPage() {
                 onClick={() =>
                   setExpandedRow(isExpanded ? null : booking.id)
                 }
+                className="hover:bg-muted"
               >
                 {isExpanded ? (
                   <ChevronUp className="h-4 w-4" />
@@ -131,46 +343,88 @@ function BookingManagementPage() {
         </tr>
 
         {isExpanded && (
-          <tr className="bg-muted/50">
+          <tr className="bg-muted/30">
             <td colSpan={9} className="p-6">
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <h4 className="mb-3">Thông tin khách hàng</h4>
-                  <div className="space-y-2 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 rounded-lg border bg-card p-4 shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm flex items-center gap-1.5 text-primary border-b pb-1.5">
+                    <User className="h-4 w-4 text-blue-500" />
+                    Thông tin khách hàng
+                  </h4>
+                  <div className="space-y-1.5 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Họ tên</span>
-                      <span>{booking.customer.name}</span>
+                      <span className="text-muted-foreground">Họ tên:</span>
+                      <span className="font-medium">{booking.customer.name}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Số điện thoại</span>
-                      <span>{booking.customer.phone}</span>
+                      <span className="text-muted-foreground">Số điện thoại:</span>
+                      <span className="font-mono">{booking.customer.phone}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Email</span>
-                      <span>{booking.customer.email}</span>
+                      <span className="text-muted-foreground">Email:</span>
+                      <span className="text-blue-600 dark:text-blue-400 font-mono text-xs">{booking.customer.email}</span>
                     </div>
                   </div>
                 </div>
 
-                <div>
-                  <h4 className="mb-3">Chi tiết đặt sân</h4>
-                  <div className="space-y-2 text-sm">
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm flex items-center gap-1.5 text-primary border-b pb-1.5">
+                    <Calendar className="h-4 w-4 text-emerald-500" />
+                    Chi tiết sân đặt
+                  </h4>
+                  <div className="space-y-1.5 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Thanh toán</span>
-                      <Badge className="bg-green-100 text-green-700">
-                        Đã thanh toán
-                      </Badge>
+                      <span className="text-muted-foreground">Sân chơi:</span>
+                      <span className="font-medium">{booking.venue}</span>
                     </div>
-                    {booking.notes && (
-                      <div>
-                        <span className="text-muted-foreground block mb-1">
-                          Ghi chú
-                        </span>
-                        <p>{booking.notes}</p>
-                      </div>
-                    )}
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Khung giờ:</span>
+                      <span className="font-medium">{booking.time}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Thời gian gốc:</span>
+                      <span className="font-mono text-xs">{new Date(booking.playTimeRaw).toLocaleString('vi-VN')}</span>
+                    </div>
                   </div>
                 </div>
+
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm flex items-center gap-1.5 text-primary border-b pb-1.5">
+                    <Info className="h-4 w-4 text-violet-500" />
+                    Chính sách hoàn tiền (Ước tính)
+                  </h4>
+                  {booking.status.toLowerCase() === "cancelled" ? (
+                    <div className="text-sm text-slate-500 italic bg-slate-100 dark:bg-slate-800 p-2.5 rounded border">
+                      Đơn hàng đã được xử lý hủy. Khung giờ chơi đã được giải phóng trở lại trạng thái Sẵn Sàng (AVAILABLE).
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {(() => {
+                        const estimate = calculateExpectedRefund(booking.playTimeRaw, booking.amount);
+                        return (
+                          <>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-muted-foreground">Khả năng hoàn:</span>
+                              <Badge className={`${estimate.badgeClass} border-none`}>{estimate.label}</Badge>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs text-muted-foreground">Số tiền hoàn trả:</span>
+                              <span className="font-bold text-slate-900 dark:text-slate-100">{estimate.amount.toLocaleString('vi-VN')}đ</span>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground leading-relaxed bg-slate-50 dark:bg-slate-900 p-1.5 rounded border border-slate-100 dark:border-slate-800">{estimate.desc}</p>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                {booking.notes && (
+                  <div className="col-span-full bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded border text-xs text-slate-600 dark:text-slate-300">
+                    <span className="font-semibold text-primary block mb-0.5">Ghi chú:</span>
+                    <p className="italic">{booking.notes}</p>
+                  </div>
+                )}
               </div>
             </td>
           </tr>
@@ -180,118 +434,181 @@ function BookingManagementPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background text-foreground pb-12">
       <Header />
 
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl mb-8">Quản lý đặt sân</h1>
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">Quản lý Đơn đặt sân</h1>
+            <p className="text-muted-foreground mt-1 text-sm">Xem danh sách, xác nhận đặt sân hoặc hủy hoàn tiền nhanh chóng.</p>
+          </div>
+          
+          {/* Quick tester tools */}
+          <Card className="border border-indigo-200 dark:border-indigo-950 bg-indigo-50/40 dark:bg-indigo-950/10 shadow-sm max-w-md w-full md:w-auto">
+            <CardContent className="p-3.5 flex gap-2.5 items-center">
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={quickInputId}
+                  onChange={(e) => setQuickInputId(e.target.value)}
+                  placeholder="Nhập mã đơn số (e.g. 5, 6, 7)"
+                  className="w-full bg-background border rounded-md px-3 py-1.5 text-sm font-mono focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
+              <Button 
+                onClick={handleQuickRefundSubmit}
+                size="sm"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs whitespace-nowrap"
+              >
+                Hủy nhanh bằng ID
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Filters */}
-        <Card className="mb-6">
-          <CardContent className="p-4">
+        <Card className="mb-6 shadow-sm border border-slate-200/80 dark:border-slate-800">
+          <CardContent className="p-5">
             <div className="flex gap-4 flex-wrap">
-              <div className="flex-1 min-w-48">
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Từ ngày</label>
                 <input
                   type="date"
-                  className="w-full border rounded-lg px-3 py-2"
+                  className="w-full border rounded-lg px-3 py-2 bg-background focus:ring-1 focus:ring-primary focus:outline-none"
                   placeholder="Từ ngày"
                 />
               </div>
-              <div className="flex-1 min-w-48">
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Đến ngày</label>
                 <input
                   type="date"
-                  className="w-full border rounded-lg px-3 py-2"
+                  className="w-full border rounded-lg px-3 py-2 bg-background focus:ring-1 focus:ring-primary focus:outline-none"
                   placeholder="Đến ngày"
                 />
               </div>
-              <Select defaultValue="all">
-                <SelectTrigger className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả sân</SelectItem>
-                  <SelectItem value="san1">Sân 1</SelectItem>
-                  <SelectItem value="san2">Sân 2</SelectItem>
-                  <SelectItem value="san3">Sân 3</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button variant="outline">Lọc</Button>
+              <div className="w-full md:w-56">
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Sân thể thao</label>
+                <Select defaultValue="all">
+                  <SelectTrigger className="w-full h-[42px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tất cả các sân</SelectItem>
+                    <SelectItem value="san1">Sân Bóng Đá Thủ Đức</SelectItem>
+                    <SelectItem value="san2">Sân Cầu Lông Bình Thạnh</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-end">
+                <Button variant="outline" className="h-[42px] px-6 font-semibold shadow-sm hover:bg-muted">Lọc kết quả</Button>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Tabs */}
-        <Tabs defaultValue="all">
-          <div className="flex items-center justify-between mb-6">
-            <TabsList>
-              <TabsTrigger value="all">
-                Tất cả ({bookings.length})
+        <Tabs defaultValue="all" className="space-y-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b pb-2">
+            <TabsList className="bg-muted/70 p-1 rounded-lg w-full lg:w-auto overflow-x-auto flex-nowrap whitespace-nowrap justify-start">
+              <TabsTrigger value="all" className="font-semibold text-sm">
+                Tất cả ({bookingList.length})
               </TabsTrigger>
-              <TabsTrigger value="pending">
-                Chờ xác nhận ({filterBookings("pending").length})
+              <TabsTrigger value="pending" className="font-semibold text-sm">
+                Chờ duyệt ({filterBookings("pending").length})
               </TabsTrigger>
-              <TabsTrigger value="confirmed">
+              <TabsTrigger value="confirmed" className="font-semibold text-sm">
                 Đã xác nhận ({filterBookings("confirmed").length})
               </TabsTrigger>
-              <TabsTrigger value="rejected">
-                Đã từ chối ({filterBookings("rejected").length})
-              </TabsTrigger>
-              <TabsTrigger value="completed">
+              <TabsTrigger value="completed" className="font-semibold text-sm">
                 Hoàn thành ({filterBookings("completed").length})
+              </TabsTrigger>
+              <TabsTrigger value="cancelled" className="font-semibold text-sm">
+                Đã hủy ({filterBookings("cancelled").length})
               </TabsTrigger>
             </TabsList>
 
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm">
-                Xuất Excel
+            <div className="flex gap-2 self-end">
+              <Button variant="outline" size="sm" className="font-medium shadow-sm">
+                Xuất danh sách Excel
               </Button>
             </div>
           </div>
 
-          <Card>
+          <Card className="shadow-md border border-slate-200/80 dark:border-slate-800 overflow-hidden">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-muted">
-                    <tr>
-                      <th className="p-3 text-left">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-muted/50 border-b text-muted-foreground text-xs uppercase font-bold tracking-wider">
+                      <th className="p-4 text-left w-12">
                         <Checkbox />
                       </th>
-                      <th className="p-3 text-left">Mã đơn</th>
-                      <th className="p-3 text-left">Khách hàng</th>
-                      <th className="p-3 text-left">Sân</th>
-                      <th className="p-3 text-left">Ngày</th>
-                      <th className="p-3 text-left">Giờ</th>
-                      <th className="p-3 text-right">Số tiền</th>
-                      <th className="p-3 text-left">Trạng thái</th>
-                      <th className="p-3 text-left">Thao tác</th>
+                      <th className="p-4 text-left">Mã đơn</th>
+                      <th className="p-4 text-left">Khách hàng</th>
+                      <th className="p-4 text-left">Sân chơi</th>
+                      <th className="p-4 text-left">Ngày</th>
+                      <th className="p-4 text-left">Khung giờ</th>
+                      <th className="p-4 text-right">Tổng tiền</th>
+                      <th className="p-4 text-left">Trạng thái</th>
+                      <th className="p-4 text-right">Hành động</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <TabsContent value="all" className="m-0">
-                      {bookings.map((booking) => (
-                        <BookingRow key={booking.id} booking={booking} />
-                      ))}
+                    <TabsContent value="all" className="m-0" asChild>
+                      <>
+                        {bookingList.length === 0 ? (
+                          <tr><td colSpan={9} className="text-center p-8 text-muted-foreground">Không có đơn đặt sân nào.</td></tr>
+                        ) : (
+                          bookingList.map((booking) => (
+                            <BookingRow key={booking.id} booking={booking} />
+                          ))
+                        )}
+                      </>
                     </TabsContent>
-                    <TabsContent value="pending" className="m-0">
-                      {filterBookings("pending").map((booking) => (
-                        <BookingRow key={booking.id} booking={booking} />
-                      ))}
+                    <TabsContent value="pending" className="m-0" asChild>
+                      <>
+                        {filterBookings("pending").length === 0 ? (
+                          <tr><td colSpan={9} className="text-center p-8 text-muted-foreground">Không có đơn đặt sân chờ duyệt.</td></tr>
+                        ) : (
+                          filterBookings("pending").map((booking) => (
+                            <BookingRow key={booking.id} booking={booking} />
+                          ))
+                        )}
+                      </>
                     </TabsContent>
-                    <TabsContent value="confirmed" className="m-0">
-                      {filterBookings("confirmed").map((booking) => (
-                        <BookingRow key={booking.id} booking={booking} />
-                      ))}
+                    <TabsContent value="confirmed" className="m-0" asChild>
+                      <>
+                        {filterBookings("confirmed").length === 0 ? (
+                          <tr><td colSpan={9} className="text-center p-8 text-muted-foreground">Không có đơn đã xác nhận.</td></tr>
+                        ) : (
+                          filterBookings("confirmed").map((booking) => (
+                            <BookingRow key={booking.id} booking={booking} />
+                          ))
+                        )}
+                      </>
                     </TabsContent>
-                    <TabsContent value="rejected" className="m-0">
-                      {filterBookings("rejected").map((booking) => (
-                        <BookingRow key={booking.id} booking={booking} />
-                      ))}
+                    <TabsContent value="completed" className="m-0" asChild>
+                      <>
+                        {filterBookings("completed").length === 0 ? (
+                          <tr><td colSpan={9} className="text-center p-8 text-muted-foreground">Không có đơn hoàn thành.</td></tr>
+                        ) : (
+                          filterBookings("completed").map((booking) => (
+                            <BookingRow key={booking.id} booking={booking} />
+                          ))
+                        )}
+                      </>
                     </TabsContent>
-                    <TabsContent value="completed" className="m-0">
-                      {filterBookings("completed").map((booking) => (
-                        <BookingRow key={booking.id} booking={booking} />
-                      ))}
+                    <TabsContent value="cancelled" className="m-0" asChild>
+                      <>
+                        {filterBookings("cancelled").length === 0 ? (
+                          <tr><td colSpan={9} className="text-center p-8 text-muted-foreground">Không có đơn đã hủy.</td></tr>
+                        ) : (
+                          filterBookings("cancelled").map((booking) => (
+                            <BookingRow key={booking.id} booking={booking} />
+                          ))
+                        )}
+                      </>
                     </TabsContent>
                   </tbody>
                 </table>
@@ -300,6 +617,187 @@ function BookingManagementPage() {
           </Card>
         </Tabs>
       </div>
+
+      {/* ──────────────────────────────────────────────────────────────────────────
+          POPUP 1: ĐỐI THOẠI XÁC NHẬN HỦY VÀ ƯỚC TÍNH HOÀN TIỀN (CONFIRM REFUND DIALOG)
+          ────────────────────────────────────────────────────────────────────────── */}
+      <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
+        <DialogContent className="max-w-md border dark:border-slate-800 shadow-2xl rounded-xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-rose-600">
+              <RotateCcw className="h-5.5 w-5.5" />
+              Yêu Cầu Hủy & Hoàn Tiền
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs">
+              Vui lòng xem xét các điều khoản hoàn tiền và nhập lý do trước khi thực hiện. Hành động này không thể hoàn tác.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedBooking && (
+            <div className="space-y-4 py-3">
+              {/* Thông tin đơn */}
+              <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Mã đơn:</span>
+                  <span className="font-mono font-bold text-primary">{selectedBooking.displayId}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Khách hàng:</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-200">{selectedBooking.customer.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Thời gian chơi:</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-200">{new Date(selectedBooking.playTimeRaw).toLocaleString('vi-VN')}</span>
+                </div>
+                <div className="flex justify-between border-t pt-2 mt-2">
+                  <span className="text-muted-foreground font-semibold">Tiền thanh toán:</span>
+                  <span className="font-bold text-primary">{selectedBooking.amount.toLocaleString('vi-VN')}đ</span>
+                </div>
+              </div>
+
+              {/* Tính toán hoàn tiền thực tế */}
+              <div className="border border-violet-100 dark:border-violet-950/50 bg-violet-50/20 dark:bg-violet-950/10 p-4 rounded-xl space-y-2.5">
+                <h5 className="font-semibold text-xs text-violet-800 dark:text-violet-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5" />
+                  Chính sách áp dụng tự động
+                </h5>
+                
+                {(() => {
+                  const policy = calculateExpectedRefund(selectedBooking.playTimeRaw, selectedBooking.amount);
+                  return (
+                    <>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-slate-600 dark:text-slate-400">Tỷ lệ hoàn trả:</span>
+                        <Badge className={`${policy.badgeClass} border-none font-bold px-2 py-0.5`}>{policy.label}</Badge>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-slate-600 dark:text-slate-400">Tiền trả khách:</span>
+                        <span className="font-extrabold text-lg text-slate-900 dark:text-slate-100">{policy.amount.toLocaleString('vi-VN')}đ</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-muted-foreground border-t pt-2 mt-1 italic">{policy.desc}</p>
+                    </>
+                  );
+                })()}
+              </div>
+
+              {/* Lý do hủy */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">Lý do hủy sân <span className="text-rose-500">*</span></label>
+                <Textarea 
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Nhập lý do chi tiết hủy đặt sân (e.g. Khách yêu cầu bận việc đột xuất, Sân bảo trì đột xuất...)"
+                  className="min-h-[80px] focus:ring-1 focus:ring-rose-500 focus:outline-none"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsCancelModalOpen(false)}
+              disabled={isSubmitting}
+            >
+              Hủy bỏ
+            </Button>
+            <Button 
+              className="bg-rose-600 hover:bg-rose-700 text-white font-medium shadow-sm transition-all duration-200"
+              onClick={handleConfirmRefund}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Đang xử lý..." : "Xác nhận hoàn tiền"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ──────────────────────────────────────────────────────────────────────────
+          POPUP 2: THÔNG BÁO HOÀN TIỀN THÀNH CÔNG RỰC RỠ (SUCCESS DETAIL DIALOG)
+          ────────────────────────────────────────────────────────────────────────── */}
+      <Dialog open={isSuccessModalOpen} onOpenChange={setIsSuccessModalOpen}>
+        <DialogContent className="max-w-md border border-emerald-100 dark:border-emerald-950/40 bg-card shadow-2xl rounded-xl overflow-hidden p-0 animate-in zoom-in-95 duration-200">
+          
+          {/* Header rực rỡ tích xanh */}
+          <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-6 text-center text-white space-y-2">
+            <div className="mx-auto w-16 h-16 bg-white/20 rounded-full flex items-center justify-center border border-white/30 animate-pulse">
+              <CheckCircle className="h-10 w-10 text-white stroke-[2.5]" />
+            </div>
+            <h3 className="text-xl font-bold tracking-tight">Hoàn Tiền Thành Công!</h3>
+            <p className="text-xs text-white/85">Giao dịch đã được hệ thống ghi nhận và đồng bộ thời gian chơi.</p>
+          </div>
+
+          {successData && (
+            <div className="p-6 space-y-5">
+              {/* Summary Info */}
+              <div className="text-center space-y-1">
+                <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Số tiền đã hoàn trả</span>
+                <h4 className="text-3xl font-black text-emerald-600 tracking-tight">
+                  {successData.refundAmount.toLocaleString('vi-VN')}đ
+                </h4>
+                <div className="inline-flex items-center gap-1.5 mt-1.5">
+                  <Badge className="bg-emerald-100 text-emerald-800 border-none font-semibold px-2 py-0.5">
+                    Đã hoàn {successData.refundPercentage}%
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Phân rã dữ liệu từ API */}
+              <div className="space-y-3">
+                <h5 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide border-b pb-1">Chi tiết giao dịch hoàn trả</h5>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Mã đơn hàng:</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">BK{String(successData.bookingId).padStart(6, '0')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Khách hàng:</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{successData.customerName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Sân chơi:</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{successData.stadiumName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Tiền thanh toán gốc:</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{successData.originalPrice.toLocaleString('vi-VN')}đ</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Trạng thái mới đơn:</span>
+                    <Badge className="bg-rose-100 text-rose-800 border-none font-semibold">{successData.bookingStatus}</Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Trạng thái dòng tiền:</span>
+                    <Badge className="bg-purple-100 text-purple-800 border-none font-semibold">{successData.paymentStatus}</Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Thời gian xử lý:</span>
+                    <span className="font-mono text-xs text-slate-800 dark:text-slate-200">{new Date(successData.processedAt).toLocaleString('vi-VN')}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Thông báo giải phóng sân */}
+              <div className="bg-slate-50 dark:bg-slate-900/60 border rounded-lg p-3 flex gap-2 items-start text-xs text-slate-600 dark:text-slate-300">
+                <AlertCircle className="h-4.5 w-4.5 text-blue-500 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-semibold block text-slate-800 dark:text-slate-100 mb-0.5">Khung giờ đặt sân đã trống!</span>
+                  Hệ thống đã giải phóng khung giờ chơi <span className="font-semibold text-primary">{new Date(successData.playTime).toLocaleString('vi-VN')}</span> sang trạng thái **Sẵn sàng (AVAILABLE)** để đón nhận các lượt đặt sân mới.
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-slate-50 dark:bg-slate-900/60 p-4 border-t flex justify-end">
+            <Button 
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+              onClick={() => setIsSuccessModalOpen(false)}
+            >
+              Đóng và tiếp tục
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
