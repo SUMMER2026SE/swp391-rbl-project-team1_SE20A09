@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,82 +11,74 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useState } from "react";
-import { Plus, MoreVertical, Edit, Settings, Eye, Pause, Trash, Package } from "lucide-react";
-import { AccessoryManagerDialog } from "@/components/venues/AccessoryManagerDialog";
+import { Plus, MoreVertical, Edit, Settings, Eye, Pause, Trash, Loader2, ImageOff } from "lucide-react";
 
 function VenueManagementPage() {
-  const [isAccessoryOpen, setIsAccessoryOpen] = useState(false);
-  const [selectedVenueForAccessory, setSelectedVenueForAccessory] = useState<{ id: number, name: string } | null>(null);
-
-  const venues = [
-    {
-      id: 1,
-      name: "Sân bóng Thành Công - Sân 1",
-      image: "https://images.unsplash.com/photo-1705593813682-033ee2991df6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=300",
-      sportType: "Bóng đá",
-      status: "active",
-      todayBookings: 8,
-      monthRevenue: 15200000,
-    },
-    {
-      id: 2,
-      name: "Sân bóng Thành Công - Sân 2",
-      image: "https://images.unsplash.com/photo-1764703666646-acc2f7d48857?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=300",
-      sportType: "Bóng đá",
-      status: "active",
-      todayBookings: 6,
-      monthRevenue: 12400000,
-    },
-    {
-      id: 3,
-      name: "Sân cầu lông - Court 1",
-      image: "https://images.unsplash.com/photo-1767729790212-661953ecaa90?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=300",
-      sportType: "Cầu lông",
-      status: "inactive",
-      todayBookings: 0,
-      monthRevenue: 0,
-    },
-  ];
+  const router = useRouter();
+  const [venues, setVenues] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const getStatusBadge = (status: string) => {
-    if (status === "active") {
-      return <Badge className="bg-green-100 text-green-700">Hoạt động</Badge>;
-    } else if (status === "inactive") {
-      return <Badge className="bg-gray-100 text-gray-700">Tạm dừng</Badge>;
+    switch (status) {
+      case "AVAILABLE":
+        return <Badge className="bg-green-100 text-green-700">Hoạt động</Badge>;
+      case "MAINTENANCE":
+        return <Badge className="bg-yellow-100 text-yellow-700">Bảo trì</Badge>;
+      case "CLOSED":
+        return <Badge className="bg-red-100 text-red-700">Đóng cửa</Badge>;
+      default:
+        return <Badge className="bg-gray-100 text-gray-700">{status}</Badge>;
     }
-    return <Badge className="bg-red-100 text-red-700">Đình chỉ</Badge>;
   };
 
   return (
     <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl">Quản lý sân</h1>
-          <Button>
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold">Quản lý sân</h1>
+        <Button onClick={() => router.push("/owner/venues/new")}>
+          <Plus className="mr-2 h-5 w-5" />
+          Thêm sân mới
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center items-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : venues.length === 0 ? (
+        <div className="text-center py-20 text-muted-foreground">
+          <p className="text-lg mb-4">Bạn chưa có sân nào.</p>
+          <Button onClick={() => router.push("/owner/venues/new")}>
             <Plus className="mr-2 h-5 w-5" />
-            Thêm sân mới
+            Thêm sân đầu tiên
           </Button>
         </div>
-
+      ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {venues.map((venue) => (
-            <Card key={venue.id} className="overflow-hidden">
-              <div className="relative h-48">
-                <img
-                  src={venue.image}
-                  alt={venue.name}
-                  className="w-full h-full object-cover"
-                />
+            <Card key={venue.stadiumId} className="overflow-hidden">
+              <div className="relative h-48 bg-muted">
+                {venue.imageUrls && venue.imageUrls.length > 0 ? (
+                  <img
+                    src={venue.imageUrls[0]}
+                    alt={venue.stadiumName}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                    <ImageOff className="h-12 w-12" />
+                  </div>
+                )}
                 <div className="absolute top-3 right-3">
-                  {getStatusBadge(venue.status)}
+                  {getStatusBadge(venue.stadiumStatus)}
                 </div>
               </div>
 
               <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <h3 className="mb-2">{venue.name}</h3>
-                    <Badge variant="outline">{venue.sportType}</Badge>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold mb-2 truncate">{venue.stadiumName}</h3>
+                    <Badge variant="outline">{venue.sportName}</Badge>
                   </div>
 
                   <DropdownMenu>
@@ -106,13 +100,6 @@ function VenueManagementPage() {
                         <Eye className="mr-2 h-4 w-4" />
                         Xem đặt sân
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => {
-                        setSelectedVenueForAccessory({ id: venue.id, name: venue.name });
-                        setIsAccessoryOpen(true);
-                      }}>
-                        <Package className="mr-2 h-4 w-4" />
-                        Quản lý phụ kiện
-                      </DropdownMenuItem>
                       <DropdownMenuItem>
                         <Pause className="mr-2 h-4 w-4" />
                         Tạm dừng
@@ -125,53 +112,27 @@ function VenueManagementPage() {
                   </DropdownMenu>
                 </div>
 
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Đặt sân hôm nay</span>
-                    <span>{venue.todayBookings}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Doanh thu tháng</span>
-                    <span className="text-primary">
-                      {venue.monthRevenue.toLocaleString('vi-VN')}đ
-                    </span>
-                  </div>
+                <div className="space-y-2 text-sm text-muted-foreground mb-4">
+                  <p className="truncate">{venue.address}</p>
+                  <p className="text-primary font-medium">
+                    {venue.pricePerHour.toLocaleString('vi-VN')}đ / giờ
+                  </p>
                 </div>
 
                 <div className="flex gap-2 mt-4">
                   <Button variant="outline" size="sm" className="flex-1">
                     Chỉnh sửa
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 text-primary hover:text-primary hover:bg-primary/5 border-primary/20"
-                    onClick={() => {
-                      setSelectedVenueForAccessory({ id: venue.id, name: venue.name });
-                      setIsAccessoryOpen(true);
-                    }}
-                  >
-                    <Package className="mr-1 h-4 w-4" />
-                    Phụ kiện
+                  <Button variant="outline" size="sm" className="flex-1">
+                    Xem đặt sân
                   </Button>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
-      </div>
-
-      {selectedVenueForAccessory && (
-        <AccessoryManagerDialog
-          stadiumId={selectedVenueForAccessory.id}
-          stadiumName={selectedVenueForAccessory.name}
-          isOpen={isAccessoryOpen}
-          onClose={() => {
-            setIsAccessoryOpen(false);
-            setSelectedVenueForAccessory(null);
-          }}
-        />
       )}
+    </div>
   );
 }
 

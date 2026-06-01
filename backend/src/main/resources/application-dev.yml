@@ -10,6 +10,8 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+    validate-on-migrate: false
+    repair-on-migrate: true
   data:
     redis:
       host: localhost
