@@ -3,6 +3,8 @@ package com.sportvenue.entity;
 import com.sportvenue.entity.enums.ApprovedStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -54,6 +56,7 @@ public class Owner implements Serializable {
     private String businessAddress;
 
     /** Trạng thái phê duyệt chủ sân từ Admin. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "approved_status", nullable = false, length = 20)
     @Builder.Default
     private ApprovedStatus approvedStatus = ApprovedStatus.PENDING;

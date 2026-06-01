@@ -4,6 +4,8 @@ import com.sportvenue.entity.enums.StadiumStatus;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -86,6 +88,7 @@ public class Stadium implements Serializable {
     private LocalTime closeTime;
 
     /** Trạng thái hoạt động của sân. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "stadium_status", nullable = false, length = 20)
     @Builder.Default
     private StadiumStatus stadiumStatus = StadiumStatus.AVAILABLE;
