@@ -24,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class LocalFileStorageService implements FileStorageService {
 
     private final Path avatarDir;
+    private final Path stadiumDir;
     private final String publicBaseUrl;
     private final long maxBytes;
     private final Set<String> allowedContentTypes;
@@ -31,6 +32,7 @@ public class LocalFileStorageService implements FileStorageService {
 
     public LocalFileStorageService(FileStorageProperties properties) {
         this.avatarDir = Paths.get(properties.getUploadDir(), "avatars").toAbsolutePath().normalize();
+        this.stadiumDir = Paths.get(properties.getUploadDir(), "stadiums").toAbsolutePath().normalize();
         String baseUrl = properties.getBaseUrl();
         this.publicBaseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.maxBytes = properties.getMaxSizeBytes();
@@ -46,20 +48,30 @@ public class LocalFileStorageService implements FileStorageService {
     private void initDirectory() {
         try {
             Files.createDirectories(avatarDir);
+            Files.createDirectories(stadiumDir);
         } catch (IOException e) {
-            throw new IllegalStateException("Không thể tạo thư mục lưu ảnh: " + avatarDir, e);
+            throw new IllegalStateException("Không thể tạo thư mục lưu ảnh: " + e.getMessage(), e);
         }
     }
 
     @Override
     public String storeAvatar(MultipartFile file, Integer userId) {
+        return storeFile(file, avatarDir, "/api/v1/files/avatars/", userId);
+    }
+
+    @Override
+    public String storeStadiumImage(MultipartFile file, Integer ownerId) {
+        return storeFile(file, stadiumDir, "/api/v1/files/stadiums/", ownerId);
+    }
+
+    private String storeFile(MultipartFile file, Path directory, String apiPath, Integer id) {
         validateFile(file);
 
         String extension = resolveExtension(file);
         String storedName = UUID.randomUUID() + extension;
-        Path target = avatarDir.resolve(storedName).normalize();
+        Path target = directory.resolve(storedName).normalize();
 
-        if (!target.startsWith(avatarDir)) {
+        if (!target.startsWith(directory)) {
             throw new BadRequestException("Tên file không hợp lệ.");
         }
 
@@ -67,12 +79,12 @@ public class LocalFileStorageService implements FileStorageService {
                 BufferedInputStream in = new BufferedInputStream(raw)) {
             ImageContentValidator.validateImageContent(in, extension);
             Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
-            log.info("Avatar saved for user {}: {}", userId, target);
+            log.info("File saved in {}: {}", directory.getFileName(), target);
         } catch (IOException e) {
             throw new BadRequestException("Không thể lưu ảnh. Vui lòng thử lại.");
         }
 
-        return publicBaseUrl + "/api/v1/files/avatars/" + storedName;
+        return publicBaseUrl + apiPath + storedName;
     }
 
     private void validateFile(MultipartFile file) {

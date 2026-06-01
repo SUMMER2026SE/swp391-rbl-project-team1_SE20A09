@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -35,6 +36,25 @@ public class FileController {
         }
 
         String url = fileStorageService.storeAvatar(file, userPrincipal.getUser().getUserId());
+        String fileName = url.substring(url.lastIndexOf('/') + 1);
+
+        return ResponseEntity.ok(FileUploadResponse.builder()
+                .url(url)
+                .fileName(fileName)
+                .build());
+    }
+
+    @PostMapping(value = "/stadium", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(summary = "Tải ảnh sân vận động", description = "Upload ảnh sân vận động. Yêu cầu ROLE_OWNER.")
+    public ResponseEntity<FileUploadResponse> uploadStadiumImage(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestParam("file") MultipartFile file) {
+        if (userPrincipal == null) {
+            throw new BadRequestException("Bạn cần đăng nhập để tải ảnh.");
+        }
+
+        String url = fileStorageService.storeStadiumImage(file, userPrincipal.getUser().getUserId());
         String fileName = url.substring(url.lastIndexOf('/') + 1);
 
         return ResponseEntity.ok(FileUploadResponse.builder()

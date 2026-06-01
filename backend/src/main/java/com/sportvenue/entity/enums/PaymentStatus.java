@@ -2,7 +2,7 @@ package com.sportvenue.entity.enums;
 
 /**
  * Trạng thái thanh toán của đơn đặt sân.
- * Ánh xạ CHECK constraint: ('Unpaid', 'Paid', 'Refunded') trong bảng bookings.
+ * Ánh xạ CHECK constraint: ('UNPAID', 'PAID', 'REFUNDED') trong bảng bookings.
  */
 public enum PaymentStatus {
     UNPAID,   // Chưa thanh toán

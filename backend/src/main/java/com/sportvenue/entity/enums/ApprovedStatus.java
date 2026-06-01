@@ -2,7 +2,7 @@ package com.sportvenue.entity.enums;
 
 /**
  * Trạng thái phê duyệt chủ sân từ Admin.
- * Ánh xạ CHECK constraint: ('Pending', 'Approved', 'Rejected') trong bảng owners.
+ * Ánh xạ CHECK constraint: ('PENDING', 'APPROVED', 'REJECTED') trong bảng owners.
  */
 public enum ApprovedStatus {
     PENDING,    // Chờ Admin duyệt

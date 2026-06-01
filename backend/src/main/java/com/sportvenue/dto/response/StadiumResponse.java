@@ -28,13 +28,13 @@ public class StadiumResponse {
     private Double distanceInKm; // Calculated distance if user coords provided
     
     private String sportTypeName;
-    private String sportName; // From main branch
+    private String sportName; 
     private String firstImageUrl;
-    private List<String> imageUrls; // From main branch
+    private List<String> imageUrls; 
     
-    private LocalTime openTime; // From main branch
-    private LocalTime closeTime; // From main branch
-    private String stadiumStatus; // From main branch
+    private LocalTime openTime; 
+    private LocalTime closeTime; 
+    private String stadiumStatus; 
     
     private List<AmenityResponse> amenities;
 }
