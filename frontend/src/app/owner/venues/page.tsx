@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -12,15 +12,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreVertical, Edit, Eye, Loader2, ImageOff } from "lucide-react";
+import { Plus, MoreVertical, Edit, Eye, Loader2, ImageOff, Package } from "lucide-react";
 import { stadiumService } from "@/lib/services/stadium";
 import { StadiumResponse } from "@/types/stadium";
 import { toast } from "sonner";
+import { AccessoryManagerDialog } from "@/components/venues/AccessoryManagerDialog";
 
 function VenueManagementPage() {
   const router = useRouter();
   const [venues, setVenues] = useState<StadiumResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isAccessoryOpen, setIsAccessoryOpen] = useState(false);
+  const [selectedVenueForAccessory, setSelectedVenueForAccessory] = useState<{ id: number, name: string } | null>(null);
 
   useEffect(() => {
     stadiumService.getMyStadiums()
@@ -110,6 +113,13 @@ function VenueManagementPage() {
                           <Eye className="mr-2 h-4 w-4" />
                           Xem đặt sân
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => {
+                          setSelectedVenueForAccessory({ id: venue.stadiumId, name: venue.stadiumName });
+                          setIsAccessoryOpen(true);
+                        }}>
+                          <Package className="mr-2 h-4 w-4" />
+                          Quản lý phụ kiện
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -125,8 +135,17 @@ function VenueManagementPage() {
                     <Button variant="outline" size="sm" className="flex-1">
                       Chỉnh sửa
                     </Button>
-                    <Button variant="outline" size="sm" className="flex-1">
-                      Xem đặt sân
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 text-primary hover:text-primary hover:bg-primary/5 border-primary/20"
+                      onClick={() => {
+                        setSelectedVenueForAccessory({ id: venue.stadiumId, name: venue.stadiumName });
+                        setIsAccessoryOpen(true);
+                      }}
+                    >
+                      <Package className="mr-1 h-4 w-4" />
+                      Phụ kiện
                     </Button>
                   </div>
                 </CardContent>
@@ -135,6 +154,18 @@ function VenueManagementPage() {
           </div>
         )}
       </div>
+
+      {selectedVenueForAccessory && (
+        <AccessoryManagerDialog
+          stadiumId={selectedVenueForAccessory.id}
+          stadiumName={selectedVenueForAccessory.name}
+          isOpen={isAccessoryOpen}
+          onClose={() => {
+            setIsAccessoryOpen(false);
+            setSelectedVenueForAccessory(null);
+          }}
+        />
+      )}
     </div>
   );
 }
