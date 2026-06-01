@@ -99,6 +99,11 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                         .build())
                 .toList();
 
+        List<String> imageUrls = null;
+        if (stadium.getImages() != null && !stadium.getImages().isEmpty()) {
+            imageUrls = stadium.getImages().stream().map(com.sportvenue.entity.StadiumImage::getImageUrl).toList();
+        }
+
         return StadiumResponse.builder()
                 .stadiumId(stadium.getStadiumId())
                 .stadiumName(stadium.getStadiumName())
@@ -111,7 +116,12 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 .longitude(stadium.getLongitude())
                 .distanceInKm(distance)
                 .sportTypeName(stadium.getSportType().getSportName())
+                .sportName(stadium.getSportType().getSportName())
                 .firstImageUrl(firstImageUrl)
+                .imageUrls(imageUrls)
+                .openTime(stadium.getOpenTime())
+                .closeTime(stadium.getCloseTime())
+                .stadiumStatus(stadium.getStadiumStatus() != null ? stadium.getStadiumStatus().name() : null)
                 .amenities(amenityResponses)
                 .build();
     }

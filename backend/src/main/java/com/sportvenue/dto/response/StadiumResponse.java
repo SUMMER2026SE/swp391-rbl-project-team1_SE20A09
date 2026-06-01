@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalTime;
 import java.util.List;
 
 @Data
@@ -27,7 +28,13 @@ public class StadiumResponse {
     private Double distanceInKm; // Calculated distance if user coords provided
     
     private String sportTypeName;
+    private String sportName; // From main branch
     private String firstImageUrl;
+    private List<String> imageUrls; // From main branch
+    
+    private LocalTime openTime; // From main branch
+    private LocalTime closeTime; // From main branch
+    private String stadiumStatus; // From main branch
     
     private List<AmenityResponse> amenities;
 }
