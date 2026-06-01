@@ -18,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.sportvenue.entity.enums.ApprovedStatus;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +44,13 @@ public class AccessoryServiceImpl implements AccessoryService {
         // 2. Tìm Owner profile từ userId
         Owner owner = ownerRepository.findByUserUserId(user.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không có profile chủ sân (Owner)"));
+
+        // Kiểm tra trạng thái phê duyệt của Owner
+        if (owner.getApprovedStatus() != ApprovedStatus.APPROVED) {
+            log.warn("Owner ID {} with email {} is not APPROVED (status: {}) but tried to add accessory",
+                    owner.getOwnerId(), ownerEmail, owner.getApprovedStatus());
+            throw new BadRequestException("Tài khoản chủ sân chưa được phê duyệt!");
+        }
 
         // 3. Tìm thông tin sân cần thêm phụ kiện
         Stadium stadium = stadiumRepository.findById(stadiumId)
@@ -72,8 +81,8 @@ public class AccessoryServiceImpl implements AccessoryService {
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public java.util.List<AccessoryResponse> getAccessoriesByStadium(Integer stadiumId, String ownerEmail) {
+    @Transactional(readOnly = true)
+    public List<AccessoryResponse> getAccessoriesByStadium(Integer stadiumId, String ownerEmail) {
         log.info("Starting getAccessoriesByStadium for stadiumId: {} by user: {}", stadiumId, ownerEmail);
 
         // 1. Tìm thông tin User từ email đăng nhập
@@ -98,6 +107,6 @@ public class AccessoryServiceImpl implements AccessoryService {
         // 5. Lấy danh sách phụ kiện và map sang DTO
         return accessoryRepository.findByStadiumStadiumId(stadiumId).stream()
                 .map(accessoryMapper::toResponse)
-                .collect(java.util.stream.Collectors.toList());
+                .toList();
     }
 }

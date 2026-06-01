@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.GetMapping;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/stadiums")
@@ -41,17 +43,17 @@ public class AccessoryController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @org.springframework.web.bind.annotation.GetMapping("/{stadiumId}/accessories")
+    @GetMapping("/{stadiumId}/accessories")
     @PreAuthorize("hasRole('Owner')")
     @Operation(
             summary = "Lấy danh sách phụ kiện cho thuê của sân",
             description = "Yêu cầu tài khoản đăng nhập có vai trò Owner và sở hữu đúng sân này. Trả về tất cả phụ kiện kèm sân."
     )
-    public ResponseEntity<java.util.List<AccessoryResponse>> getAccessories(
+    public ResponseEntity<List<AccessoryResponse>> getAccessories(
             @PathVariable Integer stadiumId,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
 
-        java.util.List<AccessoryResponse> response = accessoryService.getAccessoriesByStadium(stadiumId, userPrincipal.getUsername());
+        List<AccessoryResponse> response = accessoryService.getAccessoriesByStadium(stadiumId, userPrincipal.getUsername());
         return ResponseEntity.ok(response);
     }
 }

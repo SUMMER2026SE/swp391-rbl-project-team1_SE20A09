@@ -31,11 +31,11 @@ public class DataSeeder implements CommandLineRunner {
     public void run(String... args) {
         seedUser("admin@sportvenue.com", "Admin", "System", "0900000001", "Admin");
         seedUser("owner@sportvenue.com", "Hoàng", "Mai Huy", "0900000002", "Owner");
-        seedUser("customer@sportvenue.com", "Hoàng", "Mai Huy", "0912345678", "Customer");
+        seedUser("customer@sportvenue.com", "Lượng", "Mai Văn", "0912345678", "Customer");
         // V6 seed accounts
-        seedUser("owner2@sportvenue.com", "Xuân", "Nguyễn Huy", "0900000003", "Owner");
-        seedUser("customer2@sportvenue.com", "Chí Anh", "Lý Hào", "0912345679", "Customer");
-        seedUser("customer3@sportvenue.com", "Minh", "Trần An", "0912345680", "Customer");
+        seedUser("owner2@sportvenue.com", "Huy", "Nguyễn Xuân", "0900000003", "Owner");
+        seedUser("customer2@sportvenue.com", "Hào", "Lý Chí Anh", "0912345679", "Customer");
+        seedUser("customer3@sportvenue.com", "An", "Trần Minh", "0912345680", "Customer");
         log.info("✅ DataSeeder: Seed accounts verified/updated.");
     }
 
@@ -46,11 +46,21 @@ public class DataSeeder implements CommandLineRunner {
 
         if (optUser.isPresent()) {
             User user = optUser.get();
+            boolean updated = false;
             // Luôn cập nhật lại password hash để đảm bảo khớp với SEED_PASSWORD
             if (!passwordEncoder.matches(SEED_PASSWORD, user.getPasswordHash())) {
                 user.setPasswordHash(encodedPassword);
+                updated = true;
+            }
+            // Chuẩn hóa họ tên nếu bị lệch trong cơ sở dữ liệu
+            if (!firstName.equals(user.getFirstName()) || !lastName.equals(user.getLastName())) {
+                user.setFirstName(firstName);
+                user.setLastName(lastName);
+                updated = true;
+            }
+            if (updated) {
                 userRepository.save(user);
-                log.info("🔑 Updated password for seed user: {}", email);
+                log.info("🔄 Updated seed user: {}", email);
             }
         } else {
             Role role = roleRepository.findByRoleName(roleName)

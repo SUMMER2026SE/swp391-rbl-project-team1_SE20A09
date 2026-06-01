@@ -49,53 +49,20 @@ export function AccessoryManagerDialog({
   const [quantity, setQuantity] = React.useState<string>('')
   const [isAvailable, setIsAvailable] = React.useState<boolean>(true)
 
-  // Seed / Fallback mock data in case backend API is not responding or not initialized
-  const getMockAccessories = (sid: number): Accessory[] => {
-    return [
-      {
-        accessoryId: sid * 10 + 1,
-        stadiumId: sid,
-        stadiumName: stadiumName,
-        name: 'Bóng đá Molten số 5',
-        pricePerUnit: 30000,
-        quantity: 10,
-        isAvailable: true,
-      },
-      {
-        accessoryId: sid * 10 + 2,
-        stadiumId: sid,
-        stadiumName: stadiumName,
-        name: 'Áo lưới chia đội (Bộ 10 chiếc)',
-        pricePerUnit: 50000,
-        quantity: 5,
-        isAvailable: true,
-      },
-      {
-        accessoryId: sid * 10 + 3,
-        stadiumId: sid,
-        stadiumName: stadiumName,
-        name: 'Giày phủi Pan Thái',
-        pricePerUnit: 40000,
-        quantity: 8,
-        isAvailable: false,
-      },
-    ]
-  }
-
   const fetchAccessories = React.useCallback(async () => {
     setLoading(true)
     try {
       // Gọi real API từ Backend
       const data = await get<Accessory[]>(`/stadiums/${stadiumId}/accessories`)
       setAccessories(data)
-    } catch (error) {
-      console.warn('API /stadiums/id/accessories failed, using offline fallback mock data.', error)
-      // Nếu API lỗi (chưa seed database, chưa kết nối mạng), dùng mock data
-      setAccessories(getMockAccessories(stadiumId))
+    } catch (error: any) {
+      console.error('Failed to fetch accessories:', error)
+      toast.error('Không thể tải danh sách phụ kiện!')
+      setAccessories([])
     } finally {
       setLoading(false)
     }
-  }, [stadiumId, stadiumName])
+  }, [stadiumId])
 
   React.useEffect(() => {
     if (isOpen && stadiumId) {
@@ -145,26 +112,9 @@ export function AccessoryManagerDialog({
       setQuantity('')
       setIsAvailable(true)
     } catch (error: any) {
-      console.warn('POST API failed, falling back to local simulation mode.', error)
-      
-      // Chế độ mô phỏng khi Offline / Chưa có Backend kết nối
-      const simulatedNewAcc: Accessory = {
-        accessoryId: Math.floor(Math.random() * 10000),
-        stadiumId,
-        stadiumName,
-        name: name.trim(),
-        pricePerUnit: parsedPrice,
-        quantity: parsedQty,
-        isAvailable,
-      }
-      setAccessories((prev) => [...prev, simulatedNewAcc])
-      toast.success(`[Mô phỏng] Đã thêm phụ kiện "${name}" thành công!`)
-
-      // Reset form
-      setName('')
-      setPricePerUnit('')
-      setQuantity('')
-      setIsAvailable(true)
+      console.error('Failed to add accessory:', error)
+      const errorMsg = error?.message || 'Có lỗi xảy ra khi thêm phụ kiện!'
+      toast.error(errorMsg)
     } finally {
       setSubmitting(false)
     }
