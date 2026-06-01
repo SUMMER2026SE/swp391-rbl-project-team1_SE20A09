@@ -33,20 +33,7 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
     public PageResponse<StadiumResponse> searchStadiums(StadiumSearchRequest request) {
         Pageable pageable = PageRequest.of(request.getPage(), request.getSize());
 
-        Specification<Stadium> spec = StadiumSpecification.withDynamicFilter(
-                request.getKeyword(),
-                request.getSportTypeId(),
-                request.getAddress(),
-                request.getMinPrice(),
-                request.getMaxPrice(),
-                request.getTargetDate(),
-                request.getStartTime(),
-                request.getEndTime(),
-                request.getUserLat(),
-                request.getUserLng(),
-                request.getRadiusInKm(),
-                request.getAmenityIds()
-        );
+        Specification<Stadium> spec = StadiumSpecification.withDynamicFilter(request);
 
         // Step 1: Paginated fetch (without JOIN FETCH collections) to avoid HHH000104 memory pagination
         Page<Stadium> stadiumPage = stadiumRepository.findAll(spec, pageable);
