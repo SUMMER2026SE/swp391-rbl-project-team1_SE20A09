@@ -22,6 +22,9 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PublicStadiumServiceImpl implements PublicStadiumService {
@@ -31,11 +34,14 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<StadiumResponse> searchStadiums(StadiumSearchRequest request) {
+        log.info("Searching stadiums with keyword: {}, targetDate: {}...", request.getKeyword(),
+                request.getTargetDate());
         Pageable pageable = PageRequest.of(request.getPage(), request.getSize());
 
         Specification<Stadium> spec = StadiumSpecification.withDynamicFilter(request);
 
-        // Step 1: Paginated fetch (without JOIN FETCH collections) to avoid HHH000104 memory pagination
+        // Step 1: Paginated fetch (without JOIN FETCH collections) to avoid HHH000104
+        // memory pagination
         Page<Stadium> stadiumPage = stadiumRepository.findAll(spec, pageable);
 
         if (stadiumPage.isEmpty()) {
@@ -67,7 +73,8 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
 
         // Sort by distance if GPS is provided
         if (request.getUserLat() != null && request.getUserLng() != null) {
-            content.sort(Comparator.comparing(StadiumResponse::getDistanceInKm, Comparator.nullsLast(Double::compareTo)));
+            content.sort(
+                    Comparator.comparing(StadiumResponse::getDistanceInKm, Comparator.nullsLast(Double::compareTo)));
         }
 
         return PageResponse.<StadiumResponse>builder()
@@ -132,7 +139,7 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
         double lonDistance = Math.toRadians(lon2 - lon1);
         double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
                 + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+                        * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
     }

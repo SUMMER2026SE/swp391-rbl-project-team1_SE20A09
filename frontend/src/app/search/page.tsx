@@ -78,7 +78,7 @@ export default function SearchPage() {
     fetchStadiums(debouncedFilters)
   }, [debouncedFilters, fetchStadiums])
 
-  const handleFilterChange = (key: keyof StadiumSearchRequest, value: any) => {
+  const handleFilterChange = (key: keyof StadiumSearchRequest, value: StadiumSearchRequest[keyof StadiumSearchRequest]) => {
     setFilters(prev => ({ ...prev, [key]: value, page: 0 }))
   }
 
