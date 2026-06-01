@@ -6,13 +6,16 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Repository cho Booking entity.
@@ -20,6 +23,11 @@ import java.util.List;
  */
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Integer> {
+
+    /** Tìm kiếm đơn đặt sân kèm theo Pessimistic Write Lock để tránh Race Condition (Double Refund) */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM Booking b WHERE b.bookingId = :id")
+    Optional<Booking> findByIdForUpdate(@Param("id") Integer id);
 
     /** Lấy lịch sử đặt sân của khách hàng — dùng cho trang "Lịch sử đặt sân". */
     @EntityGraph(attributePaths = {"stadium", "slot"})
@@ -74,4 +82,8 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
 
     /** Đếm số lượng đặt sân theo trạng thái — dùng cho Dashboard. */
     long countByStadiumStadiumIdAndBookingStatus(Integer stadiumId, BookingStatus status);
+
+    /** Lấy danh sách đặt sân thuộc các sân mà Owner sở hữu. */
+    @EntityGraph(attributePaths = {"user", "stadium", "slot"})
+    List<Booking> findByStadiumOwnerUserEmailOrderByBookingDateDesc(String email);
 }
