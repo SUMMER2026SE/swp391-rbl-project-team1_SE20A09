@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { post } from "@/lib/api";
+import { get, post } from "@/lib/api";
 
 interface BookingItem {
   id: number;
@@ -60,78 +60,8 @@ interface BookingItem {
 
 function BookingManagementPage() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
-
-  // 1. Dữ liệu mẫu đồng bộ 100% với Seed Data dưới cơ sở dữ liệu để test thực tế
-  const [bookingList, setBookingList] = useState<BookingItem[]>([
-    {
-      id: 5,
-      displayId: "BK000005",
-      customer: {
-        name: "Hoàng Mai Huy",
-        phone: "0900000003",
-        email: "customer@sportvenue.com",
-      },
-      venue: "Sân Bóng Đá Thủ Đức (Sân 1)",
-      date: "Ngày mai",
-      time: "18:00 - 19:00",
-      amount: 300000,
-      paymentStatus: "paid",
-      status: "confirmed",
-      notes: "Đơn đặt thử nghiệm - Điều kiện hoàn tiền 100% (Thời gian chơi >= 24h nữa)",
-      playTimeRaw: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 6,
-      displayId: "BK000006",
-      customer: {
-        name: "Trần Minh An",
-        phone: "0900000004",
-        email: "customer2@sportvenue.com",
-      },
-      venue: "Sân Bóng Đá Thủ Đức (Sân 1)",
-      date: "Trong vòng 24 giờ",
-      time: "20:00 - 21:00",
-      amount: 300000,
-      paymentStatus: "paid",
-      status: "confirmed",
-      notes: "Đơn đặt thử nghiệm - Điều kiện hoàn tiền 50% (Thời gian chơi 12h - 24h nữa)",
-      playTimeRaw: new Date(Date.now() + 18 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 7,
-      displayId: "BK000007",
-      customer: {
-        name: "Lý Chí Anh Hào",
-        phone: "0900000005",
-        email: "customer3@sportvenue.com",
-      },
-      venue: "Sân Bóng Đá Thủ Đức (Sân 1)",
-      date: "Hôm nay (Sát giờ)",
-      time: "16:00 - 17:00",
-      amount: 300000,
-      paymentStatus: "paid",
-      status: "confirmed",
-      notes: "Đơn đặt thử nghiệm - Điều kiện hoàn tiền 0% (Thời gian chơi < 12h nữa)",
-      playTimeRaw: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
-    },
-    {
-      id: 1,
-      displayId: "BK000001",
-      customer: {
-        name: "Hoàng Mai Huy",
-        phone: "0900000003",
-        email: "customer@sportvenue.com",
-      },
-      venue: "Sân Bóng Đá Thủ Đức (Sân 1)",
-      date: "Đã diễn ra",
-      time: "07:00 - 08:00",
-      amount: 300000,
-      paymentStatus: "refunded",
-      status: "cancelled",
-      notes: "Đơn đặt trong quá khứ đã được hủy và hoàn tiền 0đ",
-      playTimeRaw: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-    },
-  ]);
+  const [bookingList, setBookingList] = useState<BookingItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // States phục vụ Hoàn Tiền (UC-OWN-12)
   const [selectedBooking, setSelectedBooking] = useState<BookingItem | null>(null);
@@ -139,14 +69,33 @@ function BookingManagementPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Xem trước tiền hoàn từ Backend (Tránh clock skew của client)
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+
   // States phục vụ hiển thị kết quả thành công Premium
   const [successData, setSuccessData] = useState<any>(null);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
 
-  // Quick Debug / Tester tools
-  const [quickInputId, setQuickInputId] = useState("");
+  // Fetch danh sách đặt sân thực tế từ Backend
+  const fetchBookings = async () => {
+    try {
+      setIsLoading(true);
+      const data = await get<BookingItem[]>("/owner/bookings");
+      setBookingList(data);
+    } catch (error: any) {
+      console.error("Error fetching bookings:", error);
+      toast.error("Không thể tải danh sách đặt sân từ máy chủ: " + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  // Hàm tính toán dự phóng hoàn tiền ở Frontend để thông báo trước cho Owner
+  useEffect(() => {
+    fetchBookings();
+  }, []);
+
+  // Hàm tính toán dự phóng hoàn tiền ở Frontend (Hiển thị dự báo nhanh)
   const calculateExpectedRefund = (playTimeStr: string, price: number) => {
     const playTime = new Date(playTimeStr);
     const now = new Date();
@@ -207,41 +156,22 @@ function BookingManagementPage() {
     return bookingList.filter((b) => b.status.toLowerCase() === status.toLowerCase());
   };
 
-  // Mở modal hoàn tiền cho Booking cụ thể
-  const handleOpenRefundModal = (booking: BookingItem) => {
+  // Mở modal hoàn tiền và lấy kết quả xem trước chính xác từ Backend (Tránh Clock Skew)
+  const handleOpenRefundModal = async (booking: BookingItem) => {
     setSelectedBooking(booking);
     setCancelReason("");
     setIsCancelModalOpen(true);
-  };
+    setPreviewData(null);
+    setIsPreviewLoading(true);
 
-  // Gọi nhanh bằng mã đơn (Chế độ Tester)
-  const handleQuickRefundSubmit = () => {
-    const parsedId = parseInt(quickInputId.trim());
-    if (isNaN(parsedId)) {
-      toast.error("Vui lòng nhập Mã đơn đặt sân hợp lệ (dạng số)!");
-      return;
-    }
-    
-    // Tìm xem đơn đó có sẵn trong list mock không
-    const found = bookingList.find(b => b.id === parsedId);
-    if (found) {
-      handleOpenRefundModal(found);
-    } else {
-      // Nếu không có trong list mock, tạo một thực thể giả lập để gửi lên backend thật
-      const mockCustom: BookingItem = {
-        id: parsedId,
-        displayId: `BK${String(parsedId).padStart(6, '0')}`,
-        customer: { name: "Khách hàng thử nghiệm", phone: "N/A", email: "N/A" },
-        venue: "Sân Bóng Đá Thủ Đức",
-        date: "Động",
-        time: "Động",
-        amount: 300000,
-        paymentStatus: "paid",
-        status: "confirmed",
-        notes: "Đơn đặt sân tuỳ biến qua cổng nhập mã nhanh",
-        playTimeRaw: new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString(),
-      };
-      handleOpenRefundModal(mockCustom);
+    try {
+      const data = await get<any>(`/owner/bookings/${booking.id}/refund/preview`);
+      setPreviewData(data);
+    } catch (error: any) {
+      console.error("Error fetching refund preview:", error);
+      toast.error("Không thể xem trước thông tin hoàn tiền: " + error.message);
+    } finally {
+      setIsPreviewLoading(false);
     }
   };
 
@@ -412,6 +342,7 @@ function BookingManagementPage() {
                               <span className="font-bold text-slate-900 dark:text-slate-100">{estimate.amount.toLocaleString('vi-VN')}đ</span>
                             </div>
                             <p className="text-[11px] text-muted-foreground leading-relaxed bg-slate-50 dark:bg-slate-900 p-1.5 rounded border border-slate-100 dark:border-slate-800">{estimate.desc}</p>
+                            <p className="text-[10px] text-amber-600 dark:text-amber-400 italic mt-1 leading-normal">* Số tiền hoàn ước tính theo giờ máy khách, có thể thay đổi tùy thuộc vào giờ máy chủ khi xử lý giao dịch thực tế.</p>
                           </>
                         );
                       })()}
@@ -444,27 +375,7 @@ function BookingManagementPage() {
             <p className="text-muted-foreground mt-1 text-sm">Xem danh sách, xác nhận đặt sân hoặc hủy hoàn tiền nhanh chóng.</p>
           </div>
           
-          {/* Quick tester tools */}
-          <Card className="border border-indigo-200 dark:border-indigo-950 bg-indigo-50/40 dark:bg-indigo-950/10 shadow-sm max-w-md w-full md:w-auto">
-            <CardContent className="p-3.5 flex gap-2.5 items-center">
-              <div className="flex-1">
-                <input
-                  type="text"
-                  value={quickInputId}
-                  onChange={(e) => setQuickInputId(e.target.value)}
-                  placeholder="Nhập mã đơn số (e.g. 5, 6, 7)"
-                  className="w-full bg-background border rounded-md px-3 py-1.5 text-sm font-mono focus:ring-1 focus:ring-indigo-500 focus:outline-none"
-                />
-              </div>
-              <Button 
-                onClick={handleQuickRefundSubmit}
-                size="sm"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs whitespace-nowrap"
-              >
-                Hủy nhanh bằng ID
-              </Button>
-            </CardContent>
-          </Card>
+          {/* Hủy nhanh đã loại bỏ trong Production */}
         </div>
 
         {/* Filters */}
@@ -557,7 +468,14 @@ function BookingManagementPage() {
                   <tbody>
                     <TabsContent value="all" className="m-0" asChild>
                       <>
-                        {bookingList.length === 0 ? (
+                        {isLoading ? (
+                          <tr>
+                            <td colSpan={9} className="text-center p-12 text-muted-foreground">
+                              <span className="animate-spin inline-block rounded-full h-6 w-6 border-2 border-primary border-t-transparent mr-2 align-middle"></span> 
+                              Đang tải danh sách đặt sân từ máy chủ...
+                            </td>
+                          </tr>
+                        ) : bookingList.length === 0 ? (
                           <tr><td colSpan={9} className="text-center p-8 text-muted-foreground">Không có đơn đặt sân nào.</td></tr>
                         ) : (
                           bookingList.map((booking) => (
@@ -568,7 +486,14 @@ function BookingManagementPage() {
                     </TabsContent>
                     <TabsContent value="pending" className="m-0" asChild>
                       <>
-                        {filterBookings("pending").length === 0 ? (
+                        {isLoading ? (
+                          <tr>
+                            <td colSpan={9} className="text-center p-12 text-muted-foreground">
+                              <span className="animate-spin inline-block rounded-full h-6 w-6 border-2 border-primary border-t-transparent mr-2 align-middle"></span> 
+                              Đang tải...
+                            </td>
+                          </tr>
+                        ) : filterBookings("pending").length === 0 ? (
                           <tr><td colSpan={9} className="text-center p-8 text-muted-foreground">Không có đơn đặt sân chờ duyệt.</td></tr>
                         ) : (
                           filterBookings("pending").map((booking) => (
@@ -579,7 +504,14 @@ function BookingManagementPage() {
                     </TabsContent>
                     <TabsContent value="confirmed" className="m-0" asChild>
                       <>
-                        {filterBookings("confirmed").length === 0 ? (
+                        {isLoading ? (
+                          <tr>
+                            <td colSpan={9} className="text-center p-12 text-muted-foreground">
+                              <span className="animate-spin inline-block rounded-full h-6 w-6 border-2 border-primary border-t-transparent mr-2 align-middle"></span> 
+                              Đang tải...
+                            </td>
+                          </tr>
+                        ) : filterBookings("confirmed").length === 0 ? (
                           <tr><td colSpan={9} className="text-center p-8 text-muted-foreground">Không có đơn đã xác nhận.</td></tr>
                         ) : (
                           filterBookings("confirmed").map((booking) => (
@@ -590,7 +522,14 @@ function BookingManagementPage() {
                     </TabsContent>
                     <TabsContent value="completed" className="m-0" asChild>
                       <>
-                        {filterBookings("completed").length === 0 ? (
+                        {isLoading ? (
+                          <tr>
+                            <td colSpan={9} className="text-center p-12 text-muted-foreground">
+                              <span className="animate-spin inline-block rounded-full h-6 w-6 border-2 border-primary border-t-transparent mr-2 align-middle"></span> 
+                              Đang tải...
+                            </td>
+                          </tr>
+                        ) : filterBookings("completed").length === 0 ? (
                           <tr><td colSpan={9} className="text-center p-8 text-muted-foreground">Không có đơn hoàn thành.</td></tr>
                         ) : (
                           filterBookings("completed").map((booking) => (
@@ -601,7 +540,14 @@ function BookingManagementPage() {
                     </TabsContent>
                     <TabsContent value="cancelled" className="m-0" asChild>
                       <>
-                        {filterBookings("cancelled").length === 0 ? (
+                        {isLoading ? (
+                          <tr>
+                            <td colSpan={9} className="text-center p-12 text-muted-foreground">
+                              <span className="animate-spin inline-block rounded-full h-6 w-6 border-2 border-primary border-t-transparent mr-2 align-middle"></span> 
+                              Đang tải...
+                            </td>
+                          </tr>
+                        ) : filterBookings("cancelled").length === 0 ? (
                           <tr><td colSpan={9} className="text-center p-8 text-muted-foreground">Không có đơn đã hủy.</td></tr>
                         ) : (
                           filterBookings("cancelled").map((booking) => (
@@ -655,29 +601,51 @@ function BookingManagementPage() {
                 </div>
               </div>
 
-              {/* Tính toán hoàn tiền thực tế */}
+              {/* Tính toán hoàn tiền thực tế (Truy vấn động từ Máy Chủ) */}
               <div className="border border-violet-100 dark:border-violet-950/50 bg-violet-50/20 dark:bg-violet-950/10 p-4 rounded-xl space-y-2.5">
                 <h5 className="font-semibold text-xs text-violet-800 dark:text-violet-400 uppercase tracking-wider flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5" />
-                  Chính sách áp dụng tự động
+                  Chính sách áp dụng tự động (Giờ Máy Chủ)
                 </h5>
                 
-                {(() => {
-                  const policy = calculateExpectedRefund(selectedBooking.playTimeRaw, selectedBooking.amount);
-                  return (
-                    <>
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-slate-600 dark:text-slate-400">Tỷ lệ hoàn trả:</span>
-                        <Badge className={`${policy.badgeClass} border-none font-bold px-2 py-0.5`}>{policy.label}</Badge>
-                      </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-slate-600 dark:text-slate-400">Tiền trả khách:</span>
-                        <span className="font-extrabold text-lg text-slate-900 dark:text-slate-100">{policy.amount.toLocaleString('vi-VN')}đ</span>
-                      </div>
-                      <p className="text-[11px] leading-relaxed text-muted-foreground border-t pt-2 mt-1 italic">{policy.desc}</p>
-                    </>
-                  );
-                })()}
+                {isPreviewLoading ? (
+                  <div className="text-center py-4 text-xs text-muted-foreground flex items-center justify-center gap-2">
+                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-indigo-600 border-t-transparent mr-2"></span>
+                    Đang tính toán tiền hoàn chính xác từ máy chủ...
+                  </div>
+                ) : previewData ? (
+                  <>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-600 dark:text-slate-400">Tỷ lệ hoàn trả:</span>
+                      <Badge className={`${
+                        previewData.refundPercentage === 100 
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400" 
+                          : previewData.refundPercentage === 50 
+                          ? "bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400" 
+                          : "bg-rose-100 text-rose-800 dark:bg-rose-950/30 dark:text-rose-400"
+                      } border-none font-bold px-2 py-0.5`}>
+                        Hoàn {previewData.refundPercentage}%
+                      </Badge>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-600 dark:text-slate-400">Tiền trả khách:</span>
+                      <span className="font-extrabold text-lg text-slate-900 dark:text-slate-100">{previewData.refundAmount.toLocaleString('vi-VN')}đ</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-muted-foreground border-t pt-2 mt-1 italic">
+                      {previewData.refundPercentage === 100 
+                        ? "Hủy trước giờ chơi >= 24 giờ. Khách hàng nhận lại toàn bộ tiền sân." 
+                        : previewData.refundPercentage === 50 
+                        ? "Hủy trước giờ chơi từ 12 giờ đến dưới 24 giờ. Khách hàng nhận lại 50% tiền sân." 
+                        : "Hủy quá sát giờ chơi (< 12 giờ). Khách hàng không được hoàn tiền theo điều khoản."
+                      }
+                    </p>
+                  </>
+                ) : (
+                  <div className="text-center py-4 text-xs text-rose-600 flex items-center justify-center gap-1.5">
+                    <AlertCircle className="h-4 w-4" />
+                    Không thể kết nối máy chủ để xem trước hoàn tiền.
+                  </div>
+                )}
               </div>
 
               {/* Lý do hủy */}
@@ -704,7 +672,7 @@ function BookingManagementPage() {
             <Button 
               className="bg-rose-600 hover:bg-rose-700 text-white font-medium shadow-sm transition-all duration-200"
               onClick={handleConfirmRefund}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isPreviewLoading || !previewData}
             >
               {isSubmitting ? "Đang xử lý..." : "Xác nhận hoàn tiền"}
             </Button>

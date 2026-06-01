@@ -1,7 +1,10 @@
 package com.sportvenue.service.impl;
 
 import com.sportvenue.dto.request.RefundRequest;
+import com.sportvenue.dto.response.OwnerBookingResponse;
 import com.sportvenue.dto.response.RefundResponse;
+
+import java.util.List;
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.Payment;
@@ -52,8 +55,8 @@ public class RefundServiceImpl implements RefundService {
         Owner owner = ownerRepository.findByUserUserId(user.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không có profile chủ sân (Owner)"));
 
-        // 2. Tìm Booking
-        Booking booking = bookingRepository.findById(bookingId)
+        // 2. Tìm Booking (Sử dụng Pessimistic Write Lock để tránh Race Condition)
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân ID: " + bookingId));
 
         // 3. Kiểm tra tính hợp lệ và quyền sở hữu
@@ -112,7 +115,7 @@ public class RefundServiceImpl implements RefundService {
             refundAmount = booking.getTotalPrice();
         } else if (hoursDiff >= 12.0) {
             refundPercentage = 50;
-            refundAmount = booking.getTotalPrice().multiply(BigDecimal.valueOf(0.5));
+            refundAmount = booking.getTotalPrice().multiply(new BigDecimal("0.5"));
         } else {
             refundPercentage = 0;
             refundAmount = BigDecimal.ZERO;
@@ -132,6 +135,7 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private void recordRefundTransaction(Booking booking, Payment originalPayment, BigDecimal refundAmount) {
+        // TODO: Call VNPAY/MoMo refund API here to actually process bank refund in production
         Payment refundPayment = Payment.builder()
                 .booking(booking)
                 .paymentMethod(originalPayment.getPaymentMethod())
@@ -159,6 +163,77 @@ public class RefundServiceImpl implements RefundService {
                 .processedAt(LocalDateTime.now())
                 .reason(reason != null ? reason.trim() : "")
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public RefundResponse previewRefund(Integer bookingId, String ownerEmail) {
+        log.info("Starting previewRefund for bookingId: {} by Owner: {}", bookingId, ownerEmail);
+
+        // 1. Tìm thông tin User và Owner profile
+        User user = userRepository.findByEmail(ownerEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng: " + ownerEmail));
+
+        Owner owner = ownerRepository.findByUserUserId(user.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không có profile chủ sân (Owner)"));
+
+        // 2. Tìm Booking
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân ID: " + bookingId));
+
+        // 3. Kiểm tra tính hợp lệ và quyền sở hữu
+        validateOwnershipAndStatus(booking, owner);
+
+        // 4. Áp dụng chính sách hoàn tiền
+        RefundCalculation calculation = calculateRefund(booking);
+
+        return RefundResponse.builder()
+                .bookingId(booking.getBookingId())
+                .stadiumName(booking.getStadium().getStadiumName())
+                .customerName(booking.getUser().getFirstName() + " " + booking.getUser().getLastName())
+                .playTime(booking.getSlot().getStartTime())
+                .originalPrice(booking.getTotalPrice())
+                .refundAmount(calculation.getAmount())
+                .refundPercentage(calculation.getPercentage())
+                .bookingStatus(booking.getBookingStatus().name())
+                .paymentStatus(booking.getPaymentStatus().name())
+                .processedAt(LocalDateTime.now())
+                .reason("Xem trước hoàn tiền")
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public List<OwnerBookingResponse> getOwnerBookings(String ownerEmail) {
+        log.info("Fetching all bookings for owner: {}", ownerEmail);
+        
+        List<Booking> bookings = bookingRepository.findByStadiumOwnerUserEmailOrderByBookingDateDesc(ownerEmail);
+        
+        return bookings.stream().map(b -> {
+            String customerName = b.getUser().getFirstName() + " " + b.getUser().getLastName();
+            OwnerBookingResponse.CustomerInfo customerInfo = OwnerBookingResponse.CustomerInfo.builder()
+                    .name(customerName)
+                    .phone(b.getUser().getPhoneNumber())
+                    .email(b.getUser().getEmail())
+                    .build();
+            
+            String startTime = b.getSlot().getStartTime().toLocalTime().toString();
+            String endTime = b.getSlot().getEndTime().toLocalTime().toString();
+            
+            return OwnerBookingResponse.builder()
+                    .id(b.getBookingId())
+                    .displayId("BK" + String.format("%06d", b.getBookingId()))
+                    .customer(customerInfo)
+                    .venue(b.getStadium().getStadiumName())
+                    .date(b.getSlot().getStartTime().toLocalDate().toString())
+                    .time(startTime + " - " + endTime)
+                    .amount(b.getTotalPrice())
+                    .paymentStatus(b.getPaymentStatus().name().toLowerCase())
+                    .status(b.getBookingStatus().name().toLowerCase())
+                    .notes(b.getNote() != null ? b.getNote() : "")
+                    .playTimeRaw(b.getSlot().getStartTime().toString())
+                    .build();
+        }).collect(java.util.stream.Collectors.toList());
     }
 
     @Getter
