@@ -102,15 +102,15 @@ public class RefundServiceImpl implements RefundService {
     private RefundCalculation calculateRefund(Booking booking) {
         LocalDateTime playTime = booking.getSlot().getStartTime();
         LocalDateTime now = LocalDateTime.now();
-        long hoursDiff = java.time.Duration.between(now, playTime).toHours();
+        double hoursDiff = (double) java.time.Duration.between(now, playTime).toMinutes() / 60.0;
 
         BigDecimal refundAmount;
         int refundPercentage;
 
-        if (hoursDiff >= 24) {
+        if (hoursDiff >= 24.0) {
             refundPercentage = 100;
             refundAmount = booking.getTotalPrice();
-        } else if (hoursDiff >= 12) {
+        } else if (hoursDiff >= 12.0) {
             refundPercentage = 50;
             refundAmount = booking.getTotalPrice().multiply(BigDecimal.valueOf(0.5));
         } else {
