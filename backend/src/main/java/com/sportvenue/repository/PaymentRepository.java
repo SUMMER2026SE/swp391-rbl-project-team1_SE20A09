@@ -32,7 +32,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
            "JOIN b.stadium s " +
            "WHERE s.owner.user.email = :ownerEmail " +
            "AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId) " +
-           "AND p.paymentStatus = 'SUCCESS' " +
+           "AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
+           "AND p.amount > 0 " +
            "AND p.paidAt >= :startDate AND p.paidAt <= :endDate " +
            "GROUP BY CAST(p.paidAt AS date) " +
            "ORDER BY CAST(p.paidAt AS date) ASC")
@@ -42,13 +43,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
                                                  @Param("endDate") LocalDateTime endDate);
 
     @Query("SELECT s.stadiumId as stadiumId, s.stadiumName as stadiumName, " +
-           "COUNT(b) as totalBookings, SUM(p.amount) as totalRevenue " +
+           "COUNT(DISTINCT b.bookingId) as totalBookings, SUM(p.amount) as totalRevenue " +
            "FROM Payment p " +
            "JOIN p.booking b " +
            "JOIN b.stadium s " +
            "WHERE s.owner.user.email = :ownerEmail " +
            "AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId) " +
-           "AND p.paymentStatus = 'SUCCESS' " +
+           "AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
+           "AND p.amount > 0 " +
            "AND p.paidAt >= :startDate AND p.paidAt <= :endDate " +
            "GROUP BY s.stadiumId, s.stadiumName " +
            "ORDER BY SUM(p.amount) DESC")

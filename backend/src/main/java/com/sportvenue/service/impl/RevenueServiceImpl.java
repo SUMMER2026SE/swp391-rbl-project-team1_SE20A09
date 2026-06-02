@@ -2,7 +2,6 @@ package com.sportvenue.service.impl;
 
 import com.sportvenue.dto.response.RevenueDetailDto;
 import com.sportvenue.dto.response.RevenueReportResponse;
-import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.projection.DailyRevenueProjection;
 import com.sportvenue.repository.projection.VenueRevenueProjection;
@@ -25,14 +24,33 @@ import java.util.stream.Collectors;
 @Slf4j
 public class RevenueServiceImpl implements RevenueService {
 
+    /** Số giờ vận hành ước tính mỗi ngày — dùng để tính tỷ lệ lấp đầy. */
+    private static final double OPERATIONAL_HOURS_PER_DAY = 12.0;
+
+    /** Giới hạn tối đa khoảng thời gian query (365 ngày) để tránh OOM. */
+    private static final long MAX_QUERY_DAYS = 365;
+
     private final PaymentRepository paymentRepository;
-    private final BookingRepository bookingRepository;
 
     @Transactional(readOnly = true)
     @Override
     public RevenueReportResponse getRevenueReport(String ownerEmail, Integer stadiumId, LocalDateTime startDate, LocalDateTime endDate) {
+
+        // RULE-05: Validate date range tránh logic lỗi và query quá nặng
+        if (startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException("startDate phải trước endDate");
+        }
+        long days = ChronoUnit.DAYS.between(startDate, endDate);
+        if (days > MAX_QUERY_DAYS) {
+            throw new IllegalArgumentException("Khoảng thời gian không được vượt quá " + MAX_QUERY_DAYS + " ngày");
+        }
+        if (days < 1) {
+            days = 1; // Tối thiểu 1 ngày để tránh chia cho 0
+        }
+
         log.info("Fetching revenue report for owner: {}, stadiumId: {}, start: {}, end: {}", ownerEmail, stadiumId, startDate, endDate);
 
+        // Lấy doanh thu theo ngày từ Payment table
         List<DailyRevenueProjection> projections = paymentRepository.getDailyRevenue(ownerEmail, stadiumId, startDate, endDate);
 
         List<RevenueDetailDto> details = projections.stream()
@@ -40,49 +58,49 @@ public class RevenueServiceImpl implements RevenueService {
                         .date(p.getDate().toString())
                         .revenue(p.getRevenue() != null ? p.getRevenue() : BigDecimal.ZERO)
                         .build())
-                .collect(Collectors.toList());
+                .toList(); // QUALITY-02: Java 16+ style
 
         BigDecimal totalRevenue = details.stream()
                 .map(RevenueDetailDto::getRevenue)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        Long totalBookings = bookingRepository.countBookingsForRevenue(ownerEmail, stadiumId, startDate, endDate);
-
-        // 1. Calculate Occupancy Rate (Estimate: 12 hours open per day per venue, 1 booking = 1 hour roughly)
-        long days = ChronoUnit.DAYS.between(startDate, endDate);
-        if (days < 1) {
-            days = 1; // Minimum 1 day
-        }
-        double totalAvailableHoursPerVenue = days * 12.0;
-
-        // 2. Fetch current period venue revenues
+        // Lấy breakdown theo sân từ cùng nguồn Payment table (BUG-02 fix)
         List<VenueRevenueProjection> venueProjections = paymentRepository.getVenueRevenueBreakdown(ownerEmail, stadiumId, startDate, endDate);
-        
-        // 3. Fetch previous period for Trend calculation
+
+        // BUG-02 Fix: Tính totalBookings từ cùng nguồn Payment để nhất quán với totalRevenue
+        Long totalBookings = venueProjections.stream()
+                .mapToLong(VenueRevenueProjection::getTotalBookings)
+                .sum();
+
+        // Lấy kỳ trước để tính xu hướng (Trend)
         LocalDateTime previousStartDate = startDate.minusDays(days);
         LocalDateTime previousEndDate = endDate.minusDays(days);
         List<VenueRevenueProjection> previousProjections = paymentRepository.getVenueRevenueBreakdown(ownerEmail, stadiumId, previousStartDate, previousEndDate);
-        
+
         Map<Integer, BigDecimal> previousRevenueMap = previousProjections.stream()
-                .collect(Collectors.toMap(VenueRevenueProjection::getStadiumId, p -> p.getTotalRevenue() != null ? p.getTotalRevenue() : BigDecimal.ZERO));
+                .collect(Collectors.toMap(
+                        VenueRevenueProjection::getStadiumId,
+                        p -> p.getTotalRevenue() != null ? p.getTotalRevenue() : BigDecimal.ZERO));
+
+        // QUALITY-01: Magic number đã được trích thành constant
+        double totalAvailableHoursPerVenue = days * OPERATIONAL_HOURS_PER_DAY;
 
         List<VenueRevenueDto> venueRevenues = venueProjections.stream()
                 .map(p -> {
                     BigDecimal currentRevenue = p.getTotalRevenue() != null ? p.getTotalRevenue() : BigDecimal.ZERO;
-                    
-                    // Occupancy
-                    double occupancy = (p.getTotalBookings() / totalAvailableHoursPerVenue) * 100.0;
+
+                    // BUG-04 Fix: dùng .doubleValue() tường minh tránh mất precision
+                    double occupancy = (p.getTotalBookings().doubleValue() / totalAvailableHoursPerVenue) * 100.0;
                     if (occupancy > 100.0) {
-                        occupancy = 100.0; // Cap at 100%
+                        occupancy = 100.0; // Cap tại 100%
                     }
-                    
-                    // Trend
+
+                    // BUG-05 Fix: Trả "N/A" thay vì "+100%" khi kỳ trước = 0
                     BigDecimal prevRevenue = previousRevenueMap.getOrDefault(p.getStadiumId(), BigDecimal.ZERO);
-                    String trendStr = "+0%";
+                    String trendStr;
                     if (prevRevenue.compareTo(BigDecimal.ZERO) == 0) {
-                        if (currentRevenue.compareTo(BigDecimal.ZERO) > 0) {
-                            trendStr = "+100%";
-                        }
+                        // Không có baseline → xu hướng không xác định
+                        trendStr = currentRevenue.compareTo(BigDecimal.ZERO) > 0 ? "N/A" : "+0%";
                     } else {
                         double diff = currentRevenue.subtract(prevRevenue).doubleValue();
                         double percentage = (diff / prevRevenue.doubleValue()) * 100.0;
@@ -94,15 +112,15 @@ public class RevenueServiceImpl implements RevenueService {
                             .stadiumName(p.getStadiumName())
                             .totalBookings(p.getTotalBookings())
                             .totalRevenue(currentRevenue)
-                            .occupancy(Math.round(occupancy * 10.0) / 10.0) // 1 decimal place
+                            .occupancy(Math.round(occupancy * 10.0) / 10.0) // Làm tròn 1 chữ số thập phân
                             .trend(trendStr)
                             .build();
                 })
-                .collect(Collectors.toList());
+                .toList(); // QUALITY-02: Java 16+ style
 
         return RevenueReportResponse.builder()
                 .totalRevenue(totalRevenue)
-                .totalBookings(totalBookings != null ? totalBookings : 0L)
+                .totalBookings(totalBookings)
                 .details(details)
                 .venueRevenues(venueRevenues)
                 .build();

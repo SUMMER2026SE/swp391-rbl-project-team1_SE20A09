@@ -52,7 +52,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     @Query("""
             SELECT COALESCE(SUM(b.totalPrice), 0) FROM Booking b
             WHERE b.stadium.stadiumId = :stadiumId
-            AND b.bookingStatus = 'COMPLETED'
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
             AND b.bookingDate BETWEEN :from AND :to
             """)
     BigDecimal sumRevenueByBookingDate(
@@ -72,7 +72,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     @Query("""
             SELECT COALESCE(SUM(b.totalPrice), 0) FROM Booking b
             WHERE b.stadium.stadiumId = :stadiumId
-            AND b.bookingStatus = 'COMPLETED'
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
             AND b.slot.startTime BETWEEN :from AND :to
             """)
     BigDecimal sumRevenueBySlotDate(
@@ -90,8 +90,9 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     @Query("SELECT COUNT(b) FROM Booking b " +
            "WHERE b.stadium.owner.user.email = :ownerEmail " +
            "AND (:stadiumId IS NULL OR b.stadium.stadiumId = :stadiumId) " +
-           "AND (b.bookingStatus = 'COMPLETED' OR b.bookingStatus = 'CONFIRMED') " +
-           "AND b.paymentStatus = 'PAID' " +
+           "AND (b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED " +
+           "     OR b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED) " +
+           "AND b.paymentStatus = com.sportvenue.entity.enums.PaymentStatus.PAID " +
            "AND b.bookingDate >= :startDate AND b.bookingDate <= :endDate")
     Long countBookingsForRevenue(@Param("ownerEmail") String ownerEmail,
                                  @Param("stadiumId") Integer stadiumId,

@@ -30,7 +30,7 @@ export interface ApiResponse<T> {
 export const reportService = {
   getRevenueReport: (startDate: string, endDate: string, stadiumId?: number) => {
     return get<ApiResponse<RevenueReportResponse>>('/owner/reports/revenue', {
-      params: { startDate, endDate, stadiumId },
+      params: { startDate, endDate, ...(stadiumId !== undefined && { stadiumId }) },
     });
   },
 };
