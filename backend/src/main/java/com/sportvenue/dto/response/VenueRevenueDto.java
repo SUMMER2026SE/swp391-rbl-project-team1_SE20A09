@@ -6,15 +6,16 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.util.List;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class RevenueReportResponse {
-    private BigDecimal totalRevenue;
+public class VenueRevenueDto {
+    private Integer stadiumId;
+    private String stadiumName;
     private Long totalBookings;
-    private List<RevenueDetailDto> details;
-    private List<VenueRevenueDto> venueRevenues;
+    private BigDecimal totalRevenue;
+    private Double occupancy;
+    private String trend;
 }

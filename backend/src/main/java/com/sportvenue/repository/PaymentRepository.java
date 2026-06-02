@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import com.sportvenue.repository.projection.DailyRevenueProjection;
+import com.sportvenue.repository.projection.VenueRevenueProjection;
 
 /**
  * Repository cho Payment entity.
@@ -39,4 +40,19 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
                                                  @Param("stadiumId") Integer stadiumId,
                                                  @Param("startDate") LocalDateTime startDate,
                                                  @Param("endDate") LocalDateTime endDate);
+    @Query("SELECT s.stadiumId as stadiumId, s.stadiumName as stadiumName, " +
+           "COUNT(b) as totalBookings, SUM(p.amount) as totalRevenue " +
+           "FROM Payment p " +
+           "JOIN p.booking b " +
+           "JOIN b.stadium s " +
+           "WHERE s.owner.user.email = :ownerEmail " +
+           "AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId) " +
+           "AND p.paymentStatus = 'SUCCESS' " +
+           "AND p.paidAt >= :startDate AND p.paidAt <= :endDate " +
+           "GROUP BY s.stadiumId, s.stadiumName " +
+           "ORDER BY SUM(p.amount) DESC")
+    List<VenueRevenueProjection> getVenueRevenueBreakdown(@Param("ownerEmail") String ownerEmail,
+                                                          @Param("stadiumId") Integer stadiumId,
+                                                          @Param("startDate") LocalDateTime startDate,
+                                                          @Param("endDate") LocalDateTime endDate);
 }
