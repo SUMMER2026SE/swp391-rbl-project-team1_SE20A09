@@ -35,18 +35,7 @@ public class RevenueServiceImpl implements RevenueService {
     @Transactional(readOnly = true)
     @Override
     public RevenueReportResponse getRevenueReport(String ownerEmail, Integer stadiumId, LocalDateTime startDate, LocalDateTime endDate) {
-
-        // RULE-05: Validate date range tránh logic lỗi và query quá nặng
-        if (startDate.isAfter(endDate)) {
-            throw new IllegalArgumentException("startDate phải trước endDate");
-        }
-        long days = ChronoUnit.DAYS.between(startDate, endDate);
-        if (days > MAX_QUERY_DAYS) {
-            throw new IllegalArgumentException("Khoảng thời gian không được vượt quá " + MAX_QUERY_DAYS + " ngày");
-        }
-        if (days < 1) {
-            days = 1; // Tối thiểu 1 ngày để tránh chia cho 0
-        }
+        long days = validateDateRange(startDate, endDate);
 
         log.info("Fetching revenue report for owner: {}, stadiumId: {}, start: {}, end: {}", ownerEmail, stadiumId, startDate, endDate);
 
@@ -72,20 +61,44 @@ public class RevenueServiceImpl implements RevenueService {
                 .mapToLong(VenueRevenueProjection::getTotalBookings)
                 .sum();
 
-        // Lấy kỳ trước để tính xu hướng (Trend)
+        Map<Integer, BigDecimal> previousRevenueMap = getPreviousRevenueMap(ownerEmail, stadiumId, startDate, endDate, days);
+
+        List<VenueRevenueDto> venueRevenues = buildVenueRevenueDtos(venueProjections, previousRevenueMap, days);
+
+        return RevenueReportResponse.builder()
+                .totalRevenue(totalRevenue)
+                .totalBookings(totalBookings)
+                .details(details)
+                .venueRevenues(venueRevenues)
+                .build();
+    }
+
+    private long validateDateRange(LocalDateTime startDate, LocalDateTime endDate) {
+        if (startDate.isAfter(endDate)) {
+            throw new IllegalArgumentException("startDate phải trước endDate");
+        }
+        long days = ChronoUnit.DAYS.between(startDate, endDate);
+        if (days > MAX_QUERY_DAYS) {
+            throw new IllegalArgumentException("Khoảng thời gian không được vượt quá " + MAX_QUERY_DAYS + " ngày");
+        }
+        return days < 1 ? 1 : days;
+    }
+
+    private Map<Integer, BigDecimal> getPreviousRevenueMap(String ownerEmail, Integer stadiumId, LocalDateTime startDate, LocalDateTime endDate, long days) {
         LocalDateTime previousStartDate = startDate.minusDays(days);
         LocalDateTime previousEndDate = endDate.minusDays(days);
         List<VenueRevenueProjection> previousProjections = paymentRepository.getVenueRevenueBreakdown(ownerEmail, stadiumId, previousStartDate, previousEndDate);
 
-        Map<Integer, BigDecimal> previousRevenueMap = previousProjections.stream()
+        return previousProjections.stream()
                 .collect(Collectors.toMap(
                         VenueRevenueProjection::getStadiumId,
                         p -> p.getTotalRevenue() != null ? p.getTotalRevenue() : BigDecimal.ZERO));
+    }
 
-        // QUALITY-01: Magic number đã được trích thành constant
+    private List<VenueRevenueDto> buildVenueRevenueDtos(List<VenueRevenueProjection> venueProjections, Map<Integer, BigDecimal> previousRevenueMap, long days) {
         double totalAvailableHoursPerVenue = days * OPERATIONAL_HOURS_PER_DAY;
 
-        List<VenueRevenueDto> venueRevenues = venueProjections.stream()
+        return venueProjections.stream()
                 .map(p -> {
                     BigDecimal currentRevenue = p.getTotalRevenue() != null ? p.getTotalRevenue() : BigDecimal.ZERO;
 
@@ -117,12 +130,5 @@ public class RevenueServiceImpl implements RevenueService {
                             .build();
                 })
                 .toList(); // QUALITY-02: Java 16+ style
-
-        return RevenueReportResponse.builder()
-                .totalRevenue(totalRevenue)
-                .totalBookings(totalBookings)
-                .details(details)
-                .venueRevenues(venueRevenues)
-                .build();
     }
 }
