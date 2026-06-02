@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from "react";
-import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -365,9 +364,7 @@ function BookingManagementPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-12">
-      <Header />
-
+    <>
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
           <div>
@@ -766,7 +763,7 @@ function BookingManagementPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }
 

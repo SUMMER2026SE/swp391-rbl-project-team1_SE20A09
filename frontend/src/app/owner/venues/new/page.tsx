@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -179,9 +177,6 @@ function AddVenuePage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold mb-8">Thêm sân mới</h1>
@@ -405,9 +400,6 @@ function AddVenuePage() {
           </div>
         </div>
       </div>
-
-      <Footer />
-    </div>
   );
 }
 

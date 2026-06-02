@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import NextAuthProvider from "@/components/providers/NextAuthProvider";
+import QueryProvider from "@/components/providers/QueryProvider";
 
 const inter = Inter({
   subsets: ["latin", "vietnamese"],
@@ -23,8 +24,10 @@ export default function RootLayout({
     <html lang="vi" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
         <NextAuthProvider>
-          {children}
-          <Toaster position="top-right" richColors />
+          <QueryProvider>
+            {children}
+            <Toaster position="top-right" richColors />
+          </QueryProvider>
         </NextAuthProvider>
       </body>
     </html>
