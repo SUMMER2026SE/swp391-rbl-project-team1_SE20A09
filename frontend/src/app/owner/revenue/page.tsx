@@ -1,6 +1,5 @@
 ﻿'use client'
 
-import { Header } from "@/components/layout/Header";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,10 +65,7 @@ function RevenueReportPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-
-      <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl">Báo cáo doanh thu</h1>
           <div className="flex gap-4">
@@ -201,7 +197,6 @@ function RevenueReportPage() {
           </CardContent>
         </Card>
       </div>
-    </div>
   );
 }
 
