@@ -1,5 +1,6 @@
-﻿'use client'
+'use client'
 
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,49 +19,96 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { Download, TrendingUp, Calendar, DollarSign } from "lucide-react";
+import { Download, TrendingUp, Calendar, DollarSign, Loader2 } from "lucide-react";
+import { reportService, RevenueReportResponse } from "@/lib/services/report";
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, format, parseISO, eachDayOfInterval } from "date-fns";
+import { toast } from "sonner";
 
 function RevenueReportPage() {
-  const summaryData = [
-    { title: "Tổng doanh thu", value: "125,500,000đ", icon: <DollarSign className="h-6 w-6" /> },
-    { title: "Tổng đặt sân", value: "245", icon: <Calendar className="h-6 w-6" /> },
-    { title: "Trung bình/đặt", value: "512,000đ", icon: <TrendingUp className="h-6 w-6" /> },
-  ];
+  const [dateRange, setDateRange] = useState("this-month");
+  
+  // Default to this month
+  const [startDate, setStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+  
+  const [loading, setLoading] = useState(true);
+  const [reportData, setReportData] = useState<RevenueReportResponse | null>(null);
 
-  const dailyRevenue = [
-    { date: "01/05", revenue: 4200000 },
-    { date: "02/05", revenue: 3800000 },
-    { date: "03/05", revenue: 4500000 },
-    { date: "04/05", revenue: 3200000 },
-    { date: "05/05", revenue: 5100000 },
-    { date: "06/05", revenue: 4700000 },
-    { date: "07/05", revenue: 3900000 },
-    { date: "08/05", revenue: 4300000 },
-    { date: "09/05", revenue: 4800000 },
-    { date: "10/05", revenue: 4100000 },
-  ];
+  const fetchReport = async (start: string, end: string) => {
+    try {
+      setLoading(true);
+      const res = await reportService.getRevenueReport(start, end);
+      setReportData(res.result);
+    } catch (error: any) {
+      toast.error(error.message || "Không thể tải dữ liệu báo cáo");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const venueBreakdown = [
-    {
-      venue: "Sân 1",
-      bookings: 95,
-      revenue: 47500000,
-      occupancy: 85,
-      trend: "+12%",
+  useEffect(() => {
+    fetchReport(startDate, endDate);
+  }, [startDate, endDate]);
+
+  const handleDateRangeChange = (value: string) => {
+    setDateRange(value);
+    const now = new Date();
+    
+    let newStart = startDate;
+    let newEnd = endDate;
+
+    if (value === 'this-week') {
+      newStart = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      newEnd = format(endOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    } else if (value === 'this-month') {
+      newStart = format(startOfMonth(now), 'yyyy-MM-dd');
+      newEnd = format(endOfMonth(now), 'yyyy-MM-dd');
+    } else if (value === 'last-month') {
+      const lastMonth = subMonths(now, 1);
+      newStart = format(startOfMonth(lastMonth), 'yyyy-MM-dd');
+      newEnd = format(endOfMonth(lastMonth), 'yyyy-MM-dd');
+    }
+    
+    if (value !== 'custom') {
+      setStartDate(newStart);
+      setEndDate(newEnd);
+    }
+  };
+
+  // Format data for Recharts (generate all dates in interval to prevent UI layout issues)
+  const allDays = eachDayOfInterval({
+    start: parseISO(startDate),
+    end: parseISO(endDate)
+  });
+
+  const chartData = allDays.map(day => {
+    const formattedDayStr = format(day, 'yyyy-MM-dd');
+    const existingData = reportData?.details?.find(d => d.date === formattedDayStr);
+    return {
+      date: format(day, 'dd/MM'),
+      revenue: existingData ? existingData.revenue : 0
+    };
+  });
+
+  const averagePerBooking = reportData?.totalBookings 
+    ? (reportData.totalRevenue / reportData.totalBookings) 
+    : 0;
+
+  const summaryCards = [
+    { 
+      title: "Tổng doanh thu", 
+      value: `${reportData?.totalRevenue?.toLocaleString('vi-VN') || 0}đ`, 
+      icon: <DollarSign className="h-6 w-6" /> 
     },
-    {
-      venue: "Sân 2",
-      bookings: 82,
-      revenue: 49200000,
-      occupancy: 78,
-      trend: "+8%",
+    { 
+      title: "Tổng đặt sân", 
+      value: reportData?.totalBookings || 0, 
+      icon: <Calendar className="h-6 w-6" /> 
     },
-    {
-      venue: "Sân Cầu lông 1",
-      bookings: 68,
-      revenue: 28800000,
-      occupancy: 65,
-      trend: "-5%",
+    { 
+      title: "Trung bình/đặt", 
+      value: `${Math.round(averagePerBooking).toLocaleString('vi-VN')}đ`, 
+      icon: <TrendingUp className="h-6 w-6" /> 
     },
   ];
 
@@ -69,7 +117,7 @@ function RevenueReportPage() {
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl">Báo cáo doanh thu</h1>
           <div className="flex gap-4">
-            <Select defaultValue="this-month">
+            <Select value={dateRange} onValueChange={handleDateRangeChange}>
               <SelectTrigger className="w-48">
                 <SelectValue />
               </SelectTrigger>
@@ -91,111 +139,56 @@ function RevenueReportPage() {
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {summaryData.map((item, idx) => (
-            <Card key={idx}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="text-primary bg-primary/10 p-3 rounded-lg">
-                    {item.icon}
+        {loading ? (
+          <div className="flex justify-center items-center h-64">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : (
+          <>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              {summaryCards.map((item, idx) => (
+                <Card key={idx}>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-primary bg-primary/10 p-3 rounded-lg">
+                        {item.icon}
+                      </div>
+                    </div>
+                    <div className="text-2xl mb-1">{item.value}</div>
+                    <div className="text-sm text-muted-foreground">{item.title}</div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Daily Revenue Chart */}
+            <Card className="mb-8">
+              <CardHeader>
+                <h3>Doanh thu theo ngày ({format(parseISO(startDate), 'dd/MM/yyyy')} - {format(parseISO(endDate), 'dd/MM/yyyy')})</h3>
+              </CardHeader>
+              <CardContent>
+                {chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={400}>
+                    <BarChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis />
+                      <Tooltip
+                        formatter={(value) => `${Number(value).toLocaleString('vi-VN')}đ`}
+                      />
+                      <Bar dataKey="revenue" fill="#2563EB" radius={[4, 4, 0, 0]} maxBarSize={60} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex justify-center items-center h-[400px] text-muted-foreground">
+                    Không có dữ liệu doanh thu trong khoảng thời gian này.
                   </div>
-                </div>
-                <div className="text-2xl mb-1">{item.value}</div>
-                <div className="text-sm text-muted-foreground">{item.title}</div>
+                )}
               </CardContent>
             </Card>
-          ))}
-        </div>
-
-        {/* Daily Revenue Chart */}
-        <Card className="mb-8">
-          <CardHeader>
-            <h3>Doanh thu theo ngày</h3>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={400}>
-              <BarChart data={dailyRevenue}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip
-                  formatter={(value) => `${Number(value).toLocaleString('vi-VN')}đ`}
-                />
-                <Bar dataKey="revenue" fill="#2563EB" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Venue Breakdown */}
-        <Card>
-          <CardHeader>
-            <h3>Chi tiết theo sân</h3>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-muted">
-                  <tr>
-                    <th className="p-3 text-left">Tên sân</th>
-                    <th className="p-3 text-center">Số lượt đặt</th>
-                    <th className="p-3 text-right">Doanh thu</th>
-                    <th className="p-3 text-center">Tỷ lệ lấp đầy</th>
-                    <th className="p-3 text-center">Xu hướng</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {venueBreakdown.map((venue, idx) => (
-                    <tr key={idx} className="border-b">
-                      <td className="p-3">{venue.venue}</td>
-                      <td className="p-3 text-center">{venue.bookings}</td>
-                      <td className="p-3 text-right">
-                        {venue.revenue.toLocaleString('vi-VN')}đ
-                      </td>
-                      <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-primary"
-                              style={{ width: `${venue.occupancy}%` }}
-                            />
-                          </div>
-                          <span className="text-sm">{venue.occupancy}%</span>
-                        </div>
-                      </td>
-                      <td className="p-3 text-center">
-                        <span
-                          className={`text-sm ${
-                            venue.trend.startsWith("+")
-                              ? "text-green-600"
-                              : "text-red-600"
-                          }`}
-                        >
-                          {venue.trend}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className="bg-muted/50 font-medium">
-                    <td className="p-3">Tổng cộng</td>
-                    <td className="p-3 text-center">
-                      {venueBreakdown.reduce((sum, v) => sum + v.bookings, 0)}
-                    </td>
-                    <td className="p-3 text-right">
-                      {venueBreakdown
-                        .reduce((sum, v) => sum + v.revenue, 0)
-                        .toLocaleString('vi-VN')}
-                      đ
-                    </td>
-                    <td className="p-3 text-center">-</td>
-                    <td className="p-3 text-center">-</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+          </>
+        )}
       </div>
   );
 }
