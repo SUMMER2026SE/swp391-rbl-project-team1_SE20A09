@@ -86,4 +86,15 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     /** Lấy danh sách đặt sân thuộc các sân mà Owner sở hữu. */
     @EntityGraph(attributePaths = {"user", "stadium", "slot"})
     List<Booking> findByStadiumOwnerUserEmailOrderByBookingDateDesc(String email);
+
+    @Query("SELECT COUNT(b) FROM Booking b " +
+           "WHERE b.stadium.owner.user.email = :ownerEmail " +
+           "AND (:stadiumId IS NULL OR b.stadium.stadiumId = :stadiumId) " +
+           "AND (b.bookingStatus = 'COMPLETED' OR b.bookingStatus = 'CONFIRMED') " +
+           "AND b.paymentStatus = 'PAID' " +
+           "AND b.bookingDate >= :startDate AND b.bookingDate <= :endDate")
+    Long countBookingsForRevenue(@Param("ownerEmail") String ownerEmail,
+                                 @Param("stadiumId") Integer stadiumId,
+                                 @Param("startDate") LocalDateTime startDate,
+                                 @Param("endDate") LocalDateTime endDate);
 }
