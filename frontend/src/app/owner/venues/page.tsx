@@ -101,7 +101,7 @@ function VenueManagementPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => router.push(`/owner/venues/${venue.stadiumId}/edit`)}>
                         <Edit className="mr-2 h-4 w-4" />
                         Chỉnh sửa
                       </DropdownMenuItem>
@@ -140,7 +140,12 @@ function VenueManagementPage() {
                 </div>
 
                 <div className="flex gap-2 mt-4">
-                  <Button variant="outline" size="sm" className="flex-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => router.push(`/owner/venues/${venue.stadiumId}/edit`)}
+                  >
                     Chỉnh sửa
                   </Button>
                   <Button

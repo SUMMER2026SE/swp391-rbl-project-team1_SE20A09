@@ -18,6 +18,7 @@ public class StadiumResponse {
     private String stadiumName;
     private String address;
     private String description;
+    private Integer sportTypeId;
     private String sportName;
     private BigDecimal pricePerHour;
     private Integer capacity;

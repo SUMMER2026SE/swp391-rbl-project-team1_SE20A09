@@ -1,0 +1,305 @@
+'use client'
+
+import { useEffect, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MapPin, Loader2, ArrowLeft } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { stadiumService } from "@/lib/services/stadium";
+import { SportType, StadiumResponse } from "@/types/stadium";
+import { toast } from "sonner";
+
+const updateStadiumSchema = z.object({
+  stadiumName: z.string()
+    .min(3, "Tên sân phải có ít nhất 3 ký tự")
+    .max(100, "Tên sân không được quá 100 ký tự"),
+  address: z.string()
+    .min(5, "Địa chỉ phải có ít nhất 5 ký tự")
+    .max(500, "Địa chỉ không được quá 500 ký tự"),
+  sportTypeId: z.number({ message: "Vui lòng chọn môn thể thao" })
+    .min(1, "Vui lòng chọn môn thể thao"),
+  pricePerHour: z.number({ message: "Vui lòng nhập giá" })
+    .min(1000, "Giá tối thiểu là 1,000đ")
+    .max(99999999.99, "Giá không được vượt quá 99,999,999.99đ"),
+  capacity: z.number({ message: "Vui lòng nhập sức chứa" })
+    .min(1, "Sức chứa phải ít nhất 1 người"),
+  description: z.string().max(2000, "Mô tả không được quá 2000 ký tự").optional(),
+  openTime: z.string().min(1, "Vui lòng chọn giờ mở cửa"),
+  closeTime: z.string().min(1, "Vui lòng chọn giờ đóng cửa"),
+}).refine(
+  (data) => {
+    if (!data.openTime || !data.closeTime) return true;
+    return data.closeTime > data.openTime;
+  },
+  { message: "Giờ đóng cửa phải sau giờ mở cửa", path: ["closeTime"] }
+);
+
+type UpdateStadiumFormValues = z.infer<typeof updateStadiumSchema>;
+
+export default function EditVenuePage() {
+  const router = useRouter();
+  const params = useParams();
+  const stadiumId = parseInt(params.id as string);
+  const { data: session, status } = useSession();
+  const [sportTypes, setSportTypes] = useState<SportType[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [stadium, setStadium] = useState<StadiumResponse | null>(null);
+
+  const form = useForm<UpdateStadiumFormValues>({
+    resolver: zodResolver(updateStadiumSchema),
+    defaultValues: {
+      stadiumName: "",
+      address: "",
+      pricePerHour: 100000,
+      capacity: 10,
+      description: "",
+      openTime: "06:00",
+      closeTime: "22:00",
+    },
+  });
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/login");
+    }
+  }, [status, router]);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      Promise.all([
+        stadiumService.getSportTypes(),
+        stadiumService.getStadiumById(stadiumId)
+      ])
+        .then(([types, stadiumData]) => {
+          setSportTypes(types);
+          setStadium(stadiumData);
+          const normalizeTime = (t: string) => {
+            if (!t) return "06:00";
+            if (/^\d{2}:\d{2}:\d{2}$/.test(t)) return t.substring(0, 5);
+            return t;
+          };
+          form.reset({
+            stadiumName: stadiumData.stadiumName,
+            address: stadiumData.address,
+            sportTypeId: stadiumData.sportTypeId,
+            pricePerHour: stadiumData.pricePerHour,
+            capacity: stadiumData.capacity,
+            description: stadiumData.description || "",
+            openTime: normalizeTime(stadiumData.openTime),
+            closeTime: normalizeTime(stadiumData.closeTime),
+          });
+        })
+        .catch((err) => {
+          toast.error(err.message || "Không thể tải thông tin sân");
+          router.push("/owner/venues");
+        })
+        .finally(() => setIsLoading(false));
+    }
+  }, [status, stadiumId, form, router]);
+
+  if (status === "loading" || isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!session || !stadium) return null;
+
+  const onSubmit = async (data: UpdateStadiumFormValues) => {
+    setIsSubmitting(true);
+    try {
+      const normalizeTime = (t: string) => {
+        if (/^\d{2}:\d{2}:\d{2}$/.test(t)) return t;
+        return `${t}:00`;
+      };
+      const payload = {
+        ...data,
+        openTime: normalizeTime(data.openTime),
+        closeTime: normalizeTime(data.closeTime),
+      };
+      await stadiumService.updateStadium(stadiumId, payload);
+      toast.success("Cập nhật sân thành công!");
+      router.push("/owner/venues");
+    } catch (error: any) {
+      toast.error(error.message || "Đã xảy ra lỗi khi cập nhật sân");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto">
+        <Button
+          variant="ghost"
+          onClick={() => router.push("/owner/venues")}
+          className="mb-4"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Quay lại
+        </Button>
+
+        <h1 className="text-3xl font-bold mb-8">Chỉnh sửa thông tin sân</h1>
+
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <Card>
+            <CardHeader>
+              <h2 className="text-xl font-semibold">Thông tin sân</h2>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="stadiumName">Tên sân *</Label>
+                <Input
+                  {...form.register("stadiumName")}
+                  id="stadiumName"
+                  placeholder="VD: Sân bóng Thành Công"
+                />
+                {form.formState.errors.stadiumName && (
+                  <p className="text-sm text-destructive">{form.formState.errors.stadiumName.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Loại môn thể thao *</Label>
+                <Select
+                  value={form.watch("sportTypeId")?.toString()}
+                  onValueChange={(val) => form.setValue("sportTypeId", parseInt(val), { shouldValidate: true })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn môn thể thao" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sportTypes.map((type) => (
+                      <SelectItem key={type.sportTypeId} value={type.sportTypeId.toString()}>
+                        {type.sportName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {form.formState.errors.sportTypeId && (
+                  <p className="text-sm text-destructive">{form.formState.errors.sportTypeId.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="address">Địa chỉ *</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                  <Textarea
+                    {...form.register("address")}
+                    id="address"
+                    className="pl-10 min-h-[80px]"
+                    placeholder="Nhập địa chỉ đầy đủ"
+                  />
+                </div>
+                {form.formState.errors.address && (
+                  <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Mô tả</Label>
+                <Textarea
+                  {...form.register("description")}
+                  id="description"
+                  className="min-h-[100px]"
+                  placeholder="Mô tả chi tiết về sân"
+                />
+                {form.formState.errors.description && (
+                  <p className="text-sm text-destructive">{form.formState.errors.description.message}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="pricePerHour">Giá thuê (VNĐ/giờ) *</Label>
+                  <Input
+                    {...form.register("pricePerHour", { valueAsNumber: true })}
+                    id="pricePerHour"
+                    type="number"
+                    min="1000"
+                    step="1000"
+                  />
+                  {form.formState.errors.pricePerHour && (
+                    <p className="text-sm text-destructive">{form.formState.errors.pricePerHour.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="capacity">Sức chứa (người) *</Label>
+                  <Input
+                    {...form.register("capacity", { valueAsNumber: true })}
+                    id="capacity"
+                    type="number"
+                    min="1"
+                  />
+                  {form.formState.errors.capacity && (
+                    <p className="text-sm text-destructive">{form.formState.errors.capacity.message}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="openTime">Giờ mở cửa *</Label>
+                  <Input
+                    {...form.register("openTime")}
+                    id="openTime"
+                    type="time"
+                  />
+                  {form.formState.errors.openTime && (
+                    <p className="text-sm text-destructive">{form.formState.errors.openTime.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="closeTime">Giờ đóng cửa *</Label>
+                  <Input
+                    {...form.register("closeTime")}
+                    id="closeTime"
+                    type="time"
+                  />
+                  {form.formState.errors.closeTime && (
+                    <p className="text-sm text-destructive">{form.formState.errors.closeTime.message}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push("/owner/venues")}
+                  disabled={isSubmitting}
+                >
+                  Hủy
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Đang lưu...
+                    </>
+                  ) : (
+                    "Lưu thay đổi"
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </form>
+      </div>
+    </div>
+  );
+}

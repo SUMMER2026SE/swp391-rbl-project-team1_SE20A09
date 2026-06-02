@@ -1,6 +1,7 @@
 package com.sportvenue.controller;
 
 import com.sportvenue.dto.request.CreateStadiumRequest;
+import com.sportvenue.dto.request.UpdateStadiumRequest;
 import com.sportvenue.dto.response.StadiumResponse;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.StadiumService;
@@ -14,7 +15,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -48,5 +51,17 @@ public class StadiumController {
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
         List<StadiumResponse> stadiums = stadiumService.getMyStadiums(userPrincipal.getUser().getUserId());
         return ResponseEntity.ok(stadiums);
+    }
+
+    @PutMapping("/{stadiumId}")
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(summary = "Update stadium", description = "Allows an owner to update their stadium. Ownership is verified.")
+    public ResponseEntity<StadiumResponse> updateStadium(
+            @PathVariable Integer stadiumId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @Valid @RequestBody UpdateStadiumRequest request) {
+        log.info("Received request to update stadium ID: {} from owner: {}", stadiumId, userPrincipal.getUsername());
+        StadiumResponse response = stadiumService.updateStadium(stadiumId, request, userPrincipal.getUser().getUserId());
+        return ResponseEntity.ok(response);
     }
 }

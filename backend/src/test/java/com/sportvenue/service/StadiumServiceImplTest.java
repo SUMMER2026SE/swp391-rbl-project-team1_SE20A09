@@ -2,6 +2,7 @@ package com.sportvenue.service;
 
 import com.sportvenue.config.FileStorageProperties;
 import com.sportvenue.dto.request.CreateStadiumRequest;
+import com.sportvenue.dto.request.UpdateStadiumRequest;
 import com.sportvenue.dto.response.StadiumResponse;
 import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.SportType;
@@ -9,6 +10,7 @@ import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.exception.BadRequestException;
+import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.mapper.StadiumMapper;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.SportTypeRepository;
@@ -182,6 +184,95 @@ class StadiumServiceImplTest {
                 .ownerId(5)
                 .user(User.builder().userId(1).build())
                 .approvedStatus(ApprovedStatus.APPROVED)
+                .build();
+    }
+
+    @Test
+    void updateStadiumSuccessfullyUpdatesAllFields() {
+        UpdateStadiumRequest request = validUpdateRequest();
+        Owner owner = approvedOwner();
+        SportType oldSportType = SportType.builder().sportTypeId(1).sportName("Football").build();
+        SportType newSportType = SportType.builder().sportTypeId(2).sportName("Basketball").build();
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .owner(owner)
+                .sportType(oldSportType)
+                .stadiumName("Old Name")
+                .address("Old Address")
+                .pricePerHour(BigDecimal.valueOf(50000))
+                .build();
+        StadiumResponse expectedResponse = StadiumResponse.builder().stadiumId(10).build();
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(sportTypeRepository.findById(2)).thenReturn(Optional.of(newSportType));
+        when(stadiumRepository.save(any(Stadium.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(stadiumMapper.toResponse(any(Stadium.class))).thenReturn(expectedResponse);
+
+        StadiumResponse response = stadiumService.updateStadium(10, request, 1);
+
+        assertEquals(expectedResponse, response);
+        ArgumentCaptor<Stadium> captor = ArgumentCaptor.forClass(Stadium.class);
+        verify(stadiumRepository).save(captor.capture());
+        Stadium updated = captor.getValue();
+        assertEquals("Updated Stadium", updated.getStadiumName());
+        assertEquals("456 New Street", updated.getAddress());
+        assertEquals(BigDecimal.valueOf(150000), updated.getPricePerHour());
+        assertEquals(20, updated.getCapacity());
+        assertEquals(LocalTime.of(7, 0), updated.getOpenTime());
+        assertEquals(LocalTime.of(23, 0), updated.getCloseTime());
+        assertEquals(newSportType, updated.getSportType());
+    }
+
+    @Test
+    void updateStadiumRejectsOwnershipViolation() {
+        UpdateStadiumRequest request = validUpdateRequest();
+        Owner owner = approvedOwner();
+        Owner differentOwner = Owner.builder().ownerId(99).build();
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .owner(differentOwner)
+                .build();
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+
+        assertThrows(ResponseStatusException.class, () -> stadiumService.updateStadium(10, request, 1));
+        verify(stadiumRepository, never()).save(any(Stadium.class));
+    }
+
+    @Test
+    void updateStadiumRejectsInvalidCloseTime() {
+        UpdateStadiumRequest request = validUpdateRequest();
+        request.setOpenTime(LocalTime.of(20, 0));
+        request.setCloseTime(LocalTime.of(8, 0));
+
+        assertThrows(BadRequestException.class, () -> stadiumService.updateStadium(10, request, 1));
+        verify(stadiumRepository, never()).save(any(Stadium.class));
+    }
+
+    @Test
+    void updateStadiumRejectsNonExistentStadium() {
+        UpdateStadiumRequest request = validUpdateRequest();
+        Owner owner = approvedOwner();
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> stadiumService.updateStadium(10, request, 1));
+        verify(stadiumRepository, never()).save(any(Stadium.class));
+    }
+
+    private static UpdateStadiumRequest validUpdateRequest() {
+        return UpdateStadiumRequest.builder()
+                .stadiumName(" Updated Stadium ")
+                .address(" 456 New Street ")
+                .sportTypeId(2)
+                .pricePerHour(BigDecimal.valueOf(150000))
+                .capacity(20)
+                .description("Updated description")
+                .openTime(LocalTime.of(7, 0))
+                .closeTime(LocalTime.of(23, 0))
                 .build();
     }
 }

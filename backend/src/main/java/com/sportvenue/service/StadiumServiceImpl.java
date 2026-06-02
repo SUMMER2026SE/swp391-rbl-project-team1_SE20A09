@@ -1,6 +1,7 @@
 package com.sportvenue.service;
 
 import com.sportvenue.dto.request.CreateStadiumRequest;
+import com.sportvenue.dto.request.UpdateStadiumRequest;
 import com.sportvenue.dto.response.StadiumResponse;
 import com.sportvenue.config.FileStorageProperties;
 import com.sportvenue.entity.Owner;
@@ -84,6 +85,41 @@ public class StadiumServiceImpl implements StadiumService {
                 .toList();
     }
 
+    @Override
+    @Transactional
+    public StadiumResponse updateStadium(Integer stadiumId, UpdateStadiumRequest request, Integer userId) {
+        normalizeUpdateRequest(request);
+        log.info("Updating stadium ID: {} for user: {}", stadiumId, userId);
+
+        Owner owner = ownerRepository.findByUserUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Owner profile not found for user ID: " + userId));
+
+        Stadium stadium = stadiumRepository.findById(stadiumId)
+                .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
+
+        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "You do not have permission to edit this stadium");
+        }
+
+        SportType sportType = sportTypeRepository.findById(request.getSportTypeId())
+                .orElseThrow(() -> new ResourceNotFoundException("Sport type not found with ID: " + request.getSportTypeId()));
+
+        stadium.setStadiumName(request.getStadiumName());
+        stadium.setAddress(request.getAddress());
+        stadium.setDescription(request.getDescription());
+        stadium.setSportType(sportType);
+        stadium.setPricePerHour(request.getPricePerHour());
+        stadium.setCapacity(request.getCapacity());
+        stadium.setOpenTime(request.getOpenTime());
+        stadium.setCloseTime(request.getCloseTime());
+
+        Stadium updatedStadium = stadiumRepository.save(stadium);
+        log.info("Successfully updated stadium with ID: {}", updatedStadium.getStadiumId());
+
+        return stadiumMapper.toResponse(updatedStadium);
+    }
+
     private void normalizeRequest(CreateStadiumRequest request) {
         request.setStadiumName(trimToNull(request.getStadiumName()));
         request.setAddress(trimToNull(request.getAddress()));
@@ -118,6 +154,16 @@ public class StadiumServiceImpl implements StadiumService {
                         || url.length() <= allowedPrefix.length());
         if (hasInvalidUrl) {
             throw new BadRequestException("Image URLs must be uploaded through the stadium image endpoint");
+        }
+    }
+
+    private void normalizeUpdateRequest(UpdateStadiumRequest request) {
+        request.setStadiumName(trimToNull(request.getStadiumName()));
+        request.setAddress(trimToNull(request.getAddress()));
+        request.setDescription(trimToNull(request.getDescription()));
+        if (request.getOpenTime() != null && request.getCloseTime() != null
+                && !request.getCloseTime().isAfter(request.getOpenTime())) {
+            throw new BadRequestException("Close time must be after open time");
         }
     }
 
