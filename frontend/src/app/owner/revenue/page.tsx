@@ -112,6 +112,47 @@ function RevenueReportPage() {
     },
   ];
 
+  const exportToExcel = () => {
+    if (!reportData || !reportData.venueRevenues) {
+      toast.error("Không có dữ liệu để xuất");
+      return;
+    }
+    
+    import("xlsx").then((XLSX) => {
+      // Create data array with a Title row and empty row before headers
+      const data = [
+        { "Tên sân": `BÁO CÁO DOANH THU (${format(parseISO(startDate), 'dd/MM/yyyy')} - ${format(parseISO(endDate), 'dd/MM/yyyy')})` },
+        { "Tên sân": "" }, // Empty row
+        ...reportData.venueRevenues.map(v => ({
+          "Tên sân": v.stadiumName,
+          "Số lượt đặt": v.totalBookings,
+          "Doanh thu (VND)": v.totalRevenue.toLocaleString('vi-VN') + " đ",
+          "Tỷ lệ lấp đầy (%)": v.occupancy + "%",
+          "Xu hướng": v.trend
+        }))
+      ];
+      
+      const ws = XLSX.utils.json_to_sheet(data);
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 30 }, // Tên sân
+        { wch: 15 }, // Số lượt đặt
+        { wch: 20 }, // Doanh thu
+        { wch: 18 }, // Tỷ lệ lấp đầy
+        { wch: 15 }  // Xu hướng
+      ];
+      
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Doanh Thu");
+      XLSX.writeFile(wb, `Bao_Cao_Doanh_Thu_${format(parseISO(startDate), 'yyyyMMdd')}_${format(parseISO(endDate), 'yyyyMMdd')}.xlsx`);
+      toast.success("Xuất Excel thành công!");
+    }).catch(err => {
+      console.error(err);
+      toast.error("Lỗi khi xuất Excel");
+    });
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
@@ -128,11 +169,7 @@ function RevenueReportPage() {
                 <SelectItem value="custom">Tùy chỉnh</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline">
-              <Download className="mr-2 h-4 w-4" />
-              Xuất PDF
-            </Button>
-            <Button variant="outline">
+            <Button variant="outline" onClick={exportToExcel}>
               <Download className="mr-2 h-4 w-4" />
               Xuất Excel
             </Button>
@@ -187,6 +224,62 @@ function RevenueReportPage() {
                 )}
               </CardContent>
             </Card>
+            {/* Venue Breakdown */}
+            {reportData?.venueRevenues && reportData.venueRevenues.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <h3>Chi tiết theo sân</h3>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-muted">
+                        <tr>
+                          <th className="p-3 text-left">Tên sân</th>
+                          <th className="p-3 text-center">Số lượt đặt</th>
+                          <th className="p-3 text-right">Doanh thu</th>
+                          <th className="p-3 text-center">Tỷ lệ lấp đầy</th>
+                          <th className="p-3 text-center">Xu hướng</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportData.venueRevenues.map((venue, idx) => (
+                          <tr key={idx} className="border-b">
+                            <td className="p-3">{venue.stadiumName}</td>
+                            <td className="p-3 text-center">{venue.totalBookings}</td>
+                            <td className="p-3 text-right">
+                              {venue.totalRevenue.toLocaleString('vi-VN')}đ
+                            </td>
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-primary"
+                                    style={{ width: `${venue.occupancy || 0}%` }}
+                                  />
+                                </div>
+                                <span className="text-sm">{venue.occupancy || 0}%</span>
+                              </div>
+                            </td>
+                            <td className="p-3 text-center">
+                              <span
+                                className={`text-sm ${
+                                  (venue.trend || "+0%").startsWith("+")
+                                    ? "text-green-600"
+                                    : "text-red-600"
+                                }`}
+                              >
+                                {venue.trend || "+0%"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </div>
