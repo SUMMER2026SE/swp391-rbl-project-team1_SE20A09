@@ -4,12 +4,17 @@ import { useState, useEffect, useCallback } from 'react'
 import { searchStadiums, getAmenities, getSportTypes, StadiumResponse, StadiumSearchRequest, Amenity } from '@/lib/api/stadium'
 import { Button } from '@/components/ui/button'
 import { Map, X } from 'lucide-react'
+import dynamic from 'next/dynamic'
 
 // Import New Components
 import { HorizontalSearch } from './components/HorizontalSearch'
 import { SportTypeTabs } from './components/SportTypeTabs'
 import { FilterModal } from './components/FilterModal'
 import { StadiumCard } from './components/StadiumCard'
+
+const StadiumMapModal = dynamic(() => import('./components/StadiumMapModal'), {
+  ssr: false,
+})
 
 // Hook debounce
 function useDebounce<T>(value: T, delay: number): T {
@@ -26,6 +31,7 @@ export default function SearchPage() {
   const [amenitiesList, setAmenitiesList] = useState<Amenity[]>([])
   const [sportTypes, setSportTypes] = useState<{ sportTypeId: number, sportName: string }[]>([])
   const [loading, setLoading] = useState(false)
+  const [isMapOpen, setIsMapOpen] = useState(false)
 
   const [filters, setFilters] = useState<StadiumSearchRequest>({
     keyword: '',
@@ -179,7 +185,11 @@ export default function SearchPage() {
               onClearFilters={handleClearFilters}
             />
 
-            <Button variant="outline" className="hidden sm:flex border-gray-200 dark:border-border font-semibold hover:bg-gray-50 dark:hover:bg-muted shadow-sm">
+            <Button
+              variant="outline"
+              onClick={() => setIsMapOpen(true)}
+              className="border-gray-200 dark:border-border font-semibold hover:bg-gray-50 dark:hover:bg-muted shadow-sm"
+            >
               <Map className="mr-2 h-4 w-4" /> Bản đồ
             </Button>
           </div>
@@ -219,6 +229,12 @@ export default function SearchPage() {
         )}
 
       </div>
+
+      <StadiumMapModal
+        isOpen={isMapOpen}
+        onClose={() => setIsMapOpen(false)}
+        stadiums={stadiums}
+      />
     </div>
   )
 }

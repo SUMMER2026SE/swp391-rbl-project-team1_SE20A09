@@ -9,6 +9,8 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.format.annotation.DateTimeFormat;
 
+import com.sportvenue.entity.enums.StadiumStatus;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -24,6 +26,8 @@ public class StadiumSearchRequest {
     private String address;
     private BigDecimal minPrice;
     private BigDecimal maxPrice;
+    private StadiumStatus status;
+
 
     // Time slot filter
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)

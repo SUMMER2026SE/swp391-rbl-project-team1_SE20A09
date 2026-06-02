@@ -21,12 +21,17 @@ import java.util.List;
 
 public class StadiumSpecification {
 
-    public static Specification<Stadium> withDynamicFilter(StadiumSearchRequest req) {
+    public static Specification<Stadium> withDynamicFilter(StadiumSearchRequest req, boolean isPublicSearch) {
         return (root, query, cb) -> {
+            query.distinct(true);
             List<Predicate> predicates = new ArrayList<>();
 
-            // 1. Only AVAILABLE stadiums
-            predicates.add(cb.equal(root.get("stadiumStatus"), StadiumStatus.AVAILABLE));
+            // 1. Status Filter
+            if (isPublicSearch) {
+                predicates.add(cb.equal(root.get("stadiumStatus"), StadiumStatus.AVAILABLE));
+            } else if (req.getStatus() != null) {
+                predicates.add(cb.equal(root.get("stadiumStatus"), req.getStatus()));
+            }
 
             addKeywordPredicate(predicates, cb, root, req.getKeyword());
             addBasicFilters(predicates, cb, root, req);
@@ -74,8 +79,8 @@ public class StadiumSpecification {
             Predicate stadiumMatch = cb.equal(slotRoot.get("stadium").get("stadiumId"), root.get("stadiumId"));
             Predicate statusMatch = cb.equal(slotRoot.get("slotStatus"), SlotStatus.AVAILABLE);
             Predicate timeMatch = cb.and(
-                    cb.greaterThanOrEqualTo(slotRoot.get("startTime"), startDateTime),
-                    cb.lessThanOrEqualTo(slotRoot.get("endTime"), endDateTime)
+                    cb.lessThan(slotRoot.get("startTime"), endDateTime),
+                    cb.greaterThan(slotRoot.get("endTime"), startDateTime)
             );
             
             slotSubquery.where(cb.and(stadiumMatch, statusMatch, timeMatch));

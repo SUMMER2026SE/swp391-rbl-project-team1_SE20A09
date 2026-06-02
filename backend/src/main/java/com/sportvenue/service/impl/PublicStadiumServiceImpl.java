@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.sportvenue.exception.BadRequestException;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -36,9 +37,15 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
     public PageResponse<StadiumResponse> searchStadiums(StadiumSearchRequest request) {
         log.info("Searching stadiums with keyword: {}, targetDate: {}...", request.getKeyword(),
                 request.getTargetDate());
+        
+        if (request.getStartTime() != null && request.getEndTime() != null
+                && !request.getEndTime().isAfter(request.getStartTime())) {
+            throw new BadRequestException("Giờ kết thúc phải sau giờ bắt đầu");
+        }
+
         Pageable pageable = PageRequest.of(request.getPage(), request.getSize());
 
-        Specification<Stadium> spec = StadiumSpecification.withDynamicFilter(request);
+        Specification<Stadium> spec = StadiumSpecification.withDynamicFilter(request, true);
 
         // Step 1: Paginated fetch (without JOIN FETCH collections) to avoid HHH000104
         // memory pagination
