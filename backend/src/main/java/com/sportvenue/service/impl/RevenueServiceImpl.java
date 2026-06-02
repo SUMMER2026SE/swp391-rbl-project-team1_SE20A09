@@ -50,7 +50,9 @@ public class RevenueServiceImpl implements RevenueService {
 
         // 1. Calculate Occupancy Rate (Estimate: 12 hours open per day per venue, 1 booking = 1 hour roughly)
         long days = ChronoUnit.DAYS.between(startDate, endDate);
-        if (days < 1) days = 1; // Minimum 1 day
+        if (days < 1) {
+            days = 1; // Minimum 1 day
+        }
         double totalAvailableHoursPerVenue = days * 12.0;
 
         // 2. Fetch current period venue revenues
@@ -70,13 +72,17 @@ public class RevenueServiceImpl implements RevenueService {
                     
                     // Occupancy
                     double occupancy = (p.getTotalBookings() / totalAvailableHoursPerVenue) * 100.0;
-                    if (occupancy > 100.0) occupancy = 100.0; // Cap at 100%
+                    if (occupancy > 100.0) {
+                        occupancy = 100.0; // Cap at 100%
+                    }
                     
                     // Trend
                     BigDecimal prevRevenue = previousRevenueMap.getOrDefault(p.getStadiumId(), BigDecimal.ZERO);
                     String trendStr = "+0%";
                     if (prevRevenue.compareTo(BigDecimal.ZERO) == 0) {
-                        if (currentRevenue.compareTo(BigDecimal.ZERO) > 0) trendStr = "+100%";
+                        if (currentRevenue.compareTo(BigDecimal.ZERO) > 0) {
+                            trendStr = "+100%";
+                        }
                     } else {
                         double diff = currentRevenue.subtract(prevRevenue).doubleValue();
                         double percentage = (diff / prevRevenue.doubleValue()) * 100.0;

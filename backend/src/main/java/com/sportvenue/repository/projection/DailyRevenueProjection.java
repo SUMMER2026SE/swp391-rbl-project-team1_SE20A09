@@ -1,8 +1,10 @@
 package com.sportvenue.repository.projection;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 public interface DailyRevenueProjection {
-    java.time.LocalDate getDate();
+    LocalDate getDate();
+
     BigDecimal getRevenue();
 }

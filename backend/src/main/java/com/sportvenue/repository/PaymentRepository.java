@@ -40,6 +40,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
                                                  @Param("stadiumId") Integer stadiumId,
                                                  @Param("startDate") LocalDateTime startDate,
                                                  @Param("endDate") LocalDateTime endDate);
+
     @Query("SELECT s.stadiumId as stadiumId, s.stadiumName as stadiumName, " +
            "COUNT(b) as totalBookings, SUM(p.amount) as totalRevenue " +
            "FROM Payment p " +
