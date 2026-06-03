@@ -44,16 +44,76 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
         }
 
         Pageable pageable = PageRequest.of(request.getPage(), request.getSize());
-
         Specification<Stadium> spec = StadiumSpecification.withDynamicFilter(request, true);
 
-        // Step 1: Paginated fetch (without JOIN FETCH collections) to avoid HHH000104
-        // memory pagination
-        Page<Stadium> stadiumPage = stadiumRepository.findAll(spec, pageable);
+        if (request.getUserLat() != null && request.getUserLng() != null) {
+            // Manual pagination for accurate distance sorting
+            List<Stadium> allStadiums = stadiumRepository.findAll(spec);
+            
+            if (allStadiums.isEmpty()) {
+                return PageResponse.<StadiumResponse>builder()
+                        .content(List.of())
+                        .pageNo(pageable.getPageNumber())
+                        .pageSize(pageable.getPageSize())
+                        .totalElements(0)
+                        .totalPages(0)
+                        .last(true)
+                        .build();
+            }
 
-        if (stadiumPage.isEmpty()) {
+            List<Integer> stadiumIds = allStadiums.stream().map(Stadium::getStadiumId).toList();
+            List<Stadium> detailedStadiums = stadiumRepository.findAllByStadiumIdIn(stadiumIds);
+            Map<Integer, Stadium> stadiumMap = detailedStadiums.stream()
+                    .collect(Collectors.toMap(Stadium::getStadiumId, Function.identity()));
+
+            List<StadiumResponse> allResponses = allStadiums.stream()
+                    .map(s -> stadiumMap.get(s.getStadiumId()))
+                    .map(stadium -> mapToResponse(stadium, request.getUserLat(), request.getUserLng()))
+                    .sorted(Comparator.comparing(StadiumResponse::getDistanceInKm, Comparator.nullsLast(Double::compareTo)))
+                    .collect(Collectors.toList());
+
+            int start = (int) pageable.getOffset();
+            int end = Math.min((start + pageable.getPageSize()), allResponses.size());
+            List<StadiumResponse> pagedResponses = (start <= end) ? allResponses.subList(start, end) : List.of();
+
             return PageResponse.<StadiumResponse>builder()
-                    .content(List.of())
+                    .content(pagedResponses)
+                    .pageNo(pageable.getPageNumber())
+                    .pageSize(pageable.getPageSize())
+                    .totalElements(allResponses.size())
+                    .totalPages((int) Math.ceil((double) allResponses.size() / pageable.getPageSize()))
+                    .last(end >= allResponses.size())
+                    .build();
+        } else {
+            // Optimized database pagination when no distance sorting is needed
+            Page<Stadium> stadiumPage = stadiumRepository.findAll(spec, pageable);
+
+            if (stadiumPage.isEmpty()) {
+                return PageResponse.<StadiumResponse>builder()
+                        .content(List.of())
+                        .pageNo(stadiumPage.getNumber())
+                        .pageSize(stadiumPage.getSize())
+                        .totalElements(stadiumPage.getTotalElements())
+                        .totalPages(stadiumPage.getTotalPages())
+                        .last(stadiumPage.isLast())
+                        .build();
+            }
+
+            List<Integer> stadiumIds = stadiumPage.getContent().stream()
+                    .map(Stadium::getStadiumId)
+                    .toList();
+
+            List<Stadium> detailedStadiums = stadiumRepository.findAllByStadiumIdIn(stadiumIds);
+            Map<Integer, Stadium> stadiumMap = detailedStadiums.stream()
+                    .collect(Collectors.toMap(Stadium::getStadiumId, Function.identity()));
+
+            List<StadiumResponse> content = stadiumPage.getContent().stream()
+                    .map(s -> stadiumMap.get(s.getStadiumId()))
+                    .map(stadium -> mapToResponse(stadium, null, null))
+                    .collect(Collectors.toList());
+
+            return PageResponse.<StadiumResponse>builder()
+                    .content(content)
                     .pageNo(stadiumPage.getNumber())
                     .pageSize(stadiumPage.getSize())
                     .totalElements(stadiumPage.getTotalElements())
@@ -61,37 +121,6 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                     .last(stadiumPage.isLast())
                     .build();
         }
-
-        // Step 2: Fetch detailed entities using EntityGraph to prevent N+1
-        List<Integer> stadiumIds = stadiumPage.getContent().stream()
-                .map(Stadium::getStadiumId)
-                .toList();
-
-        List<Stadium> detailedStadiums = stadiumRepository.findAllByStadiumIdIn(stadiumIds);
-
-        // Map them back to keep the original paginated order (or apply distance sort)
-        Map<Integer, Stadium> stadiumMap = detailedStadiums.stream()
-                .collect(Collectors.toMap(Stadium::getStadiumId, Function.identity()));
-
-        List<StadiumResponse> content = stadiumPage.getContent().stream()
-                .map(s -> stadiumMap.get(s.getStadiumId()))
-                .map(stadium -> mapToResponse(stadium, request.getUserLat(), request.getUserLng()))
-                .collect(Collectors.toList());
-
-        // Sort by distance if GPS is provided
-        if (request.getUserLat() != null && request.getUserLng() != null) {
-            content.sort(
-                    Comparator.comparing(StadiumResponse::getDistanceInKm, Comparator.nullsLast(Double::compareTo)));
-        }
-
-        return PageResponse.<StadiumResponse>builder()
-                .content(content)
-                .pageNo(stadiumPage.getNumber())
-                .pageSize(stadiumPage.getSize())
-                .totalElements(stadiumPage.getTotalElements())
-                .totalPages(stadiumPage.getTotalPages())
-                .last(stadiumPage.isLast())
-                .build();
     }
 
     private StadiumResponse mapToResponse(Stadium stadium, Double userLat, Double userLng) {

@@ -108,8 +108,8 @@ function SearchPageContent() {
       radiusInKm: searchParams.get('radiusInKm') ? Number(searchParams.get('radiusInKm')) : undefined,
       minPrice: searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : 0,
       maxPrice: searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : 1000000,
-      page: searchParams.get('page') ? Number(searchParams.get('page')) : 0,
-      size: searchParams.get('size') ? Number(searchParams.get('size')) : 12,
+      page: searchParams.has('page') ? Number(searchParams.get('page')) : 0,
+      size: searchParams.has('size') ? Number(searchParams.get('size')) : 12,
     }
 
     // Deep compare to sync UI properly for Back/Forward avoiding infinite loop
@@ -160,6 +160,9 @@ function SearchPageContent() {
       keyword: '',
       sportTypeId: undefined,
       amenityIds: [],
+      userLat: undefined,
+      userLng: undefined,
+      radiusInKm: undefined,
       minPrice: 0,
       maxPrice: 1000000,
       page: 0,

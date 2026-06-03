@@ -63,6 +63,29 @@ export function FilterModal({ filters, amenitiesList, totalResults, onFilterChan
             </div>
           </div>
 
+          {/* Distance Radius */}
+          {filters.userLat && (
+            <div>
+              <h4 className="font-bold text-lg mb-4 flex justify-between items-end">
+                <span>Bán kính tìm kiếm</span>
+                <span className="text-primary text-sm">
+                  {filters.radiusInKm || 15} km
+                </span>
+              </h4>
+              <div className="px-2 pt-4 pb-2">
+                <Slider
+                  min={1}
+                  max={50}
+                  step={1}
+                  value={[filters.radiusInKm || 15]}
+                  onValueChange={(val) => {
+                    onFilterChange('radiusInKm', val[0])
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Amenities */}
           <div>
             <h4 className="font-bold text-lg mb-4">Tiện ích (Amenities)</h4>
