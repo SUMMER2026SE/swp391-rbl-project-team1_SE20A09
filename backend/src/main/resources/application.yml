@@ -11,7 +11,7 @@ spring:
 
   # ── Datasource (PostgreSQL) ────────────────────────────
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/sportvenue}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/sportvenue?currentSchema=public&serverTimezone=Asia/Ho_Chi_Minh}
     username: ${SPRING_DATASOURCE_USERNAME:${POSTGRES_USER:sportvenue_user}}
     password: ${SPRING_DATASOURCE_PASSWORD:${POSTGRES_PASSWORD:changeme}}
     driver-class-name: org.postgresql.Driver

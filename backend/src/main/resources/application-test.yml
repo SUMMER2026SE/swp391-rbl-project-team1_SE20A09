@@ -1,9 +1,9 @@
 # ── Test profile — dùng cho unit/integration tests ──
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/sportvenue_test}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/sportvenue_test?currentSchema=public&serverTimezone=Asia/Ho_Chi_Minh}
     username: ${SPRING_DATASOURCE_USERNAME:sportvenue_user}
-    password: ${SPRING_DATASOURCE_PASSWORD:testpassword}
+    password: ${SPRING_DATASOURCE_PASSWORD:changeme}
 
   jpa:
     hibernate:
