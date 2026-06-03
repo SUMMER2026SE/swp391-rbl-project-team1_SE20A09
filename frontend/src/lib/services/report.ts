@@ -1,4 +1,5 @@
 import { get } from '../api';
+import { ApiResponse } from '@/types/common';
 
 export interface RevenueDetail {
   date: string;
@@ -19,12 +20,6 @@ export interface RevenueReportResponse {
   totalBookings: number;
   details: RevenueDetail[];
   venueRevenues: VenueRevenue[];
-}
-
-export interface ApiResponse<T> {
-  code: number;
-  message?: string;
-  result: T;
 }
 
 export const reportService = {

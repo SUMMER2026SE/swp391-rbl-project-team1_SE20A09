@@ -63,6 +63,14 @@ public class ReportController {
                     .build());
         }
 
+        if (java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate) > 365) {
+            return ResponseEntity.badRequest().body(
+                ApiResponse.<RevenueReportResponse>builder()
+                    .code(400)
+                    .message("Khoảng thời gian báo cáo không được vượt quá 365 ngày")
+                    .build());
+        }
+
         LocalDateTime startDateTime = startDate.atStartOfDay();
         LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
 
