@@ -60,10 +60,8 @@ public class PublicStadiumServiceImplTest {
         stadium2.setSportType(sportType);
         stadium2.setAmenities(Collections.emptySet());
 
-        Page<Stadium> page = new PageImpl<>(List.of(stadium2, stadium1), PageRequest.of(0, 10), 2);
-
-        when(stadiumRepository.findAll(any(Specification.class), any(PageRequest.class)))
-                .thenReturn(page);
+        when(stadiumRepository.findAll(any(Specification.class)))
+                .thenReturn(List.of(stadium2, stadium1));
         when(stadiumRepository.findAllByStadiumIdIn(any(List.class)))
                 .thenReturn(List.of(stadium1, stadium2));
 
