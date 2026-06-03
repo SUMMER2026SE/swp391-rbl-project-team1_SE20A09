@@ -1,7 +1,7 @@
 # ── Dev profile — override application.yml ──
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/sportvenue}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/sportvenue?currentSchema=public&serverTimezone=Asia/Ho_Chi_Minh}
     username: ${SPRING_DATASOURCE_USERNAME:sportvenue_user}
     password: ${SPRING_DATASOURCE_PASSWORD:changeme}
   jpa:

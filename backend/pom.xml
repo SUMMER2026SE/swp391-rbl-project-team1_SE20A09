@@ -176,7 +176,7 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
-                </configuration>
+                </configuration>  
             </plugin>
 
             <!-- MapStruct + Lombok annotation processor -->
@@ -189,7 +189,7 @@
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
+                            <artifactId>lombok</artifactId> 
                             <version>${lombok.version}</version>
                         </path>
                         <path>
@@ -220,3 +220,4 @@
         </plugins>
     </build>
 </project>
+

@@ -16,14 +16,24 @@ import java.util.List;
 public class StadiumResponse {
     private Integer stadiumId;
     private String stadiumName;
-    private String address;
     private String description;
-    private String sportName;
+    private String address;
     private BigDecimal pricePerHour;
     private Integer capacity;
-    private LocalTime openTime;
-    private LocalTime closeTime;
-    private String stadiumStatus;
     private BigDecimal averageRating;
-    private List<String> imageUrls;
+    
+    // Coordinates
+    private Double latitude;
+    private Double longitude;
+    private Double distanceInKm; // Calculated distance if user coords provided
+    
+    private String sportName; 
+    private String firstImageUrl;
+    private List<String> imageUrls; 
+    
+    private LocalTime openTime; 
+    private LocalTime closeTime; 
+    private String stadiumStatus; 
+    
+    private List<AmenityResponse> amenities;
 }
