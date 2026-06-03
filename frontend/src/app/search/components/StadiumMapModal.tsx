@@ -84,12 +84,12 @@ export default function StadiumMapModal({ isOpen, onClose, stadiums }: StadiumMa
         </div>
 
         {/* Map Container */}
-        <div className="flex-1 w-full h-[500px] relative bg-muted z-10">
+        <div className="w-full relative bg-muted z-10" style={{ height: '500px' }}>
           <MapContainer
             center={mapCenter}
             zoom={13}
             scrollWheelZoom={true}
-            className="w-full h-full"
+            style={{ height: '100%', width: '100%' }}
           >
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
