@@ -24,10 +24,12 @@ public class StadiumSearchRequest {
     private String keyword;
     private Integer sportTypeId;
     private String address;
+    @Min(value = 0, message = "Giá thấp nhất không được âm")
     private BigDecimal minPrice;
+    
+    @Min(value = 0, message = "Giá cao nhất không được âm")
     private BigDecimal maxPrice;
     private StadiumStatus status;
-
 
     // Time slot filter
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
@@ -40,20 +42,43 @@ public class StadiumSearchRequest {
     private LocalTime endTime;
 
     // Location/GPS filter
+    @jakarta.validation.constraints.DecimalMin(value = "-90.0", message = "Vĩ độ không hợp lệ")
+    @jakarta.validation.constraints.DecimalMax(value = "90.0", message = "Vĩ độ không hợp lệ")
     private Double userLat;
+
+    @jakarta.validation.constraints.DecimalMin(value = "-180.0", message = "Kinh độ không hợp lệ")
+    @jakarta.validation.constraints.DecimalMax(value = "180.0", message = "Kinh độ không hợp lệ")
     private Double userLng;
+
+    @jakarta.validation.constraints.Positive(message = "Bán kính tìm kiếm phải là số dương")
     private Double radiusInKm;
 
     // Amenities filter
     private List<Integer> amenityIds;
 
     // Pagination
-    @Min(0)
+    @Min(value = 0, message = "Trang phải lớn hơn hoặc bằng 0")
     @Builder.Default
     private int page = 0;
     
-    @Min(1)
-    @Max(100)
+    @Min(value = 1, message = "Kích thước trang phải lớn hơn hoặc bằng 1")
+    @Max(value = 100, message = "Kích thước trang không được vượt quá 100")
     @Builder.Default
     private int size = 10;
+
+    @jakarta.validation.constraints.AssertTrue(message = "Giá cao nhất phải lớn hơn hoặc bằng giá thấp nhất")
+    public boolean isPriceRangeValid() {
+        if (minPrice == null || maxPrice == null) {
+            return true;
+        }
+        return maxPrice.compareTo(minPrice) >= 0;
+    }
+
+    @jakarta.validation.constraints.AssertTrue(message = "Phải cung cấp cả vĩ độ và kinh độ, hoặc không cung cấp gì cả")
+    public boolean isLocationValid() {
+        int count = 0;
+        if (userLat != null) count++;
+        if (userLng != null) count++;
+        return count == 0 || count == 2;
+    }
 }
