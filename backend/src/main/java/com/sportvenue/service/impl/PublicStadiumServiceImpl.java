@@ -129,7 +129,6 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 .latitude(stadium.getLatitude())
                 .longitude(stadium.getLongitude())
                 .distanceInKm(distance)
-                .sportTypeName(stadium.getSportType().getSportName())
                 .sportName(stadium.getSportType().getSportName())
                 .firstImageUrl(firstImageUrl)
                 .imageUrls(imageUrls)

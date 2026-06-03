@@ -69,3 +69,7 @@ BEGIN
         ON CONFLICT DO NOTHING;
     END IF;
 END $$;
+
+-- 3. Tạo index cho (stadium_id, amenity_id) để tối ưu tìm kiếm theo amenity
+CREATE INDEX IF NOT EXISTS idx_stadium_amenities_search ON stadium_amenities(stadium_id, amenity_id);
+

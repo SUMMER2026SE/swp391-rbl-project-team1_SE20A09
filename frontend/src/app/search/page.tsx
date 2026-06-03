@@ -64,14 +64,14 @@ export default function SearchPage() {
     setLoading(true)
     try {
       // Loại bỏ các trường rỗng (empty string) để tránh lỗi parse ở Backend
-      const cleanFilters: any = { ...currentFilters }
+      const cleanFilters: Partial<StadiumSearchRequest> = { ...currentFilters }
       if (!cleanFilters.targetDate) delete cleanFilters.targetDate
       if (!cleanFilters.startTime) delete cleanFilters.startTime
       if (!cleanFilters.endTime) delete cleanFilters.endTime
       if (!cleanFilters.keyword) delete cleanFilters.keyword
       if (cleanFilters.sportTypeId === undefined) delete cleanFilters.sportTypeId
 
-      const res = await searchStadiums(cleanFilters)
+      const res = await searchStadiums(cleanFilters as StadiumSearchRequest)
       setStadiums(res.content)
     } catch (error) {
       console.error(error)
@@ -222,7 +222,7 @@ export default function SearchPage() {
               <StadiumCard
                 key={stadium.stadiumId}
                 stadium={stadium}
-                isUrgent={!!(filters.targetDate && filters.startTime && Math.random() > 0.5)}
+                isUrgent={false}
               />
             ))}
           </div>
