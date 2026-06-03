@@ -1,17 +1,4 @@
-export interface PageResponse<T> {
-  content: T[];
-  pageNumber: number;
-  pageSize: number;
-  totalElements: number;
-  totalPages: number;
-  last: boolean;
-}
-
-export interface ApiResponse<T> {
-  code: number;
-  message: string;
-  result: T;
-}
+export type { PageResponse, ApiResponse } from './common';
 
 export enum NotificationType {
   BOOKING = 'BOOKING',
