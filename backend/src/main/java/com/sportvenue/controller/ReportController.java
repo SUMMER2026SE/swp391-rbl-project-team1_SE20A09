@@ -12,8 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import com.sportvenue.security.UserPrincipal;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -46,7 +46,7 @@ public class ReportController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Không có quyền — yêu cầu role Owner")
     })
     public ResponseEntity<ApiResponse<RevenueReportResponse>> getRevenueReport(
-            @AuthenticationPrincipal UserDetails userDetails,
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
             @Parameter(description = "ID sân cụ thể muốn lọc. Bỏ trống = tất cả sân của Owner.")
             @RequestParam(required = false) Integer stadiumId,
             @Parameter(description = "Ngày bắt đầu (yyyy-MM-dd)", required = true, example = "2026-01-01")
@@ -75,7 +75,7 @@ public class ReportController {
         LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
 
         RevenueReportResponse response = revenueService.getRevenueReport(
-                userDetails.getUsername(), stadiumId, startDateTime, endDateTime);
+                userPrincipal.getUsername(), stadiumId, startDateTime, endDateTime);
 
         return ResponseEntity.ok(ApiResponse.<RevenueReportResponse>builder()
                 .code(200)
