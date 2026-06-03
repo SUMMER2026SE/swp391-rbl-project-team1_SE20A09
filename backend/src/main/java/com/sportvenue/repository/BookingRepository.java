@@ -52,7 +52,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     @Query("""
             SELECT COALESCE(SUM(b.totalPrice), 0) FROM Booking b
             WHERE b.stadium.stadiumId = :stadiumId
-            AND b.bookingStatus = 'COMPLETED'
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
             AND b.bookingDate BETWEEN :from AND :to
             """)
     BigDecimal sumRevenueByBookingDate(
@@ -72,7 +72,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     @Query("""
             SELECT COALESCE(SUM(b.totalPrice), 0) FROM Booking b
             WHERE b.stadium.stadiumId = :stadiumId
-            AND b.bookingStatus = 'COMPLETED'
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
             AND b.slot.startTime BETWEEN :from AND :to
             """)
     BigDecimal sumRevenueBySlotDate(
