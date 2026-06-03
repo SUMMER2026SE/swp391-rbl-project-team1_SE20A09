@@ -73,11 +73,11 @@ public class PublicStadiumServiceImplTest {
         // Assert
         assertNotNull(response);
         assertEquals(2, response.getContent().size());
-        
+
         // Stadium 1 should be first because distance is 0
         assertEquals(1, response.getContent().get(0).getStadiumId());
         assertEquals(0.0, response.getContent().get(0).getDistanceInKm(), 0.1);
-        
+
         // Stadium 2 should be second
         assertEquals(2, response.getContent().get(1).getStadiumId());
         assertTrue(response.getContent().get(1).getDistanceInKm() > 0.0);
