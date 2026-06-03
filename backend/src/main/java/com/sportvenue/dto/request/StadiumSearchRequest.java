@@ -77,8 +77,12 @@ public class StadiumSearchRequest {
     @jakarta.validation.constraints.AssertTrue(message = "Phải cung cấp cả vĩ độ và kinh độ, hoặc không cung cấp gì cả")
     public boolean isLocationValid() {
         int count = 0;
-        if (userLat != null) count++;
-        if (userLng != null) count++;
+        if (userLat != null) {
+            count++;
+        }
+        if (userLng != null) {
+            count++;
+        }
         return count == 0 || count == 2;
     }
 }
