@@ -11,10 +11,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Seeder chạy khi khởi động — đảm bảo các tài khoản seed
- * luôn có mật khẩu BCrypt hợp lệ (do PasswordEncoder sinh ra).
- */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -32,7 +28,6 @@ public class DataSeeder implements CommandLineRunner {
         seedUser("admin@sportvenue.com", "Admin", "System", "0900000001", "Admin");
         seedUser("owner@sportvenue.com", "Hoàng", "Mai Huy", "0900000002", "Owner");
         seedUser("customer@sportvenue.com", "Lượng", "Mai Văn", "0912345678", "Customer");
-        // V6 seed accounts
         seedUser("owner2@sportvenue.com", "Huy", "Nguyễn Xuân", "0900000003", "Owner");
         seedUser("customer2@sportvenue.com", "Hào", "Lý Chí Anh", "0912345679", "Customer");
         seedUser("customer3@sportvenue.com", "An", "Trần Minh", "0912345680", "Customer");
@@ -40,22 +35,28 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void seedUser(String email, String firstName, String lastName,
-                          String phone, String roleName) {
+            String phone, String roleName) {
         var optUser = userRepository.findByEmail(email);
         String encodedPassword = passwordEncoder.encode(SEED_PASSWORD);
 
         if (optUser.isPresent()) {
             User user = optUser.get();
             boolean updated = false;
-            // Luôn cập nhật lại password hash để đảm bảo khớp với SEED_PASSWORD
             if (!passwordEncoder.matches(SEED_PASSWORD, user.getPasswordHash())) {
                 user.setPasswordHash(encodedPassword);
                 updated = true;
             }
-            // Chuẩn hóa họ tên nếu bị lệch trong cơ sở dữ liệu
             if (!firstName.equals(user.getFirstName()) || !lastName.equals(user.getLastName())) {
                 user.setFirstName(firstName);
                 user.setLastName(lastName);
+                updated = true;
+            }
+            if (user.getIsVerified() == null || !user.getIsVerified()) {
+                user.setIsVerified(true);
+                updated = true;
+            }
+            if (user.getAccountStatus() == null || !user.getAccountStatus().equals("Active")) {
+                user.setAccountStatus("Active");
                 updated = true;
             }
             if (updated) {
@@ -74,6 +75,7 @@ public class DataSeeder implements CommandLineRunner {
                     .passwordHash(encodedPassword)
                     .role(role)
                     .accountStatus("Active")
+                    .isVerified(true)
                     .userRank("Bronze")
                     .userPoint(0)
                     .build();
