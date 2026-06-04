@@ -1,9 +1,8 @@
-'use client'
-
 import { Star, MapPin } from "lucide-react";
 import { Card, CardContent, CardFooter } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import Link from "next/link";
 
 interface VenueCardProps {
   image: string;
@@ -56,9 +55,12 @@ export function VenueCard({
       </CardContent>
 
       <CardFooter className="p-4 pt-0">
-        <Button className="w-full">Đặt ngay</Button>
+        <Link href="/booking/new" className="w-full" asChild>
+          <Button className="w-full">Đặt ngay</Button>
+        </Link>
       </CardFooter>
     </Card>
   );
 }
+
 

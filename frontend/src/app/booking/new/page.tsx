@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState } from "react";
 import { Header } from "@/components/layout/Header";
@@ -8,8 +8,10 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Calendar, MapPin, Minus, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 function BookingSlotPickerPage() {
+  const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [selectedSlot, setSelectedSlot] = useState<string>("");
   const [accessories, setAccessories] = useState({
@@ -242,6 +244,26 @@ function BookingSlotPickerPage() {
                   className="w-full"
                   size="lg"
                   disabled={!selectedDate || !selectedSlot}
+                  onClick={() => {
+                    const checkoutData = {
+                      venueName: "Sân bóng Thành Công",
+                      location: "123 Đường ABC, Quận 1, TP.HCM",
+                      sportType: "Bóng đá",
+                      date: selectedDate,
+                      slotTime: timeSlots.find((s) => s.id === selectedSlot)?.time || "",
+                      accessories: Object.entries(accessories)
+                        .filter(([_, qty]) => qty > 0)
+                        .map(([key, qty]) => {
+                          const item = accessoryItems.find((i) => i.id === key);
+                          return { name: item?.name || "", price: item?.price || 0, quantity: qty };
+                        }),
+                      venuePrice,
+                      platformFee,
+                      total
+                    };
+                    localStorage.setItem('sport_venue_checkout', JSON.stringify(checkoutData));
+                    router.push("/booking/payment");
+                  }}
                 >
                   Tiếp tục thanh toán
                 </Button>
