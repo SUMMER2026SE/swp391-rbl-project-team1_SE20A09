@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from "next-auth/react";
 import type { Session } from "next-auth";
-import { Menu, LogOut, User as UserIcon, Settings, BarChart2 } from "lucide-react";
+import { Menu, LogOut, User as UserIcon, Settings, BarChart2, Calendar } from "lucide-react";
 import { Button } from "../ui/button";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -79,7 +79,7 @@ function UserAccountMenu({ user }: { user: NonNullable<Session["user"]> }) {
         )}
         {user.roleName === "Owner" && (
           <DropdownMenuItem asChild>
-            <Link href="/owner" className="cursor-pointer">
+            <Link href="/owner/dashboard" className="cursor-pointer">
               <BarChart2 className="mr-2 h-4 w-4" />
               <span>Trang Chủ Sân</span>
             </Link>
@@ -93,10 +93,19 @@ function UserAccountMenu({ user }: { user: NonNullable<Session["user"]> }) {
           </Link>
         </DropdownMenuItem>
 
+        {user.roleName === "Customer" && (
+          <DropdownMenuItem asChild>
+            <Link href="/bookings" className="cursor-pointer">
+              <Calendar className="mr-2 h-4 w-4" />
+              <span>Lịch sử đặt sân</span>
+            </Link>
+          </DropdownMenuItem>
+        )}
+
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={handleLogout}
-          className="text-red-600 focus:text-red-600 cursor-pointer"
+          className="text-red-600 focus:text-red-650 cursor-pointer"
         >
           <LogOut className="mr-2 h-4 w-4" />
           <span>Đăng xuất</span>
@@ -162,7 +171,7 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
               )}
               {user.roleName === "Owner" && (
                 <SheetClose asChild>
-                  <Link href="/owner" className={navLinkClass}>
+                  <Link href="/owner/dashboard" className={navLinkClass}>
                     <BarChart2 className="mr-2 h-4 w-4" />
                     Trang Chủ Sân
                   </Link>
@@ -174,6 +183,14 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
                   Hồ sơ cá nhân
                 </Link>
               </SheetClose>
+              {user.roleName === "Customer" && (
+                <SheetClose asChild>
+                  <Link href="/bookings" className={navLinkClass}>
+                    <Calendar className="mr-2 h-4 w-4" />
+                    Lịch sử đặt sân
+                  </Link>
+                </SheetClose>
+              )}
               <button
                 type="button"
                 onClick={handleLogout}
