@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,9 +28,12 @@ import {
   BarChart3,
   Wallet,
   Bell,
+  Star,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 function OwnerDashboardPage() {
+  const router = useRouter();
   const kpiData = [
     {
       title: "Đặt sân hôm nay",
@@ -116,25 +119,46 @@ function OwnerDashboardPage() {
               variant="default"
               className="w-full justify-start"
               size="sm"
+              onClick={() => router.push("/owner/dashboard")}
             >
               <Home className="mr-3 h-4 w-4" />
               Dashboard
             </Button>
-            <Button variant="ghost" className="w-full justify-start" size="sm">
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start" 
+              size="sm"
+              onClick={() => router.push("/owner/venues")}
+            >
               <BarChart3 className="mr-3 h-4 w-4" />
               Sân của tôi
             </Button>
-            <Button variant="ghost" className="w-full justify-start" size="sm">
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start" 
+              size="sm"
+              onClick={() => router.push("/owner/bookings")}
+            >
               <Calendar className="mr-3 h-4 w-4" />
-              Lịch đặt
+              Lịch đặt sân
             </Button>
-            <Button variant="ghost" className="w-full justify-start" size="sm">
-              <Wallet className="mr-3 h-4 w-4" />
-              Doanh thu
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start" 
+              size="sm"
+              onClick={() => router.push("/owner/reviews")}
+            >
+              <Star className="mr-3 h-4 w-4" />
+              Đánh giá của khách
             </Button>
-            <Button variant="ghost" className="w-full justify-start" size="sm">
-              <Bell className="mr-3 h-4 w-4" />
-              Thông báo
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start" 
+              size="sm"
+              onClick={() => router.push("/owner/complaints")}
+            >
+              <AlertCircle className="mr-3 h-4 w-4" />
+              Khiếu nại khách hàng
             </Button>
           </nav>
         </aside>
