@@ -1,6 +1,6 @@
-﻿'use client'
+'use client'
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
@@ -9,10 +9,22 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { CreditCard, Building2, Smartphone, Shield, Clock } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 function PaymentPage() {
+  const router = useRouter();
   const [paymentMethod, setPaymentMethod] = useState("bank");
   const [countdown, setCountdown] = useState(300);
+  const [checkout, setCheckout] = useState<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('sport_venue_checkout');
+      if (stored) {
+        setCheckout(JSON.parse(stored));
+      }
+    }
+  }, []);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -48,26 +60,35 @@ function PaymentPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Sân bóng Thành Công</span>
-                <span>500,000đ</span>
+                <span className="text-muted-foreground">{checkout?.venueName || "Sân bóng Thành Công"}</span>
+                <span>{(checkout?.venuePrice || 500000).toLocaleString('vi-VN')}đ</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Ngày: 22/05/2024</span>
-                <span className="text-muted-foreground">Giờ: 18:00 - 20:00</span>
+                <span className="text-muted-foreground">Ngày: {checkout?.date ? new Date(checkout.date).toLocaleDateString('vi-VN') : "22/05/2024"}</span>
+                <span className="text-muted-foreground">Giờ: {checkout?.slotTime || "18:00 - 20:00"}</span>
               </div>
               <Separator />
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Phụ kiện</span>
-                <span>50,000đ</span>
-              </div>
-              <div className="flex justify-between">
+              {checkout?.accessories && checkout.accessories.length > 0 ? (
+                checkout.accessories.map((acc: any, index: number) => (
+                  <div key={index} className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{acc.name} (x{acc.quantity})</span>
+                    <span>{(acc.price * acc.quantity).toLocaleString('vi-VN')}đ</span>
+                  </div>
+                ))
+              ) : (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Phụ kiện</span>
+                  <span>0đ</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Phí dịch vụ</span>
-                <span>20,000đ</span>
+                <span>{(checkout?.platformFee || 20000).toLocaleString('vi-VN')}đ</span>
               </div>
               <Separator />
               <div className="flex justify-between text-xl">
                 <span>Tổng cộng</span>
-                <span className="text-primary">570,000đ</span>
+                <span className="text-primary">{(checkout?.total || 570000).toLocaleString('vi-VN')}đ</span>
               </div>
             </CardContent>
           </Card>
@@ -146,7 +167,41 @@ function PaymentPage() {
             </CardContent>
           </Card>
 
-          <Button className="w-full" size="lg">
+          <Button 
+            className="w-full" 
+            size="lg"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                const stored = localStorage.getItem('sport_venue_bookings');
+                const bookingsList = stored ? JSON.parse(stored) : [];
+                
+                const newBookingId = `BK00${1238 + bookingsList.length}`;
+                const newBooking = {
+                  id: newBookingId,
+                  venueName: checkout?.venueName || "Sân bóng Thành Công",
+                  venueImage: "https://images.unsplash.com/photo-1705593813682-033ee2991df6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+                  sportType: checkout?.sportType || "Bóng đá",
+                  location: checkout?.location || "Quận 1, TP.HCM",
+                  date: checkout?.date || new Date().toISOString().split('T')[0],
+                  startTime: checkout?.slotTime ? checkout.slotTime.split(" - ")[0] : "18:00",
+                  endTime: checkout?.slotTime ? checkout.slotTime.split(" - ")[1] : "20:00",
+                  duration: 2,
+                  pricePerHour: 250000,
+                  totalPrice: checkout?.total || 570000,
+                  status: "confirmed",
+                  bookingCode: `BK-2026-${newBookingId.replace('BK', '')}`,
+                  paymentMethod: paymentMethod === "bank" ? "Chuyển khoản ngân hàng" : paymentMethod === "vnpay" ? "Ví điện tử VNPay" : "Ví điện tử MoMo",
+                  paidAt: new Date().toISOString(),
+                  accessories: checkout?.accessories || [],
+                };
+                
+                bookingsList.unshift(newBooking);
+                localStorage.setItem('sport_venue_bookings', JSON.stringify(bookingsList));
+                localStorage.removeItem('sport_venue_checkout');
+              }
+              router.push("/profile?tab=bookings");
+            }}
+          >
             Thanh toán ngay
           </Button>
 
