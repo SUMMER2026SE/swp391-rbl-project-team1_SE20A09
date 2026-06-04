@@ -86,4 +86,8 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     /** Lấy danh sách đặt sân thuộc các sân mà Owner sở hữu. */
     @EntityGraph(attributePaths = {"user", "stadium", "slot"})
     List<Booking> findByStadiumOwnerUserEmailOrderByBookingDateDesc(String email);
+
+    /** Lấy toàn bộ lịch sử đặt sân của một Customer. */
+    @EntityGraph(attributePaths = {"stadium", "slot"})
+    List<Booking> findByUserEmailOrderByBookingDateDesc(String customerEmail);
 }
