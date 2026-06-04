@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -24,6 +25,12 @@ public interface ReviewRepository extends JpaRepository<Review, Integer> {
     /** Lấy danh sách review của một sân — dùng cho trang chi tiết sân. */
     @EntityGraph(attributePaths = {"user"})
     Page<Review> findByStadiumStadiumIdOrderByCreatedAtDesc(Integer stadiumId, Pageable pageable);
+
+    /** Lấy toàn bộ đánh giá của các sân thuộc quản lý của một Owner. */
+    List<Review> findByStadiumOwnerUserEmailOrderByCreatedAtDesc(String ownerEmail);
+
+    /** Lấy toàn bộ đánh giá của một Customer theo email. */
+    List<Review> findByUserEmailOrderByCreatedAtDesc(String customerEmail);
 
     /** Tính điểm trung bình của sân — gọi sau khi có review mới để cập nhật Stadium. */
     @Query("SELECT AVG(r.ratingScore) FROM Review r WHERE r.stadium.stadiumId = :stadiumId")
