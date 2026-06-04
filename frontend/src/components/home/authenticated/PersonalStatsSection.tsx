@@ -1,11 +1,18 @@
+"use client";
+
 import { Clock, MapPinned, Trophy } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { CardContent } from "@/components/ui/card";
+import { SectionHeading } from "@/components/home/authenticated/decor/SectionHeading";
+import { GlowCard } from "@/components/home/authenticated/decor/GlowCard";
+import { cn } from "@/lib/utils";
 
 type PersonalStatsSectionProps = {
   totalHours: number;
   venuesVisited: number;
   favoriteSport: string;
 };
+
+const DELAYS = ["animation-delay-300", "animation-delay-500", "animation-delay-700"];
 
 export function PersonalStatsSection({
   totalHours,
@@ -17,41 +24,62 @@ export function PersonalStatsSection({
       icon: Clock,
       value: `${totalHours}h`,
       label: "Tổng giờ chơi",
-      color: "text-blue-600 bg-blue-50",
+      gradient: "from-blue-500/20 to-cyan-400/10",
+      iconColor: "text-blue-600 bg-blue-100",
     },
     {
       icon: MapPinned,
       value: String(venuesVisited),
       label: "Sân đã ghé thăm",
-      color: "text-green-700 bg-green-50",
+      gradient: "from-emerald-500/20 to-green-400/10",
+      iconColor: "text-green-700 bg-green-100",
     },
     {
       icon: Trophy,
       value: favoriteSport,
       label: "Môn hay chơi nhất",
-      color: "text-amber-600 bg-amber-50",
+      gradient: "from-amber-500/20 to-yellow-400/10",
+      iconColor: "text-amber-600 bg-amber-100",
     },
   ];
 
   return (
-    <section className="pb-12 pt-4 md:pb-16">
+    <section className="relative pb-14 pt-4 md:pb-20">
       <div className="container mx-auto px-4">
-        <h2 className="mb-6 text-2xl font-bold">Thống kê cá nhân</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {stats.map((stat) => (
-            <Card key={stat.label} className="border-border/80">
-              <CardContent className="flex items-center gap-4 p-5">
-                <div
-                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${stat.color}`}
-                >
-                  <stat.icon className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold leading-none">{stat.value}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{stat.label}</p>
+        <SectionHeading
+          title="Thống kê cá nhân"
+          subtitle="Hành trình thể thao của bạn qua từng buổi chơi"
+        />
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+          {stats.map((stat, index) => (
+            <GlowCard key={stat.label} delayClass={DELAYS[index]}>
+              <CardContent
+                className={cn(
+                  "home-stat-glow relative overflow-hidden p-6",
+                  `bg-gradient-to-br ${stat.gradient}`,
+                )}
+              >
+                <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-white/40 blur-2xl" />
+                <div className="relative flex items-center gap-4">
+                  <div
+                    className={cn(
+                      "flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl shadow-inner",
+                      stat.iconColor,
+                    )}
+                  >
+                    <stat.icon className="h-7 w-7" />
+                  </div>
+                  <div>
+                    <p className="text-3xl font-bold tracking-tight text-shimmer">
+                      {stat.value}
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-muted-foreground">
+                      {stat.label}
+                    </p>
+                  </div>
                 </div>
               </CardContent>
-            </Card>
+            </GlowCard>
           ))}
         </div>
       </div>

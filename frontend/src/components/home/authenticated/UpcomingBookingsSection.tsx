@@ -4,7 +4,10 @@ import Link from "next/link";
 import { ArrowRight, Calendar, Clock, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { CardContent } from "@/components/ui/card";
+import { SectionHeading } from "@/components/home/authenticated/decor/SectionHeading";
+import { GlowCard } from "@/components/home/authenticated/decor/GlowCard";
+import { cn } from "@/lib/utils";
 import type { UpcomingBooking } from "@/lib/home-api";
 
 const STATUS_LABEL: Record<UpcomingBooking["status"], { label: string; className: string }> = {
@@ -12,76 +15,88 @@ const STATUS_LABEL: Record<UpcomingBooking["status"], { label: string; className
   pending: { label: "Chờ xác nhận", className: "bg-amber-100 text-amber-800" },
 };
 
+const STAGGER = ["", "animation-delay-300", "animation-delay-500", "animation-delay-700"];
+
 type UpcomingBookingsSectionProps = {
   bookings: UpcomingBooking[];
 };
 
 export function UpcomingBookingsSection({ bookings }: UpcomingBookingsSectionProps) {
   return (
-    <section className="py-10 md:py-14">
+    <section className="relative py-10 md:py-14">
       <div className="container mx-auto px-4">
-        <div className="mb-6 flex items-end justify-between gap-4">
-          <h2 className="text-2xl font-bold text-foreground">Lịch sân sắp tới</h2>
-          <Link
-            href="/bookings"
-            className="inline-flex items-center text-sm font-medium text-green-800 hover:underline"
-          >
-            Xem tất cả lịch
-            <ArrowRight className="ml-1 h-4 w-4" />
-          </Link>
-        </div>
+        <SectionHeading
+          title="Lịch sân sắp tới"
+          subtitle="Theo dõi các buổi chơi sắp diễn ra — đừng bỏ lỡ nhé"
+          action={
+            <Link
+              href="/bookings"
+              className="inline-flex items-center rounded-full border border-emerald-200 bg-white/80 px-4 py-2 text-sm font-medium text-green-800 shadow-sm backdrop-blur-sm transition-all hover:border-green-400 hover:shadow-md"
+            >
+              Xem tất cả lịch
+              <ArrowRight className="ml-1.5 h-4 w-4" />
+            </Link>
+          }
+        />
 
         {bookings.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="flex flex-col items-center py-12 text-center">
-              <Calendar className="mb-3 h-12 w-12 text-muted-foreground/50" />
-              <p className="text-muted-foreground">
-                Bạn chưa có lịch đặt sân nào. Đặt ngay!
-              </p>
-              <Button className="mt-4 rounded-xl bg-green-800 hover:bg-green-900" asChild>
+          <GlowCard className="animation-delay-300">
+            <CardContent className="flex flex-col items-center border border-dashed border-emerald-200/60 py-14 text-center">
+              <Calendar className="mb-3 h-14 w-14 text-emerald-300" />
+              <p className="text-muted-foreground">Bạn chưa có lịch đặt sân nào. Đặt ngay!</p>
+              <Button
+                className="home-cta-shine mt-5 rounded-xl bg-green-800 hover:bg-green-900"
+                asChild
+              >
                 <Link href="/booking/new">Đặt sân ngay</Link>
               </Button>
             </CardContent>
-          </Card>
+          </GlowCard>
         ) : (
-          <div className="flex flex-col gap-4">
-            {bookings.map((booking) => {
+          <div className="flex flex-col gap-5">
+            {bookings.map((booking, index) => {
               const status = STATUS_LABEL[booking.status];
               return (
-                <Card
+                <GlowCard
                   key={booking.id}
-                  className="overflow-hidden transition-shadow hover:shadow-md"
+                  delayClass={STAGGER[index % STAGGER.length]}
+                  className="transition-transform duration-300 hover:-translate-y-0.5"
                 >
                   <CardContent className="flex flex-col gap-4 p-0 sm:flex-row">
-                    <div className="relative h-40 w-full shrink-0 sm:h-auto sm:w-48">
+                    <div className="relative h-44 w-full shrink-0 overflow-hidden sm:h-auto sm:w-52">
                       <img
                         src={booking.imageUrl}
                         alt={booking.venueName}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
                     </div>
-                    <div className="flex flex-1 flex-col justify-between gap-4 p-4 sm:py-5">
+                    <div className="flex flex-1 flex-col justify-between gap-4 p-5">
                       <div>
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div>
-                            <h3 className="text-lg font-semibold">{booking.venueName}</h3>
-                            <Badge variant="outline" className="mt-1">
+                            <h3 className="text-lg font-semibold text-foreground">
+                              {booking.venueName}
+                            </h3>
+                            <Badge variant="outline" className="mt-1 border-emerald-200">
                               {booking.sportType}
                             </Badge>
                           </div>
-                          <Badge className={status.className}>{status.label}</Badge>
+                          <Badge className={cn(status.className, "shadow-sm")}>
+                            {status.label}
+                          </Badge>
                         </div>
-                        <div className="mt-3 space-y-1.5 text-sm text-muted-foreground">
+                        <div className="mt-3 space-y-2 text-sm text-muted-foreground">
                           <p className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4 shrink-0 text-green-700" />
+                            <MapPin className="h-4 w-4 shrink-0 text-emerald-600" />
                             {booking.location}
                           </p>
                           <p className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 shrink-0 text-green-700" />
+                            <Calendar className="h-4 w-4 shrink-0 text-emerald-600" />
                             {booking.date}
                           </p>
                           <p className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 shrink-0 text-green-700" />
+                            <Clock className="h-4 w-4 shrink-0 text-emerald-600" />
                             {booking.time}
                           </p>
                         </div>
@@ -100,7 +115,7 @@ export function UpcomingBookingsSection({ bookings }: UpcomingBookingsSectionPro
                       </div>
                     </div>
                   </CardContent>
-                </Card>
+                </GlowCard>
               );
             })}
           </div>

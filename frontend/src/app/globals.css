@@ -157,6 +157,99 @@
   .animate-fade-in-up {
     animation: fade-in-up 0.6s ease-out both;
   }
+
+  .text-shimmer {
+    background: linear-gradient(
+      110deg,
+      #14532d 0%,
+      #16a34a 25%,
+      #fbbf24 50%,
+      #16a34a 75%,
+      #14532d 100%
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: text-shimmer 5s linear infinite;
+  }
+
+  .animate-orb-float {
+    animation: orb-float 14s ease-in-out infinite;
+  }
+
+  .animate-shimmer-sweep {
+    animation: shimmer-sweep 12s ease-in-out infinite;
+  }
+
+  .animate-sparkle {
+    animation: sparkle 2.8s ease-in-out infinite;
+  }
+
+  .animate-glow-pulse {
+    animation: glow-pulse 3s ease-in-out infinite;
+  }
+
+  .animate-float-gentle {
+    animation: float-gentle 4s ease-in-out infinite;
+  }
+
+  .animate-wiggle {
+    animation: wiggle 1.2s ease-in-out infinite;
+  }
+
+  .animate-float-drift {
+    animation: float-drift 5s ease-in-out infinite;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 300ms;
+  }
+
+  .animation-delay-500 {
+    animation-delay: 500ms;
+  }
+
+  .animation-delay-900 {
+    animation-delay: 900ms;
+  }
+
+  .animation-delay-1100 {
+    animation-delay: 1100ms;
+  }
+
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+
+  .animation-delay-4000 {
+    animation-delay: 4s;
+  }
+
+  .home-stat-glow {
+    box-shadow:
+      0 0 0 1px hsl(142 76% 36% / 0.08),
+      0 12px 40px -16px hsl(142 76% 36% / 0.25);
+  }
+
+  .home-cta-shine {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .home-cta-shine::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      105deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.35) 50%,
+      transparent 70%
+    );
+    transform: translateX(-120%);
+    animation: cta-shine 3.5s ease-in-out infinite;
+  }
 }
 
 @keyframes pulse-slow {
@@ -178,5 +271,100 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes text-shimmer {
+  to {
+    background-position: 200% center;
+  }
+}
+
+@keyframes orb-float {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(24px, -16px) scale(1.06);
+  }
+  66% {
+    transform: translate(-12px, 12px) scale(0.98);
+  }
+}
+
+@keyframes shimmer-sweep {
+  0%,
+  100% {
+    background-position: 200% 0;
+  }
+  50% {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes sparkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 20px -4px rgba(16, 185, 129, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 32px -2px rgba(16, 185, 129, 0.55);
+  }
+}
+
+@keyframes float-gentle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(14deg);
+  }
+  75% {
+    transform: rotate(-10deg);
+  }
+}
+
+@keyframes float-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate(8px, -12px) rotate(8deg);
+  }
+}
+
+@keyframes cta-shine {
+  0%,
+  70%,
+  100% {
+    transform: translateX(-120%);
+  }
+  35% {
+    transform: translateX(120%);
   }
 }
