@@ -55,9 +55,9 @@ export function VenueCard({
       </CardContent>
 
       <CardFooter className="p-4 pt-0">
-        <Link href="/booking/new" className="w-full" asChild>
-          <Button className="w-full">Đặt ngay</Button>
-        </Link>
+        <Button className="w-full" asChild>
+          <Link href="/booking/new" className="w-full">Đặt ngay</Link>
+        </Button>
       </CardFooter>
     </Card>
   );
