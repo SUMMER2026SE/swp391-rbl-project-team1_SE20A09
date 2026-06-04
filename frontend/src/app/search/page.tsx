@@ -1,199 +1,240 @@
-﻿'use client'
+'use client'
 
-import { useState } from "react";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/landing/Footer";
-import { VenueCard } from "@/components/landing/VenueCard";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Search } from "lucide-react";
+import { useState, useEffect, useCallback } from 'react'
+import { searchStadiums, getAmenities, getSportTypes, StadiumResponse, StadiumSearchRequest, Amenity } from '@/lib/api/stadium'
+import { Button } from '@/components/ui/button'
+import { Map, X } from 'lucide-react'
+import dynamic from 'next/dynamic'
 
-function VenueSearchPage() {
-  const [priceRange, setPriceRange] = useState([0, 1000000]);
+// Import New Components
+import { HorizontalSearch } from './components/HorizontalSearch'
+import { SportTypeTabs } from './components/SportTypeTabs'
+import { FilterModal } from './components/FilterModal'
+import { StadiumCard } from './components/StadiumCard'
 
-  const venues = [
-    {
-      id: 1,
-      image: "https://images.unsplash.com/photo-1705593813682-033ee2991df6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-      name: "Sân bóng Thành Công",
-      sportType: "Bóng đá",
-      price: 500000,
-      rating: 4.8,
-      location: "Quận 1, TP.HCM",
-    },
-    {
-      id: 2,
-      image: "https://images.unsplash.com/photo-1764703666646-acc2f7d48857?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-      name: "Arena Sports Center",
-      sportType: "Bóng đá",
-      price: 700000,
-      rating: 4.9,
-      location: "Quận 3, TP.HCM",
-    },
-    {
-      id: 3,
-      image: "https://images.unsplash.com/photo-1767729790212-661953ecaa90?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-      name: "Sân Vận Động Quận 7",
-      sportType: "Bóng đá",
-      price: 600000,
-      rating: 4.7,
-      location: "Quận 7, TP.HCM",
-    },
-    {
-      id: 4,
-      image: "https://images.unsplash.com/photo-1765305460539-edf7a0838dad?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-      name: "Sân bóng Phú Mỹ Hưng",
-      sportType: "Bóng đá",
-      price: 550000,
-      rating: 4.6,
-      location: "Quận 7, TP.HCM",
-    },
-    {
-      id: 5,
-      image: "https://images.unsplash.com/photo-1771344164616-3582e4dc2f07?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
-      name: "Sân bóng Bình Thạnh",
-      sportType: "Bóng đá",
-      price: 450000,
-      rating: 4.5,
-      location: "Quận Bình Thạnh, TP.HCM",
-    },
-  ];
+const StadiumMapModal = dynamic(() => import('./components/StadiumMapModal'), {
+  ssr: false,
+})
+
+// Hook debounce
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value)
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay)
+    return () => clearTimeout(handler)
+  }, [value, delay])
+  return debouncedValue
+}
+
+export default function SearchPage() {
+  const [stadiums, setStadiums] = useState<StadiumResponse[]>([])
+  const [amenitiesList, setAmenitiesList] = useState<Amenity[]>([])
+  const [sportTypes, setSportTypes] = useState<{ sportTypeId: number, sportName: string }[]>([])
+  const [loading, setLoading] = useState(false)
+  const [isMapOpen, setIsMapOpen] = useState(false)
+
+  const [filters, setFilters] = useState<StadiumSearchRequest>({
+    keyword: '',
+    sportTypeId: undefined,
+    targetDate: '',
+    startTime: '',
+    endTime: '',
+    amenityIds: [],
+    userLat: undefined,
+    userLng: undefined,
+    radiusInKm: undefined,
+    minPrice: 0,
+    maxPrice: 1000000,
+    page: 0,
+    size: 12,
+  })
+
+  const debouncedFilters = useDebounce(filters, 500)
+
+  useEffect(() => {
+    Promise.all([getAmenities(), getSportTypes()])
+      .then(([amenitiesRes, sportTypesRes]) => {
+        setAmenitiesList(amenitiesRes)
+        setSportTypes(sportTypesRes)
+      })
+      .catch(console.error)
+  }, [])
+
+  const fetchStadiums = useCallback(async (currentFilters: StadiumSearchRequest) => {
+    setLoading(true)
+    try {
+      // Loại bỏ các trường rỗng (empty string) để tránh lỗi parse ở Backend
+      const cleanFilters: Partial<StadiumSearchRequest> = { ...currentFilters }
+      if (!cleanFilters.targetDate) delete cleanFilters.targetDate
+      if (!cleanFilters.startTime) delete cleanFilters.startTime
+      if (!cleanFilters.endTime) delete cleanFilters.endTime
+      if (!cleanFilters.keyword) delete cleanFilters.keyword
+      if (cleanFilters.sportTypeId === undefined) delete cleanFilters.sportTypeId
+
+      const res = await searchStadiums(cleanFilters as StadiumSearchRequest)
+      setStadiums(res.content)
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchStadiums(debouncedFilters)
+  }, [debouncedFilters, fetchStadiums])
+
+  const handleFilterChange = (key: keyof StadiumSearchRequest, value: StadiumSearchRequest[keyof StadiumSearchRequest]) => {
+    setFilters(prev => ({ ...prev, [key]: value, page: 0 }))
+  }
+
+  const handleAmenityToggle = (id: number) => {
+    setFilters(prev => {
+      const ids = prev.amenityIds || []
+      const newIds = ids.includes(id) ? ids.filter(i => i !== id) : [...ids, id]
+      return { ...prev, amenityIds: newIds, page: 0 }
+    })
+  }
+
+  const handleClearFilters = () => {
+    setFilters({
+      keyword: '',
+      sportTypeId: undefined,
+      amenityIds: [],
+      minPrice: 0,
+      maxPrice: 1000000,
+      page: 0,
+      size: 12,
+    })
+  }
+
+  const getLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setFilters(prev => ({
+            ...prev,
+            userLat: position.coords.latitude,
+            userLng: position.coords.longitude,
+            radiusInKm: 15,
+            page: 0
+          }))
+        },
+        (error) => alert("Không thể lấy vị trí của bạn. Vui lòng cấp quyền.")
+      )
+    } else {
+      alert("Trình duyệt của bạn không hỗ trợ định vị")
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
+    <div className="min-h-screen bg-gray-50/50 dark:bg-background pb-20">
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Filter Sidebar */}
-          <aside className="lg:col-span-1">
-            <div className="bg-card border rounded-lg p-6 sticky top-24">
-              <h3 className="mb-6">Bộ lọc</h3>
-
-              {/* Price Range */}
-              <div className="mb-6">
-                <Label className="mb-3 block">Khoảng giá</Label>
-                <Slider
-                  value={priceRange}
-                  onValueChange={setPriceRange}
-                  max={1000000}
-                  step={50000}
-                  className="mb-3"
-                />
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>{priceRange[0].toLocaleString('vi-VN')}đ</span>
-                  <span>{priceRange[1].toLocaleString('vi-VN')}đ</span>
-                </div>
-              </div>
-
-              {/* Sport Category */}
-              <div className="mb-6">
-                <Label className="mb-3 block">Loại sân</Label>
-                <div className="space-y-3">
-                  {["Bóng đá", "Cầu lông", "Quần vợt", "Bóng rổ"].map((sport) => (
-                    <div key={sport} className="flex items-center space-x-2">
-                      <Checkbox id={sport} />
-                      <label htmlFor={sport} className="text-sm cursor-pointer">
-                        {sport}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Amenities */}
-              <div className="mb-6">
-                <Label className="mb-3 block">Tiện ích</Label>
-                <div className="space-y-3">
-                  {["Bãi đỗ xe", "Phòng thay đồ", "Đèn chiếu sáng", "Wifi", "Căng tin"].map((amenity) => (
-                    <div key={amenity} className="flex items-center space-x-2">
-                      <Checkbox id={amenity} />
-                      <label htmlFor={amenity} className="text-sm cursor-pointer">
-                        {amenity}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Distance */}
-              <div>
-                <Label className="mb-3 block">Khoảng cách</Label>
-                <Select defaultValue="10">
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">Trong vòng 5km</SelectItem>
-                    <SelectItem value="10">Trong vòng 10km</SelectItem>
-                    <SelectItem value="20">Trong vòng 20km</SelectItem>
-                    <SelectItem value="50">Trong vòng 50km</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button className="w-full mt-6">Áp dụng bộ lọc</Button>
-            </div>
-          </aside>
-
-          {/* Results */}
-          <main className="lg:col-span-3">
-            {/* Search Bar */}
-            <div className="flex gap-4 mb-6">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                <Input placeholder="Tìm kiếm sân..." className="pl-10" />
-              </div>
-              <Select defaultValue="rating">
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Sắp xếp" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="rating">Đánh giá cao nhất</SelectItem>
-                  <SelectItem value="price-low">Giá thấp đến cao</SelectItem>
-                  <SelectItem value="price-high">Giá cao đến thấp</SelectItem>
-                  <SelectItem value="distance">Khoảng cách</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Results Count */}
-            <p className="text-muted-foreground mb-4">
-              Tìm thấy <strong>{venues.length}</strong> sân thể thao
-            </p>
-
-            {/* Venue List */}
-            <div className="space-y-4">
-              {venues.map((venue) => (
-                <VenueCard key={venue.id} {...venue} />
-              ))}
-            </div>
-
-            {/* Pagination */}
-            <div className="flex justify-center gap-2 mt-8">
-              <Button variant="outline" size="sm">Trước</Button>
-              <Button variant="outline" size="sm">1</Button>
-              <Button size="sm">2</Button>
-              <Button variant="outline" size="sm">3</Button>
-              <Button variant="outline" size="sm">Sau</Button>
-            </div>
-          </main>
+      {/* 1. Hero Banner */}
+      <div className="relative h-[300px] md:h-[400px] w-full bg-gray-900 overflow-hidden">
+        <img
+          src="https://images.unsplash.com/photo-1579952363873-27f3bade9f55?q=80&w=2000&auto=format&fit=crop"
+          alt="Sport Banner"
+          className="w-full h-full object-cover opacity-60"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent"></div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white tracking-tight mb-4 drop-shadow-lg">
+            Khám phá Sân Thể Thao Đỉnh Cao
+          </h1>
+          <p className="text-lg md:text-xl text-gray-200 font-medium max-w-2xl drop-shadow-md">
+            Tìm kiếm, xem giá và đặt sân ngay lập tức với hàng trăm lựa chọn tốt nhất xung quanh bạn.
+          </p>
         </div>
       </div>
 
-      <Footer />
-    </div>
-  );
-}
+      {/* 2. Horizontal Search Bar */}
+      <HorizontalSearch
+        filters={filters}
+        onFilterChange={handleFilterChange}
+        onGetLocation={getLocation}
+      />
 
-export default VenueSearchPage;
+      {/* 3. Sport Type Tabs */}
+      <SportTypeTabs
+        sportTypes={sportTypes}
+        selectedId={filters.sportTypeId}
+        onSelect={(id) => handleFilterChange('sportTypeId', id)}
+      />
+
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+
+        {/* 4. Filter Info & Modal Trigger */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Danh sách sân</h2>
+            <p className="text-muted-foreground text-sm mt-1">Tìm thấy <strong className="text-foreground">{stadiums.length}</strong> sân phù hợp với bạn</p>
+          </div>
+
+          <div className="flex gap-3">
+            <Button variant="ghost" size="sm" onClick={handleClearFilters} className="text-muted-foreground hover:text-destructive hidden sm:flex">
+              <X className="h-4 w-4 mr-1" /> Xóa bộ lọc
+            </Button>
+
+            <FilterModal
+              filters={filters}
+              amenitiesList={amenitiesList}
+              totalResults={stadiums.length}
+              onFilterChange={handleFilterChange}
+              onAmenityToggle={handleAmenityToggle}
+              onClearFilters={handleClearFilters}
+            />
+
+            <Button
+              variant="outline"
+              onClick={() => setIsMapOpen(true)}
+              className="border-gray-200 dark:border-border font-semibold hover:bg-gray-50 dark:hover:bg-muted shadow-sm"
+            >
+              <Map className="mr-2 h-4 w-4" /> Bản đồ
+            </Button>
+          </div>
+        </div>
+
+        {/* 5. Stadium Grid Area */}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <div key={i} className="animate-pulse bg-card rounded-2xl h-[420px] border border-gray-100 dark:border-border"></div>
+            ))}
+          </div>
+        ) : stadiums.length === 0 ? (
+          <div className="text-center py-20 bg-white dark:bg-card/50 rounded-3xl border border-dashed border-gray-200 dark:border-border shadow-sm flex flex-col items-center justify-center">
+            <div className="w-40 h-40 mb-6 opacity-50">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-gray-400 w-full h-full">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M12 6v6l4 4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Không tìm thấy sân</h3>
+            <p className="text-muted-foreground mb-8 max-w-md">Rất tiếc, chúng tôi không tìm thấy sân nào khớp với điều kiện lọc của bạn. Vui lòng thử nới lỏng các yêu cầu nhé!</p>
+            <Button onClick={handleClearFilters} className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 rounded-full px-8 py-6 text-base font-bold shadow-lg transition-all hover:scale-105 active:scale-95">
+              Xóa tất cả bộ lọc
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {stadiums.map((stadium) => (
+              <StadiumCard
+                key={stadium.stadiumId}
+                stadium={stadium}
+                isUrgent={false}
+              />
+            ))}
+          </div>
+        )}
+
+      </div>
+
+      <StadiumMapModal
+        isOpen={isMapOpen}
+        onClose={() => setIsMapOpen(false)}
+        stadiums={stadiums}
+      />
+    </div>
+  )
+}

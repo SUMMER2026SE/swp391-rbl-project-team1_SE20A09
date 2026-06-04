@@ -19,6 +19,10 @@ public interface OwnerRepository extends JpaRepository<Owner, Integer> {
     @EntityGraph(attributePaths = {"user"})
     Optional<Owner> findByUserUserId(Integer userId);
 
+    /** Tìm owner profile theo email của User. */
+    @EntityGraph(attributePaths = {"user"})
+    Optional<Owner> findByUserEmail(String email);
+
     /** Kiểm tra user đã có owner profile chưa. */
     boolean existsByUserUserId(Integer userId);
 

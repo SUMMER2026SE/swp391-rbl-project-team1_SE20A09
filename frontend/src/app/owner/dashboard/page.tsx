@@ -1,6 +1,5 @@
 ﻿'use client'
 
-import { Header } from "@/components/layout/Header";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -108,10 +107,7 @@ function OwnerDashboardPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-
-      <div className="flex">
+    <div className="flex">
         {/* Sidebar */}
         <aside className="w-64 min-h-screen bg-sidebar border-r p-4">
           <h2 className="mb-6 px-3">Quản lý chủ sân</h2>
@@ -291,7 +287,6 @@ function OwnerDashboardPage() {
           </Card>
         </main>
       </div>
-    </div>
   );
 }
 

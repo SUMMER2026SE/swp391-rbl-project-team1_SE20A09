@@ -16,14 +16,24 @@ const api: AxiosInstance = axios.create({
 
 // ── Request interceptor: đính kèm JWT token ──────────────
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type']
     }
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('access_token')
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
+      // Try NextAuth session first, fallback to localStorage
+      try {
+        const { getSession } = await import('next-auth/react')
+        const session = await getSession()
+        const token = (session as any)?.accessToken
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`
+        }
+      } catch {
+        const token = localStorage.getItem('access_token')
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`
+        }
       }
     }
     return config
@@ -108,6 +118,15 @@ export async function uploadAvatar(file: File): Promise<FileUploadResult> {
   const formData = new FormData()
   formData.append('file', file)
   const res = await api.post<FileUploadResult>('/files/avatar', formData, {
+    timeout: 60_000,
+  })
+  return res.data
+}
+
+export async function uploadStadiumImage(file: File): Promise<FileUploadResult> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await api.post<FileUploadResult>('/files/stadium', formData, {
     timeout: 60_000,
   })
   return res.data
