@@ -22,8 +22,40 @@ import java.util.List;
 public interface BookingRepository extends JpaRepository<Booking, Integer> {
 
     /** Lấy lịch sử đặt sân của khách hàng — dùng cho trang "Lịch sử đặt sân". */
-    @EntityGraph(attributePaths = {"stadium", "slot"})
+    @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "slot"})
     Page<Booking> findByUserUserIdOrderByBookingDateDesc(Integer userId, Pageable pageable);
+
+    /** Lịch sắp tới — slot chưa kết thúc, đơn Pending hoặc Confirmed. */
+    @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "slot"})
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.user.userId = :userId
+            AND b.bookingStatus IN (com.sportvenue.entity.enums.BookingStatus.PENDING,
+                                    com.sportvenue.entity.enums.BookingStatus.CONFIRMED)
+            AND b.slot.endTime >= :now
+            ORDER BY b.slot.startTime ASC
+            """)
+    List<Booking> findUpcomingByUserId(
+            @Param("userId") Integer userId,
+            @Param("now") LocalDateTime now,
+            Pageable pageable);
+
+    long countByUserUserId(Integer userId);
+
+    @Query("""
+            SELECT COUNT(DISTINCT b.stadium.stadiumId) FROM Booking b
+            WHERE b.user.userId = :userId
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
+            """)
+    long countDistinctCompletedVenues(@Param("userId") Integer userId);
+
+    @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "slot"})
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.user.userId = :userId
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
+            """)
+    List<Booking> findCompletedByUserId(@Param("userId") Integer userId);
 
     /** Lấy danh sách đặt sân của một sân — dùng cho Owner quản lý. */
     @EntityGraph(attributePaths = {"user", "slot"})
