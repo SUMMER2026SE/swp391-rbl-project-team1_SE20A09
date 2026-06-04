@@ -203,7 +203,7 @@ public class ComplaintServiceImpl implements ComplaintService {
             return new ArrayList<>();
         }
         try {
-            return objectMapper.readValue(json, new TypeReference<List<ComplaintResponse.ResponseItem>>() {});
+            return objectMapper.readValue(json, new TypeReference<List<ComplaintResponse.ResponseItem>>() { });
         } catch (Exception e) {
             log.warn("Failed to deserialize complaint response JSON: {}", json, e);
             // Fallback for non-JSON string formats
