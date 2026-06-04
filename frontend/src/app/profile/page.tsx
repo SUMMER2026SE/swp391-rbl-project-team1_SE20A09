@@ -32,6 +32,9 @@ import {
   Eye,
   EyeOff,
   Edit,
+  Clock,
+  MapPin,
+  FileText,
 } from "lucide-react";
 
 interface UserProfileResponse {
@@ -63,6 +66,8 @@ function UserProfilePage() {
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState("info");
 
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [oldPassword, setOldPassword] = useState("");
@@ -157,6 +162,45 @@ function UserProfilePage() {
       fetchUserProfile();
     }
   }, [status, session?.accessToken, router]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Tab routing
+      const urlParams = new URLSearchParams(window.location.search);
+      const tab = urlParams.get('tab');
+      if (tab) {
+        setActiveTab(tab);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const fetchReviews = async () => {
+      try {
+        if (!profile) return;
+        const endpoint = profile.roleName === 'Owner' ? '/owner/reviews' : '/reviews/my';
+        const data = await get<any[]>(endpoint);
+        setReviews(data || []);
+      } catch (e) {
+        console.error("Failed to load reviews", e);
+      }
+    };
+    
+    if (profile) {
+      fetchReviews();
+    }
+  }, [profile]);
+
+  const getStatusBadge = (status: string) => {
+    const statusConfig = {
+      confirmed: { label: "Đã xác nhận", className: "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" },
+      pending: { label: "Chờ xác nhận", className: "bg-amber-500/10 text-amber-500 border border-amber-500/20" },
+      completed: { label: "Hoàn thành", className: "bg-blue-500/10 text-blue-500 border border-blue-500/20" },
+      cancelled: { label: "Đã hủy bỏ", className: "bg-rose-500/10 text-rose-500 border border-rose-500/20" },
+    };
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending;
+    return <Badge className={`rounded-full px-3 py-1 font-semibold ${config.className}`}>{config.label}</Badge>;
+  };
 
   const getInitials = (name: string) => {
     if (!name) return "U";
@@ -292,11 +336,12 @@ function UserProfilePage() {
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="info" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-full sm:w-auto overflow-x-auto flex whitespace-nowrap">
             <TabsTrigger value="info">Thông tin cá nhân</TabsTrigger>
-            <TabsTrigger value="bookings">Lịch sử đặt sân</TabsTrigger>
-            <TabsTrigger value="reviews">Đánh giá của tôi</TabsTrigger>
+            <TabsTrigger value="reviews">
+              {profile.roleName === "Owner" ? "Đánh giá từ khách hàng" : "Đánh giá của tôi"}
+            </TabsTrigger>
             <TabsTrigger value="settings">Bảo mật & Cài đặt</TabsTrigger>
           </TabsList>
 
@@ -381,24 +426,136 @@ function UserProfilePage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="bookings">
-            <Card className="border-none shadow-sm bg-white p-8 text-center">
-              <Calendar className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-slate-800 mb-2">Lịch sử đặt sân</h3>
-              <p className="text-slate-500 text-sm max-w-sm mx-auto mb-6">
-                Xem lịch sử đặt sân tại trang đơn hàng của bạn.
-              </p>
-              <Button variant="outline" onClick={() => router.push("/bookings")}>
-                Đi tới lịch sử đặt sân
-              </Button>
-            </Card>
-          </TabsContent>
-
           <TabsContent value="reviews">
-            <Card className="border-none shadow-sm bg-white p-8 text-center">
-              <Star className="h-16 w-16 text-amber-300 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-slate-800 mb-2">Đánh giá của tôi</h3>
-              <p className="text-slate-500 text-sm">Tính năng đang được phát triển.</p>
+            <Card className="border-none shadow-sm bg-white">
+              <CardHeader className="pb-4">
+                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
+                  {profile.roleName === "Owner" ? "Đánh giá từ khách hàng" : "Đánh giá của tôi"}
+                </h3>
+                <p className="text-slate-500 text-sm">
+                  {profile.roleName === "Owner" 
+                    ? "Xem và phản hồi lại các đánh giá từ khách hàng về sân của bạn." 
+                    : "Xem tất cả các đánh giá và phản hồi bạn đã gửi cho các sân chơi."}
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {reviews.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400">
+                    <Star className="h-16 w-16 text-slate-200 mx-auto mb-4" />
+                    <p className="font-semibold">Chưa có đánh giá nào</p>
+                    <p className="text-xs text-slate-400 mt-1">Các đánh giá bạn viết sau khi hoàn thành đặt sân sẽ hiển thị ở đây.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {reviews.map((rev: any) => (
+                      <div 
+                        key={rev.id} 
+                        className="p-5 rounded-2xl border border-slate-100 hover:border-slate-200 hover:shadow-sm transition-all bg-slate-50/30 flex flex-col md:flex-row md:items-start justify-between gap-4"
+                      >
+                        <div className="space-y-2 flex-1">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-slate-800">{rev.venueName}</h4>
+                            <div className="flex gap-0.5">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Star 
+                                  key={star} 
+                                  className={`h-4.5 w-4.5 ${
+                                    star <= rev.rating 
+                                      ? 'fill-yellow-400 text-yellow-400' 
+                                      : 'text-slate-200'
+                                  }`} 
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-4 text-xs text-slate-400">
+                            <span>Khách hàng: <span className="font-semibold text-slate-600">{rev.customerName || "Khách hàng ẩn danh"}</span></span>
+                            <span>•</span>
+                            <span>Mã đơn: <span className="font-mono font-medium">{rev.bookingId}</span></span>
+                            <span>•</span>
+                            <span>{new Date(rev.createdAt).toLocaleDateString('vi-VN')}</span>
+                          </div>
+
+                          {rev.comment && (
+                            <p className="text-sm text-slate-600 bg-white dark:bg-zinc-900/50 p-3 rounded-xl border border-slate-100/50 mt-2 italic">
+                              "{rev.comment}"
+                            </p>
+                          )}
+
+                          {rev.tags && rev.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {rev.tags.map((tag: string) => (
+                                <Badge 
+                                  key={tag} 
+                                  variant="outline" 
+                                  className="text-[10px] bg-slate-50 border-slate-200 text-slate-500 font-normal px-2 py-0.5 rounded-full"
+                                >
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+
+                          {rev.ownerResponse && (
+                            <div className="mt-3 pl-4 border-l-2 border-primary/40">
+                              <p className="text-xs font-semibold text-primary mb-1 flex items-center gap-1">
+                                <Shield className="h-3 w-3" /> Phản hồi từ Chủ Sân:
+                              </p>
+                              <p className="text-sm text-slate-700 bg-primary/5 p-3 rounded-xl">
+                                {rev.ownerResponse}
+                              </p>
+                            </div>
+                          )}
+
+                          {profile.roleName === "Owner" && !rev.ownerResponse && (
+                            <div className="mt-4 flex gap-2">
+                              <Input 
+                                placeholder="Viết phản hồi cho đánh giá này..." 
+                                className="h-9 text-xs flex-1 bg-slate-50"
+                                id={`reply-input-${rev.id}`}
+                              />
+                              <Button 
+                                size="sm" 
+                                className="h-9 shrink-0"
+                                onClick={async () => {
+                                  const input = document.getElementById(`reply-input-${rev.id}`) as HTMLInputElement;
+                                  if (!input || !input.value.trim()) {
+                                    alert("Vui lòng nhập nội dung phản hồi");
+                                    return;
+                                  }
+                                  try {
+                                    await post(`/owner/reviews/${rev.reviewId}/reply`, {
+                                      ownerResponse: input.value.trim()
+                                    });
+                                    const updatedReviews = reviews.map(r => 
+                                      r.id === rev.id ? { ...r, ownerResponse: input.value.trim() } : r
+                                    );
+                                    setReviews(updatedReviews);
+                                  } catch (error: any) {
+                                    alert(error?.response?.data?.message || "Có lỗi xảy ra khi phản hồi");
+                                  }
+                                }}
+                              >
+                                Phản hồi
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex md:flex-col items-end justify-between md:justify-start gap-2 shrink-0">
+                          <Link href={`/booking/${rev.bookingId}`}>
+                            <Button variant="outline" size="sm" className="rounded-xl text-xs font-semibold h-9">
+                              Xem đơn đặt
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
             </Card>
           </TabsContent>
 
