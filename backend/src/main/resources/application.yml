@@ -74,7 +74,7 @@ spring:
 
 # ── Server ───────────────────────────────────────────────
 server:
-  port: 8080
+  port: 8081
   error:
     include-message: never
     include-binding-errors: never
@@ -105,7 +105,7 @@ app:
     client-id: ${GOOGLE_CLIENT_ID:}
   files:
     upload-dir: ${FILE_UPLOAD_DIR:uploads}
-    base-url: ${FILE_BASE_URL:http://localhost:8080}
+    base-url: ${FILE_BASE_URL:http://localhost:8081}
     max-size-bytes: ${FILE_MAX_SIZE_BYTES:5242880}
     allowed-extensions:
       - .jpg
