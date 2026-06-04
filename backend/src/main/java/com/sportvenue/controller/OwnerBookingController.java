@@ -44,7 +44,7 @@ public class OwnerBookingController {
      * UC-OWN-06: Xem danh sách tất cả lịch đặt sân.
      * Hỗ trợ filter theo sân, trạng thái và phân trang.
      */
-    @GetMapping
+    @GetMapping("/page")
     @PreAuthorize("hasRole('Owner')")
     @Operation(summary = "Xem danh sách booking",
                description = "Owner xem tất cả booking của sân mình. "
