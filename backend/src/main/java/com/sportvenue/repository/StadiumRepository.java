@@ -13,12 +13,14 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+
 /**
  * Repository cho Stadium entity.
  * Stub — các thành viên (đặc biệt Huy, An, Hào) mở rộng thêm query khi cần.
  */
 @Repository
-public interface StadiumRepository extends JpaRepository<Stadium, Integer> {
+public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaSpecificationExecutor<Stadium> {
 
     /** Lấy danh sách sân theo chủ sân — dùng cho trang quản lý của Owner. */
     @EntityGraph(attributePaths = {"sportType", "images"})

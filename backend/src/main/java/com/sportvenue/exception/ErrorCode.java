@@ -13,6 +13,8 @@ public enum ErrorCode {
     USER_NOT_VERIFIED(403, "Tài khoản chưa được xác thực email. Vui lòng kiểm tra hộp thư và nhập mã OTP."),
 
     // Resource Errors
+    NOTIFICATION_NOT_FOUND(404, "Không tìm thấy thông báo"),
+    UNAUTHORIZED(403, "Bạn không có quyền thực hiện hành động này"),
     DUPLICATE_RESOURCE(409, "Dữ liệu đã tồn tại trong hệ thống"),
     INTERNAL_SERVER_ERROR(500, "Lỗi hệ thống không mong muốn");
 

@@ -26,7 +26,11 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.JoinTable;
 
 /**
  * Entity ánh xạ bảng stadiums.
@@ -116,4 +120,19 @@ public class Stadium implements Serializable {
     @OneToMany(mappedBy = "stadium", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<Accessory> accessories = new ArrayList<>();
+
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "stadium_amenities",
+            joinColumns = @JoinColumn(name = "stadium_id"),
+            inverseJoinColumns = @JoinColumn(name = "amenity_id")
+    )
+    @Builder.Default
+    private Set<Amenity> amenities = new HashSet<>();
 }

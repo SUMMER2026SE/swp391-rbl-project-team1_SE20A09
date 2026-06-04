@@ -37,6 +37,9 @@ public class SecurityConfig {
             "/api/v1/hello",
             "/api/v1/ping",
             "/api/v1/auth/**",
+            "/api/v1/public/stadiums/**",
+            "/api/v1/public/amenities/**",
+            "/api/v1/sport-types/**",
             "/actuator/health",
             "/actuator/info",
             "/swagger-ui.html",
@@ -70,6 +73,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/avatars/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/files/stadiums/**").permitAll()
                         .requestMatchers("/api/v1/files/**").authenticated()
                         .anyRequest().authenticated()
                 )
