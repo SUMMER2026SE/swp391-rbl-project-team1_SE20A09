@@ -1,5 +1,5 @@
 -- Sân yêu thích của người dùng (lưu DB, giống avatar/profile)
-CREATE TABLE user_favorite_stadiums (
+CREATE TABLE IF NOT EXISTS user_favorite_stadiums (
     id          BIGSERIAL PRIMARY KEY,
     user_id     INT         NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     stadium_id  INT         NOT NULL REFERENCES stadiums(stadium_id) ON DELETE CASCADE,
