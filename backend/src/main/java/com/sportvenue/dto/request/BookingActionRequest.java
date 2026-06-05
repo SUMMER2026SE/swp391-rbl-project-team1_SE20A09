@@ -21,7 +21,12 @@ public class BookingActionRequest {
     @NotNull(message = "Hành động không được để trống")
     private Action action;
 
-    /** Lý do từ chối — bắt buộc khi action = REJECT. */
+    /** 
+     * Lý do từ chối.
+     * Note: Không dùng @NotBlank ở đây vì lý do chỉ bắt buộc khi action = REJECT (Conditional Validation).
+     * Logic kiểm tra bắt buộc này được xử lý ở tầng Service (OwnerBookingService.rejectBooking) 
+     * để tránh phải viết Custom Validator phức tạp ở tầng DTO.
+     */
     @Size(max = 500, message = "Lý do không được vượt quá 500 ký tự")
     private String reason;
 

@@ -59,9 +59,9 @@ public class OwnerBookingService {
             validateStadiumOwnership(stadiumId, owner.getOwnerId());
 
             if (status != null) {
-                List<Booking> bookings = bookingRepository
-                        .findByStadiumStadiumIdAndBookingStatus(stadiumId, status);
-                return convertToPage(bookings, pageable);
+                return bookingRepository
+                        .findByStadiumStadiumIdAndBookingStatus(stadiumId, status, pageable)
+                        .map(this::toBookingResponse);
             }
             return bookingRepository
                     .findByStadiumStadiumIdOrderByBookingDateDesc(stadiumId, pageable)
@@ -143,6 +143,8 @@ public class OwnerBookingService {
                     "Vui lòng nhập lý do khi từ chối đơn đặt sân.");
         }
 
+        // Design decision: Sử dụng CANCELLED thay vì tạo status riêng (REJECTED) cho Owner từ chối.
+        // PO quyết định gộp chung để đơn giản hóa flow, lý do từ chối sẽ được ghi vào note.
         booking.setBookingStatus(BookingStatus.CANCELLED);
         booking.setNote("Lý do từ chối: " + reason);
 
@@ -210,21 +212,4 @@ public class OwnerBookingService {
                 .build();
     }
 
-    /**
-     * Chuyển đổi list sang Page thủ công.
-     * Dùng khi repository trả về List thay vì Page.
-     */
-    private Page<BookingResponse> convertToPage(
-            List<Booking> bookings, Pageable pageable) {
-        List<BookingResponse> responses = bookings.stream()
-                .map(this::toBookingResponse)
-                .toList();
-        int start = (int) pageable.getOffset();
-        int end = Math.min(start + pageable.getPageSize(), responses.size());
-        if (start > responses.size()) {
-            return Page.empty(pageable);
-        }
-        return new org.springframework.data.domain.PageImpl<>(
-                responses.subList(start, end), pageable, responses.size());
-    }
 }

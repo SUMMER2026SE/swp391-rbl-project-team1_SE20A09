@@ -38,8 +38,8 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     Page<Booking> findByStadiumStadiumIdOrderByBookingDateDesc(Integer stadiumId, Pageable pageable);
 
     /** Lấy đặt sân theo trạng thái — dùng cho Owner filter Pending. */
-    @EntityGraph(attributePaths = {"user", "stadium", "slot"})
-    List<Booking> findByStadiumStadiumIdAndBookingStatus(Integer stadiumId, BookingStatus status);
+    @EntityGraph(attributePaths = {"user", "stadium", "stadium.sportType", "slot"})
+    Page<Booking> findByStadiumStadiumIdAndBookingStatus(Integer stadiumId, BookingStatus status, Pageable pageable);
 
     /**
      * Tổng doanh thu theo NGÀY ĐẶT (bookingDate) — thời điểm khách tạo đơn.
