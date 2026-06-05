@@ -15,7 +15,6 @@ public class ReviewResponse {
     private Integer reviewId;
     private String id;
     private Integer bookingId;
-    private String venueName;
     private String stadiumName;
     private String customerName;
     private Integer rating;

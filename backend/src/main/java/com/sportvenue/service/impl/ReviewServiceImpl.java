@@ -94,6 +94,10 @@ public class ReviewServiceImpl implements ReviewService {
             throw new BadRequestException("Bạn không thể đánh giá đơn đặt sân của người khác");
         }
 
+        if (booking.getBookingStatus() != com.sportvenue.entity.enums.BookingStatus.COMPLETED) {
+            throw new BadRequestException("Chỉ có thể đánh giá sau khi hoàn thành lịch chơi.");
+        }
+
         if (reviewRepository.existsByBookingBookingId(booking.getBookingId())) {
             throw new BadRequestException("Bạn đã đánh giá đơn đặt sân này rồi");
         }
@@ -124,13 +128,12 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     private ReviewResponse mapToResponse(Review r) {
-        String customerFullName = r.getUser().getFirstName() + " " + r.getUser().getLastName();
+        String customerFullName = r.getUser().getLastName() + " " + r.getUser().getFirstName();
         return ReviewResponse.builder()
                 .reviewId(r.getReviewId())
                 .id("REV-" + r.getReviewId())
                 .bookingId(r.getBooking().getBookingId())
                 .stadiumName(r.getStadium().getStadiumName())
-                .venueName(r.getStadium().getStadiumName())
                 .customerName(customerFullName)
                 .rating(r.getRatingScore())
                 .comment(r.getComment())
