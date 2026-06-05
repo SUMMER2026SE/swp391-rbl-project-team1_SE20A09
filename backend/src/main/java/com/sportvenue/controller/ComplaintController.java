@@ -22,10 +22,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import lombok.extern.slf4j.Slf4j;
+
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
 @Tag(name = "Complaint", description = "Quản lý và giải quyết khiếu nại của khách hàng")
+@Slf4j
 public class ComplaintController {
 
     private final ComplaintService complaintService;
@@ -35,6 +38,7 @@ public class ComplaintController {
     @Operation(summary = "Lấy danh sách khiếu nại của chủ sân (Owner)")
     public ResponseEntity<List<ComplaintResponse>> listOwnerComplaints(
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("REST request to get owner complaints for: {}", userPrincipal.getUsername());
         List<ComplaintResponse> response = complaintService.getOwnerComplaints(userPrincipal.getUsername());
         return ResponseEntity.ok(response);
     }
@@ -46,6 +50,7 @@ public class ComplaintController {
             @PathVariable Integer id,
             @Valid @RequestBody ReplyComplaintRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("REST request to reply to complaint {} by owner: {}", id, userPrincipal.getUsername());
         ComplaintResponse response = complaintService.replyComplaint(id, request, userPrincipal.getUsername());
         return ResponseEntity.ok(response);
     }
@@ -57,6 +62,7 @@ public class ComplaintController {
             @PathVariable Integer id,
             @Valid @RequestBody ResolveComplaintRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("REST request to resolve complaint {} by owner: {}", id, userPrincipal.getUsername());
         ComplaintResponse response = complaintService.resolveComplaint(id, request, userPrincipal.getUsername());
         return ResponseEntity.ok(response);
     }
@@ -66,6 +72,7 @@ public class ComplaintController {
     @Operation(summary = "Khách hàng lấy danh sách khiếu nại của mình")
     public ResponseEntity<List<ComplaintResponse>> listCustomerComplaints(
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("REST request to get customer complaints for: {}", userPrincipal.getUsername());
         List<ComplaintResponse> response = complaintService.getCustomerComplaints(userPrincipal.getUsername());
         return ResponseEntity.ok(response);
     }
@@ -76,6 +83,7 @@ public class ComplaintController {
     public ResponseEntity<ComplaintResponse> createComplaint(
             @Valid @RequestBody CreateComplaintRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("REST request to create complaint for booking {} by customer: {}", request.getBookingId(), userPrincipal.getUsername());
         ComplaintResponse response = complaintService.createComplaint(request, userPrincipal.getUsername());
         return ResponseEntity.ok(response);
     }
@@ -87,6 +95,7 @@ public class ComplaintController {
             @PathVariable Integer id,
             @Valid @RequestBody ReplyComplaintRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("REST request to reply to complaint {} by customer: {}", id, userPrincipal.getUsername());
         ComplaintResponse response = complaintService.replyComplaint(id, request, userPrincipal.getUsername());
         return ResponseEntity.ok(response);
     }

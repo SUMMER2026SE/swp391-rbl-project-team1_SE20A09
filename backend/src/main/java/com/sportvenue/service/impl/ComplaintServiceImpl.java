@@ -78,6 +78,7 @@ public class ComplaintServiceImpl implements ComplaintService {
         Complaint complaint = Complaint.builder()
                 .booking(booking)
                 .user(user)
+                .subject(request.getSubject().trim())
                 .content(request.getDescription())
                 .status(ComplaintStatus.OPEN)
                 .createdAt(LocalDateTime.now())
@@ -168,17 +169,22 @@ public class ComplaintServiceImpl implements ComplaintService {
     }
 
     private ComplaintResponse mapToResponse(Complaint c) {
-        String subject = "Khiếu nại đặt sân #" + c.getBooking().getBookingId();
+        String subject = c.getSubject();
+        if (subject == null) {
+            subject = "Khiếu nại đặt sân #" + c.getBooking().getBookingId();
+        }
         
         List<ComplaintResponse.ResponseItem> responsesList = deserializeResponses(c.getResponse());
         
         String resolution = null;
         String resolvedDate = null;
         if (c.getStatus() == ComplaintStatus.RESOLVED) {
-            resolvedDate = c.getCreatedAt().toLocalDate().toString(); // simple fallback
             if (!responsesList.isEmpty()) {
+                String lastTime = responsesList.get(responsesList.size() - 1).getTime();
+                resolvedDate = (lastTime != null && lastTime.length() >= 10) ? lastTime.substring(0, 10) : c.getCreatedAt().toLocalDate().toString();
                 resolution = responsesList.get(responsesList.size() - 1).getMessage().replace("Đã giải quyết: ", "");
             } else {
+                resolvedDate = c.getCreatedAt().toLocalDate().toString();
                 resolution = "Đã giải quyết xong.";
             }
         }
