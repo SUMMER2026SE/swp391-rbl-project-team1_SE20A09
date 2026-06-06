@@ -1,6 +1,8 @@
 export interface CreateStadiumRequest {
   stadiumName: string;
   address: string;
+  latitude: number;
+  longitude: number;
   sportTypeId: number;
   pricePerHour: number;
   description?: string;
@@ -12,9 +14,10 @@ export interface CreateStadiumRequest {
 export interface UpdateStadiumRequest {
   stadiumName: string;
   address: string;
+  latitude: number;
+  longitude: number;
   sportTypeId: number;
   pricePerHour: number;
-  capacity: number;
   description?: string;
   openTime: string; // Format HH:mm:ss
   closeTime: string; // Format HH:mm:ss
@@ -24,11 +27,12 @@ export interface StadiumResponse {
   stadiumId: number;
   stadiumName: string;
   address: string;
+  latitude: number;
+  longitude: number;
   description: string;
   sportTypeId: number;
   sportName: string;
   pricePerHour: number;
-  capacity: number;
   openTime: string;
   closeTime: string;
   stadiumStatus: string;

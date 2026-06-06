@@ -19,6 +19,7 @@ import { stadiumService } from "@/lib/services/stadium";
 import { SportType } from "@/types/stadium";
 import { uploadStadiumImage } from "@/lib/api";
 import { toast } from "sonner";
+import { AddressPicker } from "@/components/AddressPicker";
 
 const stadiumSchema = z.object({
   stadiumName: z.string()
@@ -27,6 +28,12 @@ const stadiumSchema = z.object({
   address: z.string()
     .min(5, "Địa chỉ phải có ít nhất 5 ký tự")
     .max(500, "Địa chỉ không được quá 500 ký tự"),
+  latitude: z.number({ message: "Vui lòng chọn vị trí trên bản đồ" })
+    .min(-90, "Vĩ độ không hợp lệ")
+    .max(90, "Vĩ độ không hợp lệ"),
+  longitude: z.number({ message: "Vui lòng chọn vị trí trên bản đồ" })
+    .min(-180, "Kinh độ không hợp lệ")
+    .max(180, "Kinh độ không hợp lệ"),
   sportTypeId: z.number({ message: "Vui lòng chọn môn thể thao" })
     .min(1, "Vui lòng chọn môn thể thao"),
   pricePerHour: z.number({ message: "Vui lòng nhập giá" })
@@ -83,6 +90,8 @@ function AddVenuePage() {
     defaultValues: {
       stadiumName: "",
       address: "",
+      latitude: 16.0544,
+      longitude: 108.2022,
       pricePerHour: 100000,
       description: "",
       openTime: "06:00",
@@ -245,17 +254,18 @@ function AddVenuePage() {
 
                   <div className="space-y-2">
                     <Label htmlFor="address">Địa chỉ *</Label>
-                    <div className="relative">
-                      <MapPin className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                      <Input
-                        {...form.register("address")}
-                        id="address"
-                        placeholder="Số 123, Đường ABC, Quận X, TP.HCM"
-                        className="pl-10"
-                      />
-                    </div>
+                    <AddressPicker
+                      onAddressChange={(data) => {
+                        form.setValue("address", data.addressText, { shouldValidate: true });
+                        form.setValue("latitude", data.lat, { shouldValidate: true });
+                        form.setValue("longitude", data.lng, { shouldValidate: true });
+                      }}
+                    />
                     {form.formState.errors.address && (
                       <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>
+                    )}
+                    {form.formState.errors.latitude && (
+                      <p className="text-sm text-destructive">{form.formState.errors.latitude.message}</p>
                     )}
                   </div>
 

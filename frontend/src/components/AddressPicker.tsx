@@ -1,14 +1,14 @@
-'use client'
+﻿'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps'
+import dynamic from 'next/dynamic'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card } from '@/components/ui/card'
 import { MapPin } from 'lucide-react'
+import 'leaflet/dist/leaflet.css'
 
-const VN_CENTER = { lat: 10.8231, lng: 106.6297 }
-const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
+const DA_NANG_CENTER = { lat: 16.0544, lng: 108.2022 }
 
 interface AddressData {
   addressText: string
@@ -17,162 +17,285 @@ interface AddressData {
 }
 
 interface Props {
+  initialAddress?: string
+  initialLat?: number
+  initialLng?: number
   onAddressChange: (data: AddressData) => void
 }
 
-export function AddressPicker({ onAddressChange }: Props) {
-  const [position, setPosition] = useState(VN_CENTER)
-  const [inputValue, setInputValue] = useState('')
-  const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([])
+interface LocationDTO {
+  displayName: string
+  latitude: number
+  longitude: number
+  province?: string
+  district?: string
+  ward?: string
+  street?: string
+  source?: string
+}
+
+const MapContainer = dynamic(
+  () => import('react-leaflet').then((mod) => mod.MapContainer),
+  { ssr: false }
+)
+const TileLayer = dynamic(
+  () => import('react-leaflet').then((mod) => mod.TileLayer),
+  { ssr: false }
+)
+const Marker = dynamic(
+  () => import('react-leaflet').then((mod) => mod.Marker),
+  { ssr: false }
+)
+const useMapEvents = dynamic(
+  () => import('react-leaflet').then((mod) => mod.useMapEvents),
+  { ssr: false }
+)
+
+function MapEventHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(e) {
+      onMapClick(e.latlng.lat, e.latlng.lng)
+    },
+  })
+  return null
+}
+
+function DraggableMarkerComponent({
+  position,
+  onDragEnd,
+}: {
+  position: [number, number]
+  onDragEnd: (lat: number, lng: number) => void
+}) {
+  const markerRef = useRef<any>(null)
+
+  const eventHandlers = {
+    dragend() {
+      const marker = markerRef.current
+      if (marker) {
+        const { lat, lng } = marker.getLatLng()
+        onDragEnd(lat, lng)
+      }
+    },
+  }
+
+  return <Marker ref={markerRef} position={position} draggable eventHandlers={eventHandlers} />
+}
+
+export function AddressPicker({ initialAddress, initialLat, initialLng, onAddressChange }: Props) {
+  const [position, setPosition] = useState<{ lat: number; lng: number }>(() => {
+    if (initialLat && initialLng) return { lat: initialLat, lng: initialLng }
+    return DA_NANG_CENTER
+  })
+  const [inputValue, setInputValue] = useState(initialAddress || '')
+  const [suggestions, setSuggestions] = useState<LocationDTO[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
-  const sessionTokenRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null)
-  const autocompleteServiceRef = useRef<google.maps.places.AutocompleteService | null>(null)
-  const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null)
-  const geocoderRef = useRef<google.maps.Geocoder | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
   const debounceTimerRef = useRef<NodeJS.Timeout>()
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const [isClient, setIsClient] = useState(false)
+
+  // Memory cache
+  const cacheRef = useRef<Map<string, LocationDTO[]>>(new Map())
+  const reverseCacheRef = useRef<Map<string, LocationDTO>>(new Map())
 
   useEffect(() => {
-    if (typeof google !== 'undefined') {
-      if (!autocompleteServiceRef.current) {
-        autocompleteServiceRef.current = new google.maps.places.AutocompleteService()
-      }
-      if (!geocoderRef.current) {
-        geocoderRef.current = new google.maps.Geocoder()
-      }
-      if (!sessionTokenRef.current) {
-        sessionTokenRef.current = new google.maps.places.AutocompleteSessionToken()
-      }
+    setIsClient(true)
+    if (typeof window !== 'undefined') {
+      const L = require('leaflet')
+      delete (L.Icon.Default.prototype as any)._getIconUrl
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: '/leaflet/marker-icon-2x.png',
+        iconUrl: '/leaflet/marker-icon.png',
+        shadowUrl: '/leaflet/marker-shadow.png',
+      })
     }
   }, [])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setShowDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const reverseGeocode = useCallback(
+    async (lat: number, lng: number) => {
+      const cacheKey = `${lat},${lng}`
+      if (reverseCacheRef.current.has(cacheKey)) {
+        const cached = reverseCacheRef.current.get(cacheKey)!
+        setInputValue(cached.displayName)
+        onAddressChange({ addressText: cached.displayName, lat, lng })
+        return
+      }
+
+      try {
+        const res = await fetch(`/api/v1/geocoding/reverse?lat=${lat}&lng=${lng}`)
+        if (!res.ok) throw new Error('Reverse fetch failed')
+        const data: LocationDTO = await res.json()
+        
+        if (data && data.displayName) {
+          reverseCacheRef.current.set(cacheKey, data)
+          setInputValue(data.displayName)
+          onAddressChange({ addressText: data.displayName, lat, lng })
+        } else {
+          setInputValue('')
+          onAddressChange({ addressText: '', lat, lng })
+        }
+      } catch (err) {
+        console.error('Reverse geocode error:', err)
+        setInputValue('')
+        onAddressChange({ addressText: '', lat, lng })
+      }
+    },
+    [onAddressChange]
+  )
 
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value
     setInputValue(value)
 
-    if (!value.trim()) {
-      setPredictions([])
+    if (value.trim().length < 3) {
+      setSuggestions([])
       setShowDropdown(false)
+      setIsLoading(false)
       return
     }
 
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
 
-    debounceTimerRef.current = setTimeout(() => {
-      if (!autocompleteServiceRef.current || !sessionTokenRef.current) return
+    debounceTimerRef.current = setTimeout(async () => {
+      const q = value.trim()
+      if (cacheRef.current.has(q)) {
+        setSuggestions(cacheRef.current.get(q)!)
+        setShowDropdown(true)
+        return
+      }
 
-      autocompleteServiceRef.current.getPlacePredictions(
-        {
-          input: value,
-          sessionToken: sessionTokenRef.current,
-          componentRestrictions: { country: 'vn' },
-        },
-        (results, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-            setPredictions(results)
-            setShowDropdown(true)
-          } else {
-            setPredictions([])
-          }
-        }
-      )
-    }, 350)
+      setIsLoading(true)
+      try {
+        const res = await fetch(`/api/v1/geocoding/search?q=${encodeURIComponent(q)}`)
+        if (!res.ok) throw new Error('Search failed')
+        const data: LocationDTO[] = await res.json()
+        cacheRef.current.set(q, data)
+        setSuggestions(data)
+        setShowDropdown(true)
+      } catch (err) {
+        console.error('Autocomplete error:', err)
+        setSuggestions([])
+        setShowDropdown(true)
+      } finally {
+        setIsLoading(false)
+      }
+    }, 500)
   }, [])
 
-  const selectPrediction = useCallback((placeId: string, description: string) => {
-    if (!placesServiceRef.current) {
-      const mapDiv = document.createElement('div')
-      placesServiceRef.current = new google.maps.places.PlacesService(mapDiv)
-    }
+  const selectSuggestion = useCallback(
+    (item: LocationDTO) => {
+      const lat = item.latitude
+      const lng = item.longitude
+      setPosition({ lat, lng })
+      setInputValue(item.displayName)
+      setShowDropdown(false)
+      onAddressChange({ addressText: item.displayName, lat, lng })
+    },
+    [onAddressChange]
+  )
 
-    placesServiceRef.current.getDetails(
-      { placeId, fields: ['geometry', 'formatted_address'], sessionToken: sessionTokenRef.current || undefined },
-      (place, status) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
-          const lat = place.geometry.location.lat()
-          const lng = place.geometry.location.lng()
-          setPosition({ lat, lng })
-          setInputValue(place.formatted_address || description)
-          setShowDropdown(false)
-          onAddressChange({ addressText: place.formatted_address || description, lat, lng })
-          sessionTokenRef.current = new google.maps.places.AutocompleteSessionToken()
-        }
-      }
-    )
-  }, [onAddressChange])
+  const handleMarkerDragEnd = useCallback(
+    (lat: number, lng: number) => {
+      setPosition({ lat, lng })
+      setInputValue('Đang tải địa chỉ...')
+      reverseGeocode(lat, lng)
+    },
+    [reverseGeocode]
+  )
 
-  const reverseGeocode = useCallback((lat: number, lng: number) => {
-    if (!geocoderRef.current) return
+  const handleMapClick = useCallback(
+    (lat: number, lng: number) => {
+      setPosition({ lat, lng })
+      setInputValue('Đang tải địa chỉ...')
+      reverseGeocode(lat, lng)
+    },
+    [reverseGeocode]
+  )
 
-    geocoderRef.current.geocode({ location: { lat, lng } }, (results, status) => {
-      if (status === google.maps.GeocoderStatus.OK && results?.[0]) {
-        const addr = results[0].formatted_address
-        setInputValue(addr)
-        onAddressChange({ addressText: addr, lat, lng })
-      }
-    })
-  }, [onAddressChange])
-
-  const handleMarkerDragEnd = useCallback((e: any) => {
-    if (!e.latLng) return
-    const lat = e.latLng.lat()
-    const lng = e.latLng.lng()
-    setPosition({ lat, lng })
-    reverseGeocode(lat, lng)
-  }, [reverseGeocode])
-
-  const handleMapClick = useCallback((e: any) => {
-    if (!e.detail?.latLng) return
-    const lat = e.detail.latLng.lat
-    const lng = e.detail.latLng.lng
-    setPosition({ lat, lng })
-    reverseGeocode(lat, lng)
-  }, [reverseGeocode])
-
-  return (
-    <APIProvider apiKey={API_KEY}>
+  if (!isClient) {
+    return (
       <div className="space-y-4">
         <div className="relative">
-          <Label htmlFor="address-input">Địa chỉ nhận sân *</Label>
+          <Label htmlFor="address-input">Địa chỉ sân *</Label>
           <div className="relative mt-2">
             <MapPin className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-            <Input
-              id="address-input"
-              value={inputValue}
-              onChange={handleInputChange}
-              onFocus={() => predictions.length > 0 && setShowDropdown(true)}
-              placeholder="Nhập địa chỉ hoặc chọn trên bản đồ"
-              className="pl-10"
-            />
+            <Input id="address-input" placeholder="Đang tải bản đồ..." className="pl-10" disabled />
           </div>
-          {showDropdown && predictions.length > 0 && (
-            <Card className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto">
-              {predictions.map((pred) => (
-                <button
-                  key={pred.place_id}
-                  type="button"
-                  onClick={() => selectPrediction(pred.place_id, pred.description)}
-                  className="w-full text-left px-4 py-2 hover:bg-muted transition-colors text-sm"
-                >
-                  {pred.description}
-                </button>
-              ))}
-            </Card>
-          )}
         </div>
-
-        <div className="h-[400px] rounded-lg overflow-hidden border">
-          <Map
-            defaultCenter={VN_CENTER}
-            center={position}
-            defaultZoom={13}
-            gestureHandling="greedy"
-            disableDefaultUI={false}
-            onClick={handleMapClick}
-          >
-            <AdvancedMarker position={position} draggable onDragEnd={handleMarkerDragEnd} />
-          </Map>
+        <div className="h-[400px] rounded-lg overflow-hidden border bg-muted flex items-center justify-center">
+          Đang tải bản đồ...
         </div>
       </div>
-    </APIProvider>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="relative" ref={wrapperRef}>
+        <Label htmlFor="address-input">Địa chỉ sân *</Label>
+        <div className="relative mt-2">
+          <MapPin className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+          <Input
+            id="address-input"
+            value={inputValue}
+            onChange={handleInputChange}
+            onFocus={() => {
+              if (inputValue.length >= 3) setShowDropdown(true)
+            }}
+            placeholder={inputValue === '' ? 'Nhập tay địa chỉ (Không tìm thấy tự động)' : 'Nhập địa chỉ (VD: 45 Lê Lợi, Quận 1...)'}
+            className="pl-10"
+            autoComplete="off"
+          />
+          {isLoading && (
+            <div className="absolute right-3 top-3 text-xs text-muted-foreground">
+              Đang tìm...
+            </div>
+          )}
+        </div>
+        {showDropdown && (
+          <Card className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto">
+            {suggestions.length > 0 ? (
+              suggestions.map((item, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => selectSuggestion(item)}
+                  className="w-full text-left px-4 py-3 hover:bg-muted transition-colors text-sm border-b last:border-b-0"
+                >
+                  {item.displayName}
+                </button>
+              ))
+            ) : (
+              <div className="px-4 py-3 text-sm text-muted-foreground">
+                Không tìm thấy địa chỉ phù hợp.
+              </div>
+            )}
+          </Card>
+        )}
+      </div>
+      <p className="text-sm text-muted-foreground mt-1">Hoặc ghim vị trí trực tiếp trên bản đồ bên dưới</p>
+
+      <div className="h-[400px] rounded-lg overflow-hidden border mt-2">
+        <MapContainer center={[position.lat, position.lng]} zoom={15} style={{ height: '100%', width: '100%' }}>
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <DraggableMarkerComponent position={[position.lat, position.lng]} onDragEnd={handleMarkerDragEnd} />
+          <MapEventHandler onMapClick={handleMapClick} />
+        </MapContainer>
+      </div>
+    </div>
   )
 }

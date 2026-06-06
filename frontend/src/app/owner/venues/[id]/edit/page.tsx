@@ -9,13 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MapPin, Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { stadiumService } from "@/lib/services/stadium";
 import { SportType, StadiumResponse } from "@/types/stadium";
 import { toast } from "sonner";
+import { AddressPicker } from "@/components/AddressPicker";
 
 const updateStadiumSchema = z.object({
   stadiumName: z.string()
@@ -24,13 +25,17 @@ const updateStadiumSchema = z.object({
   address: z.string()
     .min(5, "Địa chỉ phải có ít nhất 5 ký tự")
     .max(500, "Địa chỉ không được quá 500 ký tự"),
+  latitude: z.number({ message: "Vui lòng chọn vị trí trên bản đồ" })
+    .min(-90, "Vĩ độ không hợp lệ")
+    .max(90, "Vĩ độ không hợp lệ"),
+  longitude: z.number({ message: "Vui lòng chọn vị trí trên bản đồ" })
+    .min(-180, "Kinh độ không hợp lệ")
+    .max(180, "Kinh độ không hợp lệ"),
   sportTypeId: z.number({ message: "Vui lòng chọn môn thể thao" })
     .min(1, "Vui lòng chọn môn thể thao"),
   pricePerHour: z.number({ message: "Vui lòng nhập giá" })
     .min(1000, "Giá tối thiểu là 1,000đ")
     .max(99999999.99, "Giá không được vượt quá 99,999,999.99đ"),
-  capacity: z.number({ message: "Vui lòng nhập sức chứa" })
-    .min(1, "Sức chứa phải ít nhất 1 người"),
   description: z.string().max(2000, "Mô tả không được quá 2000 ký tự").optional(),
   openTime: z.string().min(1, "Vui lòng chọn giờ mở cửa"),
   closeTime: z.string().min(1, "Vui lòng chọn giờ đóng cửa"),
@@ -59,8 +64,9 @@ export default function EditVenuePage() {
     defaultValues: {
       stadiumName: "",
       address: "",
+      latitude: 16.0544,
+      longitude: 108.2022,
       pricePerHour: 100000,
-      capacity: 10,
       description: "",
       openTime: "06:00",
       closeTime: "22:00",
@@ -90,9 +96,10 @@ export default function EditVenuePage() {
           form.reset({
             stadiumName: stadiumData.stadiumName,
             address: stadiumData.address,
+            latitude: stadiumData.latitude ?? 16.0544,
+            longitude: stadiumData.longitude ?? 108.2022,
             sportTypeId: stadiumData.sportTypeId,
             pricePerHour: stadiumData.pricePerHour,
-            capacity: stadiumData.capacity,
             description: stadiumData.description || "",
             openTime: normalizeTime(stadiumData.openTime),
             closeTime: normalizeTime(stadiumData.closeTime),
@@ -193,18 +200,24 @@ export default function EditVenuePage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="address">Địa chỉ *</Label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                  <Textarea
-                    {...form.register("address")}
-                    id="address"
-                    className="pl-10 min-h-[80px]"
-                    placeholder="Nhập địa chỉ đầy đủ"
-                  />
-                </div>
+                <AddressPicker
+                  initialAddress={stadium.address}
+                  initialLat={stadium.latitude}
+                  initialLng={stadium.longitude}
+                  onAddressChange={(data) => {
+                    form.setValue("address", data.addressText, { shouldValidate: true });
+                    form.setValue("latitude", data.lat, { shouldValidate: true });
+                    form.setValue("longitude", data.lng, { shouldValidate: true });
+                  }}
+                />
                 {form.formState.errors.address && (
                   <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>
+                )}
+                {form.formState.errors.latitude && (
+                  <p className="text-sm text-destructive">{form.formState.errors.latitude.message}</p>
+                )}
+                {form.formState.errors.longitude && (
+                  <p className="text-sm text-destructive">{form.formState.errors.longitude.message}</p>
                 )}
               </div>
 
@@ -233,19 +246,6 @@ export default function EditVenuePage() {
                   />
                   {form.formState.errors.pricePerHour && (
                     <p className="text-sm text-destructive">{form.formState.errors.pricePerHour.message}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="capacity">Sức chứa (người) *</Label>
-                  <Input
-                    {...form.register("capacity", { valueAsNumber: true })}
-                    id="capacity"
-                    type="number"
-                    min="1"
-                  />
-                  {form.formState.errors.capacity && (
-                    <p className="text-sm text-destructive">{form.formState.errors.capacity.message}</p>
                   )}
                 </div>
               </div>
