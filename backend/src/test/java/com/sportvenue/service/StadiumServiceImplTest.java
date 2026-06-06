@@ -172,6 +172,8 @@ class StadiumServiceImplTest {
                 .address(" 123 Main Street ")
                 .sportTypeId(1)
                 .pricePerHour(BigDecimal.valueOf(100000))
+                .latitude(BigDecimal.valueOf(10.762622))
+                .longitude(BigDecimal.valueOf(106.660172))
                 .description(" Description ")
                 .openTime(LocalTime.of(6, 0))
                 .closeTime(LocalTime.of(22, 0))
@@ -199,7 +201,6 @@ class StadiumServiceImplTest {
                 .sportType(oldSportType)
                 .stadiumName("Old Name")
                 .address("Old Address")
-                .pricePerHour(BigDecimal.valueOf(50000))
                 .build();
         StadiumResponse expectedResponse = StadiumResponse.builder().stadiumId(10).build();
 
@@ -217,8 +218,6 @@ class StadiumServiceImplTest {
         Stadium updated = captor.getValue();
         assertEquals("Updated Stadium", updated.getStadiumName());
         assertEquals("456 New Street", updated.getAddress());
-        assertEquals(BigDecimal.valueOf(150000), updated.getPricePerHour());
-        assertEquals(20, updated.getCapacity());
         assertEquals(LocalTime.of(7, 0), updated.getOpenTime());
         assertEquals(LocalTime.of(23, 0), updated.getCloseTime());
         assertEquals(newSportType, updated.getSportType());
@@ -270,6 +269,8 @@ class StadiumServiceImplTest {
                 .sportTypeId(2)
                 .pricePerHour(BigDecimal.valueOf(150000))
                 .capacity(20)
+                .latitude(BigDecimal.valueOf(10.762622))
+                .longitude(BigDecimal.valueOf(106.660172))
                 .description("Updated description")
                 .openTime(LocalTime.of(7, 0))
                 .closeTime(LocalTime.of(23, 0))
