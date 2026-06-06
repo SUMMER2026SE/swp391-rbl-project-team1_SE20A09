@@ -80,7 +80,7 @@ function SearchPageContent() {
     const params = new URLSearchParams()
     
     Object.entries(debouncedFilters).forEach(([key, value]) => {
-      if (value !== undefined && value !== '' && key !== 'amenityIds') {
+      if (value !== undefined && value !== null && value !== '' && key !== 'amenityIds') {
         params.append(key, String(value))
       }
     })

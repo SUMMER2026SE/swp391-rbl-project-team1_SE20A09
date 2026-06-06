@@ -46,7 +46,7 @@ export function FilterModal({ filters, amenitiesList, totalResults, onFilterChan
             <h4 className="font-bold text-lg mb-4 flex justify-between items-end">
               <span>Khoảng giá</span>
               <span className="text-primary text-sm">
-                {filters.minPrice! / 1000}k - {filters.maxPrice! / 1000}k
+                {(filters.minPrice ?? 0) / 1000}k - {(filters.maxPrice ?? 1000000) / 1000}k
               </span>
             </h4>
             <div className="px-2 pt-4 pb-2">

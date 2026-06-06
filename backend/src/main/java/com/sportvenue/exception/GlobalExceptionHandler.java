@@ -75,8 +75,13 @@ public class GlobalExceptionHandler {
             bindingResult = ((org.springframework.validation.BindException) ex).getBindingResult();
         }
 
-        List<String> errors = bindingResult != null ? bindingResult.getFieldErrors().stream()
-                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+        List<String> errors = bindingResult != null ? bindingResult.getAllErrors().stream()
+                .map(error -> {
+                    if (error instanceof org.springframework.validation.FieldError) {
+                        return ((org.springframework.validation.FieldError) error).getField() + ": " + error.getDefaultMessage();
+                    }
+                    return error.getObjectName() + ": " + error.getDefaultMessage();
+                })
                 .toList() : List.of(ex.getMessage());
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
