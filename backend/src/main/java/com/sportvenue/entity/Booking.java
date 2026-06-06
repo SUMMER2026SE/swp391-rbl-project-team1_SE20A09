@@ -91,9 +91,9 @@ public class Booking implements Serializable {
     @Column(name = "address_text", length = 255)
     private String addressText;
 
-    @Column(name = "latitude", precision = 10, scale = 6)
-    private BigDecimal latitude;
+    @Column(name = "latitude")
+    private Double latitude;
 
-    @Column(name = "longitude", precision = 10, scale = 6)
-    private BigDecimal longitude;
+    @Column(name = "longitude")
+    private Double longitude;
 }

@@ -35,12 +35,12 @@ public class CreateBookingRequest {
     @NotNull(message = "Latitude is required")
     @DecimalMin(value = "-90.0", message = "Latitude must be >= -90")
     @DecimalMax(value = "90.0", message = "Latitude must be <= 90")
-    @Digits(integer = 2, fraction = 6, message = "Invalid latitude format")
+    @Digits(integer = 3, fraction = 14, message = "Invalid latitude format")
     private BigDecimal latitude;
 
     @NotNull(message = "Longitude is required")
     @DecimalMin(value = "-180.0", message = "Longitude must be >= -180")
     @DecimalMax(value = "180.0", message = "Longitude must be <= 180")
-    @Digits(integer = 3, fraction = 6, message = "Invalid longitude format")
+    @Digits(integer = 3, fraction = 14, message = "Invalid longitude format")
     private BigDecimal longitude;
 }

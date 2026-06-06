@@ -34,7 +34,7 @@ public class StadiumSpecification {
             }
 
             addKeywordPredicate(predicates, cb, root, req.getKeyword());
-            addBasicFilters(predicates, cb, root, req);
+            addBasicFilters(predicates, cb, root, query, req);
             addTimeSlotPredicate(predicates, cb, root, query, req);
             addLocationPredicate(predicates, cb, root, req);
             addAmenitiesPredicate(predicates, cb, root, query, req.getAmenityIds());
@@ -52,18 +52,30 @@ public class StadiumSpecification {
         }
     }
 
-    private static void addBasicFilters(List<Predicate> preds, CriteriaBuilder cb, Root<Stadium> root, StadiumSearchRequest req) {
+    private static void addBasicFilters(List<Predicate> preds, CriteriaBuilder cb, Root<Stadium> root, CriteriaQuery<?> query, StadiumSearchRequest req) {
         if (req.getSportTypeId() != null) {
             preds.add(cb.equal(root.get("sportType").get("sportTypeId"), req.getSportTypeId()));
         }
         if (StringUtils.hasText(req.getAddress())) {
             preds.add(cb.like(cb.lower(root.get("address")), "%" + req.getAddress().toLowerCase() + "%"));
         }
-        if (req.getMinPrice() != null) {
-            preds.add(cb.greaterThanOrEqualTo(root.get("pricePerHour"), req.getMinPrice()));
-        }
-        if (req.getMaxPrice() != null) {
-            preds.add(cb.lessThanOrEqualTo(root.get("pricePerHour"), req.getMaxPrice()));
+        if (req.getMinPrice() != null || req.getMaxPrice() != null) {
+            Subquery<Integer> priceSubquery = query.subquery(Integer.class);
+            Root<TimeSlot> priceSlotRoot = priceSubquery.from(TimeSlot.class);
+            priceSubquery.select(priceSlotRoot.get("stadium").get("stadiumId"));
+            
+            List<Predicate> pricePreds = new ArrayList<>();
+            pricePreds.add(cb.equal(priceSlotRoot.get("stadium").get("stadiumId"), root.get("stadiumId")));
+            
+            if (req.getMinPrice() != null) {
+                pricePreds.add(cb.greaterThanOrEqualTo(priceSlotRoot.get("pricePerSlot"), req.getMinPrice()));
+            }
+            if (req.getMaxPrice() != null) {
+                pricePreds.add(cb.lessThanOrEqualTo(priceSlotRoot.get("pricePerSlot"), req.getMaxPrice()));
+            }
+            
+            priceSubquery.where(cb.and(pricePreds.toArray(new Predicate[0])));
+            preds.add(cb.exists(priceSubquery));
         }
     }
 

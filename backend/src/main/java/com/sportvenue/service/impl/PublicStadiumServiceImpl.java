@@ -123,8 +123,6 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 .stadiumName(stadium.getStadiumName())
                 .description(stadium.getDescription())
                 .address(stadium.getAddress())
-                .pricePerHour(stadium.getPricePerHour())
-                .capacity(stadium.getCapacity())
                 .averageRating(stadium.getAverageRating())
                 .latitude(stadium.getLatitude())
                 .longitude(stadium.getLongitude())
