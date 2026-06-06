@@ -19,8 +19,6 @@ public class StadiumResponse {
     private String description;
     private Integer sportTypeId;
     private String address;
-    private BigDecimal pricePerHour;
-    private Integer capacity;
     private BigDecimal averageRating;
     
     // Coordinates
@@ -34,6 +32,8 @@ public class StadiumResponse {
     
     private LocalTime openTime; 
     private LocalTime closeTime; 
+    private BigDecimal pricePerHour;
+    private Integer capacity;
     private String stadiumStatus; 
     
     private List<AmenityResponse> amenities;

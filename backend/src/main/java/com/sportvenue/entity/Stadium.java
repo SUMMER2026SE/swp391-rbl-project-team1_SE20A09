@@ -75,14 +75,6 @@ public class Stadium implements Serializable {
     @Column(name = "address", nullable = false, columnDefinition = "TEXT")
     private String address;
 
-    /** Giá thuê mỗi giờ (VNĐ). */
-    @Column(name = "price_per_hour", nullable = false, precision = 10, scale = 2)
-    private BigDecimal pricePerHour;
-
-    /** Sức chứa tối đa của sân (số người). */
-    @Column(name = "capacity")
-    private Integer capacity;
-
     /** Giờ mở cửa hàng ngày. */
     @Column(name = "open_time")
     private LocalTime openTime;
@@ -90,6 +82,14 @@ public class Stadium implements Serializable {
     /** Giờ đóng cửa hàng ngày. */
     @Column(name = "close_time")
     private LocalTime closeTime;
+
+    /** Giá thuê cơ bản mỗi giờ. */
+    @Column(name = "price_per_hour", precision = 10, scale = 2)
+    private BigDecimal pricePerHour;
+
+    /** Sức chứa tối đa (số người). */
+    @Column(name = "capacity")
+    private Integer capacity;
 
     /** Trạng thái hoạt động của sân. */
     @Enumerated(EnumType.STRING)
