@@ -16,7 +16,6 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -75,9 +74,15 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                             calculateHaversineDistance(request.getUserLat(), request.getUserLng(), s1.getLatitude(), s1.getLongitude()) : null;
                     Double d2 = (s2.getLatitude() != null && s2.getLongitude() != null) ?
                             calculateHaversineDistance(request.getUserLat(), request.getUserLng(), s2.getLatitude(), s2.getLongitude()) : null;
-                    if (d1 == null && d2 == null) return 0;
-                    if (d1 == null) return 1;
-                    if (d2 == null) return -1;
+                    if (d1 == null && d2 == null) {
+                        return 0;
+                    }
+                    if (d1 == null) {
+                        return 1;
+                    }
+                    if (d2 == null) {
+                        return -1;
+                    }
                     return d1.compareTo(d2);
                 })
                 .toList();
