@@ -22,7 +22,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 
 /**
  * Service xử lý nghiệp vụ quản lý đặt sân cho Owner.
@@ -196,7 +195,9 @@ public class OwnerBookingService {
     }
 
     private String maskEmail(String email) {
-        if (email == null || !email.contains("@")) return email;
+        if (email == null || !email.contains("@")) {
+            return email;
+        }
         String[] parts = email.split("@");
         String name = parts[0];
         if (name.length() > 3) {
@@ -208,7 +209,9 @@ public class OwnerBookingService {
     }
 
     private String maskPhone(String phone) {
-        if (phone == null || phone.length() < 7) return phone;
+        if (phone == null || phone.length() < 7) {
+            return phone;
+        }
         return phone.substring(0, phone.length() - 4) + "****";
     }
 }
