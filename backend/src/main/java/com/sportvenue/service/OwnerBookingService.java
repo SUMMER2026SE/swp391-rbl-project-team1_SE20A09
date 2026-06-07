@@ -68,22 +68,9 @@ public class OwnerBookingService {
                     .map(this::toBookingResponse);
         }
 
-        // Lấy tất cả sân của owner rồi query booking
-        List<Stadium> stadiums = stadiumRepository
-                .findByOwnerOwnerIdAndStadiumStatusNot(
-                        owner.getOwnerId(),
-                        com.sportvenue.entity.enums.StadiumStatus.CLOSED);
-        List<Integer> stadiumIds = stadiums.stream()
-                .map(Stadium::getStadiumId)
-                .toList();
-
-        if (stadiumIds.isEmpty()) {
-            return Page.empty(pageable);
-        }
-
+        // Lấy tất cả sân của owner rồi query booking (đã fix N+1)
         return bookingRepository
-                .findByStadiumStadiumIdInOrderByBookingDateDesc(
-                        stadiumIds, status, pageable)
+                .findByOwnerIdAndStatus(owner.getOwnerId(), status, pageable)
                 .map(this::toBookingResponse);
     }
 
@@ -101,7 +88,7 @@ public class OwnerBookingService {
             BookingActionRequest request) {
 
         Owner owner = findOwnerByUserId(userId);
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy đơn đặt sân: " + bookingId));
 
@@ -127,14 +114,12 @@ public class OwnerBookingService {
     private BookingResponse confirmBooking(Booking booking) {
         booking.setBookingStatus(BookingStatus.CONFIRMED);
 
-        // Cập nhật slot thành Booked
+        // Cập nhật slot thành Booked (Tự động flush nhờ Dirty Checking của JPA)
         TimeSlot slot = booking.getSlot();
         slot.setSlotStatus(SlotStatus.BOOKED);
-        timeSlotRepository.save(slot);
 
-        Booking saved = bookingRepository.save(booking);
-        log.info("✅ Booking #{} đã được xác nhận", saved.getBookingId());
-        return toBookingResponse(saved);
+        log.info("✅ Booking #{} đã được xác nhận", booking.getBookingId());
+        return toBookingResponse(booking);
     }
 
     private BookingResponse rejectBooking(Booking booking, String reason) {
@@ -148,15 +133,13 @@ public class OwnerBookingService {
         booking.setBookingStatus(BookingStatus.CANCELLED);
         booking.setNote("Lý do từ chối: " + reason);
 
-        // Giải phóng slot cho người khác đặt
+        // Giải phóng slot cho người khác đặt (Tự động flush nhờ Dirty Checking)
         TimeSlot slot = booking.getSlot();
         slot.setSlotStatus(SlotStatus.AVAILABLE);
-        timeSlotRepository.save(slot);
 
-        Booking saved = bookingRepository.save(booking);
         log.info("❌ Booking #{} đã bị từ chối. Lý do: {}",
-                saved.getBookingId(), reason);
-        return toBookingResponse(saved);
+                booking.getBookingId(), reason);
+        return toBookingResponse(booking);
     }
 
     // ── Helper methods ────────────────────────────────────────────
@@ -189,8 +172,8 @@ public class OwnerBookingService {
                         .userId(customer.getUserId())
                         .fullName(customer.getLastName()
                                 + " " + customer.getFirstName())
-                        .email(customer.getEmail())
-                        .phoneNumber(customer.getPhoneNumber())
+                        .email(maskEmail(customer.getEmail()))
+                        .phoneNumber(maskPhone(customer.getPhoneNumber()))
                         .avatarUrl(customer.getAvatarUrl())
                         .build())
                 .stadium(BookingResponse.StadiumInfo.builder()
@@ -212,4 +195,20 @@ public class OwnerBookingService {
                 .build();
     }
 
+    private String maskEmail(String email) {
+        if (email == null || !email.contains("@")) return email;
+        String[] parts = email.split("@");
+        String name = parts[0];
+        if (name.length() > 3) {
+            name = name.substring(0, 3) + "***";
+        } else {
+            name = "***";
+        }
+        return name + "@" + parts[1];
+    }
+
+    private String maskPhone(String phone) {
+        if (phone == null || phone.length() < 7) return phone;
+        return phone.substring(0, phone.length() - 4) + "****";
+    }
 }
