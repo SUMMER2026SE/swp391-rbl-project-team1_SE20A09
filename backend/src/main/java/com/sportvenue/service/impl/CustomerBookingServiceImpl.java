@@ -3,6 +3,7 @@ package com.sportvenue.service.impl;
 import com.sportvenue.dto.booking.CustomerBookingHistoryDto;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.entity.Booking;
+import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.exception.ResourceNotFoundException;
