@@ -3,18 +3,35 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Flame } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { VenueCard } from "@/components/landing/VenueCard";
 import { SportCategoryChips } from "@/components/landing/home/SportCategoryChips";
-import { FEATURED_VENUES } from "@/lib/home-data";
+import { searchStadiums } from "@/lib/api/stadium";
 
 export function FeaturedVenuesSection() {
   const [sportFilter, setSportFilter] = useState("all");
 
+  const { data, isLoading } = useQuery({
+    queryKey: ["featured-venues"],
+    queryFn: () => searchStadiums({ size: 6, page: 0 }),
+    staleTime: 60_000,
+  });
+
+  const venues = data?.content ?? [];
+
   const filtered = useMemo(() => {
-    if (sportFilter === "all") return FEATURED_VENUES;
-    return FEATURED_VENUES.filter((v) => v.sportKey === sportFilter);
-  }, [sportFilter]);
+    if (sportFilter === "all") return venues;
+    // API trả về sportName tiếng Anh ("Football"), map sang key để so sánh
+    const sportKeyMap: Record<string, string> = {
+      Football: "football",
+      Badminton: "badminton",
+      Basketball: "basketball",
+      Tennis: "tennis",
+      Pickleball: "pickleball",
+    };
+    return venues.filter((v) => sportKeyMap[v.sportName] === sportFilter);
+  }, [sportFilter, venues]);
 
   return (
     <section id="featured-venues" className="py-20 md:py-28">
@@ -42,15 +59,29 @@ export function FeaturedVenuesSection() {
 
         <SportCategoryChips active={sportFilter} onChange={setSportFilter} />
 
-        {filtered.length > 0 ? (
+        {isLoading ? (
+          <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-80 animate-pulse rounded-2xl bg-muted" />
+            ))}
+          </div>
+        ) : filtered.length > 0 ? (
           <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((venue, index) => (
               <div
-                key={venue.id}
+                key={venue.stadiumId}
                 className="animate-fade-in-up"
                 style={{ animationDelay: `${index * 80}ms` }}
               >
-                <VenueCard {...venue} />
+                <VenueCard
+                  id={venue.stadiumId}
+                  image={venue.firstImageUrl ?? "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800"}
+                  name={venue.stadiumName}
+                  sportType={venue.sportName}
+                  price={venue.pricePerHour}
+                  rating={venue.averageRating ?? 5}
+                  location={venue.address}
+                />
               </div>
             ))}
           </div>

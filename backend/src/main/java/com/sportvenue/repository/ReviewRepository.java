@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -30,4 +31,8 @@ public interface ReviewRepository extends JpaRepository<Review, Integer> {
     Optional<Double> calculateAverageRating(@Param("stadiumId") Integer stadiumId);
 
     long countByStadiumStadiumId(Integer stadiumId);
+
+    /** Đếm gộp số review theo danh sách sân — tránh N+1 khi render trang chủ. */
+    @Query("SELECT r.stadium.stadiumId, COUNT(r) FROM Review r WHERE r.stadium.stadiumId IN :stadiumIds GROUP BY r.stadium.stadiumId")
+    List<Object[]> countReviewsByStadiumIdIn(@Param("stadiumIds") List<Integer> stadiumIds);
 }

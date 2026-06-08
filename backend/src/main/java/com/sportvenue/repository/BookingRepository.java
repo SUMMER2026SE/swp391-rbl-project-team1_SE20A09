@@ -65,6 +65,27 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             """)
     List<Booking> findCompletedByUserId(@Param("userId") Integer userId);
 
+    /** Tổng số phút chơi từ các booking hoàn thành — dùng cho PersonalStats. */
+    @Query("""
+            SELECT COALESCE(SUM(FUNCTION('TIMESTAMPDIFF', MINUTE, b.slot.startTime, b.slot.endTime)), 0)
+            FROM Booking b
+            WHERE b.user.userId = :userId
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
+            AND b.slot IS NOT NULL
+            """)
+    long sumCompletedPlayMinutes(@Param("userId") Integer userId);
+
+    /** Môn thể thao chơi nhiều nhất — dùng cho PersonalStats. Returns [sportName, count]. */
+    @Query("""
+            SELECT b.stadium.sportType.sportName, COUNT(b)
+            FROM Booking b
+            WHERE b.user.userId = :userId
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
+            GROUP BY b.stadium.sportType.sportName
+            ORDER BY COUNT(b) DESC
+            """)
+    List<Object[]> findTopSportByUserId(@Param("userId") Integer userId, Pageable pageable);
+
     /** Lấy danh sách đặt sân của một sân — dùng cho Owner quản lý. */
     @EntityGraph(attributePaths = {"user", "slot"})
     Page<Booking> findByStadiumStadiumIdOrderByBookingDateDesc(Integer stadiumId, Pageable pageable);
