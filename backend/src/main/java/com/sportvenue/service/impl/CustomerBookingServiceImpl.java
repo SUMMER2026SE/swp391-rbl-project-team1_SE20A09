@@ -3,7 +3,6 @@ package com.sportvenue.service.impl;
 import com.sportvenue.dto.booking.CustomerBookingHistoryDto;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.entity.Booking;
-import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.exception.ResourceNotFoundException;
@@ -61,8 +60,8 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
                 String.valueOf(booking.getBookingId()),
                 "BK" + String.format("%06d", booking.getBookingId()),
                 booking.getStadium().getStadiumName(),
-                StadiumUtils.toSportLabel(booking.getStadium().getSportType().getSportName()),
-                StadiumUtils.resolveImageUrl(booking.getStadium()),
+                toSportLabel(booking.getStadium().getSportType().getSportName()),
+                resolveImageUrl(booking.getStadium()),
                 date,
                 time,
                 booking.getStadium().getAddress(),
@@ -80,4 +79,11 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
         };
     }
 
+    private String resolveImageUrl(Stadium stadium) {
+        return StadiumUtils.resolveImageUrl(stadium);
+    }
+
+    private String toSportLabel(String sportName) {
+        return StadiumUtils.toSportLabel(sportName);
+    }
 }

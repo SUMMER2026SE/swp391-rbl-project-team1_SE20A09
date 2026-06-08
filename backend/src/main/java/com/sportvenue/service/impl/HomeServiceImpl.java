@@ -134,7 +134,7 @@ public class HomeServiceImpl implements HomeService {
         return new UpcomingBookingDto(
                 String.valueOf(booking.getBookingId()),
                 booking.getStadium().getStadiumName(),
-                StadiumUtils.toSportLabel(booking.getStadium().getSportType().getSportName()),
+                toSportLabel(booking.getStadium().getSportType().getSportName()),
                 booking.getStadium().getAddress(),
                 date,
                 time,
@@ -153,7 +153,7 @@ public class HomeServiceImpl implements HomeService {
         return new VenueSummaryDto(
                 stadium.getStadiumId(),
                 stadium.getStadiumName(),
-                StadiumUtils.toSportLabel(stadium.getSportType().getSportName()),
+                toSportLabel(stadium.getSportType().getSportName()),
                 toSportKey(stadium.getSportType().getSportName()),
                 stadium.getPricePerHour(),
                 rating,
@@ -162,6 +162,10 @@ public class HomeServiceImpl implements HomeService {
                 StadiumUtils.resolveImageUrl(stadium),
                 saved
         );
+    }
+
+    private String toSportLabel(String sportName) {
+        return StadiumUtils.toSportLabel(sportName);
     }
 
     private String toSportKey(String sportName) {
