@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 import com.sportvenue.exception.BadRequestException;
 import lombok.extern.slf4j.Slf4j;
@@ -68,8 +67,7 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 .map(Stadium::getStadiumId)
                 .toList();
 
-        List<Stadium> detailedStadiums = StreamSupport.stream(stadiumRepository.findAllById(stadiumIds).spliterator(), false)
-                .toList();
+        List<Stadium> detailedStadiums = stadiumRepository.findAllById(stadiumIds);
 
         // Map them back to keep the original paginated order (or apply distance sort)
         Map<Integer, Stadium> stadiumMap = detailedStadiums.stream()

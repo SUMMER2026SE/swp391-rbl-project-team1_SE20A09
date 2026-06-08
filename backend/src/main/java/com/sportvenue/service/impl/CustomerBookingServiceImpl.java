@@ -4,7 +4,6 @@ import com.sportvenue.dto.booking.CustomerBookingHistoryDto;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.Stadium;
-import com.sportvenue.entity.StadiumImage;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.exception.ResourceNotFoundException;
@@ -12,8 +11,8 @@ import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.CustomerBookingService;
+import com.sportvenue.util.StadiumUtils;
 import java.time.format.DateTimeFormatter;
-import java.util.Comparator;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -62,8 +61,8 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
                 String.valueOf(booking.getBookingId()),
                 "BK" + String.format("%06d", booking.getBookingId()),
                 booking.getStadium().getStadiumName(),
-                toSportLabel(booking.getStadium().getSportType().getSportName()),
-                resolveImageUrl(booking.getStadium()),
+                StadiumUtils.toSportLabel(booking.getStadium().getSportType().getSportName()),
+                StadiumUtils.resolveImageUrl(booking.getStadium()),
                 date,
                 time,
                 booking.getStadium().getAddress(),
@@ -81,25 +80,4 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
         };
     }
 
-    private String resolveImageUrl(Stadium stadium) {
-        if (stadium.getImages() == null || stadium.getImages().isEmpty()) {
-            return "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800";
-        }
-        return stadium.getImages().stream()
-                .sorted(Comparator.comparing(StadiumImage::getUploadedAt))
-                .map(StadiumImage::getImageUrl)
-                .findFirst()
-                .orElse("https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800");
-    }
-
-    private String toSportLabel(String sportName) {
-        return switch (sportName) {
-            case "Football" -> "Bóng đá";
-            case "Badminton" -> "Cầu lông";
-            case "Basketball" -> "Bóng rổ";
-            case "Tennis" -> "Quần vợt";
-            case "Pickleball" -> "Pickleball";
-            default -> sportName;
-        };
-    }
 }

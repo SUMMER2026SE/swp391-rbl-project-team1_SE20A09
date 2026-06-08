@@ -6,7 +6,6 @@ import com.sportvenue.dto.home.UpcomingBookingDto;
 import com.sportvenue.dto.home.VenueSummaryDto;
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.Stadium;
-import com.sportvenue.entity.StadiumImage;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.UserFavoriteStadium;
 import com.sportvenue.entity.enums.BookingStatus;
@@ -19,11 +18,11 @@ import com.sportvenue.repository.UserFavoriteStadiumRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.HomeService;
+import com.sportvenue.util.StadiumUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -135,12 +134,12 @@ public class HomeServiceImpl implements HomeService {
         return new UpcomingBookingDto(
                 String.valueOf(booking.getBookingId()),
                 booking.getStadium().getStadiumName(),
-                toSportLabel(booking.getStadium().getSportType().getSportName()),
+                StadiumUtils.toSportLabel(booking.getStadium().getSportType().getSportName()),
                 booking.getStadium().getAddress(),
                 date,
                 time,
                 status,
-                resolveImageUrl(booking.getStadium())
+                StadiumUtils.resolveImageUrl(booking.getStadium())
         );
     }
 
@@ -154,37 +153,15 @@ public class HomeServiceImpl implements HomeService {
         return new VenueSummaryDto(
                 stadium.getStadiumId(),
                 stadium.getStadiumName(),
-                toSportLabel(stadium.getSportType().getSportName()),
+                StadiumUtils.toSportLabel(stadium.getSportType().getSportName()),
                 toSportKey(stadium.getSportType().getSportName()),
                 stadium.getPricePerHour(),
                 rating,
                 reviewCount,
                 stadium.getAddress(),
-                resolveImageUrl(stadium),
+                StadiumUtils.resolveImageUrl(stadium),
                 saved
         );
-    }
-
-    private String resolveImageUrl(Stadium stadium) {
-        if (stadium.getImages() == null || stadium.getImages().isEmpty()) {
-            return "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800";
-        }
-        return stadium.getImages().stream()
-                .sorted(Comparator.comparing(StadiumImage::getUploadedAt))
-                .map(StadiumImage::getImageUrl)
-                .findFirst()
-                .orElse("https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800");
-    }
-
-    private String toSportLabel(String sportName) {
-        return switch (sportName) {
-            case "Football" -> "Bóng đá";
-            case "Badminton" -> "Cầu lông";
-            case "Basketball" -> "Bóng rổ";
-            case "Tennis" -> "Quần vợt";
-            case "Pickleball" -> "Pickleball";
-            default -> sportName;
-        };
     }
 
     private String toSportKey(String sportName) {

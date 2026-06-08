@@ -66,13 +66,13 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     List<Booking> findCompletedByUserId(@Param("userId") Integer userId);
 
     /** Tổng số phút chơi từ các booking hoàn thành — dùng cho PersonalStats. */
-    @Query("""
-            SELECT COALESCE(SUM(FUNCTION('TIMESTAMPDIFF', MINUTE, b.slot.startTime, b.slot.endTime)), 0)
-            FROM Booking b
-            WHERE b.user.userId = :userId
-            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
-            AND b.slot IS NOT NULL
-            """)
+    @Query(value = """
+            SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (s.end_time - s.start_time)) / 60), 0)
+            FROM bookings b
+            JOIN time_slots s ON b.slot_id = s.slot_id
+            WHERE b.user_id = :userId
+            AND b.booking_status = 'COMPLETED'
+            """, nativeQuery = true)
     long sumCompletedPlayMinutes(@Param("userId") Integer userId);
 
     /** Môn thể thao chơi nhiều nhất — dùng cho PersonalStats. Returns [sportName, count]. */
