@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { MapPin, Star, Flame } from 'lucide-react'
@@ -12,7 +13,8 @@ export function StadiumCard({ stadium, isUrgent = false }: StadiumCardProps) {
   const mockReviewCount = Math.floor(Math.random() * 200) + 50 // Giả lập số lượng đánh giá
 
   return (
-    <Card className="overflow-hidden bg-card hover:shadow-2xl transition-all duration-300 border-gray-100 dark:border-border group cursor-pointer flex flex-col h-full rounded-2xl">
+    <Link href={`/venues/${stadium.stadiumId}`}>
+      <Card className="overflow-hidden bg-card hover:shadow-2xl transition-all duration-300 border-gray-100 dark:border-border group cursor-pointer flex flex-col h-full rounded-2xl">
       <div className="relative h-64 w-full bg-muted overflow-hidden">
         {stadium.firstImageUrl ? (
           <img
@@ -81,9 +83,10 @@ export function StadiumCard({ stadium, isUrgent = false }: StadiumCardProps) {
           </div>
         </div>
         <Button className="rounded-xl px-6 py-6 font-bold bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95">
-          Đặt Ngay
+          Xem Chi Tiết
         </Button>
       </CardFooter>
     </Card>
+    </Link>
   )
 }

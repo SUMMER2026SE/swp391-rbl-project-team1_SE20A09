@@ -50,7 +50,7 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
     /** Đếm sân theo owner — dùng cho Dashboard. */
     long countByOwnerOwnerIdAndStadiumStatus(Integer ownerId, StadiumStatus status);
 
-    @EntityGraph(attributePaths = {"sportType", "images", "owner", "accessories"})
+    @EntityGraph(attributePaths = {"sportType", "images", "owner", "owner.user", "amenities"})
     Optional<Stadium> findWithDetailsByStadiumId(Integer stadiumId);
 
     @EntityGraph(attributePaths = {"sportType", "images"})

@@ -1,10 +1,16 @@
 package com.sportvenue.service.impl;
 
 import com.sportvenue.dto.request.StadiumSearchRequest;
+import com.sportvenue.dto.response.AccessoryResponse;
 import com.sportvenue.dto.response.AmenityResponse;
 import com.sportvenue.dto.response.PageResponse;
+import com.sportvenue.dto.response.StadiumDetailResponse;
 import com.sportvenue.dto.response.StadiumResponse;
+import com.sportvenue.dto.response.TimeSlotResponse;
+import com.sportvenue.entity.Review;
 import com.sportvenue.entity.Stadium;
+import com.sportvenue.exception.ResourceNotFoundException;
+import com.sportvenue.repository.ReviewRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.specification.StadiumSpecification;
 import com.sportvenue.service.PublicStadiumService;
@@ -31,6 +37,7 @@ import lombok.extern.slf4j.Slf4j;
 public class PublicStadiumServiceImpl implements PublicStadiumService {
 
     private final StadiumRepository stadiumRepository;
+    private final ReviewRepository reviewRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -148,5 +155,115 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                         * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StadiumDetailResponse getStadiumDetail(Integer stadiumId) {
+        log.info("Fetching detail for stadium ID: {}", stadiumId);
+        
+        Stadium stadium = stadiumRepository.findWithDetailsByStadiumId(stadiumId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sân với ID " + stadiumId + " không tồn tại"));
+        
+        Pageable reviewPage = PageRequest.of(0, 5);
+        List<Review> recentReviews = reviewRepository
+                .findByStadiumStadiumIdOrderByCreatedAtDesc(stadiumId, reviewPage)
+                .getContent();
+        
+        long totalReviews = reviewRepository.countByStadiumStadiumId(stadiumId);
+        
+        return StadiumDetailResponse.builder()
+                .stadiumId(stadium.getStadiumId())
+                .stadiumName(stadium.getStadiumName())
+                .description(stadium.getDescription())
+                .address(stadium.getAddress())
+                .pricePerHour(stadium.getPricePerHour())
+                .capacity(stadium.getCapacity())
+                .averageRating(stadium.getAverageRating())
+                .totalReviews(totalReviews)
+                .latitude(stadium.getLatitude())
+                .longitude(stadium.getLongitude())
+                .sportName(stadium.getSportType().getSportName())
+                .imageUrls(stadium.getImages().stream()
+                        .map(img -> img.getImageUrl())
+                        .toList())
+                .openTime(stadium.getOpenTime())
+                .closeTime(stadium.getCloseTime())
+                .stadiumStatus(stadium.getStadiumStatus() != null ? stadium.getStadiumStatus().name() : null)
+                .amenities(stadium.getAmenities().stream()
+                        .map(a -> AmenityResponse.builder()
+                                .amenityId(a.getAmenityId())
+                                .name(a.getName())
+                                .icon(a.getIcon())
+                                .build())
+                        .toList())
+                .accessories(stadium.getAccessories().stream()
+                        .map(acc -> AccessoryResponse.builder()
+                                .accessoryId(acc.getAccessoryId())
+                                .name(acc.getName())
+                                .pricePerUnit(acc.getPricePerUnit())
+                                .quantity(acc.getQuantity())
+                                .build())
+                        .toList())
+                .timeSlots(stadium.getTimeSlots().stream()
+                        .map(ts -> TimeSlotResponse.builder()
+                                .slotId(ts.getSlotId())
+                                .startTime(ts.getStartTime())
+                                .endTime(ts.getEndTime())
+                                .slotStatus(ts.getSlotStatus() != null ? ts.getSlotStatus().name() : null)
+                                .build())
+                        .toList())
+                .owner(StadiumDetailResponse.OwnerInfoDto.builder()
+                        .ownerId(stadium.getOwner().getOwnerId())
+                        .ownerName(stadium.getOwner().getUser().getFullName())
+                        .phoneNumber(stadium.getOwner().getUser().getPhoneNumber())
+                        .build())
+                .recentReviews(recentReviews.stream()
+                        .map(r -> StadiumDetailResponse.ReviewDto.builder()
+                                .reviewId(r.getReviewId())
+                                .userName(r.getUser().getFullName())
+                                .userAvatar(r.getUser().getAvatarUrl())
+                                .ratingScore(r.getRatingScore())
+                                .comment(r.getComment())
+                                .ownerResponse(r.getOwnerResponse())
+                                .createdAt(r.getCreatedAt())
+                                .build())
+                        .toList())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<StadiumDetailResponse.ReviewDto> getStadiumReviews(Integer stadiumId, int page, int size) {
+        log.info("Fetching reviews for stadium ID: {}, page: {}, size: {}", stadiumId, page, size);
+
+        if (!stadiumRepository.existsById(stadiumId)) {
+            throw new ResourceNotFoundException("Sân với ID " + stadiumId + " không tồn tại");
+        }
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Review> reviewPage = reviewRepository
+                .findByStadiumStadiumIdOrderByCreatedAtDesc(stadiumId, pageable);
+
+        List<StadiumDetailResponse.ReviewDto> content = reviewPage.getContent().stream()
+                .map(r -> StadiumDetailResponse.ReviewDto.builder()
+                        .reviewId(r.getReviewId())
+                        .userName(r.getUser().getFullName())
+                        .userAvatar(r.getUser().getAvatarUrl())
+                        .ratingScore(r.getRatingScore())
+                        .comment(r.getComment())
+                        .ownerResponse(r.getOwnerResponse())
+                        .createdAt(r.getCreatedAt())
+                        .build())
+                .toList();
+
+        return PageResponse.<StadiumDetailResponse.ReviewDto>builder()
+                .content(content)
+                .pageNo(reviewPage.getNumber())
+                .pageSize(reviewPage.getSize())
+                .totalElements(reviewPage.getTotalElements())
+                .totalPages(reviewPage.getTotalPages())
+                .last(reviewPage.isLast())
+                .build();
     }
 }
