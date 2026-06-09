@@ -31,6 +31,7 @@ export default function SearchPage() {
   const [amenitiesList, setAmenitiesList] = useState<Amenity[]>([])
   const [sportTypes, setSportTypes] = useState<{ sportTypeId: number, sportName: string }[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [isMapOpen, setIsMapOpen] = useState(false)
 
   const [filters, setFilters] = useState<StadiumSearchRequest>({
@@ -57,11 +58,16 @@ export default function SearchPage() {
         setAmenitiesList(amenitiesRes)
         setSportTypes(sportTypesRes)
       })
-      .catch(console.error)
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'Không tải được bộ lọc tìm kiếm.'
+        setLoadError(msg)
+        console.error(err)
+      })
   }, [])
 
   const fetchStadiums = useCallback(async (currentFilters: StadiumSearchRequest) => {
     setLoading(true)
+    setLoadError(null)
     try {
       // Loại bỏ các trường rỗng (empty string) để tránh lỗi parse ở Backend
       const cleanFilters: Partial<StadiumSearchRequest> = { ...currentFilters }
@@ -74,6 +80,9 @@ export default function SearchPage() {
       const res = await searchStadiums(cleanFilters as StadiumSearchRequest)
       setStadiums(res.content)
     } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Không tải được danh sách sân.'
+      setLoadError(msg)
+      setStadiums([])
       console.error(error)
     } finally {
       setLoading(false)
@@ -163,6 +172,14 @@ export default function SearchPage() {
       />
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+
+        {loadError && (
+          <div className="mb-6 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <strong>Lỗi kết nối API:</strong> {loadError}. Đảm bảo backend đang chạy (
+            <code className="text-xs">docker compose up -d backend</code>) và bạn mở đúng cổng (
+            <code className="text-xs">NEXTAUTH_URL</code> khớp URL trình duyệt).
+          </div>
+        )}
 
         {/* 4. Filter Info & Modal Trigger */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">

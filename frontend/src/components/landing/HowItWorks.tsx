@@ -1,59 +1,70 @@
-import { Search, Calendar, CheckCircle } from "lucide-react";
+"use client";
 
-interface StepProps {
-  icon: React.ReactNode;
-  number: string;
-  title: string;
-  description: string;
-}
-
-function Step({ icon, number, title, description }: StepProps) {
-  return (
-    <div className="flex flex-col items-center text-center">
-      <div className="relative mb-4">
-        <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center">
-          <div className="text-primary">{icon}</div>
-        </div>
-        <div className="absolute -top-2 -right-2 w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center">
-          {number}
-        </div>
-      </div>
-      <h3 className="mb-2">{title}</h3>
-      <p className="text-muted-foreground">{description}</p>
-    </div>
-  );
-}
+import { Calendar, CheckCircle, Search } from "lucide-react";
 
 export function HowItWorks() {
   return (
-    <section className="py-16 bg-muted/30">
+    <section className="py-20 md:py-28">
       <div className="container mx-auto px-4">
-        <h2 className="text-center mb-12">Cách thức hoạt động</h2>
+        <div className="mx-auto mb-16 max-w-2xl text-center">
+          <p className="text-sm font-semibold uppercase tracking-widest text-primary">
+            {"Cách thức hoạt động"}
+          </p>
+          <h2 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl">
+            {"Ba bước đơn giản để có sân"}
+          </h2>
+          <p className="mt-4 text-lg text-muted-foreground">
+            {"Khách có thể xem sân ngay; đăng ký khi sẵn sàng đặt lịch."}
+          </p>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-          <Step
-            icon={<Search className="h-10 w-10" />}
-            number="1"
-            title="Tìm kiếm sân"
-            description="Tìm sân phù hợp với vị trí, thời gian và môn thể thao yêu thích"
-          />
+        <div className="mx-auto grid max-w-5xl grid-cols-1 gap-12 md:grid-cols-3 md:gap-10">
+          <div className="flex flex-col items-center text-center">
+            <div className="relative mb-6">
+              <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
+                <Search className="h-11 w-11 text-primary" />
+              </div>
+              <span className="absolute -right-1 -top-1 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                1
+              </span>
+            </div>
+            <h3 className="text-xl font-semibold">{"Tìm kiếm sân"}</h3>
+            <p className="mt-2 max-w-xs text-muted-foreground">
+              {"Lọc theo vị trí, môn thể thao, ngày và khung giờ phù hợp với bạn"}
+            </p>
+          </div>
 
-          <Step
-            icon={<Calendar className="h-10 w-10" />}
-            number="2"
-            title="Đặt lịch"
-            description="Chọn khung giờ phù hợp và thanh toán trực tuyến an toàn"
-          />
+          <div className="flex flex-col items-center text-center">
+            <div className="relative mb-6">
+              <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
+                <Calendar className="h-11 w-11 text-primary" />
+              </div>
+              <span className="absolute -right-1 -top-1 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                2
+              </span>
+            </div>
+            <h3 className="text-xl font-semibold">{"Đặt lịch và thanh toán"}</h3>
+            <p className="mt-2 max-w-xs text-muted-foreground">
+              {"Chọn slot còn trống, xác nhận và thanh toán trực tuyến an toàn"}
+            </p>
+          </div>
 
-          <Step
-            icon={<CheckCircle className="h-10 w-10" />}
-            number="3"
-            title="Chơi thể thao"
-            description="Nhận xác nhận và tận hưởng trận đấu của bạn"
-          />
+          <div className="flex flex-col items-center text-center">
+            <div className="relative mb-6">
+              <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
+                <CheckCircle className="h-11 w-11 text-primary" />
+              </div>
+              <span className="absolute -right-1 -top-1 flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                3
+              </span>
+            </div>
+            <h3 className="text-xl font-semibold">{"Ra sân và tận hưởng"}</h3>
+            <p className="mt-2 max-w-xs text-muted-foreground">
+              {"Nhận xác nhận qua app và tận hưởng trận đấu của bạn"}
+            </p>
+          </div>
         </div>
       </div>
     </section>
   );
 }
-

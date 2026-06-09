@@ -1,13 +1,25 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosError } from 'axios'
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
+/**
+ * Trình duyệt: gọi /api/v1 cùng origin → Next.js proxy (next.config rewrites).
+ * Tránh lỗi CORS khi dev trên cổng 3001 trong khi Docker chiếm 3000.
+ * Server (SSR/API routes): gọi thẳng backend qua API_URL.
+ */
+function resolveApiBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    return '/api/v1'
+  }
+  const serverUrl =
+    process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
+  return `${serverUrl.replace(/\/$/, '')}/api/v1`
+}
 
 /**
  * Axios instance chính — dùng cho tất cả API calls.
  * Tự động đính kèm Bearer token và xử lý 401.
  */
 const api: AxiosInstance = axios.create({
-  baseURL: `${BASE_URL}/api/v1`,
+  baseURL: resolveApiBaseUrl(),
   timeout: 10_000,
   headers: {
     'Content-Type': 'application/json',
