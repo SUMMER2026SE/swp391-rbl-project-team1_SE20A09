@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 /**
  * Repository cho Complaint entity.
  * Stub — Hoàng mở rộng thêm khi implement UC-OWN-09.
@@ -22,4 +24,12 @@ public interface ComplaintRepository extends JpaRepository<Complaint, Integer> {
 
     /** Lấy khiếu nại của một user. */
     Page<Complaint> findByUserUserIdOrderByCreatedAtDesc(Integer userId, Pageable pageable);
+
+    /** Lấy toàn bộ khiếu nại của các sân thuộc quản lý của một Owner. */
+    @EntityGraph(attributePaths = {"user", "booking", "booking.stadium"})
+    List<Complaint> findByBookingStadiumOwnerUserEmailOrderByCreatedAtDesc(String email);
+
+    /** Lấy toàn bộ khiếu nại của một khách hàng (không phân trang). */
+    @EntityGraph(attributePaths = {"user", "booking", "booking.stadium"})
+    List<Complaint> findByUserUserIdOrderByCreatedAtDesc(Integer userId);
 }
