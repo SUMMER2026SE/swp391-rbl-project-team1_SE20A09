@@ -7,7 +7,7 @@ spring:
   jpa:
     show-sql: true
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
   flyway:
     enabled: true
     validate-on-migrate: false
@@ -28,9 +28,6 @@ spring:
           auth: true
           starttls:
             enable: true
-
-  cache:
-    type: simple
 
 logging:
   level:
