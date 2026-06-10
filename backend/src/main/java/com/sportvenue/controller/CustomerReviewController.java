@@ -18,7 +18,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.web.bind.annotation.PathVariable;
 @RestController
 @RequestMapping("/api/v1/reviews")
 @RequiredArgsConstructor
@@ -27,22 +29,24 @@ public class CustomerReviewController {
 
     private final ReviewService reviewService;
 
-    @GetMapping("/my")
+    @GetMapping("/me")
     @PreAuthorize("hasRole('Customer')")
     @Operation(summary = "Khách hàng lấy danh sách đánh giá của mình")
-    public ResponseEntity<List<ReviewResponse>> listCustomerReviews(
+    public ResponseEntity<Page<ReviewResponse>> listCustomerReviews(
+            Pageable pageable,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
-        List<ReviewResponse> response = reviewService.getCustomerReviews(userPrincipal.getUsername());
+        Page<ReviewResponse> response = reviewService.getMyReviews(userPrincipal.getUsername(), pageable);
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping
+    @PostMapping("/bookings/{bookingId}/reviews")
     @PreAuthorize("hasRole('Customer')")
     @Operation(summary = "Customer tạo đánh giá mới cho đơn đặt sân")
     public ResponseEntity<ReviewResponse> createReview(
+            @PathVariable Integer bookingId,
             @Valid @RequestBody CreateReviewRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
-        ReviewResponse response = reviewService.createReview(request, userPrincipal.getUsername());
+        ReviewResponse response = reviewService.createReview(bookingId, request, userPrincipal.getUsername());
         return ResponseEntity.ok(response);
     }
 }

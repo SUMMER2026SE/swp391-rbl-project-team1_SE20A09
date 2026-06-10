@@ -19,7 +19,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 @RestController
 @RequestMapping("/api/v1/owner/reviews")
 @RequiredArgsConstructor
@@ -31,9 +32,10 @@ public class OwnerReviewController {
     @GetMapping
     @PreAuthorize("hasRole('Owner')")
     @Operation(summary = "Lấy danh sách đánh giá của khách hàng (Owner)")
-    public ResponseEntity<List<ReviewResponse>> listOwnerReviews(
+    public ResponseEntity<Page<ReviewResponse>> listOwnerReviews(
+            Pageable pageable,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
-        List<ReviewResponse> response = reviewService.getOwnerReviews(userPrincipal.getUsername());
+        Page<ReviewResponse> response = reviewService.getOwnerReviews(userPrincipal.getUsername(), pageable);
         return ResponseEntity.ok(response);
     }
 

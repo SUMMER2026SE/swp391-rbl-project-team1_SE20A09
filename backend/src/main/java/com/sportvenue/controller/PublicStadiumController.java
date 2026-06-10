@@ -19,10 +19,18 @@ import jakarta.validation.Valid;
 public class PublicStadiumController {
 
     private final PublicStadiumService publicStadiumService;
+    private final com.sportvenue.service.ReviewService reviewService;
 
     @GetMapping
     public ResponseEntity<PageResponse<StadiumResponse>> searchStadiums(@Valid @ModelAttribute StadiumSearchRequest request) {
         PageResponse<StadiumResponse> response = publicStadiumService.searchStadiums(request);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{stadiumId}/reviews")
+    public ResponseEntity<org.springframework.data.domain.Page<com.sportvenue.dto.response.ReviewResponse>> getStadiumReviews(
+            @org.springframework.web.bind.annotation.PathVariable Integer stadiumId,
+            org.springframework.data.domain.Pageable pageable) {
+        return ResponseEntity.ok(reviewService.getStadiumReviews(stadiumId, pageable));
     }
 }
