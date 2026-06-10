@@ -95,7 +95,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of(
                         HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                        "Đã có lỗi hệ thống xảy ra. Vui lòng liên hệ quản trị viên hoặc thử lại sau."
+                        "Lỗi hệ thống: " + ex.getMessage()
                 ));
     }
 }

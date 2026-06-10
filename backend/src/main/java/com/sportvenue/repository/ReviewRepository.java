@@ -23,8 +23,16 @@ public interface ReviewRepository extends JpaRepository<Review, Integer> {
     boolean existsByBookingBookingId(Integer bookingId);
 
     /** Lấy danh sách review của một sân — dùng cho trang chi tiết sân. */
-    @EntityGraph(attributePaths = {"user"})
+    @EntityGraph(attributePaths = {"user", "booking", "stadium"})
     Page<Review> findByStadiumStadiumIdOrderByCreatedAtDesc(Integer stadiumId, Pageable pageable);
+
+    /** Lấy danh sách review của một user. */
+    @EntityGraph(attributePaths = {"stadium", "user", "booking"})
+    Page<Review> findByUserEmailOrderByCreatedAtDesc(String email, Pageable pageable);
+
+    /** Lấy danh sách review cho chủ sân (Owner) — tất cả review của các sân thuộc owner. */
+    @EntityGraph(attributePaths = {"stadium", "user", "booking"})
+    Page<Review> findByStadiumOwnerUserEmailOrderByCreatedAtDesc(String ownerEmail, Pageable pageable);
 
     /** Tính điểm trung bình của sân — gọi sau khi có review mới để cập nhật Stadium. */
     @Query("SELECT AVG(r.ratingScore) FROM Review r WHERE r.stadium.stadiumId = :stadiumId")
