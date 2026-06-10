@@ -86,6 +86,11 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401) {
       message = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+      if (typeof window !== 'undefined') {
+        import('next-auth/react').then(({ signOut }) => {
+          signOut({ callbackUrl: '/login' })
+        })
+      }
     }
 
     const customError = new Error(message) as Error & { status?: number }

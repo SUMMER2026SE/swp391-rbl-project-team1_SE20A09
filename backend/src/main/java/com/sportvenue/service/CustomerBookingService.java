@@ -6,4 +6,6 @@ import com.sportvenue.security.UserPrincipal;
 
 public interface CustomerBookingService {
     PageResponse<CustomerBookingHistoryDto> getMyBookings(UserPrincipal principal, int page, int size);
+    
+    void cancelBooking(UserPrincipal principal, Integer bookingId, String reason);
 }

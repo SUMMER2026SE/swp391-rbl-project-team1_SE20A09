@@ -23,7 +23,7 @@ spring:
   # ── JPA ────────────────────────────────────────────────
   jpa:
     hibernate:
-      ddl-auto: validate          # Flyway quản lý schema, JPA chỉ validate
+      ddl-auto: update          # Flyway quản lý schema, JPA update bổ sung
     show-sql: false
     properties:
       hibernate:
