@@ -53,7 +53,7 @@ public class OwnerBookingController {
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @RequestParam(required = false) Integer stadiumId,
             @RequestParam(required = false) BookingStatus status,
-            @PageableDefault(size = 10, sort = "bookingDate",
+            @org.springdoc.core.annotations.ParameterObject @PageableDefault(size = 10, sort = "bookingDate",
                     direction = Sort.Direction.DESC) Pageable pageable) {
 
         Page<BookingResponse> result = ownerBookingService.getOwnerBookings(

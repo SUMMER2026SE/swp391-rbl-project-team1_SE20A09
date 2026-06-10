@@ -35,7 +35,7 @@ public class NotificationController {
     public ResponseEntity<ApiResponse<PageResponse<NotificationResponse>>> getMyNotifications(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @RequestParam(required = false) Boolean unreadOnly,
-            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+            @org.springdoc.core.annotations.ParameterObject @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
 
         PageResponse<NotificationResponse> result = notificationService.getMyNotifications(
                 userPrincipal.getUser().getUserId(), unreadOnly, pageable);
