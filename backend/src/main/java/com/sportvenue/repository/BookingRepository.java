@@ -89,7 +89,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     List<Object[]> findTopSportByUserId(@Param("userId") Integer userId, Pageable pageable);
 
     /** Lấy danh sách đặt sân của một sân — dùng cho Owner quản lý. */
-    @EntityGraph(attributePaths = {"user", "slot"})
+    @EntityGraph(attributePaths = {"user", "stadium", "stadium.sportType", "slot"})
     Page<Booking> findByStadiumStadiumIdOrderByBookingDateDesc(Integer stadiumId, Pageable pageable);
 
     /** Lấy đặt sân theo trạng thái — dùng cho Owner filter Pending. */

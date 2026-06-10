@@ -111,10 +111,14 @@ public class OwnerBookingService {
     }
 
     private BookingResponse confirmBooking(Booking booking) {
+        TimeSlot slot = booking.getSlot();
+        if (slot.getSlotStatus() != SlotStatus.AVAILABLE) {
+            throw new BadRequestException("Khung giờ này đã được đặt bởi một khách hàng khác.");
+        }
+
         booking.setBookingStatus(BookingStatus.CONFIRMED);
 
         // Cập nhật slot thành Booked (Tự động flush nhờ Dirty Checking của JPA)
-        TimeSlot slot = booking.getSlot();
         slot.setSlotStatus(SlotStatus.BOOKED);
 
         log.info("✅ Booking #{} đã được xác nhận", booking.getBookingId());
@@ -132,9 +136,11 @@ public class OwnerBookingService {
         booking.setBookingStatus(BookingStatus.CANCELLED);
         booking.setNote("Lý do từ chối: " + reason);
 
-        // Giải phóng slot cho người khác đặt (Tự động flush nhờ Dirty Checking)
+        // Chỉ giải phóng slot cho người khác đặt khi không có đơn CONFIRMED khác đang chiếm giữ slot này
         TimeSlot slot = booking.getSlot();
-        slot.setSlotStatus(SlotStatus.AVAILABLE);
+        if (slot.getSlotStatus() != SlotStatus.BOOKED) {
+            slot.setSlotStatus(SlotStatus.AVAILABLE);
+        }
 
         log.info("❌ Booking #{} đã bị từ chối. Lý do: {}",
                 booking.getBookingId(), reason);
@@ -199,6 +205,9 @@ public class OwnerBookingService {
             return email;
         }
         String[] parts = email.split("@");
+        if (parts.length < 2) {
+            return email;
+        }
         String name = parts[0];
         if (name.length() > 3) {
             name = name.substring(0, 3) + "***";
