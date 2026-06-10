@@ -150,7 +150,6 @@ services:
       args:
         # Build-time args — NEXT_PUBLIC_ phải được baked vào bundle lúc build
         NEXT_PUBLIC_APP_NAME: SportVenue
-        API_URL: http://backend:8080
     container_name: sportvenue-frontend
     restart: unless-stopped
     depends_on:
