@@ -3,7 +3,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/sportvenue?currentSchema=public&serverTimezone=Asia/Ho_Chi_Minh}
     username: ${SPRING_DATASOURCE_USERNAME:sportvenue_user}
-    password: ${SPRING_DATASOURCE_PASSWORD:changeme}
+    password: ${SPRING_DATASOURCE_PASSWORD:sportvenue123}
   jpa:
     show-sql: true
     hibernate:
@@ -16,7 +16,7 @@ spring:
     redis:
       host: localhost
       port: 6379
-      password: ${REDIS_PASSWORD:changeme}
+      password: ${REDIS_PASSWORD:redis123}
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
