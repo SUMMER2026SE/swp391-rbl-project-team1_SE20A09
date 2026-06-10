@@ -19,9 +19,14 @@ public interface StadiumMapper {
     @Mapping(target = "images", ignore = true)
     @Mapping(target = "timeSlots", ignore = true)
     @Mapping(target = "accessories", ignore = true)
+    @Mapping(target = "latitude", ignore = true)
+    @Mapping(target = "longitude", ignore = true)
+    @Mapping(target = "amenities", ignore = true)
     Stadium toEntity(CreateStadiumRequest request);
 
     @Mapping(target = "sportName", source = "sportType.sportName")
     @Mapping(target = "imageUrls", expression = "java(stadium.getImages() == null ? java.util.Collections.emptyList() : stadium.getImages().stream().map(img -> img.getImageUrl()).toList())")
+    @Mapping(target = "firstImageUrl", expression = "java(stadium.getImages() == null || stadium.getImages().isEmpty() ? null : stadium.getImages().get(0).getImageUrl())")
+    @Mapping(target = "distanceInKm", ignore = true)
     StadiumResponse toResponse(Stadium stadium);
 }

@@ -4,8 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.util.List;
+import java.time.LocalDateTime;
 
 @Data
 @Builder
@@ -13,13 +12,11 @@ import java.util.List;
 @AllArgsConstructor
 public class ReviewResponse {
     private Integer reviewId;
-    private String id;
     private Integer bookingId;
-    private String stadiumName;
-    private String customerName;
-    private Integer rating;
+    private Integer stadiumId;
+    private String reviewerName;
+    private Integer ratingScore;
     private String comment;
-    private List<String> tags;
-    private String createdAt;
     private String ownerResponse;
+    private LocalDateTime createdAt;
 }

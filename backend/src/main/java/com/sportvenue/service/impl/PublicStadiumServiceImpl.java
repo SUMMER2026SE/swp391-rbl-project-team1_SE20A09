@@ -67,7 +67,7 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 .map(Stadium::getStadiumId)
                 .toList();
 
-        List<Stadium> detailedStadiums = stadiumRepository.findAllByStadiumIdIn(stadiumIds);
+        List<Stadium> detailedStadiums = stadiumRepository.findAllById(stadiumIds);
 
         // Map them back to keep the original paginated order (or apply distance sort)
         Map<Integer, Stadium> stadiumMap = detailedStadiums.stream()

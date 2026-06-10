@@ -1,0 +1,84 @@
+package com.sportvenue.controller;
+
+import com.sportvenue.dto.request.BookingActionRequest;
+import com.sportvenue.dto.response.BookingResponse;
+import com.sportvenue.entity.enums.BookingStatus;
+import com.sportvenue.security.UserPrincipal;
+import com.sportvenue.service.OwnerBookingService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * Controller quản lý đặt sân dành cho Owner.
+ * UC-OWN-06: Xem danh sách booking.
+ * UC-OWN-07: Xác nhận/Từ chối booking.
+ */
+@RestController
+@RequestMapping("/api/v1/owner/bookings")
+@RequiredArgsConstructor
+@Tag(name = "Owner — Booking Management",
+     description = "Quản lý đặt sân: xem danh sách, xác nhận, từ chối")
+@Slf4j
+public class OwnerBookingController {
+
+    private final OwnerBookingService ownerBookingService;
+
+    /**
+     * UC-OWN-06: Xem danh sách tất cả lịch đặt sân.
+     * Hỗ trợ filter theo sân, trạng thái và phân trang.
+     */
+    @GetMapping("/page")
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(summary = "Xem danh sách booking",
+               description = "Owner xem tất cả booking của sân mình. "
+                       + "Hỗ trợ filter theo stadiumId, status và phân trang.")
+    public ResponseEntity<Page<BookingResponse>> getBookings(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestParam(required = false) Integer stadiumId,
+            @RequestParam(required = false) BookingStatus status,
+            @org.springdoc.core.annotations.ParameterObject @PageableDefault(size = 10, sort = "bookingDate",
+                    direction = Sort.Direction.DESC) Pageable pageable) {
+
+        Page<BookingResponse> result = ownerBookingService.getOwnerBookings(
+                userPrincipal.getUser().getUserId(),
+                stadiumId, status, pageable);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * UC-OWN-07: Xác nhận hoặc từ chối đơn đặt sân.
+     * Action: CONFIRM hoặc REJECT (kèm lý do khi reject).
+     */
+    @PutMapping("/{bookingId}/action")
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(summary = "Xác nhận/Từ chối booking",
+               description = "Owner xác nhận hoặc từ chối đơn đặt sân. "
+                       + "Khi từ chối phải kèm lý do.")
+    public ResponseEntity<BookingResponse> processBooking(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable Integer bookingId,
+            @Valid @RequestBody BookingActionRequest request) {
+
+        BookingResponse result = ownerBookingService.processBooking(
+                userPrincipal.getUser().getUserId(),
+                bookingId, request);
+        return ResponseEntity.ok(result);
+    }
+}

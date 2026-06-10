@@ -1,20 +1,15 @@
 package com.sportvenue.service;
 
+import com.sportvenue.dto.request.CreateReviewRequest;
 import com.sportvenue.dto.response.ReviewResponse;
 
-import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface ReviewService {
-
-    /** Lấy toàn bộ đánh giá của khách hàng đối với các sân thuộc quản lý của một Owner. */
-    List<ReviewResponse> getOwnerReviews(String ownerEmail);
-
-    /** Lấy toàn bộ đánh giá mà một Customer đã gửi. */
-    List<ReviewResponse> getCustomerReviews(String customerEmail);
-
-    /** Owner phản hồi đánh giá của khách hàng. */
-    ReviewResponse replyToReview(Integer reviewId, String ownerResponse, String ownerEmail);
-
-    /** Customer thêm đánh giá mới */
-    ReviewResponse createReview(com.sportvenue.dto.request.CreateReviewRequest request, String customerEmail);
+    ReviewResponse createReview(Integer bookingId, CreateReviewRequest request, String userEmail);
+    Page<ReviewResponse> getStadiumReviews(Integer stadiumId, Pageable pageable);
+    Page<ReviewResponse> getMyReviews(String email, Pageable pageable);
+    Page<ReviewResponse> getOwnerReviews(String ownerEmail, Pageable pageable);
+    ReviewResponse replyToReview(Integer reviewId, String replyMessage, String ownerEmail);
 }

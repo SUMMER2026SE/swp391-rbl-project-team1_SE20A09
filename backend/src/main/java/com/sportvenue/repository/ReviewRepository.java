@@ -23,16 +23,24 @@ public interface ReviewRepository extends JpaRepository<Review, Integer> {
     boolean existsByBookingBookingId(Integer bookingId);
 
     /** Lấy danh sách review của một sân — dùng cho trang chi tiết sân. */
-    @EntityGraph(attributePaths = {"user"})
+    @EntityGraph(attributePaths = {"user", "booking", "stadium"})
     Page<Review> findByStadiumStadiumIdOrderByCreatedAtDesc(Integer stadiumId, Pageable pageable);
 
-    /** Lấy toàn bộ đánh giá của các sân thuộc quản lý của một Owner. */
-    List<Review> findByStadiumOwnerUserEmailOrderByCreatedAtDesc(String ownerEmail);
+    /** Lấy danh sách review của một user. */
+    @EntityGraph(attributePaths = {"stadium", "user", "booking"})
+    Page<Review> findByUserEmailOrderByCreatedAtDesc(String email, Pageable pageable);
 
-    /** Lấy toàn bộ đánh giá của một Customer theo email. */
-    List<Review> findByUserEmailOrderByCreatedAtDesc(String customerEmail);
+    /** Lấy danh sách review cho chủ sân (Owner) — tất cả review của các sân thuộc owner. */
+    @EntityGraph(attributePaths = {"stadium", "user", "booking"})
+    Page<Review> findByStadiumOwnerUserEmailOrderByCreatedAtDesc(String ownerEmail, Pageable pageable);
 
     /** Tính điểm trung bình của sân — gọi sau khi có review mới để cập nhật Stadium. */
     @Query("SELECT AVG(r.ratingScore) FROM Review r WHERE r.stadium.stadiumId = :stadiumId")
     Optional<Double> calculateAverageRating(@Param("stadiumId") Integer stadiumId);
+
+    long countByStadiumStadiumId(Integer stadiumId);
+
+    /** Đếm gộp số review theo danh sách sân — tránh N+1 khi render trang chủ. */
+    @Query("SELECT r.stadium.stadiumId, COUNT(r) FROM Review r WHERE r.stadium.stadiumId IN :stadiumIds GROUP BY r.stadium.stadiumId")
+    List<Object[]> countReviewsByStadiumIdIn(@Param("stadiumIds") List<Integer> stadiumIds);
 }
