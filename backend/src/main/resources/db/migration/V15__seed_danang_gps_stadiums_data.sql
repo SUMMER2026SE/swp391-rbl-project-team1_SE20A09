@@ -1,9 +1,3 @@
--- ══════════════════════════════════════════════════════════════════════════
--- V14__seed_danang_gps_stadiums_data.sql 
--- LƯU Ý: Tên file được đặt là V14 (thay vì V9) vì cột latitude/longitude
--- chỉ mới được tạo ra ở file V12. Nếu đặt V9, Flyway sẽ báo lỗi Column Not Found!
--- Dữ liệu giả lập 5 Sân thể thao tại khu vực ĐÀ NẴNG để test UC-OV-02 / UC-OV-03
--- ══════════════════════════════════════════════════════════════════════════
 
 -- 1. Bổ sung thêm tiện ích "Đèn chiếu sáng ban đêm" nếu chưa có
 INSERT INTO amenities (name, icon) 

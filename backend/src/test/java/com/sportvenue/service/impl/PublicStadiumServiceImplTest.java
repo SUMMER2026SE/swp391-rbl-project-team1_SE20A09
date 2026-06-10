@@ -22,6 +22,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -62,7 +63,7 @@ public class PublicStadiumServiceImplTest {
 
         when(stadiumRepository.findAll(any(Specification.class)))
                 .thenReturn(List.of(stadium2, stadium1));
-        when(stadiumRepository.findAllByStadiumIdIn(any(List.class)))
+        when(stadiumRepository.findAllById(anyIterable()))
                 .thenReturn(List.of(stadium1, stadium2));
 
         // Act

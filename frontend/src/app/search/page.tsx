@@ -6,6 +6,7 @@ import { searchStadiums, getAmenities, getSportTypes, StadiumResponse, StadiumSe
 import { Button } from '@/components/ui/button'
 import { Map, X } from 'lucide-react'
 import dynamic from 'next/dynamic'
+import Image from 'next/image'
 
 // Import New Components
 import { HorizontalSearch } from './components/HorizontalSearch'
@@ -44,6 +45,7 @@ function SearchPageContent() {
   const [amenitiesList, setAmenitiesList] = useState<Amenity[]>([])
   const [sportTypes, setSportTypes] = useState<{ sportTypeId: number, sportName: string }[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [isMapOpen, setIsMapOpen] = useState(false)
 
   // Local state for UI inputs (initialized safely to avoid SSR Hydration mismatch)
@@ -72,19 +74,23 @@ function SearchPageContent() {
         setAmenitiesList(amenitiesRes)
         setSportTypes(sportTypesRes)
       })
-      .catch(console.error)
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'Không tải được bộ lọc tìm kiếm.'
+        setLoadError(msg)
+        console.error(err)
+      })
   }, [])
 
   // 2. Sync debounced state to URL
   useEffect(() => {
     const params = new URLSearchParams()
-    
+
     Object.entries(debouncedFilters).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '' && key !== 'amenityIds') {
         params.append(key, String(value))
       }
     })
-    
+
     if (debouncedFilters.amenityIds && debouncedFilters.amenityIds.length > 0) {
       debouncedFilters.amenityIds.forEach(id => {
         params.append('amenityIds', String(id))
@@ -113,8 +119,10 @@ function SearchPageContent() {
     }
 
     // Deep compare to sync UI properly for Back/Forward avoiding infinite loop
+    // FIX: So sánh với debouncedFilters để tránh race condition khi user gõ nhanh
     setFilters(prev => {
-      if (JSON.stringify(prev) === JSON.stringify(currentFilters)) {
+      if (JSON.stringify(debouncedFilters) === JSON.stringify(currentFilters) || 
+          JSON.stringify(prev) === JSON.stringify(currentFilters)) {
         return prev;
       }
       return currentFilters;
@@ -139,7 +147,7 @@ function SearchPageContent() {
         setLoading(false)
       }
     }
-    
+
     fetchStadiums()
   }, [searchParams])
 
@@ -194,10 +202,12 @@ function SearchPageContent() {
 
       {/* 1. Hero Banner */}
       <div className="relative h-[300px] md:h-[400px] w-full bg-gray-900 overflow-hidden">
-        <img
+        <Image
           src="https://images.unsplash.com/photo-1579952363873-27f3bade9f55?q=80&w=2000&auto=format&fit=crop"
           alt="Sport Banner"
-          className="w-full h-full object-cover opacity-60"
+          fill
+          priority
+          className="object-cover opacity-60"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent"></div>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
@@ -225,6 +235,14 @@ function SearchPageContent() {
       />
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+
+        {loadError && (
+          <div className="mb-6 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <strong>Lỗi kết nối API:</strong> {loadError}. Đảm bảo backend đang chạy (
+            <code className="text-xs">docker compose up -d backend</code>) và bạn mở đúng cổng (
+            <code className="text-xs">NEXTAUTH_URL</code> khớp URL trình duyệt).
+          </div>
+        )}
 
         {/* 4. Filter Info & Modal Trigger */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">

@@ -17,6 +17,10 @@ const nextConfig = {
         protocol: 'https',
         hostname: '*.amazonaws.com',   // AWS S3 production
       },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+      },
     ],
   },
   async rewrites() {

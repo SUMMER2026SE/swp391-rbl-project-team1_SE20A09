@@ -6,18 +6,32 @@ import L from 'leaflet'
 import { X, Star, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { StadiumResponse } from '@/lib/api/stadium'
+import Image from 'next/image'
 import 'leaflet/dist/leaflet.css'
 
-// Custom Leaflet Pin Icon using Tailwind
-const customIcon = typeof window !== 'undefined' ? L.divIcon({
-  className: 'custom-leaflet-marker',
-  html: `<div class="w-10 h-10 bg-primary text-white rounded-full border-2 border-white flex items-center justify-center shadow-xl transform transition-all duration-200 hover:scale-115 hover:bg-primary/90">
-           <span class="text-lg">⚽</span>
-         </div>`,
-  iconSize: [40, 40],
-  iconAnchor: [20, 40],
-  popupAnchor: [0, -40],
-}) : undefined
+const getSportEmoji = (sportName?: string) => {
+  switch (sportName?.toLowerCase()) {
+    case 'football': return '⚽';
+    case 'badminton': return '🏸';
+    case 'basketball': return '🏀';
+    case 'tennis': return '🎾';
+    case 'volleyball': return '🏐';
+    default: return '📍';
+  }
+}
+
+const getCustomIcon = (sportName?: string) => {
+  if (typeof window === 'undefined') return undefined;
+  return L.divIcon({
+    className: 'custom-leaflet-marker',
+    html: `<div class="w-10 h-10 bg-primary text-white rounded-full border-2 border-white flex items-center justify-center shadow-xl transform transition-all duration-200 hover:scale-115 hover:bg-primary/90">
+             <span class="text-lg">${getSportEmoji(sportName)}</span>
+           </div>`,
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
+    popupAnchor: [0, -40],
+  })
+}
 
 interface StadiumMapModalProps {
   isOpen: boolean
@@ -99,16 +113,21 @@ export default function StadiumMapModal({ isOpen, onClose, stadiums }: StadiumMa
               <Marker
                 key={stadium.stadiumId}
                 position={[stadium.latitude!, stadium.longitude!]}
-                icon={customIcon}
+                icon={getCustomIcon(stadium.sportName)}
               >
                 <Popup className="custom-popup">
                   <div className="w-60 overflow-hidden font-sans p-1">
                     {stadium.firstImageUrl ? (
-                      <img
-                        src={stadium.firstImageUrl}
-                        alt={stadium.stadiumName}
-                        className="w-full h-28 object-cover rounded-lg mb-2 shadow-sm"
-                      />
+                      <div className="relative w-full h-28 mb-2">
+                        <Image
+                          src={stadium.firstImageUrl}
+                          alt={stadium.stadiumName}
+                          fill
+                          unoptimized
+                          priority
+                          className="object-cover rounded-lg shadow-sm"
+                        />
+                      </div>
                     ) : (
                       <div className="w-full h-28 bg-gray-100 dark:bg-secondary/40 rounded-lg flex items-center justify-center text-xs text-gray-400 mb-2">
                         Không có ảnh

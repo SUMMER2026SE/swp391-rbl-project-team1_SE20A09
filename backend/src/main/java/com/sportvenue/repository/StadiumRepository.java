@@ -30,6 +30,10 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
     @EntityGraph(attributePaths = {"sportType", "images", "owner"})
     Page<Stadium> findByStadiumStatus(StadiumStatus status, Pageable pageable);
 
+    @Override
+    @EntityGraph(attributePaths = {"sportType", "images", "amenities"})
+    List<Stadium> findAllById(Iterable<Integer> ids);
+
     /** Tìm kiếm sân theo tên hoặc địa chỉ — dùng cho Search Venue. */
     @Query("""
             SELECT s FROM Stadium s
@@ -49,6 +53,14 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
     @EntityGraph(attributePaths = {"sportType", "images", "owner", "accessories"})
     Optional<Stadium> findWithDetailsByStadiumId(Integer stadiumId);
 
-    @EntityGraph(attributePaths = {"sportType", "images", "amenities"})
-    List<Stadium> findAllByStadiumIdIn(List<Integer> stadiumIds);
+    @EntityGraph(attributePaths = {"sportType", "images"})
+    @Query("""
+            SELECT s FROM Stadium s
+            WHERE s.stadiumStatus = com.sportvenue.entity.enums.StadiumStatus.AVAILABLE
+            AND s.stadiumId NOT IN :excludeIds
+            ORDER BY s.averageRating DESC, s.stadiumName ASC
+            """)
+    List<Stadium> findRecommendedExcluding(
+            @Param("excludeIds") List<Integer> excludeIds,
+            Pageable pageable);
 }
