@@ -18,7 +18,7 @@ import { get, post } from "@/lib/api";
 import { BookingHistoryList } from "@/components/bookings/BookingHistoryList";
 import { ReviewHistoryList } from "@/components/reviews/ReviewHistoryList";
 import { OwnerReviewHistoryList } from "@/components/reviews/OwnerReviewHistoryList";
-import { OwnerComplaintHistoryList } from "@/components/complaints/OwnerComplaintHistoryList";
+
 import {
   Camera,
   Trophy,
@@ -348,9 +348,7 @@ function UserProfilePage() {
             <TabsTrigger value="reviews">
               {profile.roleName?.toUpperCase() === 'OWNER' ? 'Đánh giá từ khách hàng' : 'Đánh giá của tôi'}
             </TabsTrigger>
-            {profile.roleName?.toUpperCase() === 'OWNER' && (
-              <TabsTrigger value="complaints">Giải quyết khiếu nại</TabsTrigger>
-            )}
+
             <TabsTrigger value="settings">Bảo mật & Cài đặt</TabsTrigger>
           </TabsList>
 
@@ -443,11 +441,7 @@ function UserProfilePage() {
             {profile.roleName?.toUpperCase() === 'OWNER' ? <OwnerReviewHistoryList /> : <ReviewHistoryList />}
           </TabsContent>
 
-          {profile.roleName?.toUpperCase() === 'OWNER' && (
-            <TabsContent value="complaints" className="pt-4">
-              <OwnerComplaintHistoryList />
-            </TabsContent>
-          )}
+
 
           <TabsContent value="settings">
             <Card className="border-none shadow-sm bg-white">
