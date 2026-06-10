@@ -70,7 +70,7 @@ public class RefundServiceImpl implements RefundService {
         RefundCalculation calculation = calculateRefund(booking);
 
         // 6. Cập nhật dữ liệu
-        updateBookingAndReleaseSlot(booking);
+        updateBookingAndReleaseSlot(booking, request.getReason());
 
         // 7. Tạo bản ghi giao dịch âm nếu có số tiền hoàn lại lớn hơn 0
         if (calculation.getAmount().compareTo(BigDecimal.ZERO) > 0) {
@@ -124,9 +124,12 @@ public class RefundServiceImpl implements RefundService {
         return new RefundCalculation(refundPercentage, refundAmount);
     }
 
-    private void updateBookingAndReleaseSlot(Booking booking) {
+    private void updateBookingAndReleaseSlot(Booking booking, String reason) {
         booking.setBookingStatus(BookingStatus.CANCELLED);
         booking.setPaymentStatus(PaymentStatus.REFUNDED);
+        if (reason != null && !reason.isBlank()) {
+            booking.setNote("Lý do hủy hoàn tiền: " + reason.trim());
+        }
         bookingRepository.save(booking);
 
         TimeSlot slot = booking.getSlot();
