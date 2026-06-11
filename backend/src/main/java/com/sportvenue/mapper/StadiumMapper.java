@@ -26,7 +26,7 @@ public interface StadiumMapper {
     @Mapping(target = "sportName", source = "sportType.sportName")
     @Mapping(target = "sportTypeId", source = "sportType.sportTypeId")
     @Mapping(target = "imageUrls", expression = "java(stadium.getImages() == null ? java.util.Collections.emptyList() : stadium.getImages().stream().map(img -> img.getImageUrl()).toList())")
+    @Mapping(target = "firstImageUrl", expression = "java(stadium.getImages() == null || stadium.getImages().isEmpty() ? null : stadium.getImages().stream().findFirst().map(img -> img.getImageUrl()).orElse(null))")
     @Mapping(target = "distanceInKm", ignore = true)
-    @Mapping(target = "firstImageUrl", ignore = true)
     StadiumResponse toResponse(Stadium stadium);
 }

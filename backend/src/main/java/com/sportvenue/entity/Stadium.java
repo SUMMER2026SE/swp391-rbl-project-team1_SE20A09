@@ -25,9 +25,8 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Set;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.JoinTable;
@@ -109,17 +108,17 @@ public class Stadium implements Serializable {
     /** Danh sách ảnh của sân — cascade xóa khi xóa sân. */
     @OneToMany(mappedBy = "stadium", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    private List<StadiumImage> images = new ArrayList<>();
+    private Set<StadiumImage> images = new LinkedHashSet<>();
 
     /** Danh sách khung giờ của sân. */
     @OneToMany(mappedBy = "stadium", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    private List<TimeSlot> timeSlots = new ArrayList<>();
+    private Set<TimeSlot> timeSlots = new LinkedHashSet<>();
 
     /** Danh sách phụ kiện cho thuê kèm sân. */
     @OneToMany(mappedBy = "stadium", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    private List<Accessory> accessories = new ArrayList<>();
+    private Set<Accessory> accessories = new LinkedHashSet<>();
 
     @Column(name = "latitude")
     private Double latitude;

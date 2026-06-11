@@ -22,6 +22,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -60,11 +61,9 @@ public class PublicStadiumServiceImplTest {
         stadium2.setSportType(sportType);
         stadium2.setAmenities(Collections.emptySet());
 
-        Page<Stadium> page = new PageImpl<>(List.of(stadium2, stadium1), PageRequest.of(0, 10), 2);
-
-        when(stadiumRepository.findAll(any(Specification.class), any(PageRequest.class)))
-                .thenReturn(page);
-        when(stadiumRepository.findAllByStadiumIdIn(any(List.class)))
+        when(stadiumRepository.findAll(any(Specification.class)))
+                .thenReturn(List.of(stadium2, stadium1));
+        when(stadiumRepository.findAllById(anyIterable()))
                 .thenReturn(List.of(stadium1, stadium2));
 
         // Act
@@ -73,11 +72,11 @@ public class PublicStadiumServiceImplTest {
         // Assert
         assertNotNull(response);
         assertEquals(2, response.getContent().size());
-        
+
         // Stadium 1 should be first because distance is 0
         assertEquals(1, response.getContent().get(0).getStadiumId());
         assertEquals(0.0, response.getContent().get(0).getDistanceInKm(), 0.1);
-        
+
         // Stadium 2 should be second
         assertEquals(2, response.getContent().get(1).getStadiumId());
         assertTrue(response.getContent().get(1).getDistanceInKm() > 0.0);

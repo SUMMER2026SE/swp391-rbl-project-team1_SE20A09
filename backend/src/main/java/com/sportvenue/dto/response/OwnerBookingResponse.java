@@ -19,6 +19,7 @@ public class OwnerBookingResponse {
     private String date;
     private String time;
     private BigDecimal amount;
+    private BigDecimal refundAmount;
     private String paymentStatus;
     private String status;
     private String notes;

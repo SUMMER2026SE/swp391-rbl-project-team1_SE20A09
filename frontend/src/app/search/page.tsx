@@ -1,10 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { searchStadiums, getAmenities, getSportTypes, StadiumResponse, StadiumSearchRequest, Amenity } from '@/lib/api/stadium'
 import { Button } from '@/components/ui/button'
 import { Map, X } from 'lucide-react'
 import dynamic from 'next/dynamic'
+import Image from 'next/image'
+import { toast } from 'sonner'
 
 // Import New Components
 import { HorizontalSearch } from './components/HorizontalSearch'
@@ -27,12 +30,26 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 export default function SearchPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Đang tải...</div>}>
+      <SearchPageContent />
+    </Suspense>
+  )
+}
+
+function SearchPageContent() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
   const [stadiums, setStadiums] = useState<StadiumResponse[]>([])
   const [amenitiesList, setAmenitiesList] = useState<Amenity[]>([])
   const [sportTypes, setSportTypes] = useState<{ sportTypeId: number, sportName: string }[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [isMapOpen, setIsMapOpen] = useState(false)
 
+  // Local state for UI inputs (initialized safely to avoid SSR Hydration mismatch)
   const [filters, setFilters] = useState<StadiumSearchRequest>({
     keyword: '',
     sportTypeId: undefined,
@@ -51,41 +68,92 @@ export default function SearchPage() {
 
   const debouncedFilters = useDebounce(filters, 500)
 
+  // 1. Fetch amenities and sports
   useEffect(() => {
     Promise.all([getAmenities(), getSportTypes()])
       .then(([amenitiesRes, sportTypesRes]) => {
         setAmenitiesList(amenitiesRes)
         setSportTypes(sportTypesRes)
       })
-      .catch(console.error)
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'Không tải được bộ lọc tìm kiếm.'
+        setLoadError(msg)
+        console.error(err)
+      })
   }, [])
 
-  const fetchStadiums = useCallback(async (currentFilters: StadiumSearchRequest) => {
-    setLoading(true)
-    try {
-      // Loại bỏ các trường rỗng (empty string) để tránh lỗi parse ở Backend
-      const cleanFilters: Partial<StadiumSearchRequest> = { ...currentFilters }
-      if (!cleanFilters.targetDate) delete cleanFilters.targetDate
-      if (!cleanFilters.startTime) delete cleanFilters.startTime
-      if (!cleanFilters.endTime) delete cleanFilters.endTime
-      if (!cleanFilters.keyword) delete cleanFilters.keyword
-      if (cleanFilters.sportTypeId === undefined) delete cleanFilters.sportTypeId
-
-      const res = await searchStadiums(cleanFilters as StadiumSearchRequest)
-      setStadiums(res.content)
-    } catch (error) {
-      console.error(error)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
+  // 2. Sync debounced state to URL
   useEffect(() => {
-    fetchStadiums(debouncedFilters)
-  }, [debouncedFilters, fetchStadiums])
+    const params = new URLSearchParams()
+
+    Object.entries(debouncedFilters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '' && key !== 'amenityIds') {
+        params.append(key, String(value))
+      }
+    })
+
+    if (debouncedFilters.amenityIds && debouncedFilters.amenityIds.length > 0) {
+      debouncedFilters.amenityIds.forEach(id => {
+        params.append('amenityIds', String(id))
+      })
+    }
+
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }, [debouncedFilters, pathname, router])
+
+  // 3. Single Source of Truth: Fetch from URL changes & Sync UI on Back/Forward
+  useEffect(() => {
+    const currentFilters: StadiumSearchRequest = {
+      keyword: searchParams.get('keyword') || '',
+      sportTypeId: searchParams.get('sportTypeId') ? Number(searchParams.get('sportTypeId')) : undefined,
+      targetDate: searchParams.get('targetDate') || '',
+      startTime: searchParams.get('startTime') || '',
+      endTime: searchParams.get('endTime') || '',
+      amenityIds: searchParams.getAll('amenityIds').map(Number),
+      userLat: searchParams.get('userLat') ? Number(searchParams.get('userLat')) : undefined,
+      userLng: searchParams.get('userLng') ? Number(searchParams.get('userLng')) : undefined,
+      radiusInKm: searchParams.get('radiusInKm') ? Number(searchParams.get('radiusInKm')) : undefined,
+      minPrice: searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : 0,
+      maxPrice: searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : 1000000,
+      page: searchParams.has('page') ? Number(searchParams.get('page')) : 0,
+      size: searchParams.has('size') ? Number(searchParams.get('size')) : 12,
+    }
+
+    // Deep compare to sync UI properly for Back/Forward avoiding infinite loop
+    // FIX: So sánh với debouncedFilters để tránh race condition khi user gõ nhanh
+    setFilters(prev => {
+      if (JSON.stringify(debouncedFilters) === JSON.stringify(currentFilters) || 
+          JSON.stringify(prev) === JSON.stringify(currentFilters)) {
+        return prev;
+      }
+      return currentFilters;
+    })
+
+    // Prepare clean filters for API
+    const cleanFilters: Partial<StadiumSearchRequest> = { ...currentFilters }
+    if (!cleanFilters.targetDate) delete cleanFilters.targetDate
+    if (!cleanFilters.startTime) delete cleanFilters.startTime
+    if (!cleanFilters.endTime) delete cleanFilters.endTime
+    if (!cleanFilters.keyword) delete cleanFilters.keyword
+    if (cleanFilters.sportTypeId === undefined) delete cleanFilters.sportTypeId
+
+    const fetchStadiums = async () => {
+      setLoading(true)
+      try {
+        const res = await searchStadiums(cleanFilters as StadiumSearchRequest)
+        setStadiums(res.content)
+      } catch (error) {
+        console.error(error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchStadiums()
+  }, [searchParams])
 
   const handleFilterChange = (key: keyof StadiumSearchRequest, value: StadiumSearchRequest[keyof StadiumSearchRequest]) => {
-    setFilters(prev => ({ ...prev, [key]: value, page: 0 }))
+    setFilters(prev => ({ ...prev, [key]: value, page: key !== 'page' ? 0 : value as number }))
   }
 
   const handleAmenityToggle = (id: number) => {
@@ -101,6 +169,9 @@ export default function SearchPage() {
       keyword: '',
       sportTypeId: undefined,
       amenityIds: [],
+      userLat: undefined,
+      userLng: undefined,
+      radiusInKm: undefined,
       minPrice: 0,
       maxPrice: 1000000,
       page: 0,
@@ -120,10 +191,10 @@ export default function SearchPage() {
             page: 0
           }))
         },
-        (error) => alert("Không thể lấy vị trí của bạn. Vui lòng cấp quyền.")
+        (error) => toast.error("Không thể lấy vị trí của bạn. Vui lòng cấp quyền.")
       )
     } else {
-      alert("Trình duyệt của bạn không hỗ trợ định vị")
+      toast.error("Trình duyệt của bạn không hỗ trợ định vị")
     }
   }
 
@@ -132,10 +203,12 @@ export default function SearchPage() {
 
       {/* 1. Hero Banner */}
       <div className="relative h-[300px] md:h-[400px] w-full bg-gray-900 overflow-hidden">
-        <img
+        <Image
           src="https://images.unsplash.com/photo-1579952363873-27f3bade9f55?q=80&w=2000&auto=format&fit=crop"
           alt="Sport Banner"
-          className="w-full h-full object-cover opacity-60"
+          fill
+          priority
+          className="object-cover opacity-60"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent"></div>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
@@ -163,6 +236,14 @@ export default function SearchPage() {
       />
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+
+        {loadError && (
+          <div className="mb-6 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <strong>Lỗi kết nối API:</strong> {loadError}. Đảm bảo backend đang chạy (
+            <code className="text-xs">docker compose up -d backend</code>) và bạn mở đúng cổng (
+            <code className="text-xs">NEXTAUTH_URL</code> khớp URL trình duyệt).
+          </div>
+        )}
 
         {/* 4. Filter Info & Modal Trigger */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">

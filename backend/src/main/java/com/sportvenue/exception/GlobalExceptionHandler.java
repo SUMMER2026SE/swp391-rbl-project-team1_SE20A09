@@ -63,16 +63,49 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of(HttpStatus.BAD_GATEWAY.value(), ex.getMessage()));
     }
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
-        List<String> errors = ex.getBindingResult().getFieldErrors().stream()
-                .map(error -> error.getField() + ": " + error.getDefaultMessage())
-                .toList();
+    // ==========================================
+    // 11UC-OV-03: FILTER STADIUM VALIDATION HANDLERS
+    // ==========================================
+    @ExceptionHandler({MethodArgumentNotValidException.class, org.springframework.validation.BindException.class})
+    public ResponseEntity<ErrorResponse> handleValidation(Exception ex) {
+        org.springframework.validation.BindingResult bindingResult = null;
+        if (ex instanceof MethodArgumentNotValidException) {
+            bindingResult = ((MethodArgumentNotValidException) ex).getBindingResult();
+        } else if (ex instanceof org.springframework.validation.BindException) {
+            bindingResult = ((org.springframework.validation.BindException) ex).getBindingResult();
+        }
+
+        List<String> errors = bindingResult != null ? bindingResult.getAllErrors().stream()
+                .map(error -> {
+                    if (error instanceof org.springframework.validation.FieldError) {
+                        return ((org.springframework.validation.FieldError) error).getField() + ": " + error.getDefaultMessage();
+                    }
+                    return error.getObjectName() + ": " + error.getDefaultMessage();
+                })
+                .toList() : List.of(ex.getMessage());
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of(
                         HttpStatus.BAD_REQUEST.value(),
                         "Dữ liệu đầu vào không hợp lệ",
+                        errors
+                ));
+    }
+
+    @ExceptionHandler(jakarta.validation.ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolation(
+            jakarta.validation.ConstraintViolationException ex) {
+        List<String> errors = ex.getConstraintViolations().stream()
+                .map(v -> {
+                    String path = v.getPropertyPath().toString();
+                    String param = path.contains(".") ? path.substring(path.lastIndexOf('.') + 1) : path;
+                    return param + ": " + v.getMessage();
+                })
+                .toList();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_REQUEST.value(),
+                        "Tham số không hợp lệ",
                         errors
                 ));
     }
@@ -95,7 +128,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of(
                         HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                        "Đã có lỗi hệ thống xảy ra. Vui lòng liên hệ quản trị viên hoặc thử lại sau."
+                        "Lỗi hệ thống: " + ex.getMessage()
                 ));
     }
 }

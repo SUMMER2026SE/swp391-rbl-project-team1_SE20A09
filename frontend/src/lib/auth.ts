@@ -80,9 +80,19 @@ export const authOptions: NextAuthOptions = {
       return token;
     },
     async session({ session, token }) {
+      if (token.user) {
+        const { firstName, lastName, email, avatarUrl } = token.user;
+        const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+        session.user = {
+          ...session.user,
+          ...token.user,
+          email: email ?? session.user?.email,
+          name: fullName || session.user?.name,
+          image: avatarUrl ?? session.user?.image,
+        };
+      }
       if (token) {
         session.accessToken = token.accessToken;
-        session.user = token.user;
         session.googleAccessToken = token.googleAccessToken;
       }
       return session;

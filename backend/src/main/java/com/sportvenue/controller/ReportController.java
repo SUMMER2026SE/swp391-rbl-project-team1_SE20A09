@@ -2,7 +2,9 @@ package com.sportvenue.controller;
 
 import com.sportvenue.dto.response.ApiResponse;
 import com.sportvenue.dto.response.RevenueReportResponse;
+import com.sportvenue.dto.response.OwnerDashboardSummaryResponse;
 import com.sportvenue.service.RevenueService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -83,4 +85,27 @@ public class ReportController {
                 .result(response)
                 .build());
     }
+
+    @GetMapping("/summary")
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(
+        summary = "Xem tóm tắt dashboard của chủ sân",
+        description = "Trả về tổng số lượt đặt hôm nay, doanh thu tháng này, tỷ lệ lấp đầy trung bình 30 ngày và số lượng đơn chờ xác nhận."
+    )
+    @ApiResponses(value = {
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Lấy báo cáo tóm tắt thành công"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Không có quyền — yêu cầu role Owner")
+    })
+    public ResponseEntity<ApiResponse<OwnerDashboardSummaryResponse>> getDashboardSummary(
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+
+        OwnerDashboardSummaryResponse response = revenueService.getDashboardSummary(userPrincipal.getUsername());
+
+        return ResponseEntity.ok(ApiResponse.<OwnerDashboardSummaryResponse>builder()
+                .code(200)
+                .message("Lấy tóm tắt dashboard thành công")
+                .result(response)
+                .build());
+    }
 }
+
