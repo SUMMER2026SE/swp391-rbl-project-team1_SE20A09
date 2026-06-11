@@ -115,6 +115,15 @@ export default function VenueDetailPage({ params }: { params: { id: string } }) 
       lat: venue.latitude || 10.8537,
       lng: venue.longitude || 106.7540,
     },
+    recentReviews: venue.recentReviews?.map((r) => ({
+      reviewId: r.reviewId,
+      userName: r.userName,
+      userAvatar: r.userAvatar ?? null,
+      ratingScore: r.ratingScore,
+      comment: r.comment,
+      ownerResponse: r.ownerResponse ?? null,
+      createdAt: r.createdAt,
+    })) || [],
   }
 
   return <VenueDetail venue={mappedVenue} />

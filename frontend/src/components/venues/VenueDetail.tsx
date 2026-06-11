@@ -79,6 +79,15 @@ export interface VenueDetailProps {
       lat: number
       lng: number
     }
+    recentReviews?: {
+      reviewId: number
+      userName: string
+      userAvatar: string | null
+      ratingScore: number
+      comment: string
+      ownerResponse: string | null
+      createdAt: string
+    }[]
   }
 }
 
@@ -887,14 +896,48 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                   </div>
                 </div>
 
-                {/* Empty State */}
-                <div className="flex flex-col items-center justify-center py-[24px] px-4 text-center select-none">
-                  <div className="w-[54px] h-[54px] rounded-full bg-gray-50 border-[0.5px] border-gray-200 flex items-center justify-center mb-3">
-                    <IconMessageOff className="w-[28px] h-[28px] text-gray-300" />
+                {/* Reviews list or Empty State */}
+                {venue.recentReviews && venue.recentReviews.length > 0 ? (
+                  <div className="flex flex-col gap-3">
+                    {venue.recentReviews.map((review) => (
+                      <div key={review.reviewId} className="bg-gray-50 border-[0.5px] border-gray-200 rounded-[10px] p-4 flex flex-col gap-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            {review.userAvatar ? (
+                              <img src={review.userAvatar} alt={review.userName} className="w-8 h-8 rounded-full object-cover" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-[#d4f0e2] text-[#1a8a4a] font-medium text-[12px] flex items-center justify-center uppercase">
+                                {review.userName?.charAt(0) || 'U'}
+                              </div>
+                            )}
+                            <span className="text-[13px] font-medium text-gray-700">{review.userName}</span>
+                          </div>
+                          <div className="flex items-center gap-0.5">
+                            {renderStars(review.ratingScore, 13)}
+                          </div>
+                        </div>
+                        <p className="text-[13px] text-gray-600 leading-relaxed">{review.comment}</p>
+                        {review.ownerResponse && (
+                          <div className="bg-white border-[0.5px] border-[#9edbb6] rounded-[8px] px-3 py-2 mt-1">
+                            <span className="block text-[11px] font-medium text-[#1a8a4a] mb-0.5">Phản hồi của chủ sân</span>
+                            <p className="text-[12px] text-gray-600">{review.ownerResponse}</p>
+                          </div>
+                        )}
+                        <span className="text-[11px] text-gray-400">
+                          {new Date(review.createdAt).toLocaleDateString('vi-VN')}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                  <p className="text-[13px] text-gray-500 font-medium mb-0.5">Chưa có đánh giá nào.</p>
-                  <p className="text-[12px] text-gray-400 font-normal">Hãy là người đầu tiên đánh giá sân này!</p>
-                </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-[24px] px-4 text-center select-none">
+                    <div className="w-[54px] h-[54px] rounded-full bg-gray-50 border-[0.5px] border-gray-200 flex items-center justify-center mb-3">
+                      <IconMessageOff className="w-[28px] h-[28px] text-gray-300" />
+                    </div>
+                    <p className="text-[13px] text-gray-500 font-medium mb-0.5">Chưa có đánh giá nào.</p>
+                    <p className="text-[12px] text-gray-400 font-normal">Hãy là người đầu tiên đánh giá sân này!</p>
+                  </div>
+                )}
 
               </div>
             )}
