@@ -31,6 +31,7 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
 
     private final UserRepository userRepository;
     private final BookingRepository bookingRepository;
+    private final com.sportvenue.repository.PaymentRepository paymentRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -75,7 +76,8 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
             booking.getSlot().setSlotStatus(com.sportvenue.entity.enums.SlotStatus.AVAILABLE);
         }
         
-        bookingRepository.save(booking);
+        paymentRepository.findByBookingBookingId(bookingId).ifPresent(paymentRepository::delete);
+        bookingRepository.delete(booking);
     }
 
     private CustomerBookingHistoryDto toDto(Booking booking) {
