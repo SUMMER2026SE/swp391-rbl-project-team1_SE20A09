@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 
 public interface RevenueService {
     RevenueReportResponse getRevenueReport(String ownerEmail, Integer stadiumId, LocalDateTime startDate, LocalDateTime endDate);
+
     OwnerDashboardSummaryResponse getDashboardSummary(String ownerEmail);
 }
 

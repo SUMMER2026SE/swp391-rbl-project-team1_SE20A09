@@ -67,6 +67,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
             @Param("ownerEmail") String ownerEmail,
             @Param("startOfMonth") LocalDateTime startOfMonth,
             @Param("endOfMonth") LocalDateTime endOfMonth);
+
     @Query("SELECT p FROM Payment p WHERE p.booking.bookingId = :bookingId AND p.amount < 0")
     Optional<Payment> findRefundPaymentByBookingId(@Param("bookingId") Integer bookingId);
 }
