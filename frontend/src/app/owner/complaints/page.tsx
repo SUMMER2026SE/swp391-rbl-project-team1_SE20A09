@@ -403,7 +403,7 @@ function OwnerComplaintsPage() {
                           Đã thống nhất giải quyết thành công
                         </h4>
                         <p className="text-sm text-green-700 font-semibold">{selectedComplaint.resolution}</p>
-                        <p className="text-[10px] text-green-600">Ngày giải quyết: {new Date(selectedComplaint.resolvedDate).toLocaleDateString('vi-VN')}</p>
+                        <p className="text-[10px] text-green-600">Ngày giải quyết: {new Date(selectedComplaint.resolvedDate as string).toLocaleDateString('vi-VN')}</p>
                       </div>
                     )}
                   </CardContent>

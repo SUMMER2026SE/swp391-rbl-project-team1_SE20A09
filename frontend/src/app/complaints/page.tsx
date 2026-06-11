@@ -395,7 +395,7 @@ function ComplaintsPage() {
                   <CardContent className="space-y-1">
                     <p className="text-sm font-semibold text-green-700">{activeComplaint.resolution}</p>
                     <p className="text-[10px] text-green-600">
-                      Ngày giải quyết: {new Date(activeComplaint.resolvedDate).toLocaleDateString('vi-VN')}
+                      Ngày giải quyết: {new Date(activeComplaint.resolvedDate as string).toLocaleDateString('vi-VN')}
                     </p>
                   </CardContent>
                 </Card>
