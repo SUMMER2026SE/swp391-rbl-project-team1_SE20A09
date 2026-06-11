@@ -9,6 +9,7 @@ interface StadiumCardProps {
 }
 
 import Image from 'next/image'
+import Link from 'next/link'
 
 export function StadiumCard({ stadium, isUrgent = false }: StadiumCardProps) {
   const mockReviewCount = Math.floor(Math.random() * 200) + 50 // Giả lập số lượng đánh giá
@@ -84,8 +85,10 @@ export function StadiumCard({ stadium, isUrgent = false }: StadiumCardProps) {
             {stadium.pricePerHour.toLocaleString('vi-VN')}₫
           </div>
         </div>
-        <Button className="rounded-xl px-6 py-6 font-bold bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95">
-          Đặt Ngay
+        <Button asChild className="rounded-xl px-6 py-6 font-bold bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95">
+          <Link href={`/booking/new?stadiumId=${stadium.stadiumId}`}>
+            Đặt Ngay
+          </Link>
         </Button>
       </CardFooter>
     </Card>

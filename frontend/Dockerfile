@@ -14,6 +14,9 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED 1
 
+ARG API_URL=http://backend:8080
+ENV API_URL=${API_URL}
+
 RUN npm run build
 
 # ── Stage 3: Runtime ───────────────────────────────────────
