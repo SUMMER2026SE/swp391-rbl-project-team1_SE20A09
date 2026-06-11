@@ -1,11 +1,18 @@
 'use client'
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Clock, Calendar, Star, MessageSquare, X } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Calendar, Star, MessageSquare, X, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { post } from '@/lib/api';
+import { toast } from 'sonner';
+
+import { useParams } from 'next/navigation';
 
 const booking = {
   id: 1,
@@ -36,14 +43,39 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 };
 
 function BookingDetailPage() {
+  const params = useParams();
   const status = statusConfig[booking.status] ?? statusConfig['pending'];
+  
+  const [complaintOpen, setComplaintOpen] = useState(false);
+  const [complaintText, setComplaintText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmitComplaint = async () => {
+    if (!complaintText.trim()) return;
+    try {
+      setSubmitting(true);
+      const targetId = params?.id || booking.id;
+      await post(`/complaints`, {
+        bookingId: parseInt(String(targetId), 10) || 0,
+        subject: "Khiếu nại từ đơn đặt sân #" + targetId,
+        description: complaintText.trim() 
+      });
+      toast.success("Đã gửi khiếu nại thành công! Chủ sân sẽ sớm phản hồi.");
+      setComplaintOpen(false);
+      setComplaintText("");
+    } catch (err: any) {
+      toast.error(err.message || "Có lỗi xảy ra khi gửi khiếu nại.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b bg-card sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center gap-4">
-          <Link href="/bookings">
+          <Link href="/profile">
             <Button variant="ghost" size="sm">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Lịch sử đặt sân
@@ -146,28 +178,61 @@ function BookingDetailPage() {
 
         {/* Actions */}
         {booking.status === 'confirmed' && (
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Link href={`/booking/${booking.id}/review`} className="flex-1">
-              <Button variant="outline" className="w-full">
-                <Star className="h-4 w-4 mr-2" />
-                Viết đánh giá
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Link href={`/booking/${booking.id}/review`} className="flex-1">
+                <Button variant="outline" className="w-full">
+                  <Star className="h-4 w-4 mr-2" />
+                  Viết đánh giá
+                </Button>
+              </Link>
+              <Link href="/chat" className="flex-1">
+                <Button variant="outline" className="w-full">
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Liên hệ chủ sân
+                </Button>
+              </Link>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button variant="outline" className="flex-1 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700" onClick={() => setComplaintOpen(true)}>
+                <AlertCircle className="h-4 w-4 mr-2" />
+                Gửi khiếu nại
               </Button>
-            </Link>
-            <Link href="/chat" className="flex-1">
-              <Button variant="outline" className="w-full">
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Liên hệ chủ sân
-              </Button>
-            </Link>
-            <Link href={`/booking/${booking.id}/cancel`} className="flex-1">
-              <Button variant="destructive" className="w-full">
-                <X className="h-4 w-4 mr-2" />
-                Huỷ đặt sân
-              </Button>
-            </Link>
+              <Link href={`/booking/${booking.id}/cancel`} className="flex-1">
+                <Button variant="destructive" className="w-full">
+                  <X className="h-4 w-4 mr-2" />
+                  Huỷ đặt sân
+                </Button>
+              </Link>
+            </div>
           </div>
         )}
       </div>
+
+      <Dialog open={complaintOpen} onOpenChange={setComplaintOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gửi khiếu nại</DialogTitle>
+            <DialogDescription>
+              Vui lòng mô tả chi tiết vấn đề bạn gặp phải với sân hoặc dịch vụ. Chủ sân sẽ nhận được khiếu nại và giải quyết cho bạn.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <Textarea
+              placeholder="Nhập nội dung khiếu nại của bạn ở đây..."
+              value={complaintText}
+              onChange={(e) => setComplaintText(e.target.value)}
+              className="min-h-[120px]"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setComplaintOpen(false)}>Hủy</Button>
+            <Button onClick={handleSubmitComplaint} disabled={!complaintText.trim() || submitting} className="bg-red-600 hover:bg-red-700">
+              {submitting ? "Đang gửi..." : "Gửi khiếu nại"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

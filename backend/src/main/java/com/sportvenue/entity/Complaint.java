@@ -57,6 +57,10 @@ public class Complaint implements Serializable {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    /** Chủ đề khiếu nại. */
+    @Column(name = "subject", nullable = false, length = 255)
+    private String subject;
+
     /** Nội dung khiếu nại chi tiết. */
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
