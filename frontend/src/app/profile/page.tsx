@@ -14,8 +14,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import { get, post } from "@/lib/api";
+import { BookingHistoryList } from "@/components/bookings/BookingHistoryList";
+import { ReviewHistoryList } from "@/components/reviews/ReviewHistoryList";
+import { OwnerReviewHistoryList } from "@/components/reviews/OwnerReviewHistoryList";
+
 import {
   Camera,
   Trophy,
@@ -32,6 +35,9 @@ import {
   Eye,
   EyeOff,
   Edit,
+  Clock,
+  MapPin,
+  FileText,
 } from "lucide-react";
 
 interface UserProfileResponse {
@@ -63,6 +69,8 @@ function UserProfilePage() {
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState("info");
 
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [oldPassword, setOldPassword] = useState("");
@@ -157,6 +165,45 @@ function UserProfilePage() {
       fetchUserProfile();
     }
   }, [status, session?.accessToken, router]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Tab routing
+      const urlParams = new URLSearchParams(window.location.search);
+      const tab = urlParams.get('tab');
+      if (tab) {
+        setActiveTab(tab);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const fetchReviews = async () => {
+      try {
+        if (!profile) return;
+        const endpoint = profile.roleName === 'Owner' ? '/owner/reviews' : '/reviews/my';
+        const data = await get<any[]>(endpoint);
+        setReviews(data || []);
+      } catch (e) {
+        console.error("Failed to load reviews", e);
+      }
+    };
+    
+    if (profile) {
+      fetchReviews();
+    }
+  }, [profile]);
+
+  const getStatusBadge = (status: string) => {
+    const statusConfig = {
+      confirmed: { label: "Đã xác nhận", className: "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" },
+      pending: { label: "Chờ xác nhận", className: "bg-amber-500/10 text-amber-500 border border-amber-500/20" },
+      completed: { label: "Hoàn thành", className: "bg-blue-500/10 text-blue-500 border border-blue-500/20" },
+      cancelled: { label: "Đã hủy bỏ", className: "bg-rose-500/10 text-rose-500 border border-rose-500/20" },
+    };
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending;
+    return <Badge className={`rounded-full px-3 py-1 font-semibold ${config.className}`}>{config.label}</Badge>;
+  };
 
   const getInitials = (name: string) => {
     if (!name) return "U";
@@ -292,11 +339,16 @@ function UserProfilePage() {
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="info" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-full sm:w-auto overflow-x-auto flex whitespace-nowrap">
             <TabsTrigger value="info">Thông tin cá nhân</TabsTrigger>
-            <TabsTrigger value="bookings">Lịch sử đặt sân</TabsTrigger>
-            <TabsTrigger value="reviews">Đánh giá của tôi</TabsTrigger>
+            <TabsTrigger value="bookings">
+              {profile.roleName?.toUpperCase() === 'OWNER' ? 'Lịch sử khách đặt' : 'Lịch sử đặt sân'}
+            </TabsTrigger>
+            <TabsTrigger value="reviews">
+              {profile.roleName?.toUpperCase() === 'OWNER' ? 'Đánh giá từ khách hàng' : 'Đánh giá của tôi'}
+            </TabsTrigger>
+
             <TabsTrigger value="settings">Bảo mật & Cài đặt</TabsTrigger>
           </TabsList>
 
@@ -381,26 +433,15 @@ function UserProfilePage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="bookings">
-            <Card className="border-none shadow-sm bg-white p-8 text-center">
-              <Calendar className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-slate-800 mb-2">Lịch sử đặt sân</h3>
-              <p className="text-slate-500 text-sm max-w-sm mx-auto mb-6">
-                Xem lịch sử đặt sân tại trang đơn hàng của bạn.
-              </p>
-              <Button variant="outline" onClick={() => router.push("/bookings")}>
-                Đi tới lịch sử đặt sân
-              </Button>
-            </Card>
+          <TabsContent value="bookings" className="pt-4">
+            <BookingHistoryList isOwner={profile.roleName?.toUpperCase() === 'OWNER'} />
           </TabsContent>
 
-          <TabsContent value="reviews">
-            <Card className="border-none shadow-sm bg-white p-8 text-center">
-              <Star className="h-16 w-16 text-amber-300 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-slate-800 mb-2">Đánh giá của tôi</h3>
-              <p className="text-slate-500 text-sm">Tính năng đang được phát triển.</p>
-            </Card>
+          <TabsContent value="reviews" className="pt-4">
+            {profile.roleName?.toUpperCase() === 'OWNER' ? <OwnerReviewHistoryList /> : <ReviewHistoryList />}
           </TabsContent>
+
+
 
           <TabsContent value="settings">
             <Card className="border-none shadow-sm bg-white">

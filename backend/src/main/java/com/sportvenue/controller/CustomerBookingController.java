@@ -32,4 +32,16 @@ public class CustomerBookingController {
             @RequestParam(defaultValue = "10") int size) {
         return ResponseEntity.ok(customerBookingService.getMyBookings(userPrincipal, page, size));
     }
+
+    @org.springframework.web.bind.annotation.PutMapping("/{id}/cancel")
+    @Operation(
+            summary = "Huỷ đơn đặt sân",
+            description = "Khách hàng tự huỷ đơn đặt sân của mình nếu chưa hoàn thành")
+    public ResponseEntity<Void> cancelBooking(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @org.springframework.web.bind.annotation.PathVariable Integer id,
+            @org.springframework.web.bind.annotation.RequestBody java.util.Map<String, String> request) {
+        customerBookingService.cancelBooking(userPrincipal, id, request.get("reason"));
+        return ResponseEntity.ok().build();
+    }
 }
