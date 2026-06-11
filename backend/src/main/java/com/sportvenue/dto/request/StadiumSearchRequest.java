@@ -5,8 +5,12 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
 import org.springframework.format.annotation.DateTimeFormat;
 
 import com.sportvenue.entity.enums.StadiumStatus;
@@ -42,15 +46,15 @@ public class StadiumSearchRequest {
     private LocalTime endTime;
 
     // Location/GPS filter
-    @jakarta.validation.constraints.DecimalMin(value = "-90.0", message = "Vĩ độ không hợp lệ")
-    @jakarta.validation.constraints.DecimalMax(value = "90.0", message = "Vĩ độ không hợp lệ")
+    @DecimalMin(value = "-90.0", message = "Vĩ độ không hợp lệ")
+    @DecimalMax(value = "90.0", message = "Vĩ độ không hợp lệ")
     private Double userLat;
 
-    @jakarta.validation.constraints.DecimalMin(value = "-180.0", message = "Kinh độ không hợp lệ")
-    @jakarta.validation.constraints.DecimalMax(value = "180.0", message = "Kinh độ không hợp lệ")
+    @DecimalMin(value = "-180.0", message = "Kinh độ không hợp lệ")
+    @DecimalMax(value = "180.0", message = "Kinh độ không hợp lệ")
     private Double userLng;
 
-    @jakarta.validation.constraints.Positive(message = "Bán kính tìm kiếm phải là số dương")
+    @Positive(message = "Bán kính tìm kiếm phải là số dương")
     private Double radiusInKm;
 
     // Amenities filter
@@ -66,7 +70,7 @@ public class StadiumSearchRequest {
     @Builder.Default
     private int size = 10;
 
-    @jakarta.validation.constraints.AssertTrue(message = "Giá cao nhất phải lớn hơn hoặc bằng giá thấp nhất")
+    @AssertTrue(message = "Giá cao nhất phải lớn hơn hoặc bằng giá thấp nhất")
     public boolean isPriceRangeValid() {
         if (minPrice == null || maxPrice == null) {
             return true;
@@ -74,7 +78,7 @@ public class StadiumSearchRequest {
         return maxPrice.compareTo(minPrice) >= 0;
     }
 
-    @jakarta.validation.constraints.AssertTrue(message = "Phải cung cấp cả vĩ độ và kinh độ, hoặc không cung cấp gì cả")
+    @AssertTrue(message = "Phải cung cấp cả vĩ độ và kinh độ, hoặc không cung cấp gì cả")
     public boolean isLocationValid() {
         int count = 0;
         if (userLat != null) {

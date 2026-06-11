@@ -55,6 +55,9 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
         private PageResponse<StadiumResponse> handleDistancePagination(StadiumSearchRequest request,
                         Pageable pageable,
                         Specification<Stadium> spec) {
+                // TODO(Performance): Implement Haversine distance calculation and pagination at DB level
+                // Currently loads all filtered stadiums into RAM and sorts them. 
+                // Long-term solution: Replace Specification with Native Query/JPQL or PostGIS spatial features.
                 List<Stadium> allStadiums = stadiumRepository.findAll(spec);
 
                 if (allStadiums.isEmpty()) {

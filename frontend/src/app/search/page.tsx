@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Map, X } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import Image from 'next/image'
+import { toast } from 'sonner'
 
 // Import New Components
 import { HorizontalSearch } from './components/HorizontalSearch'
@@ -190,10 +191,10 @@ function SearchPageContent() {
             page: 0
           }))
         },
-        (error) => alert("Không thể lấy vị trí của bạn. Vui lòng cấp quyền.")
+        (error) => toast.error("Không thể lấy vị trí của bạn. Vui lòng cấp quyền.")
       )
     } else {
-      alert("Trình duyệt của bạn không hỗ trợ định vị")
+      toast.error("Trình duyệt của bạn không hỗ trợ định vị")
     }
   }
 
