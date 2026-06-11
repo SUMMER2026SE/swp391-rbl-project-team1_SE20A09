@@ -51,13 +51,31 @@ public class HomeServiceImpl implements HomeService {
     @Override
     @Transactional(readOnly = true)
     public HomeDashboardResponse getDashboard(UserPrincipal principal) {
+        if (principal == null) {
+            log.error("UserPrincipal is null");
+            throw new ResourceNotFoundException("Người dùng chưa đăng nhập");
+        }
+        
+        log.info("Loading dashboard for user: {}", principal.getUsername());
+        
         User user = userRepository.findByEmail(principal.getUsername())
-                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
+                .orElseThrow(() -> {
+                    log.error("User not found in database: {}", principal.getUsername());
+                    return new ResourceNotFoundException("Người dùng không tồn tại: " + principal.getUsername());
+                });
 
         Integer userId = user.getUserId();
         LocalDateTime now = LocalDateTime.now();
         Pageable upcomingPage = PageRequest.of(0, 10);
 
+        try {
+            List<Booking> upcoming = bookingRepository.findUpcomingByUserId(userId, now, upcomingPage);
+            log.info("Found {} upcoming bookings", upcoming.size());
+        } catch (Exception e) {
+            log.error("Error loading upcoming bookings: ", e);
+            throw new RuntimeException("Lỗi khi tải lịch sắp tới", e);
+        }
+        
         List<Booking> upcoming = bookingRepository.findUpcomingByUserId(userId, now, upcomingPage);
         List<UserFavoriteStadium> favorites = favoriteRepository.findByUserUserIdOrderByCreatedAtDesc(userId);
         List<Integer> favoriteIds = favorites.stream()
