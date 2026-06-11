@@ -59,7 +59,7 @@ class TimeSlotServiceImplTest {
                 .owner(owner)
                 .openTime(LocalTime.of(8, 0))
                 .closeTime(LocalTime.of(22, 0))
-                .timeSlots(new ArrayList<>())
+                .timeSlots(new java.util.LinkedHashSet<>())
                 .build();
     }
 
