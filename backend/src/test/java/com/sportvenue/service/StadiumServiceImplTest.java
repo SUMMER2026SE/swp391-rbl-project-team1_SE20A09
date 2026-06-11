@@ -92,7 +92,7 @@ class StadiumServiceImplTest {
         assertEquals("Stadium A", savedStadium.getStadiumName());
         assertEquals("123 Main Street", savedStadium.getAddress());
         assertEquals(1, savedStadium.getImages().size());
-        assertEquals(savedStadium, savedStadium.getImages().getFirst().getStadium());
+        assertEquals(savedStadium, savedStadium.getImages().iterator().next().getStadium());
     }
 
     @Test

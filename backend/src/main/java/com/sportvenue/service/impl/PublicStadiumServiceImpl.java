@@ -104,7 +104,10 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
     private StadiumResponse mapToResponse(Stadium stadium, Double userLat, Double userLng) {
         String firstImageUrl = null;
         if (stadium.getImages() != null && !stadium.getImages().isEmpty()) {
-            firstImageUrl = stadium.getImages().get(0).getImageUrl();
+            firstImageUrl = stadium.getImages().stream()
+                    .findFirst()
+                    .map(com.sportvenue.entity.StadiumImage::getImageUrl)
+                    .orElse(null);
         }
 
         Double distance = null;
