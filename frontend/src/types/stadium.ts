@@ -21,6 +21,7 @@ export interface UpdateStadiumRequest {
   description?: string;
   openTime: string; // Format HH:mm:ss
   closeTime: string; // Format HH:mm:ss
+  imageUrls?: string[];
 }
 
 export interface StadiumResponse {
@@ -38,6 +39,7 @@ export interface StadiumResponse {
   stadiumStatus: string;
   averageRating: number;
   imageUrls: string[];
+  approvedStatus: string;
 }
 
 export interface SportType {
