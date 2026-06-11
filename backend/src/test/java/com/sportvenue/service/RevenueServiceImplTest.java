@@ -4,6 +4,7 @@ import com.sportvenue.dto.response.RevenueReportResponse;
 import com.sportvenue.dto.response.VenueRevenueDto;
 import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.BookingRepository;
+import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.projection.DailyRevenueProjection;
 import com.sportvenue.repository.projection.VenueRevenueProjection;
 import com.sportvenue.service.impl.RevenueServiceImpl;
@@ -33,11 +34,14 @@ class RevenueServiceImplTest {
     @Mock
     private BookingRepository bookingRepository;
 
+    @Mock
+    private StadiumRepository stadiumRepository;
+
     private RevenueServiceImpl revenueService;
 
     @BeforeEach
     void setUp() {
-        revenueService = new RevenueServiceImpl(paymentRepository, bookingRepository);
+        revenueService = new RevenueServiceImpl(paymentRepository, bookingRepository, stadiumRepository);
     }
 
     @Test
@@ -178,24 +182,13 @@ class RevenueServiceImplTest {
         when(bookingRepository.countPendingBookingsByOwnerEmail(ownerEmail))
                 .thenReturn(3L);
 
-        // Mock daily revenue projection
-        DailyRevenueProjection d1 = Mockito.mock(DailyRevenueProjection.class);
-        when(d1.getDate()).thenReturn(now.toLocalDate().minusDays(1));
-        when(d1.getRevenue()).thenReturn(BigDecimal.valueOf(1000000));
-        when(paymentRepository.getDailyRevenue(eq(ownerEmail), eq(null), any(LocalDateTime.class), any(LocalDateTime.class)))
-                .thenReturn(List.of(d1));
+        // Mock bookings in 30 days
+        when(bookingRepository.countBookingsByOwnerAndDateRange(eq(ownerEmail), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(10L);
 
-        // Mock venue breakdown revenue projection
-        VenueRevenueProjection vr1 = Mockito.mock(VenueRevenueProjection.class);
-        when(vr1.getStadiumId()).thenReturn(1);
-        when(vr1.getStadiumName()).thenReturn("Stadium A");
-        when(vr1.getTotalBookings()).thenReturn(10L);
-        when(vr1.getTotalRevenue()).thenReturn(BigDecimal.valueOf(1000000));
-        
-        // getRevenueReport calls getVenueRevenueBreakdown twice: once for current period and once for previous period
-        when(paymentRepository.getVenueRevenueBreakdown(eq(ownerEmail), eq(null), any(LocalDateTime.class), any(LocalDateTime.class)))
-                .thenReturn(List.of(vr1)) // 1st call: current
-                .thenReturn(List.of());   // 2nd call: previous
+        // Mock stadiums count
+        when(stadiumRepository.countStadiumsByOwnerEmail(ownerEmail))
+                .thenReturn(1L);
 
         // Execute
         com.sportvenue.dto.response.OwnerDashboardSummaryResponse summary = revenueService.getDashboardSummary(ownerEmail);
@@ -206,7 +199,7 @@ class RevenueServiceImplTest {
         assertEquals(BigDecimal.valueOf(10000000), summary.getCurrentMonthRevenue());
         assertEquals(3L, summary.getPendingBookingsCount());
         
-        // occupancy for 30 days and 10 bookings is (10 / (30 * 12)) * 100% = 2.77% -> round to 2.8%
+        // occupancy for 30 days, 1 stadium and 10 bookings is (10 / (30 * 12 * 1)) * 100% = 2.77% -> round to 2.8%
         assertEquals(2.8, summary.getAverageOccupancyRate());
     }
 }

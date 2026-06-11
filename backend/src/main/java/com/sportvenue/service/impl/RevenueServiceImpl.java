@@ -6,6 +6,7 @@ import com.sportvenue.dto.response.OwnerDashboardSummaryResponse;
 import com.sportvenue.dto.response.VenueRevenueDto;
 import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.BookingRepository;
+import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.projection.DailyRevenueProjection;
 import com.sportvenue.repository.projection.VenueRevenueProjection;
 import com.sportvenue.service.RevenueService;
@@ -35,6 +36,7 @@ public class RevenueServiceImpl implements RevenueService {
 
     private final PaymentRepository paymentRepository;
     private final BookingRepository bookingRepository;
+    private final StadiumRepository stadiumRepository;
 
 
     @Transactional(readOnly = true)
@@ -147,7 +149,7 @@ public class RevenueServiceImpl implements RevenueService {
         LocalDateTime endOfToday = now.toLocalDate().atTime(LocalTime.MAX);
 
         LocalDateTime startOfMonth = now.toLocalDate().withDayOfMonth(1).atStartOfDay();
-        LocalDateTime endOfMonth = now.toLocalDate().plusMonths(1).withDayOfMonth(1).minusDays(1).atTime(LocalTime.MAX);
+        LocalDateTime endOfMonth = now.toLocalDate().with(java.time.temporal.TemporalAdjusters.lastDayOfMonth()).atTime(LocalTime.MAX);
 
         long todayBookingsCount = bookingRepository.countTodayBookingsByOwnerEmail(ownerEmail, startOfToday, endOfToday);
         BigDecimal currentMonthRevenue = paymentRepository.sumCurrentMonthRevenue(ownerEmail, startOfMonth, endOfMonth);
@@ -155,14 +157,16 @@ public class RevenueServiceImpl implements RevenueService {
 
         // Tỷ lệ lấp đầy trong 30 ngày qua
         LocalDateTime start30DaysAgo = now.minusDays(30);
-        RevenueReportResponse report = getRevenueReport(ownerEmail, null, start30DaysAgo, now);
+        long totalBookings = bookingRepository.countBookingsByOwnerAndDateRange(ownerEmail, start30DaysAgo, now);
+        long totalStadiums = stadiumRepository.countStadiumsByOwnerEmail(ownerEmail);
 
         double averageOccupancyRate = 0.0;
-        if (report.getVenueRevenues() != null && !report.getVenueRevenues().isEmpty()) {
-            double totalOccupancy = report.getVenueRevenues().stream()
-                    .mapToDouble(VenueRevenueDto::getOccupancy)
-                    .sum();
-            averageOccupancyRate = totalOccupancy / report.getVenueRevenues().size();
+        if (totalStadiums > 0) {
+            double totalAvailableHours = 30.0 * OPERATIONAL_HOURS_PER_DAY * totalStadiums;
+            averageOccupancyRate = ((double) totalBookings / totalAvailableHours) * 100.0;
+            if (averageOccupancyRate > 100.0) {
+                averageOccupancyRate = 100.0;
+            }
             averageOccupancyRate = Math.round(averageOccupancyRate * 10.0) / 10.0; // làm tròn 1 chữ số thập phân
         }
 

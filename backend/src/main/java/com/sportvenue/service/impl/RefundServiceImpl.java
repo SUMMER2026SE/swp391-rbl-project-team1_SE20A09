@@ -212,6 +212,19 @@ public class RefundServiceImpl implements RefundService {
         
         List<Booking> bookings = bookingRepository.findByStadiumOwnerUserEmailOrderByBookingDateDesc(ownerEmail);
         
+        List<Integer> bookingIds = bookings.stream().map(Booking::getBookingId).toList();
+        java.util.Map<Integer, BigDecimal> refundMap = new java.util.HashMap<>();
+        if (!bookingIds.isEmpty()) {
+            List<Payment> refundPayments = paymentRepository.findRefundPaymentsByBookingIds(bookingIds);
+            for (Payment p : refundPayments) {
+                if (p.getBooking() != null && p.getAmount() != null) {
+                    Integer bid = p.getBooking().getBookingId();
+                    BigDecimal amt = p.getAmount().abs();
+                    refundMap.put(bid, refundMap.getOrDefault(bid, BigDecimal.ZERO).add(amt));
+                }
+            }
+        }
+        
         return bookings.stream().map(b -> {
             String customerName = b.getUser().getFirstName() + " " + b.getUser().getLastName();
             OwnerBookingResponse.CustomerInfo customerInfo = OwnerBookingResponse.CustomerInfo.builder()
@@ -223,13 +236,7 @@ public class RefundServiceImpl implements RefundService {
             String startTime = b.getSlot().getStartTime().toLocalTime().toString();
             String endTime = b.getSlot().getEndTime().toLocalTime().toString();
             
-            BigDecimal refundAmt = BigDecimal.ZERO;
-            if (b.getPaymentStatus() == com.sportvenue.entity.enums.PaymentStatus.REFUNDED) {
-                java.util.Optional<Payment> refundOpt = paymentRepository.findRefundPaymentByBookingId(b.getBookingId());
-                if (refundOpt.isPresent()) {
-                    refundAmt = refundOpt.get().getAmount().abs();
-                }
-            }
+            BigDecimal refundAmt = refundMap.getOrDefault(b.getBookingId(), BigDecimal.ZERO);
 
             return OwnerBookingResponse.builder()
                     .id(b.getBookingId())

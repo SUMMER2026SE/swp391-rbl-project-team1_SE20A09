@@ -70,4 +70,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
 
     @Query("SELECT p FROM Payment p WHERE p.booking.bookingId = :bookingId AND p.amount < 0")
     Optional<Payment> findRefundPaymentByBookingId(@Param("bookingId") Integer bookingId);
+
+    @Query("SELECT p FROM Payment p WHERE p.booking.bookingId IN :bookingIds AND p.amount < 0")
+    List<Payment> findRefundPaymentsByBookingIds(@Param("bookingIds") List<Integer> bookingIds);
 }
