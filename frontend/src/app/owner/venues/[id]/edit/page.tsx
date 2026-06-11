@@ -9,14 +9,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, Upload, X } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { stadiumService } from "@/lib/services/stadium";
 import { SportType, StadiumResponse } from "@/types/stadium";
+import { uploadStadiumImage } from "@/lib/api";
 import { toast } from "sonner";
 import { AddressPicker } from "@/components/AddressPicker";
+import { Badge } from "@/components/ui/badge";
 
 const updateStadiumSchema = z.object({
   stadiumName: z.string()
@@ -58,6 +60,31 @@ export default function EditVenuePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [stadium, setStadium] = useState<StadiumResponse | null>(null);
+  const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    if (uploadedPhotos.length + files.length > 10) {
+      toast.error("Chỉ được tải lên tối đa 10 ảnh");
+      e.target.value = "";
+      return;
+    }
+    setIsUploading(true);
+    let successCount = 0;
+    for (const file of Array.from(files)) {
+      try {
+        const result = await uploadStadiumImage(file);
+        setUploadedPhotos(prev => [...prev, result.url]);
+        successCount++;
+      } catch {
+        toast.error(`Không thể tải lên ảnh "${file.name}". Bỏ qua và tiếp tục.`);
+      }
+    }
+    if (successCount > 0) toast.success(`Đã tải lên ${successCount} ảnh`);
+    setIsUploading(false);
+  };
 
   const form = useForm<UpdateStadiumFormValues>({
     resolver: zodResolver(updateStadiumSchema),
@@ -88,6 +115,7 @@ export default function EditVenuePage() {
         .then(([types, stadiumData]) => {
           setSportTypes(types);
           setStadium(stadiumData);
+          setUploadedPhotos(stadiumData.imageUrls || []);
           const normalizeTime = (t: string) => {
             if (!t) return "06:00";
             if (/^\d{2}:\d{2}:\d{2}$/.test(t)) return t.substring(0, 5);
@@ -124,6 +152,10 @@ export default function EditVenuePage() {
   if (!session || !stadium) return null;
 
   const onSubmit = async (data: UpdateStadiumFormValues) => {
+    if (uploadedPhotos.length < 1) {
+      toast.error("Vui lòng tải lên ít nhất 1 ảnh");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const normalizeTime = (t: string) => {
@@ -134,6 +166,7 @@ export default function EditVenuePage() {
         ...data,
         openTime: normalizeTime(data.openTime),
         closeTime: normalizeTime(data.closeTime),
+        imageUrls: uploadedPhotos,
       };
       await stadiumService.updateStadium(stadiumId, payload);
       toast.success("Cập nhật sân thành công!");
@@ -232,6 +265,53 @@ export default function EditVenuePage() {
                 {form.formState.errors.description && (
                   <p className="text-sm text-destructive">{form.formState.errors.description.message}</p>
                 )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-base font-semibold">Hình ảnh sân *</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {uploadedPhotos.map((photo, idx) => (
+                    <div key={idx} className="relative aspect-video">
+                      <img
+                        src={photo}
+                        alt={`Photo ${idx + 1}`}
+                        className="w-full h-full object-cover rounded-lg border"
+                      />
+                      {idx === 0 && (
+                        <Badge className="absolute top-2 left-2 bg-primary text-white">Ảnh chính</Badge>
+                      )}
+                      <button
+                        type="button"
+                        className="absolute top-2 right-2 bg-destructive text-destructive-foreground rounded-full p-1 shadow-sm"
+                        onClick={() => setUploadedPhotos(uploadedPhotos.filter((_, i) => i !== idx))}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+
+                  <label className="aspect-video border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-muted-foreground hover:border-primary hover:text-primary cursor-pointer transition-colors bg-muted/50">
+                    {isUploading ? (
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                    ) : (
+                      <>
+                        <Upload className="h-8 w-8 mb-2" />
+                        <span className="text-xs sm:text-sm">Tải ảnh lên</span>
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handlePhotoUpload}
+                      disabled={isUploading}
+                    />
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  * Tải lên tối thiểu 1 ảnh. Nên dùng ảnh ngang (16:9) để hiển thị tốt nhất.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
