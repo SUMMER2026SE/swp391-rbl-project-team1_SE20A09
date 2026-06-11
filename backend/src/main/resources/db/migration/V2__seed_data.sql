@@ -40,32 +40,32 @@ VALUES
 -- ── 4. Stadiums ───────────────────────────────────────────────────────────
 -- latitude DOUBLE PRECISION, longitude DOUBLE PRECISION
 -- NO capacity, NO price_per_hour
-INSERT INTO stadiums (owner_id, sport_type_id, stadium_name, description, address, latitude, longitude, open_time, close_time, stadium_status, average_rating)
+INSERT INTO stadiums (owner_id, sport_type_id, stadium_name, description, address, latitude, longitude, open_time, close_time, price_per_hour, capacity, stadium_status, approved_status, average_rating)
 VALUES
     ((SELECT owner_id FROM owners WHERE business_name = 'Sport Venue Owner Corp'),
      (SELECT sport_type_id FROM sport_types WHERE sport_name = 'Football'),
      'Sân Bóng Đá Thủ Đức', 'Sân bóng đá mini 5vs5 chất lượng cao, cỏ nhân tạo thế hệ 3',
-     '123 Võ Văn Ngân, Thủ Đức, TP.HCM', 10.850, 106.755, '06:00', '22:00', 'AVAILABLE', 4.5),
+     '123 Võ Văn Ngân, Thủ Đức, TP.HCM', 10.850, 106.755, '06:00', '22:00', 150000.00, 10, 'AVAILABLE', 'APPROVED', 4.5),
 
     ((SELECT owner_id FROM owners WHERE business_name = 'Sport Venue Owner Corp'),
      (SELECT sport_type_id FROM sport_types WHERE sport_name = 'Badminton'),
      'Sân Cầu Lông Quận 1', 'Hệ thống 6 sân cầu lông trong nhà, sàn gỗ chuyên nghiệp',
-     '45 Lê Lợi, Quận 1, TP.HCM', 10.776, 106.700, '07:00', '23:00', 'AVAILABLE', 4.8),
+     '45 Lê Lợi, Quận 1, TP.HCM', 10.776, 106.700, '07:00', '23:00', 150000.00, 10, 'AVAILABLE', 'APPROVED', 4.8),
 
     ((SELECT owner_id FROM owners WHERE business_name = 'Huy Sport Center'),
      (SELECT sport_type_id FROM sport_types WHERE sport_name = 'Basketball'),
      'Sân Bóng Rổ Bình Thạnh', 'Sân bóng rổ ngoài trời có mái che, đèn LED chơi đêm',
-     '78 Đinh Tiên Hoàng, Bình Thạnh, TP.HCM', 10.800, 106.711, '06:00', '22:00', 'AVAILABLE', 4.2),
+     '78 Đinh Tiên Hoàng, Bình Thạnh, TP.HCM', 10.800, 106.711, '06:00', '22:00', 150000.00, 10, 'AVAILABLE', 'APPROVED', 4.2),
 
     ((SELECT owner_id FROM owners WHERE business_name = 'Sport Venue Owner Corp'),
      (SELECT sport_type_id FROM sport_types WHERE sport_name = 'Tennis'),
      'Sân Tennis Phú Mỹ Hưng', 'Sân tennis tiêu chuẩn quốc tế, mặt sân clay',
-     '10 Nguyễn Văn Linh, Quận 7, TP.HCM', 10.732, 106.722, '06:00', '21:00', 'MAINTENANCE', 4.6),
+     '10 Nguyễn Văn Linh, Quận 7, TP.HCM', 10.732, 106.722, '06:00', '21:00', 150000.00, 10, 'MAINTENANCE', 'APPROVED', 4.6),
 
     ((SELECT owner_id FROM owners WHERE business_name = 'Huy Sport Center'),
      (SELECT sport_type_id FROM sport_types WHERE sport_name = 'Football'),
      'Sân Bóng Đá Gò Vấp', 'Sân 7vs7 mặt cỏ tự nhiên, phòng thay đồ riêng',
-     '99 Quang Trung, Gò Vấp, TP.HCM', 10.835, 106.678, '05:30', '22:30', 'AVAILABLE', 4.3);
+     '99 Quang Trung, Gò Vấp, TP.HCM', 10.835, 106.678, '05:30', '22:30', 150000.00, 10, 'AVAILABLE', 'APPROVED', 4.3);
 
 -- ── 5. Stadium Images ─────────────────────────────────────────────────────
 INSERT INTO stadium_images (stadium_id, image_url)
@@ -188,3 +188,12 @@ SELECT s.stadium_id, 'Vợt cầu lông', 15000.00, 20, TRUE FROM stadiums s WHE
 INSERT INTO notifications (user_id, notification_type, title, message, is_read)
 SELECT user_id, 'BOOKING', 'Đơn đặt sân mới', 'Bạn có một đơn đặt sân mới đang chờ xác nhận.', FALSE
 FROM users WHERE email = 'owner@sportvenue.com';
+
+-- ── 13. User Favorite Stadiums ──────────────────────────────────────────────
+INSERT INTO user_favorite_stadiums (user_id, stadium_id)
+SELECT u.user_id, s.stadium_id
+FROM users u
+CROSS JOIN stadiums s
+WHERE u.email = 'customer@sportvenue.com'
+  AND s.stadium_name IN ('Sân Bóng Đá Thủ Đức', 'Sân Cầu Lông Quận 1')
+ON CONFLICT DO NOTHING;

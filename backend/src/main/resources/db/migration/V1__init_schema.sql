@@ -70,8 +70,12 @@ CREATE TABLE stadiums (
     longitude       DOUBLE PRECISION,
     open_time       TIME,
     close_time      TIME,
+    price_per_hour  DECIMAL(10, 2),
+    capacity        INT,
     stadium_status  VARCHAR(20)     NOT NULL DEFAULT 'AVAILABLE'
                         CHECK (stadium_status IN ('AVAILABLE', 'MAINTENANCE', 'CLOSED')),
+    approved_status VARCHAR(20)     NOT NULL DEFAULT 'PENDING'
+                        CHECK (approved_status IN ('PENDING', 'APPROVED', 'REJECTED')),
     average_rating  DECIMAL(3, 2)   NOT NULL DEFAULT 5.0,
     created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -208,6 +212,7 @@ CREATE TABLE complaints (
     status          VARCHAR(20)     NOT NULL DEFAULT 'OPEN'
                         CHECK (status IN ('OPEN', 'IN_PROGRESS', 'RESOLVED')),
     response        TEXT,
+    subject         VARCHAR(255)    DEFAULT 'No Subject',
     created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -270,3 +275,14 @@ CREATE INDEX idx_otp_tokens_expires_at ON otp_tokens(expires_at);
 CREATE INDEX idx_complaints_booking_id ON complaints(booking_id);
 CREATE INDEX idx_accessories_stadium_id ON accessories(stadium_id);
 CREATE INDEX idx_stadium_amenities_search ON stadium_amenities(stadium_id, amenity_id);
+
+-- ── 22. User Favorite Stadiums ──────────────────────────────────────────────
+CREATE TABLE user_favorite_stadiums (
+    id          BIGSERIAL PRIMARY KEY,
+    user_id     INT         NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    stadium_id  INT         NOT NULL REFERENCES stadiums(stadium_id) ON DELETE CASCADE,
+    created_at  TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_user_favorite_stadium UNIQUE (user_id, stadium_id)
+);
+
+CREATE INDEX idx_user_favorites_user_id ON user_favorite_stadiums(user_id);
