@@ -28,11 +28,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class HomeServiceImpl implements HomeService {
@@ -51,14 +53,26 @@ public class HomeServiceImpl implements HomeService {
     @Override
     @Transactional(readOnly = true)
     public HomeDashboardResponse getDashboard(UserPrincipal principal) {
+        if (principal == null) {
+            log.error("UserPrincipal is null");
+            throw new ResourceNotFoundException("Người dùng chưa đăng nhập");
+        }
+        
+        log.info("Loading dashboard for user: {}", principal.getUsername());
+        
+        try {
         User user = userRepository.findByEmail(principal.getUsername())
-                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
+                .orElseThrow(() -> {
+                    log.error("User not found in database: {}", principal.getUsername());
+                    return new ResourceNotFoundException("Người dùng không tồn tại: " + principal.getUsername());
+                });
 
         Integer userId = user.getUserId();
         LocalDateTime now = LocalDateTime.now();
         Pageable upcomingPage = PageRequest.of(0, 10);
 
         List<Booking> upcoming = bookingRepository.findUpcomingByUserId(userId, now, upcomingPage);
+        log.info("Found {} upcoming bookings for user {}", upcoming.size(), userId);
         List<UserFavoriteStadium> favorites = favoriteRepository.findByUserUserIdOrderByCreatedAtDesc(userId);
         List<Integer> favoriteIds = favorites.stream()
                 .map(f -> f.getStadium().getStadiumId())
@@ -77,12 +91,17 @@ public class HomeServiceImpl implements HomeService {
                 .distinct()
                 .toList();
 
-        Map<Integer, Long> reviewCountMap = reviewRepository.countReviewsByStadiumIdIn(allIds)
-                .stream()
-                .collect(Collectors.toMap(
-                        row -> (Integer) row[0],
-                        row -> (Long) row[1]
-                ));
+        Map<Integer, Long> reviewCountMap;
+        if (allIds.isEmpty()) {
+            reviewCountMap = Map.of();
+        } else {
+            reviewCountMap = reviewRepository.countReviewsByStadiumIdIn(allIds)
+                    .stream()
+                    .collect(Collectors.toMap(
+                            row -> (Integer) row[0],
+                            row -> (Long) row[1]
+                    ));
+        }
 
         // Thống kê từ DB — không load entity thô
         long venuesVisited = bookingRepository.countDistinctCompletedVenues(userId);
@@ -98,6 +117,10 @@ public class HomeServiceImpl implements HomeService {
                 List.of(),
                 stats
         );
+        } catch (Exception e) {
+            log.error("Error loading dashboard for user {}: {}", principal.getUsername(), e.getMessage(), e);
+            throw e;
+        }
     }
 
     private List<Stadium> loadRecommended(List<Integer> favoriteIds) {
@@ -123,6 +146,16 @@ public class HomeServiceImpl implements HomeService {
     }
 
     private UpcomingBookingDto toUpcomingDto(Booking booking) {
+        // Guard null slot — phòng tránh NPE nếu dữ liệu DB bị thiếu slot
+        if (booking.getSlot() == null) {
+            log.warn("Booking {} has no slot, skipping date/time", booking.getBookingId());
+            return new UpcomingBookingDto(
+                    String.valueOf(booking.getBookingId()),
+                    booking.getStadium() != null ? booking.getStadium().getStadiumName() : "N/A",
+                    "N/A", "N/A", "N/A", "N/A", "pending", null
+            );
+        }
+
         String date = booking.getSlot().getStartTime().format(DATE_FMT);
         String time = booking.getSlot().getStartTime().format(TIME_FMT)
                 + " – "
@@ -131,15 +164,20 @@ public class HomeServiceImpl implements HomeService {
                 ? "confirmed"
                 : "pending";
 
+        String sportName = (booking.getStadium() != null
+                && booking.getStadium().getSportType() != null)
+                ? booking.getStadium().getSportType().getSportName()
+                : "N/A";
+
         return new UpcomingBookingDto(
                 String.valueOf(booking.getBookingId()),
-                booking.getStadium().getStadiumName(),
-                toSportLabel(booking.getStadium().getSportType().getSportName()),
-                booking.getStadium().getAddress(),
+                booking.getStadium() != null ? booking.getStadium().getStadiumName() : "N/A",
+                toSportLabel(sportName),
+                booking.getStadium() != null ? booking.getStadium().getAddress() : "N/A",
                 date,
                 time,
                 status,
-                StadiumUtils.resolveImageUrl(booking.getStadium())
+                booking.getStadium() != null ? StadiumUtils.resolveImageUrl(booking.getStadium()) : null
         );
     }
 
@@ -150,11 +188,15 @@ public class HomeServiceImpl implements HomeService {
 
         long reviewCount = reviewCountMap.getOrDefault(stadium.getStadiumId(), 0L);
 
+        String sportName = stadium.getSportType() != null
+                ? stadium.getSportType().getSportName()
+                : "N/A";
+
         return new VenueSummaryDto(
                 stadium.getStadiumId(),
                 stadium.getStadiumName(),
-                toSportLabel(stadium.getSportType().getSportName()),
-                toSportKey(stadium.getSportType().getSportName()),
+                toSportLabel(sportName),
+                toSportKey(sportName),
                 stadium.getPricePerHour(),
                 rating,
                 reviewCount,

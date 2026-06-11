@@ -36,7 +36,7 @@ export function VenueCard({
   actionLabel = "Xem & đặt sân",
   actionHref,
 }: VenueCardProps) {
-  const href = actionHref ?? (id ? `/search?venue=${id}` : "/search");
+  const href = actionHref ?? (id ? `/venues/${id}` : "/search");
 
   return (
     <Card className="group overflow-hidden border-border/80 transition-all duration-300 hover:-translate-y-1 hover:border-primary/25 hover:shadow-xl hover:shadow-primary/10">

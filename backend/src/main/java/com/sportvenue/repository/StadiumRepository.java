@@ -50,14 +50,14 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
     /** Đếm sân theo owner — dùng cho Dashboard. */
     long countByOwnerOwnerIdAndStadiumStatus(Integer ownerId, StadiumStatus status);
 
-    @EntityGraph(attributePaths = {"sportType", "images", "owner", "accessories"})
+    @EntityGraph(attributePaths = {"sportType", "images", "owner", "owner.user", "amenities", "accessories", "timeSlots"})
     Optional<Stadium> findWithDetailsByStadiumId(Integer stadiumId);
 
     @EntityGraph(attributePaths = {"sportType", "images"})
     @Query("""
             SELECT s FROM Stadium s
             WHERE s.stadiumStatus = com.sportvenue.entity.enums.StadiumStatus.AVAILABLE
-            AND s.stadiumId NOT IN :excludeIds
+            AND (:#{#excludeIds.size()} = 0 OR s.stadiumId NOT IN :excludeIds)
             ORDER BY s.averageRating DESC, s.stadiumName ASC
             """)
     List<Stadium> findRecommendedExcluding(

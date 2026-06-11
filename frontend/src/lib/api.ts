@@ -59,8 +59,17 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean }
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if ((error.response?.status === 401 || error.response?.status === 403) && !originalRequest._retry) {
       originalRequest._retry = true
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('access_token')
+        try {
+          const { signOut } = await import('next-auth/react')
+          signOut({ callbackUrl: '/login?error=session_expired' })
+        } catch {
+          // If next-auth is unavailable or signOut fails, still clear token locally.
+        }
+      }
     }
 
     const data = error.response?.data as {
@@ -91,6 +100,10 @@ api.interceptors.response.use(
           signOut({ callbackUrl: '/login' })
         })
       }
+    }
+
+    if (error.response?.status === 403) {
+      message = 'Bạn không có quyền truy cập hoặc phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
     }
 
     const customError = new Error(message) as Error & { status?: number }
