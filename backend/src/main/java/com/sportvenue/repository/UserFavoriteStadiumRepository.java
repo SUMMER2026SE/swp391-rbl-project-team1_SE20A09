@@ -9,7 +9,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface UserFavoriteStadiumRepository extends JpaRepository<UserFavoriteStadium, Long> {
 
-    @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images"})
+    @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "user"})
     List<UserFavoriteStadium> findByUserUserIdOrderByCreatedAtDesc(Integer userId);
 
     long countByUserUserId(Integer userId);

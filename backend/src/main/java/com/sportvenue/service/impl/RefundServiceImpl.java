@@ -70,7 +70,7 @@ public class RefundServiceImpl implements RefundService {
         RefundCalculation calculation = calculateRefund(booking);
 
         // 6. Cập nhật dữ liệu
-        updateBookingAndReleaseSlot(booking);
+        updateBookingAndReleaseSlot(booking, request.getReason());
 
         // 7. Tạo bản ghi giao dịch âm nếu có số tiền hoàn lại lớn hơn 0
         if (calculation.getAmount().compareTo(BigDecimal.ZERO) > 0) {
@@ -124,9 +124,12 @@ public class RefundServiceImpl implements RefundService {
         return new RefundCalculation(refundPercentage, refundAmount);
     }
 
-    private void updateBookingAndReleaseSlot(Booking booking) {
+    private void updateBookingAndReleaseSlot(Booking booking, String reason) {
         booking.setBookingStatus(BookingStatus.CANCELLED);
         booking.setPaymentStatus(PaymentStatus.REFUNDED);
+        if (reason != null && !reason.isBlank()) {
+            booking.setNote("Lý do hủy hoàn tiền: " + reason.trim());
+        }
         bookingRepository.save(booking);
 
         TimeSlot slot = booking.getSlot();
@@ -209,6 +212,19 @@ public class RefundServiceImpl implements RefundService {
         
         List<Booking> bookings = bookingRepository.findByStadiumOwnerUserEmailOrderByBookingDateDesc(ownerEmail);
         
+        List<Integer> bookingIds = bookings.stream().map(Booking::getBookingId).toList();
+        java.util.Map<Integer, BigDecimal> refundMap = new java.util.HashMap<>();
+        if (!bookingIds.isEmpty()) {
+            List<Payment> refundPayments = paymentRepository.findRefundPaymentsByBookingIds(bookingIds);
+            for (Payment p : refundPayments) {
+                if (p.getBooking() != null && p.getAmount() != null) {
+                    Integer bid = p.getBooking().getBookingId();
+                    BigDecimal amt = p.getAmount().abs();
+                    refundMap.put(bid, refundMap.getOrDefault(bid, BigDecimal.ZERO).add(amt));
+                }
+            }
+        }
+        
         return bookings.stream().map(b -> {
             String customerName = b.getUser().getFirstName() + " " + b.getUser().getLastName();
             OwnerBookingResponse.CustomerInfo customerInfo = OwnerBookingResponse.CustomerInfo.builder()
@@ -220,6 +236,8 @@ public class RefundServiceImpl implements RefundService {
             String startTime = b.getSlot().getStartTime().toLocalTime().toString();
             String endTime = b.getSlot().getEndTime().toLocalTime().toString();
             
+            BigDecimal refundAmt = refundMap.getOrDefault(b.getBookingId(), BigDecimal.ZERO);
+
             return OwnerBookingResponse.builder()
                     .id(b.getBookingId())
                     .displayId("BK" + String.format("%06d", b.getBookingId()))
@@ -228,6 +246,7 @@ public class RefundServiceImpl implements RefundService {
                     .date(b.getSlot().getStartTime().toLocalDate().toString())
                     .time(startTime + " - " + endTime)
                     .amount(b.getTotalPrice())
+                    .refundAmount(refundAmt)
                     .paymentStatus(b.getPaymentStatus().name().toLowerCase())
                     .status(b.getBookingStatus().name().toLowerCase())
                     .notes(b.getNote() != null ? b.getNote() : "")

@@ -51,6 +51,7 @@ interface BookingItem {
   date: string;
   time: string;
   amount: number;
+  refundAmount: number;
   paymentStatus: string;
   status: string;
   notes: string;
@@ -75,6 +76,8 @@ function BookingManagementPage() {
   // States phục vụ hiển thị kết quả thành công Premium
   const [successData, setSuccessData] = useState<any>(null);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+
+  const [activeTab, setActiveTab] = useState("all");
 
   // Fetch danh sách đặt sân thực tế từ Backend
   const fetchBookings = async () => {
@@ -234,6 +237,16 @@ function BookingManagementPage() {
           <td className="p-4 align-middle text-right font-semibold text-slate-900 dark:text-slate-100">
             {booking.amount.toLocaleString('vi-VN')}đ
           </td>
+          <td className="p-4 align-middle text-right text-rose-600 dark:text-rose-400 font-medium">
+            {booking.refundAmount > 0 ? `-${booking.refundAmount.toLocaleString('vi-VN')}đ` : "0đ"}
+          </td>
+          <td className="p-4 align-middle text-right text-emerald-600 dark:text-emerald-400 font-bold">
+            {(() => {
+              const isPaidType = booking.paymentStatus.toLowerCase() === "paid" || booking.paymentStatus.toLowerCase() === "refunded";
+              const netVal = isPaidType ? (booking.amount - booking.refundAmount) : 0;
+              return `${netVal.toLocaleString('vi-VN')}đ`;
+            })()}
+          </td>
           <td className="p-4 align-middle">
             <div className="flex flex-col gap-1 items-start">
               {getStatusBadge(booking.status)}
@@ -273,7 +286,7 @@ function BookingManagementPage() {
 
         {isExpanded && (
           <tr className="bg-muted/30">
-            <td colSpan={9} className="p-6">
+            <td colSpan={11} className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 rounded-lg border bg-card p-4 shadow-sm animate-in fade-in slide-in-from-top-1 duration-200">
                 <div className="space-y-3">
                   <h4 className="font-semibold text-sm flex items-center gap-1.5 text-primary border-b pb-1.5">
@@ -363,6 +376,29 @@ function BookingManagementPage() {
     );
   };
 
+  const getActiveBookings = () => {
+    switch (activeTab) {
+      case "pending":
+        return filterBookings("pending");
+      case "confirmed":
+        return filterBookings("confirmed");
+      case "completed":
+        return filterBookings("completed");
+      case "cancelled":
+        return filterBookings("cancelled");
+      default:
+        return bookingList;
+    }
+  };
+
+  const activeBookings = getActiveBookings();
+  const totalGrossAmount = activeBookings.reduce((sum, b) => {
+    const isPaidType = b.paymentStatus.toLowerCase() === "paid" || b.paymentStatus.toLowerCase() === "refunded";
+    return sum + (isPaidType ? b.amount : 0);
+  }, 0);
+  const totalRefundedAmount = activeBookings.reduce((sum, b) => sum + (b.refundAmount || 0), 0);
+  const totalNetAmount = totalGrossAmount - totalRefundedAmount;
+
   return (
     <>
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -415,8 +451,56 @@ function BookingManagementPage() {
           </CardContent>
         </Card>
 
+        {/* Doanh thu Summary Widget */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <Card className="bg-slate-50/50 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <CardContent className="p-5 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Doanh thu gộp (Gross)</p>
+                <h3 className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
+                  {totalGrossAmount.toLocaleString('vi-VN')}đ
+                </h3>
+                <p className="text-[11px] text-muted-foreground mt-1">Tổng tiền của các đơn hàng trong danh sách</p>
+              </div>
+              <div className="bg-blue-100 text-blue-600 p-3 rounded-lg dark:bg-blue-950/40 dark:text-blue-400">
+                <DollarSign className="h-6 w-6" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-slate-50/50 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <CardContent className="p-5 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tiền đã hoàn trả (Refunded)</p>
+                <h3 className="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-1">
+                  {totalRefundedAmount.toLocaleString('vi-VN')}đ
+                </h3>
+                <p className="text-[11px] text-muted-foreground mt-1">Số tiền đã trả lại cho các đơn hủy hoàn tiền</p>
+              </div>
+              <div className="bg-rose-100 text-rose-600 p-3 rounded-lg dark:bg-rose-950/40 dark:text-rose-400">
+                <RotateCcw className="h-6 w-6" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-emerald-50/30 dark:bg-emerald-950/10 border border-emerald-100/80 dark:border-emerald-950/40 shadow-sm">
+            <CardContent className="p-5 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider">Thực thu sau cùng (Net)</p>
+                <h3 className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                  {totalNetAmount.toLocaleString('vi-VN')}đ
+                </h3>
+                <p className="text-[11px] text-emerald-800 dark:text-emerald-400 mt-1">Số tiền thực tế chủ sân thu về sau hủy hoàn</p>
+              </div>
+              <div className="bg-emerald-100 text-emerald-600 p-3 rounded-lg dark:bg-emerald-950/30 dark:text-emerald-400">
+                <CheckCircle className="h-6 w-6" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Tabs */}
-        <Tabs defaultValue="all" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b pb-2">
             <TabsList className="bg-muted/70 p-1 rounded-lg w-full lg:w-auto overflow-x-auto flex-nowrap whitespace-nowrap justify-start">
               <TabsTrigger value="all" className="font-semibold text-sm">
@@ -458,6 +542,8 @@ function BookingManagementPage() {
                       <th className="p-4 text-left">Ngày</th>
                       <th className="p-4 text-left">Khung giờ</th>
                       <th className="p-4 text-right">Tổng tiền</th>
+                      <th className="p-4 text-right">Tiền đã hoàn</th>
+                      <th className="p-4 text-right">Thực thu</th>
                       <th className="p-4 text-left">Trạng thái</th>
                       <th className="p-4 text-right">Hành động</th>
                     </tr>
@@ -467,13 +553,13 @@ function BookingManagementPage() {
                       <>
                         {isLoading ? (
                           <tr>
-                            <td colSpan={9} className="text-center p-12 text-muted-foreground">
+                            <td colSpan={11} className="text-center p-12 text-muted-foreground">
                               <span className="animate-spin inline-block rounded-full h-6 w-6 border-2 border-primary border-t-transparent mr-2 align-middle"></span> 
                               Đang tải danh sách đặt sân từ máy chủ...
                             </td>
                           </tr>
                         ) : bookingList.length === 0 ? (
-                          <tr><td colSpan={9} className="text-center p-8 text-muted-foreground">Không có đơn đặt sân nào.</td></tr>
+                          <tr><td colSpan={11} className="text-center p-8 text-muted-foreground">Không có đơn đặt sân nào.</td></tr>
                         ) : (
                           bookingList.map((booking) => (
                             <BookingRow key={booking.id} booking={booking} />
@@ -485,13 +571,13 @@ function BookingManagementPage() {
                       <>
                         {isLoading ? (
                           <tr>
-                            <td colSpan={9} className="text-center p-12 text-muted-foreground">
+                            <td colSpan={11} className="text-center p-12 text-muted-foreground">
                               <span className="animate-spin inline-block rounded-full h-6 w-6 border-2 border-primary border-t-transparent mr-2 align-middle"></span> 
                               Đang tải...
                             </td>
                           </tr>
                         ) : filterBookings("pending").length === 0 ? (
-                          <tr><td colSpan={9} className="text-center p-8 text-muted-foreground">Không có đơn đặt sân chờ duyệt.</td></tr>
+                          <tr><td colSpan={11} className="text-center p-8 text-muted-foreground">Không có đơn đặt sân chờ duyệt.</td></tr>
                         ) : (
                           filterBookings("pending").map((booking) => (
                             <BookingRow key={booking.id} booking={booking} />
@@ -503,13 +589,13 @@ function BookingManagementPage() {
                       <>
                         {isLoading ? (
                           <tr>
-                            <td colSpan={9} className="text-center p-12 text-muted-foreground">
+                            <td colSpan={11} className="text-center p-12 text-muted-foreground">
                               <span className="animate-spin inline-block rounded-full h-6 w-6 border-2 border-primary border-t-transparent mr-2 align-middle"></span> 
                               Đang tải...
                             </td>
                           </tr>
                         ) : filterBookings("confirmed").length === 0 ? (
-                          <tr><td colSpan={9} className="text-center p-8 text-muted-foreground">Không có đơn đã xác nhận.</td></tr>
+                          <tr><td colSpan={11} className="text-center p-8 text-muted-foreground">Không có đơn đã xác nhận.</td></tr>
                         ) : (
                           filterBookings("confirmed").map((booking) => (
                             <BookingRow key={booking.id} booking={booking} />
@@ -521,13 +607,13 @@ function BookingManagementPage() {
                       <>
                         {isLoading ? (
                           <tr>
-                            <td colSpan={9} className="text-center p-12 text-muted-foreground">
+                            <td colSpan={11} className="text-center p-12 text-muted-foreground">
                               <span className="animate-spin inline-block rounded-full h-6 w-6 border-2 border-primary border-t-transparent mr-2 align-middle"></span> 
                               Đang tải...
                             </td>
                           </tr>
                         ) : filterBookings("completed").length === 0 ? (
-                          <tr><td colSpan={9} className="text-center p-8 text-muted-foreground">Không có đơn hoàn thành.</td></tr>
+                          <tr><td colSpan={11} className="text-center p-8 text-muted-foreground">Không có đơn hoàn thành.</td></tr>
                         ) : (
                           filterBookings("completed").map((booking) => (
                             <BookingRow key={booking.id} booking={booking} />
@@ -539,13 +625,13 @@ function BookingManagementPage() {
                       <>
                         {isLoading ? (
                           <tr>
-                            <td colSpan={9} className="text-center p-12 text-muted-foreground">
+                            <td colSpan={11} className="text-center p-12 text-muted-foreground">
                               <span className="animate-spin inline-block rounded-full h-6 w-6 border-2 border-primary border-t-transparent mr-2 align-middle"></span> 
                               Đang tải...
                             </td>
                           </tr>
                         ) : filterBookings("cancelled").length === 0 ? (
-                          <tr><td colSpan={9} className="text-center p-8 text-muted-foreground">Không có đơn đã hủy.</td></tr>
+                          <tr><td colSpan={11} className="text-center p-8 text-muted-foreground">Không có đơn đã hủy.</td></tr>
                         ) : (
                           filterBookings("cancelled").map((booking) => (
                             <BookingRow key={booking.id} booking={booking} />

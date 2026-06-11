@@ -31,6 +31,7 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
 
     private final UserRepository userRepository;
     private final BookingRepository bookingRepository;
+    private final com.sportvenue.repository.PaymentRepository paymentRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -49,6 +50,34 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
                 .totalPages(pageResult.getTotalPages())
                 .last(pageResult.isLast())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public void cancelBooking(UserPrincipal principal, Integer bookingId, String reason) {
+        User user = userRepository.findByEmail(principal.getUsername())
+                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân"));
+
+        if (!booking.getUser().getUserId().equals(user.getUserId())) {
+            throw new com.sportvenue.exception.BadRequestException("Bạn không có quyền huỷ đơn đặt sân này");
+        }
+
+        if (booking.getBookingStatus() == BookingStatus.COMPLETED || booking.getBookingStatus() == BookingStatus.CANCELLED) {
+            throw new com.sportvenue.exception.BadRequestException("Không thể huỷ đơn đặt sân đã hoàn thành hoặc đã huỷ");
+        }
+
+        booking.setBookingStatus(BookingStatus.CANCELLED);
+        booking.setNote("Khách hàng huỷ: " + reason);
+        
+        if (booking.getSlot() != null) {
+            booking.getSlot().setSlotStatus(com.sportvenue.entity.enums.SlotStatus.AVAILABLE);
+        }
+        
+        paymentRepository.findByBookingBookingId(bookingId).ifPresent(paymentRepository::delete);
+        bookingRepository.delete(booking);
     }
 
     private CustomerBookingHistoryDto toDto(Booking booking) {
