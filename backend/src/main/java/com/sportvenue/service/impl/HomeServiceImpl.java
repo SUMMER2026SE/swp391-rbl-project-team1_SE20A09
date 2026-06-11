@@ -28,11 +28,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class HomeServiceImpl implements HomeService {
@@ -68,15 +70,8 @@ public class HomeServiceImpl implements HomeService {
         LocalDateTime now = LocalDateTime.now();
         Pageable upcomingPage = PageRequest.of(0, 10);
 
-        try {
-            List<Booking> upcoming = bookingRepository.findUpcomingByUserId(userId, now, upcomingPage);
-            log.info("Found {} upcoming bookings", upcoming.size());
-        } catch (Exception e) {
-            log.error("Error loading upcoming bookings: ", e);
-            throw new RuntimeException("Lỗi khi tải lịch sắp tới", e);
-        }
-        
         List<Booking> upcoming = bookingRepository.findUpcomingByUserId(userId, now, upcomingPage);
+        log.info("Found {} upcoming bookings for user {}", upcoming.size(), userId);
         List<UserFavoriteStadium> favorites = favoriteRepository.findByUserUserIdOrderByCreatedAtDesc(userId);
         List<Integer> favoriteIds = favorites.stream()
                 .map(f -> f.getStadium().getStadiumId())
