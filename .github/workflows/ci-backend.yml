@@ -24,7 +24,7 @@ jobs:
           POSTGRES_USER: sportvenue_user
           POSTGRES_PASSWORD: testpassword
         ports:
-          - 5432:5432
+          - 5433:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -64,7 +64,7 @@ jobs:
         working-directory: backend
         env:
           SPRING_PROFILES_ACTIVE: test
-          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/sportvenue_test
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5433/sportvenue_test
           SPRING_DATASOURCE_USERNAME: sportvenue_user
           SPRING_DATASOURCE_PASSWORD: testpassword
           SPRING_DATA_REDIS_HOST: localhost
