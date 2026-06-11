@@ -244,6 +244,7 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 .openTime(stadium.getOpenTime())
                 .closeTime(stadium.getCloseTime())
                 .stadiumStatus(stadium.getStadiumStatus() != null ? stadium.getStadiumStatus().name() : null)
+                .approvedStatus(stadium.getApprovedStatus() != null ? stadium.getApprovedStatus().name() : null)
                 .amenities(stadium.getAmenities().stream()
                         .map(a -> AmenityResponse.builder()
                                 .amenityId(a.getAmenityId())

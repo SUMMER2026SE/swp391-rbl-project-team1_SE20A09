@@ -4,6 +4,7 @@ import com.sportvenue.dto.request.StadiumSearchRequest;
 import com.sportvenue.entity.Amenity;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.TimeSlot;
+import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.entity.enums.StadiumStatus;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -29,6 +30,7 @@ public class StadiumSpecification {
             // 1. Status Filter
             if (isPublicSearch) {
                 predicates.add(cb.equal(root.get("stadiumStatus"), StadiumStatus.AVAILABLE));
+                predicates.add(cb.equal(root.get("approvedStatus"), ApprovedStatus.APPROVED));
             } else if (req.getStatus() != null) {
                 predicates.add(cb.equal(root.get("stadiumStatus"), req.getStatus()));
             }
@@ -80,10 +82,7 @@ public class StadiumSpecification {
     }
 
     private static void addTimeSlotPredicate(List<Predicate> preds, CriteriaBuilder cb, Root<Stadium> root, CriteriaQuery<?> query, StadiumSearchRequest req) {
-        if (req.getTargetDate() != null && req.getStartTime() != null && req.getEndTime() != null) {
-            LocalDateTime startDateTime = LocalDateTime.of(req.getTargetDate(), req.getStartTime());
-            LocalDateTime endDateTime = LocalDateTime.of(req.getTargetDate(), req.getEndTime());
-
+        if (req.getStartTime() != null && req.getEndTime() != null) {
             Subquery<Integer> slotSubquery = query.subquery(Integer.class);
             var slotRoot = slotSubquery.from(TimeSlot.class);
             slotSubquery.select(slotRoot.get("stadium").get("stadiumId"));
@@ -91,8 +90,8 @@ public class StadiumSpecification {
             Predicate stadiumMatch = cb.equal(slotRoot.get("stadium").get("stadiumId"), root.get("stadiumId"));
             Predicate statusMatch = cb.equal(slotRoot.get("slotStatus"), SlotStatus.AVAILABLE);
             Predicate timeMatch = cb.and(
-                    cb.lessThan(slotRoot.get("startTime"), endDateTime),
-                    cb.greaterThan(slotRoot.get("endTime"), startDateTime)
+                    cb.lessThan(slotRoot.get("startTime"), req.getEndTime()),
+                    cb.greaterThan(slotRoot.get("endTime"), req.getStartTime())
             );
             
             slotSubquery.where(cb.and(stadiumMatch, statusMatch, timeMatch));
