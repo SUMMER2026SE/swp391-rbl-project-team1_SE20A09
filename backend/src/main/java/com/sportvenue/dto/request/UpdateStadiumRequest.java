@@ -68,6 +68,8 @@ public class UpdateStadiumRequest {
     @Digits(integer = 3, fraction = 14, message = "Longitude precision invalid")
     private BigDecimal longitude;
 
+    private java.util.List<String> imageUrls;
+
     @AssertTrue(message = "Close time must be after open time")
     public boolean isCloseTimeAfterOpenTime() {
         if (openTime == null || closeTime == null) {

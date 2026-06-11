@@ -35,6 +35,7 @@ public class StadiumResponse {
     private BigDecimal pricePerHour;
     private Integer capacity;
     private String stadiumStatus; 
+    private String approvedStatus;
     
     private List<AmenityResponse> amenities;
 }

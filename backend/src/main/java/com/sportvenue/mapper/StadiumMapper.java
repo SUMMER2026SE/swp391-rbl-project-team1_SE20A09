@@ -19,6 +19,7 @@ public interface StadiumMapper {
     @Mapping(target = "timeSlots", ignore = true)
     @Mapping(target = "accessories", ignore = true)
     @Mapping(target = "amenities", ignore = true)
+    @Mapping(target = "approvedStatus", ignore = true)
     @Mapping(target = "latitude", expression = "java(request.getLatitude() != null ? request.getLatitude().doubleValue() : null)")
     @Mapping(target = "longitude", expression = "java(request.getLongitude() != null ? request.getLongitude().doubleValue() : null)")
     Stadium toEntity(CreateStadiumRequest request);

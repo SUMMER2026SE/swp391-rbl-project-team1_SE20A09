@@ -1,5 +1,6 @@
 package com.sportvenue.entity;
 
+import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.entity.enums.StadiumStatus;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -95,6 +96,12 @@ public class Stadium implements Serializable {
     @Column(name = "stadium_status", nullable = false, length = 20)
     @Builder.Default
     private StadiumStatus stadiumStatus = StadiumStatus.AVAILABLE;
+
+    /** Trạng thái duyệt của sân. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "approved_status", nullable = false, length = 20)
+    @Builder.Default
+    private ApprovedStatus approvedStatus = ApprovedStatus.PENDING;
 
     /** Điểm đánh giá trung bình — được cập nhật sau mỗi review. */
     @Column(name = "average_rating", nullable = false, precision = 3, scale = 2)
