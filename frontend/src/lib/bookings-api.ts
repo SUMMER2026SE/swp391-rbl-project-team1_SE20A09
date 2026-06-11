@@ -58,11 +58,26 @@ export async function fetchMyBookings(
   };
 }
 
+type OwnerBookingDto = {
+  bookingId: string | number;
+  stadium?: {
+    stadiumName: string;
+    sportType: string;
+    address: string;
+  };
+  slot?: {
+    startTime: string;
+    endTime: string;
+  };
+  totalPrice: number | string;
+  bookingStatus: string;
+};
+
 export async function fetchOwnerBookings(
   page = 0,
   size = 50
 ): Promise<BookingPageResult> {
-  const data = await get<PageResponse<any>>(
+  const data = await get<PageResponse<OwnerBookingDto>>(
     `/owner/bookings/page?page=${page}&size=${size}`
   );
 
@@ -80,7 +95,7 @@ export async function fetchOwnerBookings(
     price: typeof b.totalPrice === "number" ? b.totalPrice : Number(b.totalPrice),
     status: (b.bookingStatus?.toLowerCase() === "confirmed" ? "confirmed" : 
              b.bookingStatus?.toLowerCase() === "completed" ? "completed" :
-             b.bookingStatus?.toLowerCase() === "cancelled" ? "cancelled" : "pending") as any,
+             b.bookingStatus?.toLowerCase() === "cancelled" ? "cancelled" : "pending") as BookingHistoryItem["status"],
   }));
 
   return {

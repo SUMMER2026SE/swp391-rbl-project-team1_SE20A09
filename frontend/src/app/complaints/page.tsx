@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
@@ -26,10 +26,73 @@ import { AlertCircle, Plus, MessageSquare, User } from "lucide-react";
 import { get, post } from "@/lib/api";
 import { toast } from "sonner";
 
+type ComplaintResponse = {
+  from: string;
+  message: string;
+  time: string;
+};
+
+type Complaint = {
+  id: string;
+  subject: string;
+  against: string;
+  description: string;
+  status: string;
+  submittedDate: string;
+  responses: ComplaintResponse[];
+  resolvedDate?: string;
+  resolution?: string;
+  bookingId?: string;
+};
+
+const DEFAULT_COMPLAINTS: Complaint[] = [
+  {
+    id: "CP001",
+    subject: "Sân không đúng mô tả",
+    against: "Sân bóng Thành Công",
+    description: "Sân thực tế không giống hình ảnh trên web. Cỏ nhân tạo cũ, bề mặt không bằng phẳng.",
+    status: "open",
+    submittedDate: "2026-05-22",
+    responses: [],
+  },
+  {
+    id: "CP002",
+    subject: "Chủ sân không phản hồi",
+    against: "Sân bóng Thành Công",
+    description: "Đã liên hệ nhiều lần nhưng chủ sân không phản hồi về việc hoàn tiền do hủy sân.",
+    status: "in_progress",
+    submittedDate: "2026-05-20",
+    responses: [
+      {
+        from: "Admin",
+        message: "Chúng tôi đang xem xét khiếu nại của bạn. Sẽ phản hồi trong 24-48h.",
+        time: "2026-05-21 10:00",
+      },
+    ],
+  },
+  {
+    id: "CP003",
+    subject: "Yêu cầu hoàn tiền dịch vụ",
+    against: "Sân cầu lông Thành Công",
+    description: "Đã hủy sân trước 48h nhưng chưa nhận được tiền hoàn.",
+    status: "resolved",
+    submittedDate: "2026-05-15",
+    resolvedDate: "2026-05-18",
+    resolution: "Đã xử lý hoàn tiền 100% vào tài khoản. Vui lòng kiểm tra.",
+    responses: [
+      {
+        from: "Chủ sân",
+        message: "Xin lỗi vì sự chậm trễ. Chúng tôi đã xử lý hoàn tiền.",
+        time: "2026-05-18 14:00",
+      },
+    ],
+  },
+];
+
 function ComplaintsPage() {
-  const [complaints, setComplaints] = useState<any[]>([]);
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [selectedComplaint, setSelectedComplaint] = useState<any>(null);
+  const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
 
   // Form states
   const [against, setAgainst] = useState("1");
@@ -37,53 +100,9 @@ function ComplaintsPage() {
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
 
-  const DEFAULT_COMPLAINTS = [
-    {
-      id: "CP001",
-      subject: "Sân không đúng mô tả",
-      against: "Sân bóng Thành Công",
-      description: "Sân thực tế không giống hình ảnh trên web. Cỏ nhân tạo cũ, bề mặt không bằng phẳng.",
-      status: "open",
-      submittedDate: "2026-05-22",
-      responses: [],
-    },
-    {
-      id: "CP002",
-      subject: "Chủ sân không phản hồi",
-      against: "Sân bóng Thành Công",
-      description: "Đã liên hệ nhiều lần nhưng chủ sân không phản hồi về việc hoàn tiền do hủy sân.",
-      status: "in_progress",
-      submittedDate: "2026-05-20",
-      responses: [
-        {
-          from: "Admin",
-          message: "Chúng tôi đang xem xét khiếu nại của bạn. Sẽ phản hồi trong 24-48h.",
-          time: "2026-05-21 10:00",
-        },
-      ],
-    },
-    {
-      id: "CP003",
-      subject: "Yêu cầu hoàn tiền dịch vụ",
-      against: "Sân cầu lông Thành Công",
-      description: "Đã hủy sân trước 48h nhưng chưa nhận được tiền hoàn.",
-      status: "resolved",
-      submittedDate: "2026-05-15",
-      resolvedDate: "2026-05-18",
-      resolution: "Đã xử lý hoàn tiền 100% vào tài khoản. Vui lòng kiểm tra.",
-      responses: [
-        {
-          from: "Chủ sân",
-          message: "Xin lỗi vì sự chậm trễ. Chúng tôi đã xử lý hoàn tiền.",
-          time: "2026-05-18 14:00",
-        },
-      ],
-    },
-  ];
-
-  const fetchComplaints = async () => {
+  const fetchComplaints = useCallback(async () => {
     try {
-      const data = await get<any[]>("/complaints");
+      const data = await get<Complaint[]>("/complaints");
       if (data && Array.isArray(data)) {
         setComplaints(data);
         localStorage.setItem('sport_venue_complaints', JSON.stringify(data));
@@ -100,11 +119,11 @@ function ComplaintsPage() {
         setComplaints(DEFAULT_COMPLAINTS);
       }
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchComplaints();
-  }, []);
+  }, [fetchComplaints]);
 
   const handleCreateComplaint = async () => {
     if (!subject.trim() || !description.trim()) return;
@@ -116,14 +135,14 @@ function ComplaintsPage() {
       if (!numericBookingId) {
         throw new Error("Vui lòng nhập Mã đơn đặt sân hợp lệ (dạng số)");
       }
-      await post<any>("/complaints", {
+      await post<unknown>("/complaints", {
         bookingId: numericBookingId,
         subject: subject.trim(),
         description: description.trim()
       });
       toast.success("Gửi khiếu nại thành công!");
       fetchComplaints();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.warn("Backend create complaint failed, using local update:", error);
       let targetVenue = "Sân bóng Thành Công";
       if (against === "2") targetVenue = "Arena Sports Center";
@@ -346,7 +365,7 @@ function ComplaintsPage() {
                 <div className="space-y-3">
                   <h4 className="font-bold text-xs text-muted-foreground uppercase">Hộp thư trao đổi:</h4>
                   <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
-                    {activeComplaint.responses.map((response: any, idx: number) => (
+                    {activeComplaint.responses.map((response: ComplaintResponse, idx: number) => (
                       <div
                         key={idx}
                         className={`flex flex-col max-w-[85%] rounded-lg p-3 ${

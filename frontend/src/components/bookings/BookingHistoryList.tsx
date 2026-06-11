@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -137,7 +137,7 @@ export function BookingHistoryList({ isOwner = false }: BookingHistoryListProps)
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadBookings = () => {
+  const loadBookings = useCallback(() => {
     setLoading(true);
     setError(null);
     const fetchFn = isOwner ? fetchOwnerBookings : fetchMyBookings;
@@ -147,11 +147,11 @@ export function BookingHistoryList({ isOwner = false }: BookingHistoryListProps)
         setError(err instanceof Error ? err.message : "Không tải được lịch sử đặt sân.");
       })
       .finally(() => setLoading(false));
-  };
+  }, [isOwner]);
 
   useEffect(() => {
     loadBookings();
-  }, [isOwner]);
+  }, [loadBookings]);
 
   const upcoming = useMemo(
     () => bookings.filter((b) => b.status === "confirmed" || b.status === "pending"),
