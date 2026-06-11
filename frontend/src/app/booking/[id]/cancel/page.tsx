@@ -27,8 +27,9 @@ export default function CancelBookingPage() {
 
     try {
       setSubmitting(true);
-      await put(`/customer/bookings/${bookingId}/cancel`, { reason });
+      await put(`/bookings/${bookingId}/cancel`, { reason });
       toast.success("Huỷ đặt sân thành công");
+      router.refresh();
       router.push("/bookings");
     } catch (err: any) {
       toast.error(err.message || "Có lỗi xảy ra khi huỷ đặt sân");

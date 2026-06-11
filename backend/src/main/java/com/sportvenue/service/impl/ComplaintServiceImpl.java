@@ -29,6 +29,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.sportvenue.service.NotificationService;
+import com.sportvenue.entity.enums.NotificationType;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -38,6 +41,7 @@ public class ComplaintServiceImpl implements ComplaintService {
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
     private final OwnerRepository ownerRepository;
+    private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -85,6 +89,16 @@ public class ComplaintServiceImpl implements ComplaintService {
                 .build();
 
         Complaint saved = complaintRepository.save(complaint);
+        
+        // Notify owner
+        notificationService.createNotification(
+                booking.getStadium().getOwner().getUser().getUserId(),
+                "Khiếu nại mới",
+                "Khách hàng " + user.getFullName() + " vừa tạo khiếu nại cho đơn đặt sân #" + booking.getBookingId(),
+                NotificationType.COMPLAINT,
+                String.valueOf(saved.getComplaintId())
+        );
+        
         return mapToResponse(saved);
     }
 
@@ -133,6 +147,26 @@ public class ComplaintServiceImpl implements ComplaintService {
         }
 
         Complaint saved = complaintRepository.save(complaint);
+        
+        // Notify the other party
+        if (isCustomer) {
+            notificationService.createNotification(
+                    complaint.getBooking().getStadium().getOwner().getUser().getUserId(),
+                    "Phản hồi khiếu nại mới",
+                    "Khách hàng vừa phản hồi trong khiếu nại #" + complaintId,
+                    NotificationType.COMPLAINT,
+                    String.valueOf(saved.getComplaintId())
+            );
+        } else if (isOwner) {
+            notificationService.createNotification(
+                    complaint.getUser().getUserId(),
+                    "Phản hồi khiếu nại mới",
+                    "Chủ sân vừa phản hồi trong khiếu nại #" + complaintId,
+                    NotificationType.COMPLAINT,
+                    String.valueOf(saved.getComplaintId())
+            );
+        }
+        
         return mapToResponse(saved);
     }
 
@@ -165,6 +199,16 @@ public class ComplaintServiceImpl implements ComplaintService {
         complaint.setStatus(ComplaintStatus.RESOLVED);
 
         Complaint saved = complaintRepository.save(complaint);
+        
+        // Notify customer
+        notificationService.createNotification(
+                complaint.getUser().getUserId(),
+                "Khiếu nại đã được giải quyết",
+                "Chủ sân đã giải quyết khiếu nại #" + complaintId,
+                NotificationType.COMPLAINT,
+                String.valueOf(saved.getComplaintId())
+        );
+        
         return mapToResponse(saved);
     }
 
