@@ -8,6 +8,9 @@ interface StadiumCardProps {
   isUrgent?: boolean
 }
 
+import Image from 'next/image'
+import Link from 'next/link'
+
 export function StadiumCard({ stadium, isUrgent = false }: StadiumCardProps) {
   const mockReviewCount = Math.floor(Math.random() * 200) + 50 // Giả lập số lượng đánh giá
 
@@ -15,10 +18,12 @@ export function StadiumCard({ stadium, isUrgent = false }: StadiumCardProps) {
     <Card className="overflow-hidden bg-card hover:shadow-2xl transition-all duration-300 border-gray-100 dark:border-border group cursor-pointer flex flex-col h-full rounded-2xl">
       <div className="relative h-64 w-full bg-muted overflow-hidden">
         {stadium.firstImageUrl ? (
-          <img
+          <Image
             src={stadium.firstImageUrl}
             alt={stadium.stadiumName}
-            className="object-cover w-full h-full group-hover:scale-110 transition-transform duration-700 ease-in-out"
+            fill
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            className="object-cover group-hover:scale-110 transition-transform duration-700 ease-in-out"
           />
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground bg-secondary/50">Không có ảnh</div>
@@ -80,8 +85,10 @@ export function StadiumCard({ stadium, isUrgent = false }: StadiumCardProps) {
             {stadium.pricePerHour.toLocaleString('vi-VN')}₫
           </div>
         </div>
-        <Button className="rounded-xl px-6 py-6 font-bold bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95">
-          Đặt Ngay
+        <Button asChild className="rounded-xl px-6 py-6 font-bold bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95">
+          <Link href={`/booking/new?stadiumId=${stadium.stadiumId}`}>
+            Đặt Ngay
+          </Link>
         </Button>
       </CardFooter>
     </Card>
