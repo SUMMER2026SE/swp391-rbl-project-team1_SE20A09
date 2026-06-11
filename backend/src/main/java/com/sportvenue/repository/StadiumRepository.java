@@ -63,4 +63,12 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
     List<Stadium> findRecommendedExcluding(
             @Param("excludeIds") List<Integer> excludeIds,
             Pageable pageable);
+
+    @Query("""
+            SELECT COUNT(s) FROM Stadium s
+            JOIN s.owner o
+            JOIN o.user u
+            WHERE u.email = :ownerEmail
+            """)
+    long countStadiumsByOwnerEmail(@Param("ownerEmail") String ownerEmail);
 }

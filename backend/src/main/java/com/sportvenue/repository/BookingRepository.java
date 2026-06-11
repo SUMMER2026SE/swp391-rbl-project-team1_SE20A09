@@ -170,4 +170,45 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("ownerId") Integer ownerId,
             @Param("status") BookingStatus status,
             Pageable pageable);
+
+    @Query("""
+            SELECT COUNT(b) FROM Booking b
+            JOIN b.stadium s
+            JOIN s.owner o
+            JOIN o.user u
+            WHERE u.email = :ownerEmail
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.PENDING
+            """)
+    long countPendingBookingsByOwnerEmail(@Param("ownerEmail") String ownerEmail);
+
+    @Query("""
+            SELECT COUNT(b) FROM Booking b
+            JOIN b.stadium s
+            JOIN s.owner o
+            JOIN o.user u
+            JOIN b.slot sl
+            WHERE u.email = :ownerEmail
+            AND sl.startTime BETWEEN :startOfToday AND :endOfToday
+            AND b.bookingStatus IN (com.sportvenue.entity.enums.BookingStatus.CONFIRMED, com.sportvenue.entity.enums.BookingStatus.COMPLETED)
+            """)
+    long countTodayBookingsByOwnerEmail(
+            @Param("ownerEmail") String ownerEmail,
+            @Param("startOfToday") LocalDateTime startOfToday,
+            @Param("endOfToday") LocalDateTime endOfToday);
+
+    @Query("""
+            SELECT COUNT(b) FROM Booking b
+            JOIN b.stadium s
+            JOIN s.owner o
+            JOIN o.user u
+            JOIN b.slot sl
+            WHERE u.email = :ownerEmail
+            AND b.bookingStatus IN (com.sportvenue.entity.enums.BookingStatus.CONFIRMED, com.sportvenue.entity.enums.BookingStatus.COMPLETED)
+            AND sl.startTime BETWEEN :startDate AND :endDate
+            """)
+    long countBookingsByOwnerAndDateRange(
+            @Param("ownerEmail") String ownerEmail,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate);
 }
+

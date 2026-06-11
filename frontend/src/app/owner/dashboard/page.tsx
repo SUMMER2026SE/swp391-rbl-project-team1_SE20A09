@@ -1,8 +1,11 @@
-﻿'use client'
+'use client'
 
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   LineChart,
   Line,
@@ -21,259 +24,478 @@ import {
   TrendingDown,
   Calendar,
   DollarSign,
-  Users,
   AlertCircle,
   CheckCircle,
   Home,
   BarChart3,
   Wallet,
   Bell,
+  XCircle,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { get, put } from "@/lib/api";
+
+// ── Interfaces ────────────────────────────────────────────────────────
+interface ApiResponse<T> {
+  code: number;
+  message: string;
+  result: T;
+}
+
+interface CustomerInfo {
+  name: string;
+  phone: string;
+  email: string;
+}
+
+interface BookingItem {
+  id: number;
+  displayId: string;
+  customer: CustomerInfo;
+  venue: string;
+  date: string;
+  time: string;
+  amount: number;
+  paymentStatus: string;
+  status: string;
+  notes: string;
+  playTimeRaw: string;
+}
+
+interface RevenueDetail {
+  date: string;
+  revenue: number;
+}
+
+interface VenueRevenue {
+  stadiumId: number;
+  stadiumName: string;
+  totalBookings: number;
+  totalRevenue: number;
+  occupancy: number;
+  trend: string;
+}
+
+interface RevenueReportResponse {
+  totalRevenue: number;
+  totalBookings: number;
+  details: RevenueDetail[];
+  venueRevenues: VenueRevenue[];
+}
+
+interface OwnerDashboardSummaryResponse {
+  todayBookingsCount: number;
+  currentMonthRevenue: number;
+  averageOccupancyRate: number;
+  pendingBookingsCount: number;
+}
+
+interface KpiItem {
+  title: string;
+  value: string | number;
+  change: string;
+  trend: "up" | "down" | "neutral";
+  icon: React.ReactNode;
+}
+
+const COLORS = ["#2563EB", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"];
 
 function OwnerDashboardPage() {
-  const kpiData = [
+  const [isLoading, setIsLoading] = useState(true);
+  const [report, setReport] = useState<RevenueReportResponse | null>(null);
+  const [summary, setSummary] = useState<OwnerDashboardSummaryResponse | null>(null);
+  const [pendingBookings, setPendingBookings] = useState<BookingItem[]>([]);
+  
+  // Rejection Dialog states
+  const [selectedBookingId, setSelectedBookingId] = useState<number | null>(null);
+  const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [isSubmittingAction, setIsSubmittingAction] = useState(false);
+
+  // Fetch all necessary dashboard data
+  const loadDashboardData = async () => {
+    try {
+      setIsLoading(true);
+
+      // 1. Tính toán ngày (30 ngày trước đến nay)
+      const end = new Date();
+      const start = new Date();
+      start.setDate(end.getDate() - 30);
+
+      const formatDate = (d: Date) => d.toISOString().split("T")[0];
+      const startDateStr = formatDate(start);
+      const endDateStr = formatDate(end);
+
+      // 2. Fetch Báo cáo doanh thu, Booking và Dashboard Summary
+      const [reportRes, bookingsList, summaryRes] = await Promise.all([
+        get<ApiResponse<RevenueReportResponse>>(`/owner/reports/revenue?startDate=${startDateStr}&endDate=${endDateStr}`),
+        get<BookingItem[]>("/owner/bookings"),
+        get<ApiResponse<OwnerDashboardSummaryResponse>>("/owner/reports/summary"),
+      ]);
+
+      setReport(reportRes.result);
+      setSummary(summaryRes.result);
+
+      // Lọc các booking có trạng thái pending để hiển thị ở bảng chờ duyệt
+      const pending = bookingsList.filter(
+        (b) => b.status.toLowerCase() === "pending"
+      );
+      setPendingBookings(pending);
+
+    } catch (error: unknown) {
+      const err = error as Error;
+      console.error("Lỗi khi tải dữ liệu dashboard:", err);
+      toast.error(err.message || "Không thể tải dữ liệu dashboard. Vui lòng thử lại.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  // Xử lý duyệt đặt sân
+  const handleConfirmBooking = async (bookingId: number) => {
+    try {
+      toast.loading("Đang xử lý duyệt đơn...", { id: "booking-action" });
+      await put(`/owner/bookings/${bookingId}/action`, { action: "CONFIRM" });
+      toast.success("Đã duyệt đơn đặt sân thành công!", { id: "booking-action" });
+      loadDashboardData();
+    } catch (error: unknown) {
+      const err = error as Error;
+      toast.error(err.message || "Không thể duyệt đơn.", { id: "booking-action" });
+    }
+  };
+
+  // Mở Dialog từ chối
+  const handleOpenRejectDialog = (bookingId: number) => {
+    setSelectedBookingId(bookingId);
+    setRejectReason("");
+    setIsRejectDialogOpen(true);
+  };
+
+  // Xử lý từ chối đặt sân
+  const handleRejectBooking = async () => {
+    if (!selectedBookingId) return;
+    if (!rejectReason.trim()) {
+      toast.error("Vui lòng nhập lý do từ chối.");
+      return;
+    }
+
+    try {
+      setIsSubmittingAction(true);
+      toast.loading("Đang xử lý từ chối...", { id: "booking-action" });
+      await put(`/owner/bookings/${selectedBookingId}/action`, {
+        action: "REJECT",
+        reason: rejectReason.trim(),
+      });
+      toast.success("Đã từ chối đơn đặt sân thành công!", { id: "booking-action" });
+      setIsRejectDialogOpen(false);
+      loadDashboardData();
+    } catch (error: unknown) {
+      const err = error as Error;
+      toast.error(err.message || "Không thể từ chối đơn.", { id: "booking-action" });
+    } finally {
+      setIsSubmittingAction(false);
+    }
+  };
+
+  // Xử lý định dạng biểu đồ phân bổ doanh thu theo sân
+  const getVenuePieData = () => {
+    if (!report || !report.venueRevenues || report.venueRevenues.length === 0) {
+      return [];
+    }
+    return report.venueRevenues.map((v) => ({
+      name: v.stadiumName,
+      value: v.totalRevenue,
+    }));
+  };
+
+  // Điền dữ liệu đầy đủ 30 ngày (padding với doanh thu = 0 cho ngày không có phát sinh giao dịch)
+  const getPaddedDetails = () => {
+    if (!report || !report.details) return [];
+    const detailsMap = new Map(report.details.map((d) => [d.date, d.revenue]));
+    const list = [];
+    const end = new Date();
+    const current = new Date();
+    current.setDate(end.getDate() - 30);
+
+    while (current <= end) {
+      const dateStr = current.toISOString().split("T")[0];
+      list.push({
+        date: dateStr,
+        revenue: detailsMap.get(dateStr) || 0,
+      });
+      current.setDate(current.getDate() + 1);
+    }
+    return list;
+  };
+
+  const kpisData: KpiItem[] = [
     {
       title: "Đặt sân hôm nay",
-      value: "12",
-      change: "+8%",
-      trend: "up",
+      value: summary?.todayBookingsCount ?? 0,
+      change: "",
+      trend: "neutral",
       icon: <Calendar className="h-6 w-6" />,
     },
     {
       title: "Doanh thu tháng này",
-      value: "45.5M",
-      change: "+15%",
-      trend: "up",
+      value: summary ? `${summary.currentMonthRevenue.toLocaleString("vi-VN")}đ` : "0đ",
+      change: "",
+      trend: "neutral",
       icon: <DollarSign className="h-6 w-6" />,
     },
     {
-      title: "Tỷ lệ lấp đầy",
-      value: "78%",
-      change: "-3%",
-      trend: "down",
+      title: "Tỷ lệ lấp đầy trung bình",
+      value: summary ? `${summary.averageOccupancyRate}%` : "0%",
+      change: "",
+      trend: "neutral",
       icon: <BarChart3 className="h-6 w-6" />,
     },
     {
       title: "Chờ xác nhận",
-      value: "5",
+      value: summary?.pendingBookingsCount ?? 0,
       change: "",
       trend: "neutral",
       icon: <AlertCircle className="h-6 w-6" />,
     },
   ];
 
-  const revenueData = [
-    { date: "01/05", revenue: 1200000 },
-    { date: "05/05", revenue: 1800000 },
-    { date: "10/05", revenue: 1500000 },
-    { date: "15/05", revenue: 2100000 },
-    { date: "20/05", revenue: 1900000 },
-    { date: "25/05", revenue: 2400000 },
-    { date: "30/05", revenue: 2200000 },
-  ];
-
-  const sportTypeData = [
-    { name: "Bóng đá", value: 65, color: "#2563EB" },
-    { name: "Cầu lông", value: 20, color: "#10B981" },
-    { name: "Quần vợt", value: 10, color: "#F59E0B" },
-    { name: "Bóng rổ", value: 5, color: "#EF4444" },
-  ];
-
-  const pendingBookings = [
-    {
-      id: "BK001234",
-      customer: "Nguyễn Văn A",
-      venue: "Sân 1",
-      date: "22/05/2024",
-      time: "18:00 - 20:00",
-      amount: 500000,
-    },
-    {
-      id: "BK001235",
-      customer: "Trần Thị B",
-      venue: "Sân 2",
-      date: "22/05/2024",
-      time: "20:00 - 22:00",
-      amount: 600000,
-    },
-    {
-      id: "BK001236",
-      customer: "Lê Văn C",
-      venue: "Sân 1",
-      date: "23/05/2024",
-      time: "16:00 - 18:00",
-      amount: 500000,
-    },
-  ];
 
   return (
-    <div className="flex">
-        {/* Sidebar */}
-        <aside className="w-64 min-h-screen bg-sidebar border-r p-4">
-          <h2 className="mb-6 px-3">Quản lý chủ sân</h2>
-          <nav className="space-y-1">
-            <Button
-              variant="default"
-              className="w-full justify-start"
-              size="sm"
-            >
-              <Home className="mr-3 h-4 w-4" />
-              Dashboard
-            </Button>
-            <Button variant="ghost" className="w-full justify-start" size="sm">
-              <BarChart3 className="mr-3 h-4 w-4" />
-              Sân của tôi
-            </Button>
-            <Button variant="ghost" className="w-full justify-start" size="sm">
-              <Calendar className="mr-3 h-4 w-4" />
-              Lịch đặt
-            </Button>
-            <Button variant="ghost" className="w-full justify-start" size="sm">
-              <Wallet className="mr-3 h-4 w-4" />
-              Doanh thu
-            </Button>
-            <Button variant="ghost" className="w-full justify-start" size="sm">
-              <Bell className="mr-3 h-4 w-4" />
-              Thông báo
-            </Button>
-          </nav>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 p-8">
-          <h1 className="text-3xl mb-8">Dashboard</h1>
-
-          {/* KPIs */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {kpiData.map((kpi, idx) => (
-              <Card key={idx}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="text-primary bg-primary/10 p-3 rounded-lg">
-                      {kpi.icon}
-                    </div>
-                    {kpi.change && (
-                      <div
-                        className={`flex items-center text-sm ${
-                          kpi.trend === "up"
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }`}
-                      >
-                        {kpi.trend === "up" ? (
-                          <TrendingUp className="h-4 w-4 mr-1" />
-                        ) : (
-                          <TrendingDown className="h-4 w-4 mr-1" />
-                        )}
-                        {kpi.change}
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-2xl mb-1">{kpi.value}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {kpi.title}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+    <div className="p-6 lg:p-8">
+      <div>
+          <div>
+            <h1 className="text-3xl font-extrabold text-slate-950 dark:text-white">Tổng quan hiệu suất</h1>
+            <p className="text-muted-foreground text-sm">Dữ liệu được cập nhật dựa trên hoạt động thực tế của hệ thống.</p>
           </div>
+          <Button variant="outline" onClick={loadDashboardData} disabled={isLoading} size="sm">
+            Tải lại trang
+          </Button>
+        </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            {/* Revenue Chart */}
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <h3>Doanh thu 30 ngày qua</h3>
-              </CardHeader>
-              <CardContent>
+        {/* KPIs Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {isLoading
+            ? Array.from({ length: 4 }).map((_, idx) => (
+                <Card key={idx}>
+                  <CardContent className="p-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <Skeleton className="h-12 w-12 rounded-lg" />
+                      <Skeleton className="h-4 w-12" />
+                    </div>
+                    <Skeleton className="h-8 w-24 mb-2" />
+                    <Skeleton className="h-4 w-32" />
+                  </CardContent>
+                </Card>
+              ))
+            : kpisData.map((kpi, idx) => (
+                <Card key={idx} className="border border-slate-200/80 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="text-primary bg-primary/10 p-3 rounded-lg dark:bg-primary/20">
+                        {kpi.icon}
+                      </div>
+                      {kpi.change && (
+                        <div
+                          className={`flex items-center text-sm ${
+                            kpi.trend === "up"
+                              ? "text-green-600 dark:text-green-400"
+                              : "text-red-600 dark:text-red-400"
+                          }`}
+                        >
+                          {kpi.trend === "up" ? (
+                            <TrendingUp className="h-4 w-4 mr-1" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4 mr-1" />
+                          )}
+                          {kpi.change}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white mb-1">
+                      {kpi.value}
+                    </div>
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      {kpi.title}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+        </div>
+
+        {/* Charts Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Revenue Chart */}
+          <Card className="lg:col-span-2 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <CardHeader className="pb-2">
+              <h3 className="font-bold text-slate-900 dark:text-white">Doanh thu 30 ngày qua</h3>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : !report || report.details.length === 0 ? (
+                <div className="h-[300px] flex items-center justify-center text-muted-foreground text-sm">
+                  Chưa có dữ liệu doanh thu trong khoảng thời gian này.
+                </div>
+              ) : (
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={revenueData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
+                  <LineChart data={getPaddedDetails()}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                      tickFormatter={(value) => {
+                        const parts = value.split("-");
+                        return parts.length === 3 ? `${parts[2]}/${parts[1]}` : value;
+                      }}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                      tickFormatter={(value) => `${Number(value) / 1000}k`}
+                    />
                     <Tooltip
-                      formatter={(value) => `${Number(value).toLocaleString('vi-VN')}đ`}
+                      formatter={(value) => [`${Number(value).toLocaleString("vi-VN")}đ`, "Doanh thu"]}
                     />
                     <Line
                       type="monotone"
                       dataKey="revenue"
                       stroke="#2563EB"
-                      strokeWidth={2}
+                      strokeWidth={2.5}
+                      dot={{ r: 2 }}
+                      activeDot={{ r: 6 }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
-              </CardContent>
-            </Card>
+              )}
+            </CardContent>
+          </Card>
 
-            {/* Sport Type Distribution */}
-            <Card>
-              <CardHeader>
-                <h3>Doanh thu theo môn</h3>
-              </CardHeader>
-              <CardContent>
+          {/* Sport/Stadium Distribution Chart */}
+          <Card className="border border-slate-200/80 dark:border-slate-800 shadow-sm">
+            <CardHeader className="pb-2">
+              <h3 className="font-bold text-slate-900 dark:text-white">Doanh thu theo sân</h3>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : getVenuePieData().length === 0 ? (
+                <div className="h-[300px] flex items-center justify-center text-muted-foreground text-sm">
+                  Không có dữ liệu đóng góp từ các sân.
+                </div>
+              ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
-                      data={sportTypeData}
+                      data={getVenuePieData()}
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={(entry) => `${entry.value}%`}
-                      outerRadius={80}
+                      label={({ percent }) => percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ""}
+                      outerRadius={75}
                       fill="#8884d8"
                       dataKey="value"
                     >
-                      {sportTypeData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      {getVenuePieData().map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip />
-                    <Legend />
+                    <Tooltip formatter={(value) => `${Number(value).toLocaleString("vi-VN")}đ`} />
+                    <Legend 
+                      verticalAlign="bottom" 
+                      height={36} 
+                      iconType="circle"
+                      wrapperStyle={{ fontSize: "12px" }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
-          {/* Pending Bookings */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <h3>Đơn đặt chờ xác nhận</h3>
-                <Badge variant="destructive">{pendingBookings.length}</Badge>
+        {/* Pending Bookings Table */}
+        <Card className="border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+          <CardHeader className="border-b bg-slate-50/50 dark:bg-slate-950/20 py-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-900 dark:text-white">Đơn đặt sân chờ duyệt</h3>
+              <Badge variant={pendingBookings.length > 0 ? "destructive" : "secondary"}>
+                {pendingBookings.length}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {isLoading ? (
+              <div className="p-8 space-y-4">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
               </div>
-            </CardHeader>
-            <CardContent>
+            ) : pendingBookings.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground text-sm flex flex-col items-center gap-2">
+                <CheckCircle className="h-8 w-8 text-emerald-500" />
+                Tuyệt vời! Bạn không còn đơn đặt sân nào cần duyệt.
+              </div>
+            ) : (
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full border-collapse">
                   <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-3">Mã đơn</th>
-                      <th className="text-left p-3">Khách hàng</th>
-                      <th className="text-left p-3">Sân</th>
-                      <th className="text-left p-3">Ngày</th>
-                      <th className="text-left p-3">Giờ</th>
-                      <th className="text-right p-3">Số tiền</th>
-                      <th className="text-right p-3">Thao tác</th>
+                    <tr className="border-b bg-slate-50/50 dark:bg-slate-950/20 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      <th className="text-left p-4">Mã đơn</th>
+                      <th className="text-left p-4">Khách hàng</th>
+                      <th className="text-left p-4">Sân</th>
+                      <th className="text-left p-4">Ngày chơi</th>
+                      <th className="text-left p-4">Khung giờ</th>
+                      <th className="text-right p-4">Số tiền</th>
+                      <th className="text-right p-4">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pendingBookings.map((booking) => (
-                      <tr key={booking.id} className="border-b hover:bg-muted">
-                        <td className="p-3 font-mono text-sm">{booking.id}</td>
-                        <td className="p-3">{booking.customer}</td>
-                        <td className="p-3">{booking.venue}</td>
-                        <td className="p-3">{booking.date}</td>
-                        <td className="p-3">{booking.time}</td>
-                        <td className="p-3 text-right">
-                          {booking.amount.toLocaleString('vi-VN')}đ
+                      <tr key={booking.id} className="border-b hover:bg-slate-50 dark:hover:bg-slate-950/40 transition-colors">
+                        <td className="p-4 font-mono text-sm font-semibold text-primary">{booking.displayId}</td>
+                        <td className="p-4">
+                          <div className="font-medium text-slate-900 dark:text-white">{booking.customer.name}</div>
+                          <div className="text-xs text-muted-foreground">{booking.customer.phone}</div>
                         </td>
-                        <td className="p-3 text-right">
+                        <td className="p-4 text-slate-700 dark:text-slate-300">{booking.venue}</td>
+                        <td className="p-4 text-slate-700 dark:text-slate-300">{booking.date}</td>
+                        <td className="p-4 text-slate-700 dark:text-slate-300 font-medium">{booking.time}</td>
+                        <td className="p-4 text-right font-semibold text-slate-900 dark:text-white">
+                          {booking.amount.toLocaleString("vi-VN")}đ
+                        </td>
+                        <td className="p-4 text-right">
                           <div className="flex gap-2 justify-end">
-                            <Button size="sm" variant="default">
+                            <Button
+                              size="sm"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm transition-all"
+                              onClick={() => handleConfirmBooking(booking.id)}
+                            >
                               <CheckCircle className="h-4 w-4 mr-1" />
                               Duyệt
                             </Button>
-                            <Button size="sm" variant="destructive">
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="font-medium shadow-sm transition-all"
+                              onClick={() => handleOpenRejectDialog(booking.id)}
+                            >
+                              <XCircle className="h-4 w-4 mr-1" />
                               Từ chối
                             </Button>
                           </div>
@@ -283,10 +505,46 @@ function OwnerDashboardPage() {
                   </tbody>
                 </table>
               </div>
-            </CardContent>
-          </Card>
-        </main>
-      </div>
+            )}
+          </CardContent>
+        </Card>
+
+
+      {/* Rejection Reason Dialog */}
+      <Dialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-rose-600 flex items-center gap-2">
+              <XCircle className="h-6 w-6" />
+              Từ chối đơn đặt sân
+            </DialogTitle>
+            <DialogDescription>
+              Vui lòng nhập lý do từ chối đơn đặt sân này. Lý do này sẽ được gửi đến khách hàng qua ghi chú đơn hàng.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Textarea
+              placeholder="Nhập lý do từ chối (ví dụ: Sân đang bảo trì, Trùng lịch đột xuất...)"
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              className="min-h-[100px] focus:ring-1 focus:ring-rose-500 focus:outline-none"
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsRejectDialogOpen(false)} disabled={isSubmittingAction}>
+              Hủy
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleRejectBooking}
+              disabled={isSubmittingAction || !rejectReason.trim()}
+            >
+              {isSubmittingAction ? "Đang xử lý..." : "Xác nhận từ chối"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 
