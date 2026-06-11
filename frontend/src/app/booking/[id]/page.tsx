@@ -180,7 +180,7 @@ function BookingDetailPage() {
         {booking.status === 'confirmed' && (
           <div className="flex flex-col gap-3">
             <div className="flex flex-col sm:flex-row gap-3">
-              <Link href={`/booking/${booking.id}/review`} className="flex-1">
+              <Link href={`/booking/${params.id}/review`} className="flex-1">
                 <Button variant="outline" className="w-full">
                   <Star className="h-4 w-4 mr-2" />
                   Viết đánh giá
@@ -198,7 +198,7 @@ function BookingDetailPage() {
                 <AlertCircle className="h-4 w-4 mr-2" />
                 Gửi khiếu nại
               </Button>
-              <Link href={`/booking/${booking.id}/cancel`} className="flex-1">
+              <Link href={`/booking/${params.id}/cancel`} className="flex-1">
                 <Button variant="destructive" className="w-full">
                   <X className="h-4 w-4 mr-2" />
                   Huỷ đặt sân
