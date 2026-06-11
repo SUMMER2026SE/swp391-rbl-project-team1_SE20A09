@@ -223,6 +223,14 @@ public class RefundServiceImpl implements RefundService {
             String startTime = b.getSlot().getStartTime().toLocalTime().toString();
             String endTime = b.getSlot().getEndTime().toLocalTime().toString();
             
+            BigDecimal refundAmt = BigDecimal.ZERO;
+            if (b.getPaymentStatus() == com.sportvenue.entity.enums.PaymentStatus.REFUNDED) {
+                java.util.Optional<Payment> refundOpt = paymentRepository.findRefundPaymentByBookingId(b.getBookingId());
+                if (refundOpt.isPresent()) {
+                    refundAmt = refundOpt.get().getAmount().abs();
+                }
+            }
+
             return OwnerBookingResponse.builder()
                     .id(b.getBookingId())
                     .displayId("BK" + String.format("%06d", b.getBookingId()))
@@ -231,6 +239,7 @@ public class RefundServiceImpl implements RefundService {
                     .date(b.getSlot().getStartTime().toLocalDate().toString())
                     .time(startTime + " - " + endTime)
                     .amount(b.getTotalPrice())
+                    .refundAmount(refundAmt)
                     .paymentStatus(b.getPaymentStatus().name().toLowerCase())
                     .status(b.getBookingStatus().name().toLowerCase())
                     .notes(b.getNote() != null ? b.getNote() : "")

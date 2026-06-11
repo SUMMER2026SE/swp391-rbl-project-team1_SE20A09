@@ -170,4 +170,23 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("ownerId") Integer ownerId,
             @Param("status") BookingStatus status,
             Pageable pageable);
+
+    @Query("""
+            SELECT COUNT(b) FROM Booking b
+            WHERE b.stadium.owner.user.email = :ownerEmail
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.PENDING
+            """)
+    long countPendingBookingsByOwnerEmail(@Param("ownerEmail") String ownerEmail);
+
+    @Query("""
+            SELECT COUNT(b) FROM Booking b
+            WHERE b.stadium.owner.user.email = :ownerEmail
+            AND b.slot.startTime BETWEEN :startOfToday AND :endOfToday
+            AND b.bookingStatus IN (com.sportvenue.entity.enums.BookingStatus.CONFIRMED, com.sportvenue.entity.enums.BookingStatus.COMPLETED)
+            """)
+    long countTodayBookingsByOwnerEmail(
+            @Param("ownerEmail") String ownerEmail,
+            @Param("startOfToday") LocalDateTime startOfToday,
+            @Param("endOfToday") LocalDateTime endOfToday);
 }
+

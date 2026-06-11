@@ -2,10 +2,12 @@ package com.sportvenue.service.impl;
 
 import com.sportvenue.dto.response.RevenueDetailDto;
 import com.sportvenue.dto.response.RevenueReportResponse;
+import com.sportvenue.dto.response.OwnerDashboardSummaryResponse;
+import com.sportvenue.dto.response.VenueRevenueDto;
 import com.sportvenue.repository.PaymentRepository;
+import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.projection.DailyRevenueProjection;
 import com.sportvenue.repository.projection.VenueRevenueProjection;
-import com.sportvenue.dto.response.VenueRevenueDto;
 import com.sportvenue.service.RevenueService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
@@ -31,6 +34,8 @@ public class RevenueServiceImpl implements RevenueService {
     private static final long MAX_QUERY_DAYS = 365;
 
     private final PaymentRepository paymentRepository;
+    private final BookingRepository bookingRepository;
+
 
     @Transactional(readOnly = true)
     @Override
@@ -131,4 +136,42 @@ public class RevenueServiceImpl implements RevenueService {
                 })
                 .toList(); // QUALITY-02: Java 16+ style
     }
+
+    @Transactional(readOnly = true)
+    @Override
+    public OwnerDashboardSummaryResponse getDashboardSummary(String ownerEmail) {
+        log.info("Calculating dashboard summary for owner: {}", ownerEmail);
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startOfToday = now.toLocalDate().atStartOfDay();
+        LocalDateTime endOfToday = now.toLocalDate().atTime(LocalTime.MAX);
+
+        LocalDateTime startOfMonth = now.toLocalDate().withDayOfMonth(1).atStartOfDay();
+        LocalDateTime endOfMonth = now.toLocalDate().plusMonths(1).withDayOfMonth(1).minusDays(1).atTime(LocalTime.MAX);
+
+        long todayBookingsCount = bookingRepository.countTodayBookingsByOwnerEmail(ownerEmail, startOfToday, endOfToday);
+        BigDecimal currentMonthRevenue = paymentRepository.sumCurrentMonthRevenue(ownerEmail, startOfMonth, endOfMonth);
+        long pendingBookingsCount = bookingRepository.countPendingBookingsByOwnerEmail(ownerEmail);
+
+        // Tỷ lệ lấp đầy trong 30 ngày qua
+        LocalDateTime start30DaysAgo = now.minusDays(30);
+        RevenueReportResponse report = getRevenueReport(ownerEmail, null, start30DaysAgo, now);
+
+        double averageOccupancyRate = 0.0;
+        if (report.getVenueRevenues() != null && !report.getVenueRevenues().isEmpty()) {
+            double totalOccupancy = report.getVenueRevenues().stream()
+                    .mapToDouble(VenueRevenueDto::getOccupancy)
+                    .sum();
+            averageOccupancyRate = totalOccupancy / report.getVenueRevenues().size();
+            averageOccupancyRate = Math.round(averageOccupancyRate * 10.0) / 10.0; // làm tròn 1 chữ số thập phân
+        }
+
+        return OwnerDashboardSummaryResponse.builder()
+                .todayBookingsCount(todayBookingsCount)
+                .currentMonthRevenue(currentMonthRevenue)
+                .averageOccupancyRate(averageOccupancyRate)
+                .pendingBookingsCount(pendingBookingsCount)
+                .build();
+    }
 }
+
