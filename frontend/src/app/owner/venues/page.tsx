@@ -60,16 +60,21 @@ import { AccessoryManagerDialog } from "@/components/venues/AccessoryManagerDial
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useConfirm } from "@/hooks/useConfirm";
 
+interface VenueModalData {
+  id: number;
+  name: string;
+}
+
 function VenueManagementPage() {
   const router = useRouter();
   const [venues, setVenues] = useState<StadiumResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAccessoryOpen, setIsAccessoryOpen] = useState(false);
-  const [selectedVenueForAccessory, setSelectedVenueForAccessory] = useState<{ id: number, name: string } | null>(null);
+  const [selectedVenueForAccessory, setSelectedVenueForAccessory] = useState<VenueModalData | null>(null);
   
-  const [suspendVenue, setSuspendVenue] = useState<{ id: number, name: string } | null>(null);
-  const [activateVenue, setActivateVenue] = useState<{ id: number, name: string } | null>(null);
-  const [deleteVenue, setDeleteVenue] = useState<{ id: number, name: string } | null>(null);
+  const [suspendVenue, setSuspendVenue] = useState<VenueModalData | null>(null);
+  const [activateVenue, setActivateVenue] = useState<VenueModalData | null>(null);
+  const [deleteVenue, setDeleteVenue] = useState<VenueModalData | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -168,7 +173,7 @@ function VenueManagementPage() {
     try {
       await stadiumService.deleteStadium(deleteVenue.id);
       toast.success("Đã xóa sân thành công.");
-      setVenues(venues.map(v => v.stadiumId === deleteVenue.id ? { ...v, stadiumStatus: "CLOSED" } : v));
+      setVenues(venues.filter(v => v.stadiumId !== deleteVenue.id));
       setDeleteVenue(null);
       setDeleteConfirmText("");
     } catch (error) {
