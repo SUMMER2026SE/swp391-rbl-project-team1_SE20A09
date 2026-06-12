@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export default function StadiumApprovalPage() {
   const router = useRouter();
@@ -92,10 +93,12 @@ export default function StadiumApprovalPage() {
           {/* Main Image preview */}
           <div className="w-full md:w-48 h-32 relative bg-muted rounded-lg overflow-hidden shrink-0">
             {stadium.imageUrls && stadium.imageUrls.length > 0 ? (
-              <img
+              <Image
                 src={stadium.imageUrls[0]}
                 alt={stadium.stadiumName}
-                className="w-full h-full object-cover"
+                fill
+                className="object-cover"
+                unoptimized
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-muted-foreground">

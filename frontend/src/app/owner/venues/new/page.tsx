@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, X, MapPin, Loader2 } from "lucide-react";
+import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -292,10 +293,12 @@ function AddVenuePage() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                     {uploadedPhotos.map((photo, idx) => (
                       <div key={idx} className="relative aspect-video">
-                        <img
+                        <Image
                           src={photo}
                           alt={`Photo ${idx + 1}`}
-                          className="w-full h-full object-cover rounded-lg border"
+                          fill
+                          className="object-cover rounded-lg border"
+                          unoptimized
                         />
                         {idx === 0 && (
                           <Badge className="absolute top-2 left-2">Ảnh chính</Badge>

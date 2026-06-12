@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MapPin, Calendar, Clock, FileText, Loader2, AlertCircle } from "lucide-react";
+import Image from "next/image";
 import {
   fetchMyBookings,
   fetchOwnerBookings,
@@ -74,11 +75,15 @@ function BookingCard({ booking, isOwner = false }: { booking: BookingHistoryItem
     <Card>
       <CardContent className="p-6">
         <div className="flex gap-4">
-          <img
-            src={booking.imageUrl}
-            alt={booking.venue}
-            className="h-24 w-24 rounded-lg object-cover"
-          />
+          <div className="h-24 w-24 relative rounded-lg overflow-hidden shrink-0">
+            <Image
+              src={booking.imageUrl}
+              alt={booking.venue}
+              fill
+              className="object-cover"
+              unoptimized
+            />
+          </div>
           <div className="flex-1">
             <div className="mb-2 flex items-start justify-between">
               <div>

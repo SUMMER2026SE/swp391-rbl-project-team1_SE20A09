@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import dynamic from 'next/dynamic'
+import Image from 'next/image'
 import {
   IconBallFootball,
   IconClock,
@@ -401,10 +402,12 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
         className="w-full h-[260px] relative overflow-hidden cursor-pointer bg-[#1e4535]"
       >
         {venue.images[activeIndex] ? (
-          <img 
+          <Image 
             src={venue.images[activeIndex]} 
             alt={venue.name} 
-            className="w-full h-full object-cover transition-all duration-300"
+            fill
+            className="object-cover transition-all duration-300"
+            unoptimized
           />
         ) : (
           <div className="w-full h-full bg-[#1e4535] flex items-center justify-center">
@@ -485,10 +488,12 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
               className="relative h-[64px] cursor-pointer bg-[#1e4535] overflow-hidden"
             >
               {img ? (
-                <img 
+                <Image 
                   src={img} 
                   alt={`Thumbnail ${i + 1}`} 
-                  className="w-full h-full object-cover"
+                  fill
+                  className="object-cover"
+                  unoptimized
                 />
               ) : (
                 <div className="w-full h-full bg-[#1e4535] flex items-center justify-center text-[10px] text-white/40">
@@ -904,7 +909,14 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
                             {review.userAvatar ? (
-                              <img src={review.userAvatar} alt={review.userName} className="w-8 h-8 rounded-full object-cover" />
+                              <Image 
+                                src={review.userAvatar} 
+                                alt={review.userName} 
+                                width={32} 
+                                height={32} 
+                                className="rounded-full object-cover" 
+                                unoptimized
+                              />
                             ) : (
                               <div className="w-8 h-8 rounded-full bg-[#d4f0e2] text-[#1a8a4a] font-medium text-[12px] flex items-center justify-center uppercase">
                                 {review.userName?.charAt(0) || 'U'}
@@ -1040,10 +1052,12 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
             {/* Image display */}
             <div className="w-full h-[400px] bg-black rounded-[12px] overflow-hidden flex items-center justify-center border border-white/10 relative">
               {venue.images[lightboxIndex] ? (
-                <img 
+                <Image 
                   src={venue.images[lightboxIndex]} 
                   alt={`Viewer ${lightboxIndex + 1}`} 
-                  className="w-full h-full object-cover"
+                  fill
+                  className="object-cover"
+                  unoptimized
                 />
               ) : (
                 <div className="w-full h-full bg-[#1e4535] flex items-center justify-center text-white/50 text-[14px]">

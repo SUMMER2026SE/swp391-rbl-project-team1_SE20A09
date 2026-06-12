@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,8 +40,6 @@ import {
   Plus,
   MoreVertical,
   Edit,
-  Settings,
-  Eye,
   Pause,
   PlayCircle,
   Trash,
@@ -89,7 +88,6 @@ function VenueManagementPage() {
     isOpen: isConfirmOpen, 
     isLoading: isActionLoading, 
     options: confirmOptions, 
-    confirm, 
     close: closeConfirm, 
     execute: executeConfirm 
   } = useConfirm()
@@ -100,7 +98,7 @@ function VenueManagementPage() {
       .catch(() => toast.error("Không thể tải danh sách môn thể thao"));
   }, []);
 
-  const fetchVenues = () => {
+  const fetchVenues = useCallback(() => {
     setLoading(true);
     stadiumService.getMyStadiums({
       search: search || undefined,
@@ -110,14 +108,14 @@ function VenueManagementPage() {
       .then(setVenues)
       .catch(() => toast.error("Không thể tải danh sách sân"))
       .finally(() => setLoading(false));
-  };
+  }, [search, sportTypeId, status]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchVenues();
     }, 300);
     return () => clearTimeout(timer);
-  }, [search, sportTypeId, status]);
+  }, [fetchVenues]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -309,10 +307,12 @@ function VenueManagementPage() {
                   <TableCell>
                     <div className="w-12 h-8 relative rounded bg-muted overflow-hidden shrink-0 border border-slate-100">
                       {venue.imageUrls && venue.imageUrls.length > 0 ? (
-                        <img
+                        <Image
                           src={venue.imageUrls[0]}
                           alt={venue.stadiumName}
-                          className="w-full h-full object-cover"
+                          fill
+                          className="object-cover"
+                          unoptimized
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-muted-foreground">
@@ -360,7 +360,7 @@ function VenueManagementPage() {
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
-                          onClick={() => handleDeleteVenue(venue.stadiumId, venue.stadiumName)}
+                          onClick={() => setDeleteVenue({ id: venue.stadiumId, name: venue.stadiumName })}
                         >
                           <Trash className="mr-2 h-4 w-4" />
                           Xóa sân
@@ -380,10 +380,12 @@ function VenueManagementPage() {
             <Card key={venue.stadiumId} className="overflow-hidden border-slate-200 hover:shadow-md transition-shadow">
               <div className="relative h-48 bg-muted">
                 {venue.imageUrls && venue.imageUrls.length > 0 ? (
-                  <img
+                  <Image
                     src={venue.imageUrls[0]}
                     alt={venue.stadiumName}
-                    className="w-full h-full object-cover"
+                    fill
+                    className="object-cover"
+                    unoptimized
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-muted-foreground">

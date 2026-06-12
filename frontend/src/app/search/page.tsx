@@ -150,7 +150,7 @@ function SearchPageContent() {
     }
 
     fetchStadiums()
-  }, [searchParams])
+  }, [searchParams, debouncedFilters])
 
   const handleFilterChange = (key: keyof StadiumSearchRequest, value: StadiumSearchRequest[keyof StadiumSearchRequest]) => {
     setFilters(prev => ({ ...prev, [key]: value, page: key !== 'page' ? 0 : value as number }))
