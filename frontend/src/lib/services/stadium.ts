@@ -20,13 +20,7 @@ export const stadiumService = {
   },
 
   getStadiumById: (stadiumId: number) => {
-    return get<StadiumResponse[]>(`/stadiums/my`).then(
-      (stadiums) => {
-        const stadium = stadiums.find((s) => s.stadiumId === stadiumId);
-        if (!stadium) throw new Error('Stadium not found');
-        return stadium;
-      }
-    );
+    return get<StadiumResponse>(`/stadiums/${stadiumId}`);
   },
 
   updateStadium: (stadiumId: number, data: UpdateStadiumRequest) => {

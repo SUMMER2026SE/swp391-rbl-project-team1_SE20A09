@@ -58,6 +58,17 @@ public class StadiumController {
         return ResponseEntity.ok(stadiums);
     }
 
+    @GetMapping("/{stadiumId}")
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(summary = "Get stadium by ID", description = "Returns a specific stadium owned by the authenticated owner.")
+    public ResponseEntity<StadiumResponse> getStadiumById(
+            @PathVariable Integer stadiumId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        StadiumResponse stadium = stadiumService.getStadiumByIdAndOwner(
+                stadiumId, userPrincipal.getUser().getUserId());
+        return ResponseEntity.ok(stadium);
+    }
+
     @PutMapping("/{stadiumId}")
     @PreAuthorize("hasRole('Owner')")
     @Operation(summary = "Update stadium", description = "Allows an owner to update their stadium. Ownership is verified.")

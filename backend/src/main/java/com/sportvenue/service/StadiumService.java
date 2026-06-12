@@ -9,6 +9,8 @@ public interface StadiumService {
 
     java.util.List<StadiumResponse> getMyStadiums(Integer userId, String search, Integer sportTypeId, String status);
 
+    StadiumResponse getStadiumByIdAndOwner(Integer stadiumId, Integer userId);
+
     StadiumResponse updateStadium(Integer stadiumId, UpdateStadiumRequest request, Integer userId);
 
     StadiumResponse approveStadium(Integer stadiumId);

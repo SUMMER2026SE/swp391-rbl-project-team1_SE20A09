@@ -86,8 +86,6 @@ public class StadiumServiceImpl implements StadiumService {
             // Must belong to this owner
             predicates.add(cb.equal(root.get("owner").get("ownerId"), owner.getOwnerId()));
             
-            // Exclude CLOSED stadiums
-            predicates.add(cb.notEqual(root.get("stadiumStatus"), StadiumStatus.CLOSED));
             
             // Keyword search on name
             if (org.springframework.util.StringUtils.hasText(search)) {
@@ -116,6 +114,22 @@ public class StadiumServiceImpl implements StadiumService {
                 .stream()
                 .map(stadiumMapper::toResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StadiumResponse getStadiumByIdAndOwner(Integer stadiumId, Integer userId) {
+        Owner owner = ownerRepository.findByUserUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Owner profile not found for user ID: " + userId));
+
+        Stadium stadium = stadiumRepository.findById(stadiumId)
+                .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
+
+        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        return stadiumMapper.toResponse(stadium);
     }
 
     @Override
@@ -230,14 +244,12 @@ public class StadiumServiceImpl implements StadiumService {
         if (org.springframework.util.StringUtils.hasText(approvedStatus)) {
             try {
                 ApprovedStatus statusEnum = ApprovedStatus.valueOf(approvedStatus.toUpperCase());
-                stadiums = stadiumRepository.findAll().stream()
-                        .filter(s -> s.getApprovedStatus() == statusEnum)
-                        .toList();
+                stadiums = stadiumRepository.findByApprovedStatus(statusEnum);
             } catch (IllegalArgumentException e) {
-                stadiums = stadiumRepository.findAll();
+                stadiums = stadiumRepository.findAllWithDetails();
             }
         } else {
-            stadiums = stadiumRepository.findAll();
+            stadiums = stadiumRepository.findAllWithDetails();
         }
         return stadiums.stream()
                 .map(stadiumMapper::toResponse)
