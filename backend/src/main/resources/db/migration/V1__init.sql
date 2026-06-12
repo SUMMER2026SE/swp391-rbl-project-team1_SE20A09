@@ -78,7 +78,8 @@ CREATE TABLE stadiums (
     stadium_status  VARCHAR(20)     NOT NULL DEFAULT 'Available'
                         CHECK (stadium_status IN ('Available', 'Maintenance', 'Closed')),
     average_rating  DECIMAL(3, 2)   NOT NULL DEFAULT 5.0,
-    created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at      TIMESTAMP
 );
 
 -- ── 7. StadiumImages ──────────────────────────────────────────────────────
@@ -214,3 +215,4 @@ CREATE INDEX idx_bookings_status      ON bookings(booking_status);
 CREATE INDEX idx_messages_conv_id     ON messages(conversation_id);
 CREATE INDEX idx_posts_user_id        ON posts(user_id);
 CREATE INDEX idx_notifications_user   ON notifications(user_id, is_read);
+CREATE INDEX idx_stadiums_deleted_at  ON stadiums(deleted_at);
