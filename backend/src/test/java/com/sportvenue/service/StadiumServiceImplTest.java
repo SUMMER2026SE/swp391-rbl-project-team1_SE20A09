@@ -9,19 +9,23 @@ import com.sportvenue.entity.SportType;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.ApprovedStatus;
+import com.sportvenue.entity.enums.StadiumStatus;
+import com.sportvenue.entity.Amenity;
+import com.sportvenue.exception.AppException;
 import com.sportvenue.exception.BadRequestException;
+import com.sportvenue.exception.ErrorCode;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.mapper.StadiumMapper;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.repository.StadiumRepository;
+import com.sportvenue.repository.AmenityRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
@@ -48,6 +52,9 @@ class StadiumServiceImplTest {
     private SportTypeRepository sportTypeRepository;
 
     @Mock
+    private AmenityRepository amenityRepository;
+
+    @Mock
     private StadiumMapper stadiumMapper;
 
     private StadiumServiceImpl stadiumService;
@@ -60,6 +67,7 @@ class StadiumServiceImplTest {
                 stadiumRepository,
                 ownerRepository,
                 sportTypeRepository,
+                amenityRepository,
                 stadiumMapper,
                 fileStorageProperties);
     }
@@ -114,7 +122,8 @@ class StadiumServiceImplTest {
 
         when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
 
-        assertThrows(ResponseStatusException.class, () -> stadiumService.createStadium(request, 1));
+        AppException ex = assertThrows(AppException.class, () -> stadiumService.createStadium(request, 1));
+        assertEquals(ErrorCode.UNAUTHORIZED, ex.getErrorCode());
         verify(stadiumRepository, never()).save(any(Stadium.class));
     }
 
@@ -236,7 +245,8 @@ class StadiumServiceImplTest {
         when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
         when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
 
-        assertThrows(ResponseStatusException.class, () -> stadiumService.updateStadium(10, request, 1));
+        AppException ex = assertThrows(AppException.class, () -> stadiumService.updateStadium(10, request, 1));
+        assertEquals(ErrorCode.UNAUTHORIZED, ex.getErrorCode());
         verify(stadiumRepository, never()).save(any(Stadium.class));
     }
 
@@ -260,6 +270,120 @@ class StadiumServiceImplTest {
 
         assertThrows(ResourceNotFoundException.class, () -> stadiumService.updateStadium(10, request, 1));
         verify(stadiumRepository, never()).save(any(Stadium.class));
+    }
+
+    @Test
+    void updateStadiumResetsApprovedStatusToPendingWhenNameChanges() {
+        UpdateStadiumRequest request = validUpdateRequest();
+        request.setStadiumName("A Completely New Name");
+        Owner owner = approvedOwner();
+        SportType sportType = SportType.builder().sportTypeId(2).sportName("Basketball").build();
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .owner(owner)
+                .sportType(sportType)
+                .stadiumName("Old Name")
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .build();
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(sportTypeRepository.findById(2)).thenReturn(Optional.of(sportType));
+        when(stadiumRepository.save(any(Stadium.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(stadiumMapper.toResponse(any(Stadium.class))).thenReturn(StadiumResponse.builder().build());
+
+        stadiumService.updateStadium(10, request, 1);
+
+        ArgumentCaptor<Stadium> captor = ArgumentCaptor.forClass(Stadium.class);
+        verify(stadiumRepository).save(captor.capture());
+        assertEquals(ApprovedStatus.PENDING, captor.getValue().getApprovedStatus());
+    }
+
+    @Test
+    void updateStadiumDoesNotResetApprovedStatusWhenNameDoesNotChange() {
+        UpdateStadiumRequest request = validUpdateRequest();
+        request.setStadiumName("Old Name");
+        Owner owner = approvedOwner();
+        SportType sportType = SportType.builder().sportTypeId(2).sportName("Basketball").build();
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .owner(owner)
+                .sportType(sportType)
+                .stadiumName("Old Name")
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .build();
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(sportTypeRepository.findById(2)).thenReturn(Optional.of(sportType));
+        when(stadiumRepository.save(any(Stadium.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(stadiumMapper.toResponse(any(Stadium.class))).thenReturn(StadiumResponse.builder().build());
+
+        stadiumService.updateStadium(10, request, 1);
+
+        ArgumentCaptor<Stadium> captor = ArgumentCaptor.forClass(Stadium.class);
+        verify(stadiumRepository).save(captor.capture());
+        assertEquals(ApprovedStatus.APPROVED, captor.getValue().getApprovedStatus());
+    }
+
+    @Test
+    void updateStadiumSyncsAmenitiesSuccessfully() {
+        UpdateStadiumRequest request = validUpdateRequest();
+        request.setAmenityIds(List.of(1, 2));
+        Owner owner = approvedOwner();
+        SportType sportType = SportType.builder().sportTypeId(2).sportName("Basketball").build();
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .owner(owner)
+                .sportType(sportType)
+                .stadiumName("Old Name")
+                .amenities(new java.util.HashSet<>())
+                .build();
+
+        List<Amenity> mockAmenities = List.of(
+                Amenity.builder().amenityId(1).name("Wifi").build(),
+                Amenity.builder().amenityId(2).name("Parking").build()
+        );
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(sportTypeRepository.findById(2)).thenReturn(Optional.of(sportType));
+        when(amenityRepository.findAllById(List.of(1, 2))).thenReturn(mockAmenities);
+        when(stadiumRepository.save(any(Stadium.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(stadiumMapper.toResponse(any(Stadium.class))).thenReturn(StadiumResponse.builder().build());
+
+        stadiumService.updateStadium(10, request, 1);
+
+        ArgumentCaptor<Stadium> captor = ArgumentCaptor.forClass(Stadium.class);
+        verify(stadiumRepository).save(captor.capture());
+        assertEquals(2, captor.getValue().getAmenities().size());
+    }
+
+    @Test
+    void updateStadiumUpdatesStadiumStatusSuccessfully() {
+        UpdateStadiumRequest request = validUpdateRequest();
+        request.setStadiumStatus(StadiumStatus.MAINTENANCE);
+        Owner owner = approvedOwner();
+        SportType sportType = SportType.builder().sportTypeId(2).sportName("Basketball").build();
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .owner(owner)
+                .sportType(sportType)
+                .stadiumName("Old Name")
+                .stadiumStatus(StadiumStatus.AVAILABLE)
+                .build();
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(sportTypeRepository.findById(2)).thenReturn(Optional.of(sportType));
+        when(stadiumRepository.save(any(Stadium.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(stadiumMapper.toResponse(any(Stadium.class))).thenReturn(StadiumResponse.builder().build());
+
+        stadiumService.updateStadium(10, request, 1);
+
+        ArgumentCaptor<Stadium> captor = ArgumentCaptor.forClass(Stadium.class);
+        verify(stadiumRepository).save(captor.capture());
+        assertEquals(StadiumStatus.MAINTENANCE, captor.getValue().getStadiumStatus());
     }
 
     private static UpdateStadiumRequest validUpdateRequest() {

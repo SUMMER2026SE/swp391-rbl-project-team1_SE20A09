@@ -10,18 +10,19 @@ import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.StadiumImage;
 import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.entity.enums.StadiumStatus;
+import com.sportvenue.exception.AppException;
 import com.sportvenue.exception.BadRequestException;
+import com.sportvenue.exception.ErrorCode;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.mapper.StadiumMapper;
+import com.sportvenue.repository.AmenityRepository;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.repository.StadiumRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -33,6 +34,7 @@ public class StadiumServiceImpl implements StadiumService {
     private final StadiumRepository stadiumRepository;
     private final OwnerRepository ownerRepository;
     private final SportTypeRepository sportTypeRepository;
+    private final AmenityRepository amenityRepository;
     private final StadiumMapper stadiumMapper;
     private final FileStorageProperties fileStorageProperties;
 
@@ -46,8 +48,7 @@ public class StadiumServiceImpl implements StadiumService {
                 .orElseThrow(() -> new ResourceNotFoundException("Owner profile not found for user ID: " + userId));
 
         if (owner.getApprovedStatus() != ApprovedStatus.APPROVED) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Tài khoản chủ sân chưa được Admin phê duyệt. Vui lòng chờ xét duyệt.");
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         SportType sportType = sportTypeRepository.findById(request.getSportTypeId())
@@ -130,8 +131,7 @@ public class StadiumServiceImpl implements StadiumService {
                 .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
 
         if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "You do not have permission to edit this stadium");
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         SportType sportType = sportTypeRepository.findById(request.getSportTypeId())
@@ -178,6 +178,21 @@ public class StadiumServiceImpl implements StadiumService {
         stadium.setCapacity(request.getCapacity());
         stadium.setLatitude(request.getLatitude().doubleValue());
         stadium.setLongitude(request.getLongitude().doubleValue());
+
+        // Sync amenities if provided in the update request
+        if (request.getAmenityIds() != null) {
+            java.util.List<com.sportvenue.entity.Amenity> amenitiesList = amenityRepository.findAllById(request.getAmenityIds());
+            if (amenitiesList.size() != request.getAmenityIds().size()) {
+                throw new ResourceNotFoundException("Some amenities were not found");
+            }
+            stadium.getAmenities().clear();
+            stadium.getAmenities().addAll(amenitiesList);
+        }
+
+        // Update stadiumStatus safely if provided
+        if (request.getStadiumStatus() != null) {
+            stadium.setStadiumStatus(request.getStadiumStatus());
+        }
 
         Stadium updatedStadium = stadiumRepository.save(stadium);
         log.info("Successfully updated stadium with ID: {}", updatedStadium.getStadiumId());

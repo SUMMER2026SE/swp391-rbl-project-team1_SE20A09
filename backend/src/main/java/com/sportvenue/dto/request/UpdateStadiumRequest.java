@@ -70,6 +70,10 @@ public class UpdateStadiumRequest {
 
     private java.util.List<String> imageUrls;
 
+    private java.util.List<Integer> amenityIds;
+
+    private com.sportvenue.entity.enums.StadiumStatus stadiumStatus;
+
     @AssertTrue(message = "Close time must be after open time")
     public boolean isCloseTimeAfterOpenTime() {
         if (openTime == null || closeTime == null) {
