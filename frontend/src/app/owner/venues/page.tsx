@@ -6,12 +6,21 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreVertical, Edit, Settings, Eye, Pause, Trash, Loader2, ImageOff, Package } from "lucide-react";
+import { Plus, MoreVertical, Edit, Settings, Eye, Pause, PlayCircle, Trash, Loader2, ImageOff, Package } from "lucide-react";
 import { stadiumService } from "@/lib/services/stadium";
 import { StadiumResponse } from "@/types/stadium";
 import { toast } from "sonner";
@@ -23,6 +32,12 @@ function VenueManagementPage() {
   const [loading, setLoading] = useState(true);
   const [isAccessoryOpen, setIsAccessoryOpen] = useState(false);
   const [selectedVenueForAccessory, setSelectedVenueForAccessory] = useState<{ id: number, name: string } | null>(null);
+  
+  const [suspendVenue, setSuspendVenue] = useState<{ id: number, name: string } | null>(null);
+  const [activateVenue, setActivateVenue] = useState<{ id: number, name: string } | null>(null);
+  const [deleteVenue, setDeleteVenue] = useState<{ id: number, name: string } | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     stadiumService.getMyStadiums()
@@ -41,6 +56,56 @@ function VenueManagementPage() {
         return <Badge className="bg-red-100 text-red-700">Đóng cửa</Badge>;
       default:
         return <Badge className="bg-gray-100 text-gray-700">{status}</Badge>;
+    }
+  };
+
+  const handleSuspend = async () => {
+    if (!suspendVenue) return;
+    setIsSubmitting(true);
+    try {
+      await stadiumService.suspendStadium(suspendVenue.id);
+      toast.success("Đã tạm ngưng hoạt động sân thành công.");
+      setVenues(venues.map(v => v.stadiumId === suspendVenue.id ? { ...v, stadiumStatus: "MAINTENANCE" } : v));
+      setSuspendVenue(null);
+    } catch (error) {
+      toast.error("Có lỗi xảy ra khi tạm ngưng sân.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleActivate = async () => {
+    if (!activateVenue) return;
+    setIsSubmitting(true);
+    try {
+      await stadiumService.activateStadium(activateVenue.id);
+      toast.success("Đã mở lại hoạt động sân thành công.");
+      setVenues(venues.map(v => v.stadiumId === activateVenue.id ? { ...v, stadiumStatus: "AVAILABLE" } : v));
+      setActivateVenue(null);
+    } catch (error) {
+      toast.error("Có lỗi xảy ra khi mở lại sân.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteVenue) return;
+    if (deleteConfirmText !== "DELETE") {
+      toast.error("Vui lòng nhập chữ DELETE để xác nhận.");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await stadiumService.deleteStadium(deleteVenue.id);
+      toast.success("Đã xóa sân thành công.");
+      setVenues(venues.map(v => v.stadiumId === deleteVenue.id ? { ...v, stadiumStatus: "CLOSED" } : v));
+      setDeleteVenue(null);
+      setDeleteConfirmText("");
+    } catch (error) {
+      toast.error("Có lỗi xảy ra khi xóa sân.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -120,14 +185,23 @@ function VenueManagementPage() {
                         <Package className="mr-2 h-4 w-4" />
                         Quản lý phụ kiện
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
-                        <Pause className="mr-2 h-4 w-4" />
-                        Tạm dừng
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive">
-                        <Trash className="mr-2 h-4 w-4" />
-                        Xóa
-                      </DropdownMenuItem>
+                      {venue.stadiumStatus === 'AVAILABLE' ? (
+                        <DropdownMenuItem onClick={() => setSuspendVenue({ id: venue.stadiumId, name: venue.stadiumName })}>
+                          <Pause className="mr-2 h-4 w-4" />
+                          Tạm dừng
+                        </DropdownMenuItem>
+                      ) : venue.stadiumStatus === 'MAINTENANCE' ? (
+                        <DropdownMenuItem onClick={() => setActivateVenue({ id: venue.stadiumId, name: venue.stadiumName })}>
+                          <PlayCircle className="mr-2 h-4 w-4" />
+                          Mở lại
+                        </DropdownMenuItem>
+                      ) : null}
+                      {venue.stadiumStatus !== 'CLOSED' && (
+                        <DropdownMenuItem className="text-destructive" onClick={() => setDeleteVenue({ id: venue.stadiumId, name: venue.stadiumName })}>
+                          <Trash className="mr-2 h-4 w-4" />
+                          Xóa
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -173,6 +247,73 @@ function VenueManagementPage() {
           }}
         />
       )}
+
+      {/* Suspend Modal */}
+      <Dialog open={!!suspendVenue} onOpenChange={(open) => !open && setSuspendVenue(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận tạm dừng sân</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn tạm dừng hoạt động sân <strong>{suspendVenue?.name}</strong> không? 
+              Trạng thái sân sẽ chuyển sang bảo trì và khách hàng không thể đặt sân mới.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSuspendVenue(null)} disabled={isSubmitting}>Hủy</Button>
+            <Button onClick={handleSuspend} disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Xác nhận
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Activate Modal */}
+      <Dialog open={!!activateVenue} onOpenChange={(open) => !open && setActivateVenue(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận mở lại sân</DialogTitle>
+            <DialogDescription>
+              Sân <strong>{activateVenue?.name}</strong> sẽ được chuyển sang trạng thái hoạt động và khách hàng có thể tiếp tục đặt sân.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setActivateVenue(null)} disabled={isSubmitting}>Hủy</Button>
+            <Button onClick={handleActivate} disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Xác nhận
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Modal */}
+      <Dialog open={!!deleteVenue} onOpenChange={(open) => !open && setDeleteVenue(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xóa sân (Nguy hiểm)</DialogTitle>
+            <DialogDescription className="text-destructive">
+              Hành động này sẽ đóng cửa sân <strong>{deleteVenue?.name}</strong> vĩnh viễn và hủy tất cả các lịch đặt chưa diễn ra. Hành động này không thể hoàn tác!
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm mb-2">Vui lòng nhập <strong>DELETE</strong> để xác nhận:</p>
+            <Input 
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="DELETE"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteVenue(null); setDeleteConfirmText(""); }} disabled={isSubmitting}>Hủy</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={isSubmitting || deleteConfirmText !== "DELETE"}>
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Xóa sân
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
