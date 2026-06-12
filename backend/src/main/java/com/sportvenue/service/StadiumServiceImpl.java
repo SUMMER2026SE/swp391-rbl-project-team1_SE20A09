@@ -12,6 +12,11 @@ import com.sportvenue.entity.enums.StadiumStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.mapper.StadiumMapper;
+import com.sportvenue.entity.Booking;
+import com.sportvenue.entity.enums.BookingStatus;
+import com.sportvenue.exception.AppException;
+import com.sportvenue.exception.ErrorCode;
+import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.repository.StadiumRepository;
@@ -22,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -32,8 +38,10 @@ public class StadiumServiceImpl implements StadiumService {
     private final StadiumRepository stadiumRepository;
     private final OwnerRepository ownerRepository;
     private final SportTypeRepository sportTypeRepository;
+    private final BookingRepository bookingRepository;
     private final StadiumMapper stadiumMapper;
     private final FileStorageProperties fileStorageProperties;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -127,5 +135,85 @@ public class StadiumServiceImpl implements StadiumService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    @Override
+    @Transactional
+    public void suspendStadium(Integer stadiumId, Integer userId) {
+        log.info("Owner {} requesting suspend for stadium {}", userId, stadiumId);
+        Owner owner = ownerRepository.findByUserUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Owner profile not found for user ID: " + userId));
+
+        Stadium stadium = stadiumRepository.findById(stadiumId)
+                .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
+
+        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        stadium.setStadiumStatus(StadiumStatus.MAINTENANCE);
+        stadiumRepository.save(stadium);
+        log.info("Stadium {} successfully suspended by owner {}", stadiumId, userId);
+    }
+
+    @Override
+    @Transactional
+    public void activateStadium(Integer stadiumId, Integer userId) {
+        log.info("Owner {} requesting activation for stadium {}", userId, stadiumId);
+        Owner owner = ownerRepository.findByUserUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Owner profile not found for user ID: " + userId));
+
+        Stadium stadium = stadiumRepository.findById(stadiumId)
+                .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
+
+        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        stadium.setStadiumStatus(StadiumStatus.AVAILABLE);
+        stadiumRepository.save(stadium);
+        log.info("Stadium {} successfully activated by owner {}", stadiumId, userId);
+    }
+
+    @Override
+    @Transactional
+    public void deleteStadium(Integer stadiumId, Integer userId) {
+        log.info("Owner {} requesting delete for stadium {}", userId, stadiumId);
+        Owner owner = ownerRepository.findByUserUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Owner profile not found for user ID: " + userId));
+
+        Stadium stadium = stadiumRepository.findById(stadiumId)
+                .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
+
+        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        stadium.setStadiumStatus(StadiumStatus.CLOSED);
+        stadium.setDeletedAt(LocalDateTime.now());
+        stadiumRepository.save(stadium);
+
+        List<Booking> futureBookings = bookingRepository.findFutureBookingsByStadiumId(stadiumId, LocalDateTime.now());
+        log.info("Found {} future bookings to cancel for stadium {}", futureBookings.size(), stadiumId);
+        for (Booking booking : futureBookings) {
+            booking.setBookingStatus(BookingStatus.CANCELLED);
+            booking.setNote("Sân bị đóng cửa vĩnh viễn bởi chủ sân.");
+            if (booking.getSlot() != null) {
+                booking.getSlot().setSlotStatus(com.sportvenue.entity.enums.SlotStatus.AVAILABLE);
+            }
+            if (booking.getPaymentStatus() == com.sportvenue.entity.enums.PaymentStatus.PAID) {
+                booking.setPaymentStatus(com.sportvenue.entity.enums.PaymentStatus.REFUNDED);
+            }
+            bookingRepository.save(booking);
+
+            notificationService.createNotification(
+                    booking.getUser().getUserId(),
+                    "Đơn đặt sân bị hủy",
+                    String.format("Đơn đặt sân %s của bạn đã bị hủy do sân ngừng hoạt động vĩnh viễn. Vui lòng liên hệ để được hoàn tiền nếu có.", stadium.getStadiumName()),
+                    com.sportvenue.entity.enums.NotificationType.BOOKING,
+                    booking.getBookingId().toString()
+            );
+        }
+        log.info("Stadium {} successfully soft-deleted by owner {}", stadiumId, userId);
     }
 }

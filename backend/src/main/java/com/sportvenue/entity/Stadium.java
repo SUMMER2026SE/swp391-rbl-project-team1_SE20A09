@@ -105,6 +105,9 @@ public class Stadium implements Serializable {
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
     /** Danh sách ảnh của sân — cascade xóa khi xóa sân. */
     @OneToMany(mappedBy = "stadium", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

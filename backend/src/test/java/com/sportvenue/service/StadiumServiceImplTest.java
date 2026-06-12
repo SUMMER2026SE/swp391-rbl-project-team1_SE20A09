@@ -32,6 +32,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.sportvenue.repository.BookingRepository;
+import com.sportvenue.service.NotificationService;
 
 @ExtendWith(MockitoExtension.class)
 class StadiumServiceImplTest {
@@ -46,7 +48,13 @@ class StadiumServiceImplTest {
     private SportTypeRepository sportTypeRepository;
 
     @Mock
+    private BookingRepository bookingRepository;
+
+    @Mock
     private StadiumMapper stadiumMapper;
+
+    @Mock
+    private NotificationService notificationService;
 
     private StadiumServiceImpl stadiumService;
 
@@ -58,8 +66,10 @@ class StadiumServiceImplTest {
                 stadiumRepository,
                 ownerRepository,
                 sportTypeRepository,
+                bookingRepository,
                 stadiumMapper,
-                fileStorageProperties);
+                fileStorageProperties,
+                notificationService);
     }
 
     @Test
