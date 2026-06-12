@@ -20,6 +20,7 @@ export default function StadiumApprovalPage() {
   const [stadiums, setStadiums] = useState<StadiumResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState("PENDING");
 
   // Authentication guard
   useEffect(() => {
@@ -31,9 +32,9 @@ export default function StadiumApprovalPage() {
     }
   }, [sessionStatus, session, router]);
 
-  const fetchStadiums = () => {
+  const fetchStadiums = (status: string) => {
     setLoading(true);
-    stadiumService.getAllStadiums()
+    stadiumService.getAllStadiums(status)
       .then(setStadiums)
       .catch(() => toast.error("Không thể tải danh sách sân chờ duyệt"))
       .finally(() => setLoading(false));
@@ -41,16 +42,16 @@ export default function StadiumApprovalPage() {
 
   useEffect(() => {
     if (sessionStatus === "authenticated" && session?.user?.roleName === "Admin") {
-      fetchStadiums();
+      fetchStadiums(activeTab);
     }
-  }, [sessionStatus, session]);
+  }, [sessionStatus, session, activeTab]);
 
   const handleApprove = async (stadiumId: number) => {
     setActionLoadingId(stadiumId);
     try {
       await stadiumService.approveStadium(stadiumId);
       toast.success("Đã duyệt sân thành công");
-      fetchStadiums();
+      fetchStadiums(activeTab);
     } catch {
       toast.error("Không thể phê duyệt sân");
     } finally {
@@ -63,17 +64,13 @@ export default function StadiumApprovalPage() {
     try {
       await stadiumService.rejectStadium(stadiumId);
       toast.success("Đã từ chối sân thành công");
-      fetchStadiums();
+      fetchStadiums(activeTab);
     } catch {
       toast.error("Không thể từ chối sân");
     } finally {
       setActionLoadingId(null);
     }
   };
-
-  const pendingStadiums = stadiums.filter(s => s.approvedStatus === "PENDING");
-  const approvedStadiums = stadiums.filter(s => s.approvedStatus === "APPROVED");
-  const rejectedStadiums = stadiums.filter(s => s.approvedStatus === "REJECTED");
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -193,50 +190,50 @@ export default function StadiumApprovalPage() {
           </Button>
         </div>
 
-        <Tabs defaultValue="pending">
+        <Tabs value={activeTab.toLowerCase()} onValueChange={(val) => setActiveTab(val.toUpperCase())}>
           <TabsList className="mb-6">
             <TabsTrigger value="pending">
-              Chờ duyệt ({pendingStadiums.length})
+              Chờ duyệt
             </TabsTrigger>
             <TabsTrigger value="approved">
-              Đã duyệt ({approvedStadiums.length})
+              Đã duyệt
             </TabsTrigger>
             <TabsTrigger value="rejected">
-              Từ chối ({rejectedStadiums.length})
+              Từ chối
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="pending">
-            {pendingStadiums.length === 0 ? (
+            {stadiums.length === 0 ? (
               <div className="text-center py-20 text-muted-foreground border-2 border-dashed rounded-lg bg-card">
                 Hiện tại không có sân nào đang chờ duyệt.
               </div>
             ) : (
-              pendingStadiums.map((stadium) => (
+              stadiums.map((stadium) => (
                 <StadiumRow key={stadium.stadiumId} stadium={stadium} />
               ))
             )}
           </TabsContent>
 
           <TabsContent value="approved">
-            {approvedStadiums.length === 0 ? (
+            {stadiums.length === 0 ? (
               <div className="text-center py-20 text-muted-foreground border-2 border-dashed rounded-lg bg-card">
                 Chưa có sân nào được phê duyệt.
               </div>
             ) : (
-              approvedStadiums.map((stadium) => (
+              stadiums.map((stadium) => (
                 <StadiumRow key={stadium.stadiumId} stadium={stadium} />
               ))
             )}
           </TabsContent>
 
           <TabsContent value="rejected">
-            {rejectedStadiums.length === 0 ? (
+            {stadiums.length === 0 ? (
               <div className="text-center py-20 text-muted-foreground border-2 border-dashed rounded-lg bg-card">
                 Chưa có sân nào bị từ chối.
               </div>
             ) : (
-              rejectedStadiums.map((stadium) => (
+              stadiums.map((stadium) => (
                 <StadiumRow key={stadium.stadiumId} stadium={stadium} />
               ))
             )}
