@@ -81,11 +81,15 @@ public class GoongGeocodeProvider implements GeocodeProvider {
     }
 
     private void fillAddressComponents(LocationDTO dto, List<Map<String, Object>> components) {
-        if (components == null) return;
+        if (components == null) {
+            return;
+        }
         
         for (Map<String, Object> component : components) {
             List<String> types = (List<String>) component.get("types");
-            if (types == null) continue;
+            if (types == null) {
+                continue;
+            }
             
             String longName = (String) component.get("long_name");
             

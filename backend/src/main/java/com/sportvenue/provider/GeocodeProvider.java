@@ -5,5 +5,6 @@ import java.util.List;
 
 public interface GeocodeProvider {
     List<LocationDTO> search(String query);
+
     LocationDTO reverseGeocode(Double lat, Double lng);
 }
