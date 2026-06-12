@@ -87,4 +87,13 @@ public class Booking implements Serializable {
     /** Ghi chú thêm của khách hàng khi đặt sân. */
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
+
+    @Column(name = "address_text", length = 255)
+    private String addressText;
+
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
 }

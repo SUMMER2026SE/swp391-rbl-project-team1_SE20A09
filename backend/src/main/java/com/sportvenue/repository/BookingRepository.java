@@ -42,8 +42,8 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             WHERE b.user.userId = :userId
             AND b.bookingStatus IN (com.sportvenue.entity.enums.BookingStatus.PENDING,
                                     com.sportvenue.entity.enums.BookingStatus.CONFIRMED)
-            AND b.slot.endTime >= :now
-            ORDER BY b.slot.startTime ASC
+            AND b.bookingDate >= :now
+            ORDER BY b.bookingDate ASC
             """)
     List<Booking> findUpcomingByUserId(
             @Param("userId") Integer userId,
@@ -128,7 +128,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             SELECT COALESCE(SUM(b.totalPrice), 0) FROM Booking b
             WHERE b.stadium.stadiumId = :stadiumId
             AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
-            AND b.slot.startTime BETWEEN :from AND :to
+            AND b.bookingDate BETWEEN :from AND :to
             """)
     BigDecimal sumRevenueBySlotDate(
             @Param("stadiumId") Integer stadiumId,
@@ -186,9 +186,8 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             JOIN b.stadium s
             JOIN s.owner o
             JOIN o.user u
-            JOIN b.slot sl
             WHERE u.email = :ownerEmail
-            AND sl.startTime BETWEEN :startOfToday AND :endOfToday
+            AND b.bookingDate BETWEEN :startOfToday AND :endOfToday
             AND b.bookingStatus IN (com.sportvenue.entity.enums.BookingStatus.CONFIRMED, com.sportvenue.entity.enums.BookingStatus.COMPLETED)
             """)
     long countTodayBookingsByOwnerEmail(
@@ -201,10 +200,9 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             JOIN b.stadium s
             JOIN s.owner o
             JOIN o.user u
-            JOIN b.slot sl
             WHERE u.email = :ownerEmail
             AND b.bookingStatus IN (com.sportvenue.entity.enums.BookingStatus.CONFIRMED, com.sportvenue.entity.enums.BookingStatus.COMPLETED)
-            AND sl.startTime BETWEEN :startDate AND :endDate
+            AND b.bookingDate BETWEEN :startDate AND :endDate
             """)
     long countBookingsByOwnerAndDateRange(
             @Param("ownerEmail") String ownerEmail,

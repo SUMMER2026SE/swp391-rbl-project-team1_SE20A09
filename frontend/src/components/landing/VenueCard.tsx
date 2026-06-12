@@ -95,7 +95,7 @@ export function VenueCard({
           </div>
           <div className="text-right">
             <span className="font-bold text-primary">
-              {price.toLocaleString("vi-VN")}đ
+              {(price ?? 0).toLocaleString("vi-VN")}đ
             </span>
             <span className="text-xs text-muted-foreground">/giờ</span>
           </div>

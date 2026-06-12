@@ -78,6 +78,8 @@ class CreateStadiumRequestValidationTest {
                 .description("Clean synthetic grass")
                 .openTime(LocalTime.of(6, 0))
                 .closeTime(LocalTime.of(22, 0))
+                .latitude(BigDecimal.valueOf(10.0))
+                .longitude(BigDecimal.valueOf(100.0))
                 .imageUrls(List.of("http://localhost:8080/api/v1/files/stadiums/image.jpg"))
                 .build();
     }

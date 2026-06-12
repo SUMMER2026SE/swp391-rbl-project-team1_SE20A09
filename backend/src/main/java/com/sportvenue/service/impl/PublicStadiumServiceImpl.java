@@ -81,9 +81,15 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                             ? calculateHaversineDistance(request.getUserLat(), request.getUserLng(), s2.getLatitude(), s2.getLongitude())
                             : null;
 
-                    if (d1 == null && d2 == null) return 0;
-                    if (d1 == null) return 1;
-                    if (d2 == null) return -1;
+                    if (d1 == null && d2 == null) {
+                        return 0;
+                    }
+                    if (d1 == null) {
+                        return 1;
+                    }
+                    if (d2 == null) {
+                        return -1;
+                    }
                     return d1.compareTo(d2);
                 })
                 .toList();
@@ -188,8 +194,6 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 .stadiumName(stadium.getStadiumName())
                 .description(stadium.getDescription())
                 .address(stadium.getAddress())
-                .pricePerHour(stadium.getPricePerHour())
-                .capacity(stadium.getCapacity())
                 .averageRating(stadium.getAverageRating())
                 .latitude(stadium.getLatitude())
                 .longitude(stadium.getLongitude())
@@ -246,6 +250,7 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 .openTime(stadium.getOpenTime())
                 .closeTime(stadium.getCloseTime())
                 .stadiumStatus(stadium.getStadiumStatus() != null ? stadium.getStadiumStatus().name() : null)
+                .approvedStatus(stadium.getApprovedStatus() != null ? stadium.getApprovedStatus().name() : null)
                 .amenities(stadium.getAmenities().stream()
                         .map(a -> AmenityResponse.builder()
                                 .amenityId(a.getAmenityId())

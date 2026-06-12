@@ -43,6 +43,7 @@
     "@tabler/icons-react": "^3.0.0",
     "@tanstack/react-query": "^5.40.0",
     "@tanstack/react-query-devtools": "^5.40.0",
+    "@vis.gl/react-google-maps": "^1.8.3",
     "axios": "^1.7.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
@@ -73,6 +74,7 @@
   "devDependencies": {
     "@emnapi/core": "^1.10.0",
     "@emnapi/runtime": "^1.10.0",
+    "@types/google.maps": "^3.65.0",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^20.13.0",
     "@types/react": "^18.3.3",

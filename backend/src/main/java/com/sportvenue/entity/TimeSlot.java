@@ -20,7 +20,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.io.Serializable;
-import java.time.LocalDateTime;
+import java.math.BigDecimal;
+import java.time.LocalTime;
 
 /**
  * Entity ánh xạ bảng time_slots.
@@ -51,13 +52,17 @@ public class TimeSlot implements Serializable {
     @JoinColumn(name = "stadium_id", nullable = false)
     private Stadium stadium;
 
-    /** Thời điểm bắt đầu của khung giờ. */
+    /** Giờ bắt đầu của khung giờ. */
     @Column(name = "start_time", nullable = false)
-    private LocalDateTime startTime;
+    private LocalTime startTime;
 
-    /** Thời điểm kết thúc của khung giờ. */
+    /** Giờ kết thúc của khung giờ. */
     @Column(name = "end_time", nullable = false)
-    private LocalDateTime endTime;
+    private LocalTime endTime;
+
+    /** Giá thuê cho khung giờ này. */
+    @Column(name = "price_per_slot", nullable = false, precision = 10, scale = 2)
+    private BigDecimal pricePerSlot;
 
     /** Trạng thái hiện tại của slot — dùng để kiểm tra trước khi đặt. */
     @Enumerated(EnumType.STRING)

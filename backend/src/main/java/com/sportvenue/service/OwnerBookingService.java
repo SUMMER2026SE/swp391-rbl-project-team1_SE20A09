@@ -22,6 +22,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+
 
 /**
  * Service xử lý nghiệp vụ quản lý đặt sân cho Owner.
@@ -189,8 +191,8 @@ public class OwnerBookingService {
                         .build())
                 .slot(BookingResponse.SlotInfo.builder()
                         .slotId(slot.getSlotId())
-                        .startTime(slot.getStartTime())
-                        .endTime(slot.getEndTime())
+                        .startTime(LocalDateTime.of(booking.getBookingDate().toLocalDate(), slot.getStartTime()))
+                        .endTime(LocalDateTime.of(booking.getBookingDate().toLocalDate(), slot.getEndTime()))
                         .build())
                 .totalPrice(booking.getTotalPrice())
                 .bookingStatus(booking.getBookingStatus().name())

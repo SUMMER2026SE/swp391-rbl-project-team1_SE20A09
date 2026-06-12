@@ -126,6 +126,11 @@ app:
       - image/heic
       - image/heif
 
+# ── Goong Map Config ──────────────────────────────────────
+goong:
+  api:
+    key: ${GOONG_API_KEY:}
+
 # ── Swagger / SpringDoc ───────────────────────────────────
 springdoc:
   swagger-ui:

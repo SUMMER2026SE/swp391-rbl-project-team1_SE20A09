@@ -30,6 +30,13 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
     @EntityGraph(attributePaths = {"sportType", "images", "owner"})
     Page<Stadium> findByStadiumStatus(StadiumStatus status, Pageable pageable);
 
+    @EntityGraph(attributePaths = {"sportType", "images", "owner"})
+    List<Stadium> findByApprovedStatus(com.sportvenue.entity.enums.ApprovedStatus status);
+
+    @EntityGraph(attributePaths = {"sportType", "images", "owner"})
+    @Query("SELECT s FROM Stadium s")
+    List<Stadium> findAllWithDetails();
+
     @Override
     @EntityGraph(attributePaths = {"sportType", "images", "amenities"})
     List<Stadium> findAllById(Iterable<Integer> ids);

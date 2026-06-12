@@ -81,7 +81,7 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
     }
 
     private CustomerBookingHistoryDto toDto(Booking booking) {
-        String date = booking.getSlot().getStartTime().format(DATE_FMT);
+        String date = booking.getBookingDate().format(DATE_FMT);
         String time = booking.getSlot().getStartTime().format(TIME_FMT)
                 + " - "
                 + booking.getSlot().getEndTime().format(TIME_FMT);
