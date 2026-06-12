@@ -40,6 +40,7 @@ export interface StadiumResponse {
   averageRating: number;
   imageUrls: string[];
   approvedStatus: string;
+  capacity?: number;
 }
 
 export interface SportType {

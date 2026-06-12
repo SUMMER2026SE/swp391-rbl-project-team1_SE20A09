@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import dynamic from 'next/dynamic'
@@ -34,53 +34,13 @@ interface LocationDTO {
   source?: string
 }
 
-const MapContainer = dynamic(
-  () => import('react-leaflet').then((mod) => mod.MapContainer),
-  { ssr: false }
-)
-const TileLayer = dynamic(
-  () => import('react-leaflet').then((mod) => mod.TileLayer),
-  { ssr: false }
-)
-const Marker = dynamic(
-  () => import('react-leaflet').then((mod) => mod.Marker),
-  { ssr: false }
-)
-const useMapEvents = dynamic(
-  () => import('react-leaflet').then((mod) => mod.useMapEvents),
-  { ssr: false }
-)
-
-function MapEventHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
-  useMapEvents({
-    click(e) {
-      onMapClick(e.latlng.lat, e.latlng.lng)
-    },
-  })
-  return null
-}
-
-function DraggableMarkerComponent({
-  position,
-  onDragEnd,
-}: {
-  position: [number, number]
-  onDragEnd: (lat: number, lng: number) => void
-}) {
-  const markerRef = useRef<any>(null)
-
-  const eventHandlers = {
-    dragend() {
-      const marker = markerRef.current
-      if (marker) {
-        const { lat, lng } = marker.getLatLng()
-        onDragEnd(lat, lng)
-      }
-    },
+const LeafletMap = dynamic(
+  () => import('./LeafletMap'),
+  {
+    ssr: false,
+    loading: () => <div className="h-full w-full flex items-center justify-center bg-muted">Đang tải bản đồ...</div>
   }
-
-  return <Marker ref={markerRef} position={position} draggable eventHandlers={eventHandlers} />
-}
+)
 
 export function AddressPicker({ initialAddress, initialLat, initialLng, onAddressChange }: Props) {
   const [position, setPosition] = useState<{ lat: number; lng: number }>(() => {
@@ -287,14 +247,7 @@ export function AddressPicker({ initialAddress, initialLat, initialLng, onAddres
       <p className="text-sm text-muted-foreground mt-1">Hoặc ghim vị trí trực tiếp trên bản đồ bên dưới</p>
 
       <div className="h-[400px] rounded-lg overflow-hidden border mt-2">
-        <MapContainer center={[position.lat, position.lng]} zoom={15} style={{ height: '100%', width: '100%' }}>
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          <DraggableMarkerComponent position={[position.lat, position.lng]} onDragEnd={handleMarkerDragEnd} />
-          <MapEventHandler onMapClick={handleMapClick} />
-        </MapContainer>
+        <LeafletMap position={position} onMapClick={handleMapClick} onDragEnd={handleMarkerDragEnd} />
       </div>
     </div>
   )
