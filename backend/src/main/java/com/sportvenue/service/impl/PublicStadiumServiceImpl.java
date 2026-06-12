@@ -227,6 +227,10 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
         Stadium stadium = stadiumRepository.findWithDetailsByStadiumId(stadiumId)
                 .orElseThrow(() -> new ResourceNotFoundException("Sân với ID " + stadiumId + " không tồn tại"));
 
+        if (stadium.getDeletedAt() != null) {
+            throw new ResourceNotFoundException("Sân với ID " + stadiumId + " không tồn tại");
+        }
+
         Pageable reviewPage = PageRequest.of(0, 5);
         List<Review> recentReviews = reviewRepository
                 .findByStadiumStadiumIdOrderByCreatedAtDesc(stadiumId, reviewPage)
@@ -298,7 +302,10 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
     public PageResponse<StadiumDetailResponse.ReviewDto> getStadiumReviews(Integer stadiumId, int page, int size) {
         log.info("Fetching reviews for stadium ID: {}, page: {}, size: {}", stadiumId, page, size);
 
-        if (!stadiumRepository.existsById(stadiumId)) {
+        Stadium stadium = stadiumRepository.findById(stadiumId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sân với ID " + stadiumId + " không tồn tại"));
+                
+        if (stadium.getDeletedAt() != null) {
             throw new ResourceNotFoundException("Sân với ID " + stadiumId + " không tồn tại");
         }
 
