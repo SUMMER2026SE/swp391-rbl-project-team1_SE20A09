@@ -6,7 +6,9 @@ import com.sportvenue.entity.Stadium;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-@Mapper(componentModel = "spring")
+import org.mapstruct.ReportingPolicy;
+
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface StadiumMapper {
 
     @Mapping(target = "owner", ignore = true)
@@ -14,17 +16,18 @@ public interface StadiumMapper {
     @Mapping(target = "stadiumId", ignore = true)
     @Mapping(target = "stadiumStatus", ignore = true)
     @Mapping(target = "averageRating", ignore = true)
-    @Mapping(target = "capacity", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "images", ignore = true)
     @Mapping(target = "timeSlots", ignore = true)
     @Mapping(target = "accessories", ignore = true)
-    @Mapping(target = "latitude", ignore = true)
-    @Mapping(target = "longitude", ignore = true)
     @Mapping(target = "amenities", ignore = true)
+    @Mapping(target = "approvedStatus", ignore = true)
+    @Mapping(target = "latitude", expression = "java(request.getLatitude() != null ? request.getLatitude().doubleValue() : null)")
+    @Mapping(target = "longitude", expression = "java(request.getLongitude() != null ? request.getLongitude().doubleValue() : null)")
     Stadium toEntity(CreateStadiumRequest request);
 
     @Mapping(target = "sportName", source = "sportType.sportName")
+    @Mapping(target = "sportTypeId", source = "sportType.sportTypeId")
     @Mapping(target = "imageUrls", expression = "java(stadium.getImages() == null ? java.util.Collections.emptyList() : stadium.getImages().stream().map(img -> img.getImageUrl()).toList())")
     @Mapping(target = "firstImageUrl", expression = "java(stadium.getImages() == null || stadium.getImages().isEmpty() ? null : stadium.getImages().stream().findFirst().map(img -> img.getImageUrl()).orElse(null))")
     @Mapping(target = "distanceInKm", ignore = true)

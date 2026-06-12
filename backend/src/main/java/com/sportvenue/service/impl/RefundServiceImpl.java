@@ -103,7 +103,7 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private RefundCalculation calculateRefund(Booking booking) {
-        LocalDateTime playTime = booking.getSlot().getStartTime();
+        LocalDateTime playTime = LocalDateTime.of(booking.getBookingDate().toLocalDate(), booking.getSlot().getStartTime());
         LocalDateTime now = LocalDateTime.now();
         double hoursDiff = (double) java.time.Duration.between(now, playTime).toMinutes() / 60.0;
 
@@ -157,7 +157,7 @@ public class RefundServiceImpl implements RefundService {
                 .bookingId(booking.getBookingId())
                 .stadiumName(booking.getStadium().getStadiumName())
                 .customerName(booking.getUser().getFirstName() + " " + booking.getUser().getLastName())
-                .playTime(booking.getSlot().getStartTime())
+                .playTime(LocalDateTime.of(booking.getBookingDate().toLocalDate(), booking.getSlot().getStartTime()))
                 .originalPrice(booking.getTotalPrice())
                 .refundAmount(calc.getAmount())
                 .refundPercentage(calc.getPercentage())
@@ -194,7 +194,7 @@ public class RefundServiceImpl implements RefundService {
                 .bookingId(booking.getBookingId())
                 .stadiumName(booking.getStadium().getStadiumName())
                 .customerName(booking.getUser().getFirstName() + " " + booking.getUser().getLastName())
-                .playTime(booking.getSlot().getStartTime())
+                .playTime(LocalDateTime.of(booking.getBookingDate().toLocalDate(), booking.getSlot().getStartTime()))
                 .originalPrice(booking.getTotalPrice())
                 .refundAmount(calculation.getAmount())
                 .refundPercentage(calculation.getPercentage())
@@ -233,8 +233,8 @@ public class RefundServiceImpl implements RefundService {
                     .email(b.getUser().getEmail())
                     .build();
             
-            String startTime = b.getSlot().getStartTime().toLocalTime().toString();
-            String endTime = b.getSlot().getEndTime().toLocalTime().toString();
+            String startTimeStr = b.getSlot().getStartTime().toString();
+            String endTimeStr = b.getSlot().getEndTime().toString();
             
             BigDecimal refundAmt = refundMap.getOrDefault(b.getBookingId(), BigDecimal.ZERO);
 
@@ -243,8 +243,8 @@ public class RefundServiceImpl implements RefundService {
                     .displayId("BK" + String.format("%06d", b.getBookingId()))
                     .customer(customerInfo)
                     .venue(b.getStadium().getStadiumName())
-                    .date(b.getSlot().getStartTime().toLocalDate().toString())
-                    .time(startTime + " - " + endTime)
+                    .date(b.getBookingDate().toLocalDate().toString())
+                    .time(startTimeStr + " - " + endTimeStr)
                     .amount(b.getTotalPrice())
                     .refundAmount(refundAmt)
                     .paymentStatus(b.getPaymentStatus().name().toLowerCase())

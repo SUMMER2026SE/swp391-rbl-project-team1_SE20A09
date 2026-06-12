@@ -34,6 +34,7 @@ public class StadiumDetailResponse {
     private LocalTime openTime;
     private LocalTime closeTime;
     private String stadiumStatus;
+    private String approvedStatus;
     
     private List<AmenityResponse> amenities;
     private List<AccessoryResponse> accessories;

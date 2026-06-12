@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 /**
@@ -40,8 +40,8 @@ public interface TimeSlotRepository extends JpaRepository<TimeSlot, Integer> {
             """)
     List<TimeSlot> findAvailableSlotsWithinRange(
             @Param("stadiumId") Integer stadiumId,
-            @Param("from") LocalDateTime from,
-            @Param("to") LocalDateTime to);
+            @Param("from") LocalTime from,
+            @Param("to") LocalTime to);
 
     /**
      * Lấy slot AVAILABLE có BẤT KỲ PHẦN NÀO overlap với khoảng thời gian
@@ -64,8 +64,20 @@ public interface TimeSlotRepository extends JpaRepository<TimeSlot, Integer> {
             """)
     List<TimeSlot> findAvailableSlotsOverlapping(
             @Param("stadiumId") Integer stadiumId,
-            @Param("from") LocalDateTime from,
-            @Param("to") LocalDateTime to);
+            @Param("from") LocalTime from,
+            @Param("to") LocalTime to);
+
+    @Query("""
+            SELECT t FROM TimeSlot t
+            WHERE t.stadium.stadiumId = :stadiumId
+            AND t.startTime < :to
+            AND t.endTime > :from
+            ORDER BY t.startTime ASC
+            """)
+    List<TimeSlot> findOverlappingSlots(
+            @Param("stadiumId") Integer stadiumId,
+            @Param("from") LocalTime from,
+            @Param("to") LocalTime to);
 
     /** Kiểm tra slot còn trống không — dùng trước khi tạo booking. */
     boolean existsBySlotIdAndSlotStatus(Integer slotId, SlotStatus status);

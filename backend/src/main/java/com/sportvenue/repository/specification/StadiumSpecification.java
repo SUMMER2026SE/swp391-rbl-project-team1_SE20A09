@@ -4,6 +4,7 @@ import com.sportvenue.dto.request.StadiumSearchRequest;
 import com.sportvenue.entity.Amenity;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.TimeSlot;
+import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.entity.enums.StadiumStatus;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -15,7 +16,6 @@ import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,12 +29,13 @@ public class StadiumSpecification {
             // 1. Status Filter
             if (isPublicSearch) {
                 predicates.add(cb.equal(root.get("stadiumStatus"), StadiumStatus.AVAILABLE));
+                predicates.add(cb.equal(root.get("approvedStatus"), ApprovedStatus.APPROVED));
             } else if (req.getStatus() != null) {
                 predicates.add(cb.equal(root.get("stadiumStatus"), req.getStatus()));
             }
 
             addKeywordPredicate(predicates, cb, root, req.getKeyword());
-            addBasicFilters(predicates, cb, root, req);
+            addBasicFilters(predicates, cb, root, query, req);
             addTimeSlotPredicate(predicates, cb, root, query, req);
             addLocationPredicate(predicates, cb, root, req);
             addAmenitiesPredicate(predicates, cb, root, query, req.getAmenityIds());
@@ -52,26 +53,35 @@ public class StadiumSpecification {
         }
     }
 
-    private static void addBasicFilters(List<Predicate> preds, CriteriaBuilder cb, Root<Stadium> root, StadiumSearchRequest req) {
+    private static void addBasicFilters(List<Predicate> preds, CriteriaBuilder cb, Root<Stadium> root, CriteriaQuery<?> query, StadiumSearchRequest req) {
         if (req.getSportTypeId() != null) {
             preds.add(cb.equal(root.get("sportType").get("sportTypeId"), req.getSportTypeId()));
         }
         if (StringUtils.hasText(req.getAddress())) {
             preds.add(cb.like(cb.lower(root.get("address")), "%" + req.getAddress().toLowerCase() + "%"));
         }
-        if (req.getMinPrice() != null) {
-            preds.add(cb.greaterThanOrEqualTo(root.get("pricePerHour"), req.getMinPrice()));
-        }
-        if (req.getMaxPrice() != null) {
-            preds.add(cb.lessThanOrEqualTo(root.get("pricePerHour"), req.getMaxPrice()));
+        if (req.getMinPrice() != null || req.getMaxPrice() != null) {
+            Subquery<Integer> priceSubquery = query.subquery(Integer.class);
+            Root<TimeSlot> priceSlotRoot = priceSubquery.from(TimeSlot.class);
+            priceSubquery.select(priceSlotRoot.get("stadium").get("stadiumId"));
+            
+            List<Predicate> pricePreds = new ArrayList<>();
+            pricePreds.add(cb.equal(priceSlotRoot.get("stadium").get("stadiumId"), root.get("stadiumId")));
+            
+            if (req.getMinPrice() != null) {
+                pricePreds.add(cb.greaterThanOrEqualTo(priceSlotRoot.get("pricePerSlot"), req.getMinPrice()));
+            }
+            if (req.getMaxPrice() != null) {
+                pricePreds.add(cb.lessThanOrEqualTo(priceSlotRoot.get("pricePerSlot"), req.getMaxPrice()));
+            }
+            
+            priceSubquery.where(cb.and(pricePreds.toArray(new Predicate[0])));
+            preds.add(cb.exists(priceSubquery));
         }
     }
 
     private static void addTimeSlotPredicate(List<Predicate> preds, CriteriaBuilder cb, Root<Stadium> root, CriteriaQuery<?> query, StadiumSearchRequest req) {
-        if (req.getTargetDate() != null && req.getStartTime() != null && req.getEndTime() != null) {
-            LocalDateTime startDateTime = LocalDateTime.of(req.getTargetDate(), req.getStartTime());
-            LocalDateTime endDateTime = LocalDateTime.of(req.getTargetDate(), req.getEndTime());
-
+        if (req.getStartTime() != null && req.getEndTime() != null) {
             Subquery<Integer> slotSubquery = query.subquery(Integer.class);
             var slotRoot = slotSubquery.from(TimeSlot.class);
             slotSubquery.select(slotRoot.get("stadium").get("stadiumId"));
@@ -79,8 +89,8 @@ public class StadiumSpecification {
             Predicate stadiumMatch = cb.equal(slotRoot.get("stadium").get("stadiumId"), root.get("stadiumId"));
             Predicate statusMatch = cb.equal(slotRoot.get("slotStatus"), SlotStatus.AVAILABLE);
             Predicate timeMatch = cb.and(
-                    cb.lessThan(slotRoot.get("startTime"), endDateTime),
-                    cb.greaterThan(slotRoot.get("endTime"), startDateTime)
+                    cb.lessThan(slotRoot.get("startTime"), req.getEndTime()),
+                    cb.greaterThan(slotRoot.get("endTime"), req.getStartTime())
             );
             
             slotSubquery.where(cb.and(stadiumMatch, statusMatch, timeMatch));

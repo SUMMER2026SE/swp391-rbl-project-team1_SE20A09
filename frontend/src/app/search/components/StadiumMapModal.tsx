@@ -152,7 +152,7 @@ export default function StadiumMapModal({ isOpen, onClose, stadiums }: StadiumMa
                           Giá mỗi giờ
                         </span>
                         <span className="font-extrabold text-sm text-gray-900 dark:text-white">
-                          {stadium.pricePerHour.toLocaleString('vi-VN')}₫
+                          {(stadium.pricePerHour ?? 0).toLocaleString('vi-VN')}₫
                         </span>
                       </div>
                       <Button

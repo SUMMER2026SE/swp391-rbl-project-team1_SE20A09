@@ -1,7 +1,6 @@
 -- ══════════════════════════════════════════════════════════════════════════
--- V1__init.sql — Sport Venue Management System
--- Database Design by Team 1 — SE20A09
--- Converted from SQL Server → PostgreSQL 16
+-- V1__init_schema.sql — Sport Venue Management System
+-- Optimized Schema Design — Team 1 — SE20A09
 -- ══════════════════════════════════════════════════════════════════════════
 
 -- ── 1. Roles ──────────────────────────────────────────────────────────────
@@ -10,16 +9,11 @@ CREATE TABLE roles (
     role_name   VARCHAR(30) NOT NULL UNIQUE
 );
 
-INSERT INTO roles (role_name) VALUES ('Admin'), ('Owner'), ('Customer');
-
 -- ── 2. SportTypes ─────────────────────────────────────────────────────────
 CREATE TABLE sport_types (
     sport_type_id   SERIAL PRIMARY KEY,
     sport_name      VARCHAR(50) NOT NULL UNIQUE
 );
-
-INSERT INTO sport_types (sport_name) VALUES
-    ('Football'), ('Badminton'), ('Basketball'), ('Tennis'), ('Volleyball');
 
 -- ── 3. Promotions ─────────────────────────────────────────────────────────
 CREATE TABLE promotions (
@@ -44,10 +38,11 @@ CREATE TABLE users (
     password_hash   VARCHAR(255)    NOT NULL,
     avatar_url      VARCHAR(255),
     user_point      INT             NOT NULL DEFAULT 0,
-    user_rank       VARCHAR(20)     NOT NULL DEFAULT 'Bronze'
-                        CHECK (user_rank IN ('Bronze', 'Silver', 'Gold', 'Diamond')),
-    account_status  VARCHAR(20)     NOT NULL DEFAULT 'Active'
-                        CHECK (account_status IN ('Active', 'Blocked', 'Pending')),
+    user_rank       VARCHAR(20)     NOT NULL DEFAULT 'BRONZE'
+                        CHECK (user_rank IN ('BRONZE', 'SILVER', 'GOLD', 'DIAMOND')),
+    account_status  VARCHAR(20)     NOT NULL DEFAULT 'ACTIVE'
+                        CHECK (account_status IN ('ACTIVE', 'BLOCKED', 'PENDING')),
+    is_verified     BOOLEAN         NOT NULL DEFAULT FALSE,
     created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -58,8 +53,8 @@ CREATE TABLE owners (
     business_name       VARCHAR(100),
     tax_code            VARCHAR(30),
     business_address    TEXT,
-    approved_status     VARCHAR(20)     NOT NULL DEFAULT 'Pending'
-                            CHECK (approved_status IN ('Pending', 'Approved', 'Rejected')),
+    approved_status     VARCHAR(20)     NOT NULL DEFAULT 'PENDING'
+                            CHECK (approved_status IN ('PENDING', 'APPROVED', 'REJECTED')),
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -71,12 +66,16 @@ CREATE TABLE stadiums (
     stadium_name    VARCHAR(100)    NOT NULL,
     description     TEXT,
     address         TEXT            NOT NULL,
-    price_per_hour  DECIMAL(10, 2)  NOT NULL,
-    capacity        INT,
+    latitude        DOUBLE PRECISION,
+    longitude       DOUBLE PRECISION,
     open_time       TIME,
     close_time      TIME,
-    stadium_status  VARCHAR(20)     NOT NULL DEFAULT 'Available'
-                        CHECK (stadium_status IN ('Available', 'Maintenance', 'Closed')),
+    price_per_hour  DECIMAL(10, 2),
+    capacity        INT,
+    stadium_status  VARCHAR(20)     NOT NULL DEFAULT 'AVAILABLE'
+                        CHECK (stadium_status IN ('AVAILABLE', 'MAINTENANCE', 'CLOSED')),
+    approved_status VARCHAR(20)     NOT NULL DEFAULT 'PENDING'
+                        CHECK (approved_status IN ('PENDING', 'APPROVED', 'REJECTED')),
     average_rating  DECIMAL(3, 2)   NOT NULL DEFAULT 5.0,
     created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at      TIMESTAMP
@@ -94,10 +93,11 @@ CREATE TABLE stadium_images (
 CREATE TABLE time_slots (
     slot_id         SERIAL PRIMARY KEY,
     stadium_id      INT             NOT NULL REFERENCES stadiums(stadium_id) ON DELETE CASCADE,
-    start_time      TIMESTAMP       NOT NULL,
-    end_time        TIMESTAMP       NOT NULL,
-    slot_status     VARCHAR(20)     NOT NULL DEFAULT 'Available'
-                        CHECK (slot_status IN ('Available', 'Booked', 'Maintenance'))
+    start_time      TIME            NOT NULL,
+    end_time        TIME            NOT NULL,
+    price_per_slot  DECIMAL(10, 2)  NOT NULL,
+    slot_status     VARCHAR(20)     NOT NULL DEFAULT 'AVAILABLE'
+                        CHECK (slot_status IN ('AVAILABLE', 'BOOKED', 'MAINTENANCE'))
 );
 
 -- ── 9. Bookings ───────────────────────────────────────────────────────────
@@ -107,12 +107,15 @@ CREATE TABLE bookings (
     stadium_id      INT             NOT NULL REFERENCES stadiums(stadium_id),
     slot_id         INT             NOT NULL REFERENCES time_slots(slot_id),
     total_price     DECIMAL(10, 2)  NOT NULL,
-    booking_status  VARCHAR(20)     NOT NULL DEFAULT 'Pending'
-                        CHECK (booking_status IN ('Pending', 'Confirmed', 'Completed', 'Cancelled')),
-    payment_status  VARCHAR(20)     NOT NULL DEFAULT 'Unpaid'
-                        CHECK (payment_status IN ('Unpaid', 'Paid', 'Refunded')),
+    booking_status  VARCHAR(20)     NOT NULL DEFAULT 'PENDING'
+                        CHECK (booking_status IN ('PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED')),
+    payment_status  VARCHAR(20)     NOT NULL DEFAULT 'UNPAID'
+                        CHECK (payment_status IN ('UNPAID', 'PAID', 'REFUNDED')),
     booking_date    TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    note            TEXT
+    note            TEXT,
+    address_text    VARCHAR(255),
+    latitude        DOUBLE PRECISION,
+    longitude       DOUBLE PRECISION
 );
 
 -- ── 10. Payments ──────────────────────────────────────────────────────────
@@ -120,11 +123,11 @@ CREATE TABLE payments (
     payment_id      SERIAL PRIMARY KEY,
     booking_id      INT             NOT NULL REFERENCES bookings(booking_id),
     payment_method  VARCHAR(20)     NOT NULL
-                        CHECK (payment_method IN ('Cash', 'VNPay', 'Momo', 'Banking')),
+                        CHECK (payment_method IN ('CASH', 'VNPAY', 'MOMO', 'BANKING')),
     amount          DECIMAL(10, 2)  NOT NULL,
     transaction_code VARCHAR(100),
-    payment_status  VARCHAR(20)     NOT NULL DEFAULT 'Pending'
-                        CHECK (payment_status IN ('Pending', 'Success', 'Failed')),
+    payment_status  VARCHAR(20)     NOT NULL DEFAULT 'PENDING'
+                        CHECK (payment_status IN ('PENDING', 'SUCCESS', 'FAILED')),
     paid_at         TIMESTAMP
 );
 
@@ -136,19 +139,21 @@ CREATE TABLE reviews (
     stadium_id      INT             NOT NULL REFERENCES stadiums(stadium_id),
     rating_score    INT             NOT NULL CHECK (rating_score BETWEEN 1 AND 5),
     comment         TEXT,
+    owner_response  TEXT,
     created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ── 12. Notifications ─────────────────────────────────────────────────────
 CREATE TABLE notifications (
-    notification_id     SERIAL PRIMARY KEY,
-    user_id             INT             NOT NULL REFERENCES users(user_id),
-    title               VARCHAR(255)    NOT NULL,
-    content             TEXT            NOT NULL,
-    notification_type   VARCHAR(20)
-                            CHECK (notification_type IN ('Booking', 'Payment', 'Promotion', 'System')),
-    is_read             BOOLEAN         NOT NULL DEFAULT FALSE,
-    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+    notification_id BIGSERIAL PRIMARY KEY,
+    user_id         INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    notification_type VARCHAR(20) NOT NULL
+        CHECK (notification_type IN ('BOOKING', 'PAYMENT', 'PROMOTION', 'SYSTEM', 'REVIEW', 'COMPLAINT')),
+    title           VARCHAR(200) NOT NULL,
+    message         TEXT NOT NULL,
+    is_read         BOOLEAN NOT NULL DEFAULT FALSE,
+    related_resource_id VARCHAR(100),
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ── 13. Conversations ─────────────────────────────────────────────────────
@@ -199,8 +204,57 @@ CREATE TABLE booking_promotions (
     CONSTRAINT pk_booking_promotions PRIMARY KEY (booking_id, promotion_id)
 );
 
+-- ── 19. Complaints ────────────────────────────────────────────────────────
+CREATE TABLE complaints (
+    complaint_id    SERIAL PRIMARY KEY,
+    booking_id      INT             NOT NULL REFERENCES bookings(booking_id),
+    user_id         INT             NOT NULL REFERENCES users(user_id),
+    content         TEXT            NOT NULL,
+    status          VARCHAR(20)     NOT NULL DEFAULT 'OPEN'
+                        CHECK (status IN ('OPEN', 'IN_PROGRESS', 'RESOLVED')),
+    response        TEXT,
+    subject         VARCHAR(255)    DEFAULT 'No Subject',
+    created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ── 20. Accessories ───────────────────────────────────────────────────────
+CREATE TABLE accessories (
+    accessory_id    SERIAL PRIMARY KEY,
+    stadium_id      INT             NOT NULL REFERENCES stadiums(stadium_id) ON DELETE CASCADE,
+    name            VARCHAR(100)    NOT NULL,
+    price_per_unit  DECIMAL(10, 2)  NOT NULL,
+    quantity        INT             NOT NULL DEFAULT 0,
+    is_available    BOOLEAN         NOT NULL DEFAULT TRUE
+);
+
+-- ── 21. Amenities ─────────────────────────────────────────────────────────
+CREATE TABLE amenities (
+    amenity_id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    icon VARCHAR(255)
+);
+
+-- ── 22. Stadium_Amenities ─────────────────────────────────────────────────
+CREATE TABLE stadium_amenities (
+    stadium_id INT NOT NULL,
+    amenity_id INT NOT NULL,
+    PRIMARY KEY (stadium_id, amenity_id),
+    CONSTRAINT fk_stadium_amenities_stadium FOREIGN KEY (stadium_id) REFERENCES stadiums (stadium_id) ON DELETE CASCADE,
+    CONSTRAINT fk_stadium_amenities_amenity FOREIGN KEY (amenity_id) REFERENCES amenities (amenity_id) ON DELETE CASCADE
+);
+
+-- ── 23. OTP_Tokens ────────────────────────────────────────────────────────
+CREATE TABLE otp_tokens (
+    otp_id      SERIAL PRIMARY KEY,
+    user_id     INT             NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    otp_code    VARCHAR(6)      NOT NULL,
+    expires_at  TIMESTAMP       NOT NULL,
+    used        BOOLEAN         NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ══════════════════════════════════════════════════════════════════════════
--- Indexes — tối ưu các truy vấn thường gặp
+-- Indexes
 -- ══════════════════════════════════════════════════════════════════════════
 CREATE INDEX idx_users_email          ON users(email);
 CREATE INDEX idx_users_role_id        ON users(role_id);
@@ -212,7 +266,25 @@ CREATE INDEX idx_time_slots_status    ON time_slots(slot_status);
 CREATE INDEX idx_bookings_user_id     ON bookings(user_id);
 CREATE INDEX idx_bookings_stadium_id  ON bookings(stadium_id);
 CREATE INDEX idx_bookings_status      ON bookings(booking_status);
+CREATE INDEX idx_bookings_location    ON bookings(latitude, longitude);
 CREATE INDEX idx_messages_conv_id     ON messages(conversation_id);
 CREATE INDEX idx_posts_user_id        ON posts(user_id);
-CREATE INDEX idx_notifications_user   ON notifications(user_id, is_read);
 CREATE INDEX idx_stadiums_deleted_at  ON stadiums(deleted_at);
+CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at DESC);
+CREATE INDEX idx_notifications_user_is_read ON notifications(user_id, is_read);
+CREATE INDEX idx_otp_tokens_user_id   ON otp_tokens(user_id);
+CREATE INDEX idx_otp_tokens_expires_at ON otp_tokens(expires_at);
+CREATE INDEX idx_complaints_booking_id ON complaints(booking_id);
+CREATE INDEX idx_accessories_stadium_id ON accessories(stadium_id);
+CREATE INDEX idx_stadium_amenities_search ON stadium_amenities(stadium_id, amenity_id);
+
+-- ── 22. User Favorite Stadiums ──────────────────────────────────────────────
+CREATE TABLE user_favorite_stadiums (
+    id          BIGSERIAL PRIMARY KEY,
+    user_id     INT         NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    stadium_id  INT         NOT NULL REFERENCES stadiums(stadium_id) ON DELETE CASCADE,
+    created_at  TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_user_favorite_stadium UNIQUE (user_id, stadium_id)
+);
+
+CREATE INDEX idx_user_favorites_user_id ON user_favorite_stadiums(user_id);

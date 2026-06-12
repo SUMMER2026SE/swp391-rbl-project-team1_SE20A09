@@ -82,7 +82,7 @@ export function StadiumCard({ stadium, isUrgent = false }: StadiumCardProps) {
         <div>
           <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Giá mỗi giờ</div>
           <div className="font-extrabold text-2xl text-gray-900 dark:text-white">
-            {stadium.pricePerHour.toLocaleString('vi-VN')}₫
+            {(stadium.pricePerHour ?? 0).toLocaleString('vi-VN')}₫
           </div>
         </div>
         <Button asChild className="rounded-xl px-6 py-6 font-bold bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95">

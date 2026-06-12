@@ -1,5 +1,6 @@
 package com.sportvenue.entity;
 
+import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.entity.enums.StadiumStatus;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -74,14 +75,6 @@ public class Stadium implements Serializable {
     @Column(name = "address", nullable = false, columnDefinition = "TEXT")
     private String address;
 
-    /** Giá thuê mỗi giờ (VNĐ). */
-    @Column(name = "price_per_hour", nullable = false, precision = 10, scale = 2)
-    private BigDecimal pricePerHour;
-
-    /** Sức chứa tối đa của sân (số người). */
-    @Column(name = "capacity")
-    private Integer capacity;
-
     /** Giờ mở cửa hàng ngày. */
     @Column(name = "open_time")
     private LocalTime openTime;
@@ -90,11 +83,25 @@ public class Stadium implements Serializable {
     @Column(name = "close_time")
     private LocalTime closeTime;
 
+    /** Giá thuê cơ bản mỗi giờ. */
+    @Column(name = "price_per_hour", precision = 10, scale = 2)
+    private BigDecimal pricePerHour;
+
+    /** Sức chứa tối đa (số người). */
+    @Column(name = "capacity")
+    private Integer capacity;
+
     /** Trạng thái hoạt động của sân. */
     @Enumerated(EnumType.STRING)
     @Column(name = "stadium_status", nullable = false, length = 20)
     @Builder.Default
     private StadiumStatus stadiumStatus = StadiumStatus.AVAILABLE;
+
+    /** Trạng thái duyệt của sân. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "approved_status", nullable = false, length = 20)
+    @Builder.Default
+    private ApprovedStatus approvedStatus = ApprovedStatus.PENDING;
 
     /** Điểm đánh giá trung bình — được cập nhật sau mỗi review. */
     @Column(name = "average_rating", nullable = false, precision = 3, scale = 2)

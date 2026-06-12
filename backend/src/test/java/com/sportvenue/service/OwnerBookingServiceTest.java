@@ -24,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -68,8 +69,8 @@ class OwnerBookingServiceTest {
 
         slot = new TimeSlot();
         slot.setSlotId(1);
-        slot.setStartTime(LocalDateTime.now().withHour(8).withMinute(0));
-        slot.setEndTime(LocalDateTime.now().withHour(9).withMinute(0));
+        slot.setStartTime(LocalTime.of(8, 0));
+        slot.setEndTime(LocalTime.of(9, 0));
         slot.setSlotStatus(SlotStatus.AVAILABLE);
 
         booking = new Booking();

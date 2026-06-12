@@ -1,9 +1,10 @@
-﻿'use client'
+'use client'
 
 import { Header } from "@/components/layout/Header";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 import {
   AreaChart,
   Area,
@@ -134,14 +135,18 @@ function AdminDashboardPage() {
               <Users className="mr-3 h-4 w-4" />
               Người dùng
             </Button>
-            <Button variant="ghost" className="w-full justify-start" size="sm">
-              <Building className="mr-3 h-4 w-4" />
-              Chủ sân
-            </Button>
-            <Button variant="ghost" className="w-full justify-start" size="sm">
-              <MapPin className="mr-3 h-4 w-4" />
-              Sân
-            </Button>
+            <Link href="/admin/owner-approvals" className="block w-full">
+              <Button variant="ghost" className="w-full justify-start" size="sm">
+                <Building className="mr-3 h-4 w-4" />
+                Chủ sân
+              </Button>
+            </Link>
+            <Link href="/admin/stadium-approvals" className="block w-full">
+              <Button variant="ghost" className="w-full justify-start" size="sm">
+                <MapPin className="mr-3 h-4 w-4" />
+                Sân
+              </Button>
+            </Link>
             <Button variant="ghost" className="w-full justify-start" size="sm">
               <UserCog className="mr-3 h-4 w-4" />
               Danh mục
