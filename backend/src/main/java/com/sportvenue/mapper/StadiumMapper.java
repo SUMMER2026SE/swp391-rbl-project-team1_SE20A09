@@ -6,7 +6,9 @@ import com.sportvenue.entity.Stadium;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
-@Mapper(componentModel = "spring")
+import org.mapstruct.ReportingPolicy;
+
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface StadiumMapper {
 
     @Mapping(target = "owner", ignore = true)

@@ -11,6 +11,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import java.time.Duration;
+
 @Service
 @Slf4j
 public class GoongGeocodeProvider implements GeocodeProvider {
@@ -18,7 +21,14 @@ public class GoongGeocodeProvider implements GeocodeProvider {
     @Value("${goong.api.key}")
     private String apiKey;
     
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
+
+    public GoongGeocodeProvider(RestTemplateBuilder restTemplateBuilder) {
+        this.restTemplate = restTemplateBuilder
+                .setConnectTimeout(Duration.ofSeconds(5))
+                .setReadTimeout(Duration.ofSeconds(10))
+                .build();
+    }
 
     @Override
     public List<LocationDTO> search(String query) {
