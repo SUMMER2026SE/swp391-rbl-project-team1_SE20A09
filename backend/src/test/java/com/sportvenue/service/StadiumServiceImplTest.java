@@ -408,4 +408,110 @@ class StadiumServiceImplTest {
                 .closeTime(LocalTime.of(23, 0))
                 .build();
     }
+
+    @Test
+    void suspendStadiumSuccessfullyChangesStatus() {
+        Owner owner = approvedOwner();
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .owner(owner)
+                .stadiumStatus(StadiumStatus.AVAILABLE)
+                .build();
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+
+        stadiumService.suspendStadium(10, 1);
+
+        verify(stadiumRepository).save(stadium);
+        assertEquals(StadiumStatus.MAINTENANCE, stadium.getStadiumStatus());
+    }
+
+    @Test
+    void suspendStadiumRejectsOwnershipViolation() {
+        Owner owner = approvedOwner();
+        Owner differentOwner = Owner.builder().ownerId(99).build();
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .owner(differentOwner)
+                .build();
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+
+        AppException ex = assertThrows(AppException.class, () -> stadiumService.suspendStadium(10, 1));
+        assertEquals(ErrorCode.UNAUTHORIZED, ex.getErrorCode());
+        verify(stadiumRepository, never()).save(any(Stadium.class));
+    }
+
+    @Test
+    void activateStadiumSuccessfullyChangesStatus() {
+        Owner owner = approvedOwner();
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .owner(owner)
+                .stadiumStatus(StadiumStatus.MAINTENANCE)
+                .build();
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+
+        stadiumService.activateStadium(10, 1);
+
+        verify(stadiumRepository).save(stadium);
+        assertEquals(StadiumStatus.AVAILABLE, stadium.getStadiumStatus());
+    }
+
+    @Test
+    void activateStadiumRejectsNonExistentStadium() {
+        Owner owner = approvedOwner();
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> stadiumService.activateStadium(10, 1));
+        verify(stadiumRepository, never()).save(any(Stadium.class));
+    }
+
+    @Test
+    void deleteStadiumSuccessfullyClosesAndCancelsBookings() {
+        Owner owner = approvedOwner();
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .stadiumName("Test Stadium")
+                .owner(owner)
+                .stadiumStatus(StadiumStatus.AVAILABLE)
+                .build();
+
+        User customer = User.builder().userId(2).build();
+        com.sportvenue.entity.Booking booking1 = com.sportvenue.entity.Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .bookingStatus(com.sportvenue.entity.enums.BookingStatus.CONFIRMED)
+                .paymentStatus(com.sportvenue.entity.enums.PaymentStatus.PAID)
+                .build();
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(bookingRepository.findFutureBookingsByStadiumId(org.mockito.ArgumentMatchers.eq(10), any()))
+                .thenReturn(List.of(booking1));
+
+        stadiumService.deleteStadium(10, 1);
+
+        verify(stadiumRepository).save(stadium);
+        assertEquals(StadiumStatus.CLOSED, stadium.getStadiumStatus());
+        org.junit.jupiter.api.Assertions.assertNotNull(stadium.getDeletedAt());
+
+        verify(bookingRepository).save(booking1);
+        assertEquals(com.sportvenue.entity.enums.BookingStatus.CANCELLED, booking1.getBookingStatus());
+        assertEquals(com.sportvenue.entity.enums.PaymentStatus.REFUNDED, booking1.getPaymentStatus());
+
+        verify(notificationService).createNotification(
+                org.mockito.ArgumentMatchers.eq(2),
+                any(),
+                any(),
+                any(),
+                any()
+        );
+    }
 }
