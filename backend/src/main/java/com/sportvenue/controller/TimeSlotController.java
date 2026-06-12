@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +30,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Time Slot", description = "Endpoints for managing stadium time slots")
 @Slf4j
+@Validated
 public class TimeSlotController {
 
     private final TimeSlotService timeSlotService;
@@ -56,7 +58,7 @@ public class TimeSlotController {
     public ResponseEntity<List<TimeSlotResponse>> bulkCreateSlots(
             @PathVariable Integer stadiumId,
             @AuthenticationPrincipal UserPrincipal userPrincipal,
-            @Valid @RequestBody List<CreateTimeSlotRequest> requests) {
+            @RequestBody List<@Valid CreateTimeSlotRequest> requests) {
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 timeSlotService.bulkCreateSlots(stadiumId, requests, userPrincipal.getUser().getUserId()));
     }

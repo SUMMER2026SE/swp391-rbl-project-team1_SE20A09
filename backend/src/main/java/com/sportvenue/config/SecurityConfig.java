@@ -42,7 +42,6 @@ public class SecurityConfig {
             "/api/v1/public/stadiums/**",
             "/api/v1/public/amenities/**",
             "/api/v1/sport-types/**",
-            "/api/v1/geocoding/**",
             "/actuator/health",
             "/actuator/info",
             "/swagger-ui.html",
