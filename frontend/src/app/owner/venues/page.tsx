@@ -29,7 +29,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -194,7 +193,6 @@ function VenueManagementPage() {
       default:
         return <Badge variant="outline">{approvedStatus}</Badge>;
     }
-  };
   };
 
   return (

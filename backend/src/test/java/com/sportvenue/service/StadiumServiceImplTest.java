@@ -55,6 +55,8 @@ class StadiumServiceImplTest {
 
     @Mock
     private BookingRepository bookingRepository;
+
+    @Mock
     private AmenityRepository amenityRepository;
 
     @Mock
