@@ -13,6 +13,12 @@ public interface StadiumService {
 
     StadiumResponse updateStadium(Integer stadiumId, UpdateStadiumRequest request, Integer userId);
 
+    void suspendStadium(Integer stadiumId, Integer userId);
+
+    void activateStadium(Integer stadiumId, Integer userId);
+
+    void deleteStadium(Integer stadiumId, Integer userId);
+
     StadiumResponse approveStadium(Integer stadiumId);
 
     StadiumResponse rejectStadium(Integer stadiumId);

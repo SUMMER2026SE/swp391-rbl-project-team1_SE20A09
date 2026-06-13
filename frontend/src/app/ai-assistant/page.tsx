@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, Send, Search, Calendar, TrendingUp, MapPin } from "lucide-react";
+import Image from "next/image";
 
 function AIAssistantPage() {
   const [message, setMessage] = useState("");
@@ -151,10 +152,13 @@ function AIAssistantPage() {
                   <Card className="max-w-sm">
                     <CardContent className="p-4">
                       <div className="flex gap-3 mb-3">
-                        <img
+                        <Image
                           src={venueRecommendation.image}
                           alt={venueRecommendation.name}
-                          className="w-20 h-20 rounded-lg object-cover"
+                          width={80}
+                          height={80}
+                          className="rounded-lg object-cover"
+                          unoptimized
                         />
                         <div className="flex-1">
                           <h4 className="mb-1">{venueRecommendation.name}</h4>

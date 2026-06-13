@@ -9,6 +9,7 @@ import { SectionHeading } from "@/components/home/authenticated/decor/SectionHea
 import { GlowCard } from "@/components/home/authenticated/decor/GlowCard";
 import { cn } from "@/lib/utils";
 import type { UpcomingBooking } from "@/lib/home-api";
+import Image from "next/image";
 
 const STATUS_LABEL: Record<UpcomingBooking["status"], { label: string; className: string }> = {
   confirmed: { label: "Đã xác nhận", className: "bg-green-100 text-green-800" },
@@ -64,10 +65,12 @@ export function UpcomingBookingsSection({ bookings }: UpcomingBookingsSectionPro
                 >
                   <CardContent className="flex flex-col gap-4 p-0 sm:flex-row">
                     <div className="relative h-44 w-full shrink-0 overflow-hidden sm:h-auto sm:w-52">
-                      <img
+                      <Image
                         src={booking.imageUrl}
                         alt={booking.venueName}
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        fill
+                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                        unoptimized
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
                     </div>

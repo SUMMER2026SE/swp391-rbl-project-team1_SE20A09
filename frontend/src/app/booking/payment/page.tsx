@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState } from "react";
 import { Header } from "@/components/layout/Header";
@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { CreditCard, Building2, Smartphone, Shield, Clock } from "lucide-react";
+import Image from "next/image";
 
 function PaymentPage() {
   const [paymentMethod, setPaymentMethod] = useState("bank");
@@ -113,10 +114,13 @@ function PaymentPage() {
                       Thanh toán qua VNPay QR
                     </div>
                   </Label>
-                  <img
+                  <Image
                     src="https://via.placeholder.com/60x20/0066CC/FFFFFF?text=VNPAY"
                     alt="VNPay"
-                    className="h-6"
+                    width={60}
+                    height={20}
+                    className="h-6 w-auto"
+                    unoptimized
                   />
                 </div>
 
@@ -136,10 +140,13 @@ function PaymentPage() {
                       Ví điện tử MoMo
                     </div>
                   </Label>
-                  <img
+                  <Image
                     src="https://via.placeholder.com/60x20/A50064/FFFFFF?text=MoMo"
                     alt="MoMo"
-                    className="h-6"
+                    width={60}
+                    height={20}
+                    className="h-6 w-auto"
+                    unoptimized
                   />
                 </div>
               </RadioGroup>

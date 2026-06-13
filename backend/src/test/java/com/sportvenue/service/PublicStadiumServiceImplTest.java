@@ -118,7 +118,7 @@ class PublicStadiumServiceImplTest {
 
     @Test
     void getStadiumReviews_success_returnsPageResponse() {
-        when(stadiumRepository.existsById(1)).thenReturn(true);
+        when(stadiumRepository.findById(1)).thenReturn(Optional.of(buildStadium(1)));
         when(reviewRepository.findByStadiumStadiumIdOrderByCreatedAtDesc(eq(1), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList(), PageRequest.of(0, 5), 0));
 
@@ -134,7 +134,7 @@ class PublicStadiumServiceImplTest {
 
     @Test
     void getStadiumReviews_stadiumNotFound_throwsResourceNotFoundException() {
-        when(stadiumRepository.existsById(999)).thenReturn(false);
+        when(stadiumRepository.findById(999)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class,
                 () -> service.getStadiumReviews(999, 0, 5));
@@ -155,7 +155,7 @@ class PublicStadiumServiceImplTest {
         review.setOwnerResponse(null);
         review.setCreatedAt(LocalDateTime.now());
 
-        when(stadiumRepository.existsById(1)).thenReturn(true);
+        when(stadiumRepository.findById(1)).thenReturn(Optional.of(buildStadium(1)));
         when(reviewRepository.findByStadiumStadiumIdOrderByCreatedAtDesc(eq(1), any()))
                 .thenReturn(new PageImpl<>(List.of(review), PageRequest.of(0, 5), 1));
 

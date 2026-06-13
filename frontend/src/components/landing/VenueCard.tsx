@@ -5,6 +5,8 @@ import { Star, MapPin, Clock, Sparkles, Heart } from "lucide-react";
 import { Card, CardContent, CardFooter } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import Image from "next/image";
+
 export interface VenueCardProps {
   id?: number;
   image: string;
@@ -41,10 +43,12 @@ export function VenueCard({
   return (
     <Card className="group overflow-hidden border-border/80 transition-all duration-300 hover:-translate-y-1 hover:border-primary/25 hover:shadow-xl hover:shadow-primary/10">
       <div className="relative h-52 overflow-hidden">
-        <img
+        <Image
           src={image}
           alt={name}
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+          fill
+          className="object-cover transition-transform duration-500 group-hover:scale-110"
+          unoptimized
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
         <Badge className="absolute right-3 top-3 border-0 bg-primary/95 shadow-md">

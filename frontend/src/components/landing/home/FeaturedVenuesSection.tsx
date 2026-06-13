@@ -18,9 +18,8 @@ export function FeaturedVenuesSection() {
     staleTime: 60_000,
   });
 
-  const venues = data?.content ?? [];
-
   const filtered = useMemo(() => {
+    const venues = data?.content ?? [];
     if (sportFilter === "all") return venues;
     // API trả về sportName tiếng Anh ("Football"), map sang key để so sánh
     const sportKeyMap: Record<string, string> = {
@@ -31,7 +30,7 @@ export function FeaturedVenuesSection() {
       Pickleball: "pickleball",
     };
     return venues.filter((v) => sportKeyMap[v.sportName] === sportFilter);
-  }, [sportFilter, venues]);
+  }, [sportFilter, data?.content]);
 
   return (
     <section id="featured-venues" className="py-20 md:py-28">

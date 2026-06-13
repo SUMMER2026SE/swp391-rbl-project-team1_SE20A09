@@ -77,7 +77,8 @@ CREATE TABLE stadiums (
     approved_status VARCHAR(20)     NOT NULL DEFAULT 'PENDING'
                         CHECK (approved_status IN ('PENDING', 'APPROVED', 'REJECTED')),
     average_rating  DECIMAL(3, 2)   NOT NULL DEFAULT 5.0,
-    created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at      TIMESTAMP
 );
 
 -- ── 7. StadiumImages ──────────────────────────────────────────────────────
@@ -268,6 +269,7 @@ CREATE INDEX idx_bookings_status      ON bookings(booking_status);
 CREATE INDEX idx_bookings_location    ON bookings(latitude, longitude);
 CREATE INDEX idx_messages_conv_id     ON messages(conversation_id);
 CREATE INDEX idx_posts_user_id        ON posts(user_id);
+CREATE INDEX idx_stadiums_deleted_at  ON stadiums(deleted_at);
 CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at DESC);
 CREATE INDEX idx_notifications_user_is_read ON notifications(user_id, is_read);
 CREATE INDEX idx_otp_tokens_user_id   ON otp_tokens(user_id);

@@ -208,5 +208,16 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("ownerEmail") String ownerEmail,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate);
+
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.stadium.stadiumId = :stadiumId
+            AND b.bookingStatus IN (com.sportvenue.entity.enums.BookingStatus.PENDING,
+                                    com.sportvenue.entity.enums.BookingStatus.CONFIRMED)
+            AND b.slot.endTime >= :now
+            """)
+    List<Booking> findFutureBookingsByStadiumId(
+            @Param("stadiumId") Integer stadiumId,
+            @Param("now") LocalDateTime now);
 }
 

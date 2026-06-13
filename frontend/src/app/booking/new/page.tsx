@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState } from "react";
 import { Header } from "@/components/layout/Header";
@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Calendar, MapPin, Minus, Plus } from "lucide-react";
+import Image from "next/image";
 
 function BookingSlotPickerPage() {
   const [selectedDate, setSelectedDate] = useState<string>("");
@@ -60,10 +61,13 @@ function BookingSlotPickerPage() {
             <Card>
               <CardContent className="p-6">
                 <div className="flex gap-4">
-                  <img
+                  <Image
                     src="https://images.unsplash.com/photo-1705593813682-033ee2991df6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=300"
                     alt="Venue"
-                    className="w-24 h-24 rounded-lg object-cover"
+                    width={96}
+                    height={96}
+                    className="rounded-lg object-cover"
+                    unoptimized
                   />
                   <div className="flex-1">
                     <h3 className="mb-2">Sân bóng Thành Công</h3>

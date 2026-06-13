@@ -261,7 +261,7 @@ function OwnerReviewsPage() {
 
                   {/* Customer Review Comment */}
                   <div className="bg-muted/30 p-4 rounded-lg border mb-4">
-                    <p className="text-sm italic text-foreground/80">"{review.comment}"</p>
+                    <p className="text-sm italic text-foreground/80">&quot;{review.comment}&quot;</p>
                     {review.tags && review.tags.length > 0 && (
                       <div className="flex gap-2 flex-wrap mt-3">
                         {review.tags.map((tag: string, idx: number) => (

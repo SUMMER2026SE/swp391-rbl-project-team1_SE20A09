@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from "@/components/ui/textarea";
 import { post } from '@/lib/api';
 import { toast } from 'sonner';
+import Image from "next/image";
 
 import { useParams } from 'next/navigation';
 
@@ -99,23 +100,25 @@ function BookingDetailPage() {
 
         {/* Venue Info */}
         <Card>
-          <CardContent className="p-0 overflow-hidden">
-            <img
+          <CardContent className="p-0 overflow-hidden relative h-40">
+            <Image
               src={booking.venueImage}
               alt={booking.venueName}
-              className="w-full h-40 object-cover"
+              fill
+              className="object-cover"
+              unoptimized
             />
-            <div className="p-4">
-              <div className="flex items-start justify-between mb-2">
-                <h2 className="text-lg font-semibold">{booking.venueName}</h2>
-                <Badge variant="secondary">{booking.sportType}</Badge>
-              </div>
-              <div className="flex items-center text-sm text-muted-foreground">
-                <MapPin className="h-4 w-4 mr-1" />
-                {booking.location}
-              </div>
-            </div>
           </CardContent>
+          <div className="p-4">
+            <div className="flex items-start justify-between mb-2">
+              <h2 className="text-lg font-semibold">{booking.venueName}</h2>
+              <Badge variant="secondary">{booking.sportType}</Badge>
+            </div>
+            <div className="flex items-center text-sm text-muted-foreground">
+              <MapPin className="h-4 w-4 mr-1" />
+              {booking.location}
+            </div>
+          </div>
         </Card>
 
         {/* Booking Details */}
@@ -238,3 +241,4 @@ function BookingDetailPage() {
 }
 
 export default BookingDetailPage;
+

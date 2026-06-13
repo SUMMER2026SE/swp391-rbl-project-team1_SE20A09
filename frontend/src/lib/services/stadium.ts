@@ -1,4 +1,4 @@
-import { post, get, put } from '../api';
+import { post, get, put, del } from '../api';
 import { CreateStadiumRequest, UpdateStadiumRequest, StadiumResponse, SportType } from '@/types/stadium';
 
 export const stadiumService = {
@@ -40,5 +40,17 @@ export const stadiumService = {
 
   rejectStadium: (stadiumId: number) => {
     return put<StadiumResponse>(`/stadiums/${stadiumId}/reject`, {});
+  },
+
+  suspendStadium: (stadiumId: number) => {
+    return put<void>(`/stadiums/${stadiumId}/suspend`);
+  },
+
+  activateStadium: (stadiumId: number) => {
+    return put<void>(`/stadiums/${stadiumId}/activate`);
+  },
+
+  deleteStadium: (stadiumId: number) => {
+    return del<void>(`/stadiums/${stadiumId}`);
   },
 };
