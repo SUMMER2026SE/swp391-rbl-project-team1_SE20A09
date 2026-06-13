@@ -79,7 +79,7 @@ function UserAccountMenu({ user }: { user: NonNullable<Session["user"]> }) {
         )}
         {user.roleName === "Owner" && (
           <DropdownMenuItem asChild>
-            <Link href="/owner" className="cursor-pointer">
+            <Link href="/owner/dashboard" className="cursor-pointer">
               <BarChart2 className="mr-2 h-4 w-4" />
               <span>Trang Chủ Sân</span>
             </Link>
@@ -162,7 +162,7 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
               )}
               {user.roleName === "Owner" && (
                 <SheetClose asChild>
-                  <Link href="/owner" className={navLinkClass}>
+                  <Link href="/owner/dashboard" className={navLinkClass}>
                     <BarChart2 className="mr-2 h-4 w-4" />
                     Trang Chủ Sân
                   </Link>
@@ -211,7 +211,7 @@ export function Header() {
   const isOwnerArea = pathname.startsWith("/owner");
 
   return (
-    <header className="border-b bg-card sticky top-0 z-50">
+    <header className="border-b bg-card sticky top-0 z-[1000]">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center space-x-2 shrink-0">

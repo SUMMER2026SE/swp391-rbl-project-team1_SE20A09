@@ -394,13 +394,14 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
   )
 
   return (
-    <div className="w-full min-h-screen bg-white select-none relative flex flex-col font-sans">
-      
-      {/* [A] HERO IMAGE SECTION — full width */}
-      <div 
-        onClick={() => openLightbox(0)}
-        className="w-full h-[260px] relative overflow-hidden cursor-pointer bg-[#1e4535]"
-      >
+    <div className="w-full min-h-screen bg-gray-50/50 select-none relative flex flex-col font-sans pb-12">
+      <div className="w-full max-w-5xl mx-auto bg-white shadow-sm md:rounded-2xl md:my-6 overflow-hidden border border-gray-200">
+        
+        {/* [A] HERO IMAGE SECTION — full width within container */}
+        <div 
+          onClick={() => openLightbox(0)}
+          className="w-full h-[320px] relative overflow-hidden cursor-pointer bg-[#1e4535]"
+        >
         {venue.images[activeIndex] ? (
           <Image 
             src={venue.images[activeIndex]} 
@@ -1031,6 +1032,8 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
         </div>
 
       </div>
+
+      </div> {/* Closing the max-w-5xl container */}
 
       {/* LIGHTBOX (full-screen image viewer) */}
       {lightboxOpen && (

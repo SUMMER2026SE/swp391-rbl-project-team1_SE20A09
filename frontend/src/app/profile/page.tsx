@@ -397,9 +397,6 @@ function UserProfilePage() {
                         <Activity className="h-3 w-3 mr-1" />
                         {profile.accountStatus === "Active" ? "Đang hoạt động" : "Tạm khóa"}
                       </Badge>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href="/profile/edit">Chỉnh sửa thông tin</Link>
-                      </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -563,26 +560,17 @@ function UserProfilePage() {
                       </CardContent>
                     </Card>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="max-w-md">
                       <Button
                         variant="outline"
                         onClick={() => setIsChangingPassword(true)}
-                        className="justify-start py-6 h-auto"
+                        className="w-full justify-start py-6 h-auto"
                       >
                         <Lock className="h-5 w-5 mr-3 text-slate-500" />
                         <div className="text-left">
                           <div className="font-semibold text-sm">Đổi mật khẩu</div>
                           <div className="text-slate-400 text-xs">Thay đổi mật khẩu đăng nhập</div>
                         </div>
-                      </Button>
-                      <Button variant="outline" asChild className="justify-start py-6 h-auto">
-                        <Link href="/profile/edit">
-                          <Edit className="h-5 w-5 mr-3 text-slate-500" />
-                          <div className="text-left">
-                            <div className="font-semibold text-sm">Chỉnh sửa hồ sơ</div>
-                            <div className="text-slate-400 text-xs">Tên, SĐT, ảnh đại diện</div>
-                          </div>
-                        </Link>
                       </Button>
                     </div>
                   )}

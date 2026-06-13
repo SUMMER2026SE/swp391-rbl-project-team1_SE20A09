@@ -6,6 +6,7 @@ import { getVenueDetail } from '@/lib/api/venue'
 import VenueDetail from '@/components/venues/VenueDetail'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Header } from '@/components/layout/Header'
 
 export default function VenueDetailPage({ params }: { params: { id: string } }) {
   const venueId = parseInt(params.id)
@@ -62,11 +63,11 @@ export default function VenueDetailPage({ params }: { params: { id: string } }) 
 
   // Map backend response data structure to VenueDetail props structure
   const fallbackImages = [
-    'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=800&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1544698310-74ea9d1c8258?w=800&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1518063319789-7217e6706b04?w=800&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1575361204480-aadea25e6e68?w=800&auto=format&fit=crop',
-    'https://images.unsplash.com/photo-1526232761682-d26e03ac148e?w=800&auto=format&fit=crop'
+    'https://images.unsplash.com/photo-1575361204480-aadea25e6e68?w=800&auto=format&fit=crop', // Soccer Ball (valid)
+    'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&auto=format&fit=crop', // Basketball (valid)
+    'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800&auto=format&fit=crop', // Tennis (valid)
+    'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&auto=format&fit=crop', // Badminton (valid)
+    'https://images.unsplash.com/photo-1592709823855-d152f523155a?w=800&auto=format&fit=crop'  // Volleyball (valid)
   ]
 
   const rawImages = venue.imageUrls || []
@@ -126,6 +127,11 @@ export default function VenueDetailPage({ params }: { params: { id: string } }) 
     })) || [],
   }
 
-  return <VenueDetail venue={mappedVenue} />
+  return (
+    <div className="min-h-screen bg-white">
+      <Header />
+      <VenueDetail venue={mappedVenue} />
+    </div>
+  )
 }
 
