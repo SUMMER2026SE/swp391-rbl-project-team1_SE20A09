@@ -42,7 +42,7 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return !"Blocked".equalsIgnoreCase(user.getAccountStatus());
+        return !"BLOCKED".equalsIgnoreCase(user.getAccountStatus());
     }
 
     @Override
@@ -52,6 +52,6 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return "Active".equalsIgnoreCase(user.getAccountStatus());
+        return "ACTIVE".equalsIgnoreCase(user.getAccountStatus());
     }
 }

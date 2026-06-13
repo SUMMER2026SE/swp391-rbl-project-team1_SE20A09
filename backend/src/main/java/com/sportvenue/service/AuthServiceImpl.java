@@ -87,7 +87,7 @@ public class AuthServiceImpl implements AuthService {
                 .phoneNumber(request.getPhone())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(customerRole)
-                .accountStatus("Pending")
+                .accountStatus("PENDING")
                 .isVerified(false)
                 .userRank("Bronze")
                 .userPoint(0)
@@ -187,7 +187,7 @@ public class AuthServiceImpl implements AuthService {
                     .phoneNumber(phoneNumber)
                     .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString()))
                     .role(customerRole)
-                    .accountStatus("Active")
+                    .accountStatus("ACTIVE")
                     .isVerified(true) // Google users are verified by default
                     .userRank("Bronze")
                     .userPoint(0)
@@ -195,13 +195,13 @@ public class AuthServiceImpl implements AuthService {
 
             user = userRepository.save(user);
         } else {
-            if ("Blocked".equalsIgnoreCase(user.getAccountStatus())) {
+            if ("BLOCKED".equalsIgnoreCase(user.getAccountStatus())) {
                 throw new BadRequestException("Tài khoản của bạn đã bị khóa.");
             }
             boolean updated = false;
             if (!user.getIsVerified()) {
                 user.setIsVerified(true);
-                user.setAccountStatus("Active");
+                user.setAccountStatus("ACTIVE");
                 updated = true;
                 log.info("Verified previously unverified user via Google login: {}", email);
             }
@@ -355,7 +355,7 @@ public class AuthServiceImpl implements AuthService {
             return;
         }
 
-        if ("Blocked".equalsIgnoreCase(user.getAccountStatus())) {
+        if ("BLOCKED".equalsIgnoreCase(user.getAccountStatus())) {
             throw new BadRequestException("Tài khoản của bạn đã bị khóa. Không thể thực hiện khôi phục mật khẩu.");
         }
 
@@ -391,7 +391,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại."));
 
-        if ("Blocked".equalsIgnoreCase(user.getAccountStatus())) {
+        if ("BLOCKED".equalsIgnoreCase(user.getAccountStatus())) {
             throw new BadRequestException("Tài khoản của bạn đã bị khóa.");
         }
 

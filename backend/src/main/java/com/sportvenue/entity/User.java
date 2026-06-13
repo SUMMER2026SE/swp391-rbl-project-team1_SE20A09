@@ -74,7 +74,7 @@ public class User implements Serializable {
 
     @Column(name = "account_status", nullable = false, length = 20)
     @Builder.Default
-    private String accountStatus = "Pending";
+    private String accountStatus = "PENDING";
 
     /** false = chưa xác thực email, true = đã xác thực. */
     @Column(name = "is_verified", nullable = false)

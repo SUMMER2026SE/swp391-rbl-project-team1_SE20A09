@@ -73,7 +73,7 @@ public class DataSeeder implements CommandLineRunner {
                     .phoneNumber(phone)
                     .passwordHash(encodedPassword)
                     .role(role)
-                    .accountStatus("Active")
+                    .accountStatus("ACTIVE")
                     .userRank("Bronze")
                     .userPoint(0)
                     .build();

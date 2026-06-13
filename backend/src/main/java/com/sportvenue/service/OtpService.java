@@ -65,7 +65,7 @@ public class OtpService {
         // Success
         otpToken.setUsed(true);
         user.setIsVerified(true);
-        user.setAccountStatus("Active");
+        user.setAccountStatus("ACTIVE");
         
         otpTokenRepository.save(otpToken);
         userRepository.save(user);
