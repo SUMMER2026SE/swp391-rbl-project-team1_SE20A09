@@ -74,7 +74,7 @@ public class DataSeeder implements CommandLineRunner {
                     .passwordHash(encodedPassword)
                     .role(role)
                     .accountStatus("ACTIVE")
-                    .userRank("Bronze")
+                    .userRank("BRONZE")
                     .userPoint(0)
                     .build();
             userRepository.save(user);

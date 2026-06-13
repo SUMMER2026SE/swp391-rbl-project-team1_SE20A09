@@ -89,7 +89,7 @@ public class AuthServiceImpl implements AuthService {
                 .role(customerRole)
                 .accountStatus("PENDING")
                 .isVerified(false)
-                .userRank("Bronze")
+                .userRank("BRONZE")
                 .userPoint(0)
                 .build();
 
@@ -189,7 +189,7 @@ public class AuthServiceImpl implements AuthService {
                     .role(customerRole)
                     .accountStatus("ACTIVE")
                     .isVerified(true) // Google users are verified by default
-                    .userRank("Bronze")
+                    .userRank("BRONZE")
                     .userPoint(0)
                     .build();
 

@@ -70,7 +70,7 @@ public class User implements Serializable {
 
     @Column(name = "user_rank", nullable = false, length = 20)
     @Builder.Default
-    private String userRank = "Bronze";
+    private String userRank = "BRONZE";
 
     @Column(name = "account_status", nullable = false, length = 20)
     @Builder.Default
