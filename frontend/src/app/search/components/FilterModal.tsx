@@ -9,7 +9,7 @@ interface FilterModalProps {
   filters: StadiumSearchRequest
   amenitiesList: Amenity[]
   totalResults: number
-  onFilterChange: (key: keyof StadiumSearchRequest, value: any) => void
+  onFilterChange: <K extends keyof StadiumSearchRequest>(key: K, value: StadiumSearchRequest[K]) => void
   onAmenityToggle: (id: number) => void
   onClearFilters: () => void
 }

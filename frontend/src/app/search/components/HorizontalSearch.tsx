@@ -5,7 +5,7 @@ import { StadiumSearchRequest } from '@/lib/api/stadium'
 
 interface HorizontalSearchProps {
   filters: StadiumSearchRequest
-  onFilterChange: (key: keyof StadiumSearchRequest, value: any) => void
+  onFilterChange: <K extends keyof StadiumSearchRequest>(key: K, value: StadiumSearchRequest[K]) => void
   onGetLocation: () => void
 }
 

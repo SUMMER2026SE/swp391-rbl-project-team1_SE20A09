@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState } from "react";
 import { Header } from "@/components/layout/Header";
@@ -16,8 +16,34 @@ import {
 } from "@/components/ui/dialog";
 import { CheckCircle, XCircle, FileText, MapPin, Building } from "lucide-react";
 
+interface OwnerMock {
+  name: string;
+  email: string;
+  phone: string;
+  avatar: string;
+}
+
+interface VenueMock {
+  name: string;
+  address: string;
+  sportType: string;
+  description?: string;
+}
+
+interface OwnerApplicationMock {
+  id: number;
+  owner: OwnerMock;
+  venue: VenueMock;
+  documents?: string[];
+  submittedDate: string;
+  approvedDate?: string;
+  rejectedDate?: string;
+  rejectionReason?: string;
+  status: string;
+}
+
 function OwnerApprovalPage() {
-  const [selectedApplication, setSelectedApplication] = useState<any>(null);
+  const [selectedApplication, setSelectedApplication] = useState<OwnerApplicationMock | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
   const applications = [
@@ -118,7 +144,7 @@ function OwnerApprovalPage() {
     return <Badge className={item.className}>{item.label}</Badge>;
   };
 
-  const ApplicationCard = ({ application }: { application: any }) => (
+  const ApplicationCard = ({ application }: { application: OwnerApplicationMock }) => (
     <Card className="mb-4">
       <CardContent className="p-6">
         <div className="flex items-start justify-between mb-4">
