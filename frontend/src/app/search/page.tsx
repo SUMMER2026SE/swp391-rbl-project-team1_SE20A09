@@ -14,6 +14,7 @@ import { HorizontalSearch } from './components/HorizontalSearch'
 import { SportTypeTabs } from './components/SportTypeTabs'
 import { FilterModal } from './components/FilterModal'
 import { StadiumCard } from './components/StadiumCard'
+import { Header } from '@/components/layout/Header'
 
 const StadiumMapModal = dynamic(() => import('./components/StadiumMapModal'), {
   ssr: false,
@@ -48,6 +49,7 @@ function SearchPageContent() {
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isMapOpen, setIsMapOpen] = useState(false)
+  const [isLocating, setIsLocating] = useState(false)
 
   // Local state for UI inputs (initialized safely to avoid SSR Hydration mismatch)
   const [filters, setFilters] = useState<StadiumSearchRequest>({
@@ -88,6 +90,10 @@ function SearchPageContent() {
 
     Object.entries(debouncedFilters).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '' && key !== 'amenityIds') {
+        if (key === 'minPrice' && Number(value) === 0) return
+        if (key === 'maxPrice' && Number(value) === 1000000) return
+        if (key === 'page' && Number(value) === 0) return
+        if (key === 'size' && Number(value) === 12) return
         params.append(key, String(value))
       }
     })
@@ -119,14 +125,11 @@ function SearchPageContent() {
       size: searchParams.has('size') ? Number(searchParams.get('size')) : 12,
     }
 
-    // Deep compare to sync UI properly for Back/Forward avoiding infinite loop
-    // FIX: So sánh với debouncedFilters để tránh race condition khi user gõ nhanh
     setFilters(prev => {
-      if (JSON.stringify(debouncedFilters) === JSON.stringify(currentFilters) || 
-          JSON.stringify(prev) === JSON.stringify(currentFilters)) {
-        return prev;
+      if (JSON.stringify(prev) === JSON.stringify(currentFilters)) {
+        return prev
       }
-      return currentFilters;
+      return currentFilters
     })
 
     // Prepare clean filters for API
@@ -136,6 +139,8 @@ function SearchPageContent() {
     if (!cleanFilters.endTime) delete cleanFilters.endTime
     if (!cleanFilters.keyword) delete cleanFilters.keyword
     if (cleanFilters.sportTypeId === undefined) delete cleanFilters.sportTypeId
+    if (cleanFilters.minPrice === 0) delete cleanFilters.minPrice
+    if (cleanFilters.maxPrice === 1000000) delete cleanFilters.maxPrice
 
     const fetchStadiums = async () => {
       setLoading(true)
@@ -150,7 +155,7 @@ function SearchPageContent() {
     }
 
     fetchStadiums()
-  }, [searchParams, debouncedFilters])
+  }, [searchParams])
 
   const handleFilterChange = (key: keyof StadiumSearchRequest, value: StadiumSearchRequest[keyof StadiumSearchRequest]) => {
     setFilters(prev => ({ ...prev, [key]: value, page: key !== 'page' ? 0 : value as number }))
@@ -181,8 +186,10 @@ function SearchPageContent() {
 
   const getLocation = () => {
     if (navigator.geolocation) {
+      setIsLocating(true)
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          setIsLocating(false)
           setFilters(prev => ({
             ...prev,
             userLat: position.coords.latitude,
@@ -190,8 +197,12 @@ function SearchPageContent() {
             radiusInKm: 15,
             page: 0
           }))
+          toast.success("Đã định vị thành công vị trí của bạn!")
         },
-        (error) => toast.error("Không thể lấy vị trí của bạn. Vui lòng cấp quyền.")
+        (error) => {
+          setIsLocating(false)
+          toast.error("Không thể lấy vị trí của bạn. Vui lòng cấp quyền.")
+        }
       )
     } else {
       toast.error("Trình duyệt của bạn không hỗ trợ định vị")
@@ -200,6 +211,7 @@ function SearchPageContent() {
 
   return (
     <div className="min-h-screen bg-gray-50/50 dark:bg-background pb-20">
+      <Header />
 
       {/* 1. Hero Banner */}
       <div className="relative h-[300px] md:h-[400px] w-full bg-gray-900 overflow-hidden">
@@ -226,6 +238,7 @@ function SearchPageContent() {
         filters={filters}
         onFilterChange={handleFilterChange}
         onGetLocation={getLocation}
+        isLocating={isLocating}
       />
 
       {/* 3. Sport Type Tabs */}

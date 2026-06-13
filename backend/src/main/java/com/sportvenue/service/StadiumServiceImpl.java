@@ -291,9 +291,17 @@ public class StadiumServiceImpl implements StadiumService {
         String allowedPrefix = normalizedBaseUrl + "/api/v1/files/stadiums/";
 
         boolean hasInvalidUrl = imageUrls.stream()
-                .anyMatch(url -> !url.startsWith(allowedPrefix)
-                        || url.contains("..")
-                        || url.length() <= allowedPrefix.length());
+                .anyMatch(url -> {
+                    // Allow uploaded local stadium images
+                    if (url.startsWith(allowedPrefix) && !url.contains("..") && url.length() > allowedPrefix.length()) {
+                        return false;
+                    }
+                    // Allow external web URLs (http/https) for mockups & seeding compatibility
+                    if ((url.startsWith("http://") || url.startsWith("https://")) && !url.contains("..")) {
+                        return false;
+                    }
+                    return true;
+                });
         if (hasInvalidUrl) {
             throw new BadRequestException("Image URLs must be uploaded through the stadium image endpoint");
         }

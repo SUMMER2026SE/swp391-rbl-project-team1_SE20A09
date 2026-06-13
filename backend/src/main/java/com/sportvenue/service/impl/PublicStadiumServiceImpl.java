@@ -199,11 +199,15 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 .longitude(stadium.getLongitude())
                 .distanceInKm(distance)
                 .sportName(stadium.getSportType().getSportName())
+                .sportTypeId(stadium.getSportType().getSportTypeId())
                 .firstImageUrl(firstImageUrl)
                 .imageUrls(imageUrls)
                 .openTime(stadium.getOpenTime())
                 .closeTime(stadium.getCloseTime())
+                .pricePerHour(stadium.getPricePerHour())
+                .capacity(stadium.getCapacity())
                 .stadiumStatus(stadium.getStadiumStatus() != null ? stadium.getStadiumStatus().name() : null)
+                .approvedStatus(stadium.getApprovedStatus() != null ? stadium.getApprovedStatus().name() : null)
                 .amenities(amenityResponses)
                 .build();
     }

@@ -1,15 +1,16 @@
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Navigation, Calendar, Clock, MapPin } from 'lucide-react'
+import { Navigation, Calendar, Clock, MapPin, Loader2 } from 'lucide-react'
 import { StadiumSearchRequest } from '@/lib/api/stadium'
 
 interface HorizontalSearchProps {
   filters: StadiumSearchRequest
   onFilterChange: <K extends keyof StadiumSearchRequest>(key: K, value: StadiumSearchRequest[K]) => void
   onGetLocation: () => void
+  isLocating?: boolean
 }
 
-export function HorizontalSearch({ filters, onFilterChange, onGetLocation }: HorizontalSearchProps) {
+export function HorizontalSearch({ filters, onFilterChange, onGetLocation, isLocating = false }: HorizontalSearchProps) {
   return (
     <div className="bg-white dark:bg-card p-4 rounded-full shadow-2xl border border-gray-100 dark:border-border max-w-5xl mx-auto flex flex-col md:flex-row items-center gap-4 relative z-10 -mt-16 mb-8 w-[95%]">
 
@@ -71,10 +72,22 @@ export function HorizontalSearch({ filters, onFilterChange, onGetLocation }: Hor
       <div className="md:pl-2 w-full md:w-auto">
         <Button
           onClick={onGetLocation}
-          className={`w-full md:w-auto rounded-full px-6 py-6 font-bold shadow-lg transition-all ${filters.userLat ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/30' : 'bg-primary hover:bg-primary/90 shadow-primary/30'}`}
+          disabled={isLocating}
+          className={`w-full md:w-auto rounded-full px-6 py-6 font-bold shadow-lg transition-all duration-300 active:scale-95
+            ${isLocating 
+              ? 'bg-gray-400 cursor-not-allowed shadow-none' 
+              : filters.userLat 
+                ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/30 hover:scale-105' 
+                : 'bg-primary hover:bg-primary/90 shadow-primary/30 hover:scale-105'
+            }
+          `}
         >
-          <Navigation className="mr-2 h-5 w-5" />
-          {filters.userLat ? 'Gần bạn (15km)' : 'Gần tôi'}
+          {isLocating ? (
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          ) : (
+            <Navigation className={`mr-2 h-5 w-5 ${filters.userLat ? 'animate-pulse' : ''}`} />
+          )}
+          {isLocating ? 'Đang định vị...' : filters.userLat ? 'Gần bạn (15km)' : 'Gần tôi'}
         </Button>
       </div>
     </div>
