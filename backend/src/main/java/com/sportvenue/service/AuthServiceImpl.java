@@ -23,6 +23,8 @@ import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.RoleRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.security.JwtTokenProvider;
+import com.sportvenue.entity.enums.AccountStatus;
+import com.sportvenue.entity.enums.UserRank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -87,9 +89,9 @@ public class AuthServiceImpl implements AuthService {
                 .phoneNumber(request.getPhone())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(customerRole)
-                .accountStatus("PENDING")
+                .accountStatus(AccountStatus.PENDING)
                 .isVerified(false)
-                .userRank("BRONZE")
+                .userRank(UserRank.BRONZE)
                 .userPoint(0)
                 .build();
 
@@ -187,21 +189,21 @@ public class AuthServiceImpl implements AuthService {
                     .phoneNumber(phoneNumber)
                     .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString()))
                     .role(customerRole)
-                    .accountStatus("ACTIVE")
+                    .accountStatus(AccountStatus.ACTIVE)
                     .isVerified(true) // Google users are verified by default
-                    .userRank("BRONZE")
+                    .userRank(UserRank.BRONZE)
                     .userPoint(0)
                     .build();
 
             user = userRepository.save(user);
         } else {
-            if ("BLOCKED".equalsIgnoreCase(user.getAccountStatus())) {
+            if (user.getAccountStatus() == AccountStatus.BLOCKED) {
                 throw new BadRequestException("Tài khoản của bạn đã bị khóa.");
             }
             boolean updated = false;
             if (!user.getIsVerified()) {
                 user.setIsVerified(true);
-                user.setAccountStatus("ACTIVE");
+                user.setAccountStatus(AccountStatus.ACTIVE);
                 updated = true;
                 log.info("Verified previously unverified user via Google login: {}", email);
             }
@@ -322,9 +324,9 @@ public class AuthServiceImpl implements AuthService {
                 .roleName(user.getRole().getRoleName())
                 .avatarUrl(user.getAvatarUrl())
                 .phoneNumber(user.getPhoneNumber())
-                .userRank(user.getUserRank())
+                .userRank(user.getUserRank() != null ? user.getUserRank().name() : null)
                 .userPoint(user.getUserPoint())
-                .accountStatus(user.getAccountStatus())
+                .accountStatus(user.getAccountStatus() != null ? user.getAccountStatus().name() : null)
                 .build();
     }
 
@@ -355,7 +357,7 @@ public class AuthServiceImpl implements AuthService {
             return;
         }
 
-        if ("BLOCKED".equalsIgnoreCase(user.getAccountStatus())) {
+        if (user.getAccountStatus() == AccountStatus.BLOCKED) {
             throw new BadRequestException("Tài khoản của bạn đã bị khóa. Không thể thực hiện khôi phục mật khẩu.");
         }
 
@@ -391,7 +393,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại."));
 
-        if ("BLOCKED".equalsIgnoreCase(user.getAccountStatus())) {
+        if (user.getAccountStatus() == AccountStatus.BLOCKED) {
             throw new BadRequestException("Tài khoản của bạn đã bị khóa.");
         }
 

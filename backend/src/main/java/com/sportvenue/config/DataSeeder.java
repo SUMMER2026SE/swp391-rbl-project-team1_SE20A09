@@ -4,6 +4,8 @@ import com.sportvenue.entity.Role;
 import com.sportvenue.entity.User;
 import com.sportvenue.repository.RoleRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.entity.enums.AccountStatus;
+import com.sportvenue.entity.enums.UserRank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -73,8 +75,8 @@ public class DataSeeder implements CommandLineRunner {
                     .phoneNumber(phone)
                     .passwordHash(encodedPassword)
                     .role(role)
-                    .accountStatus("ACTIVE")
-                    .userRank("BRONZE")
+                    .accountStatus(AccountStatus.ACTIVE)
+                    .userRank(UserRank.BRONZE)
                     .userPoint(0)
                     .build();
             userRepository.save(user);

@@ -26,6 +26,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.util.Arrays;
 import java.util.List;
 import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 
 @Configuration
 @EnableWebSecurity
@@ -88,8 +89,7 @@ public class SecurityConfig {
                         })
                 )
                 .addFilterBefore(new RateLimitingFilter(
-                        Arrays.asList(env.getActiveProfiles()).contains("dev") ||
-                        Arrays.asList(env.getActiveProfiles()).contains("test")
+                        env.acceptsProfiles(Profiles.of("dev", "test"))
                 ), UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

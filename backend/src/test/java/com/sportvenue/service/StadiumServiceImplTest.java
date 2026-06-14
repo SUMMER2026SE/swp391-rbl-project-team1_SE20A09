@@ -65,6 +65,9 @@ class StadiumServiceImplTest {
     @Mock
     private NotificationService notificationService;
 
+    @Mock
+    private org.springframework.core.env.Environment env;
+
     private StadiumServiceImpl stadiumService;
 
     @BeforeEach
@@ -79,7 +82,8 @@ class StadiumServiceImplTest {
                 amenityRepository,
                 stadiumMapper,
                 fileStorageProperties,
-                notificationService);
+                notificationService,
+                env);
     }
 
     @Test

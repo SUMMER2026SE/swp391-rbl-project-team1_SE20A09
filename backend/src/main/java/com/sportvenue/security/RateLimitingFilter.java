@@ -24,6 +24,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class RateLimitingFilter extends OncePerRequestFilter {
 
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(RateLimitingFilter.class);
+
     private final boolean isDevOrTest;
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
@@ -34,6 +36,9 @@ public class RateLimitingFilter extends OncePerRequestFilter {
 
     public RateLimitingFilter(boolean isDevOrTest) {
         this.isDevOrTest = isDevOrTest;
+        if (isDevOrTest) {
+            logger.warn("⚠️ Rate Limiting is BYPASSED because dev/test profile is active!");
+        }
     }
 
     @Override
