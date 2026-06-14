@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState } from "react";
 import { Header } from "@/components/layout/Header";
@@ -25,9 +25,19 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, Edit, Trash2, Trophy } from "lucide-react";
 
+interface SportCategoryMock {
+  id: number;
+  name: string;
+  nameEn: string;
+  description: string;
+  icon: string;
+  venueCount: number;
+  active: boolean;
+}
+
 function SportCategoriesPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<any>(null);
+  const [editingCategory, setEditingCategory] = useState<SportCategoryMock | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const [categories, setCategories] = useState([
@@ -87,7 +97,7 @@ function SportCategoriesPage() {
     category,
     onClose,
   }: {
-    category?: any;
+    category?: SportCategoryMock;
     onClose: () => void;
   }) => (
     <div className="space-y-4">
@@ -231,7 +241,7 @@ function SportCategoriesPage() {
             <DialogTitle>Chỉnh sửa môn thể thao</DialogTitle>
           </DialogHeader>
           <CategoryForm
-            category={editingCategory}
+            category={editingCategory ?? undefined}
             onClose={() => setEditingCategory(null)}
           />
         </DialogContent>

@@ -16,6 +16,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
+import com.sportvenue.entity.enums.AccountStatus;
+import com.sportvenue.entity.enums.UserRank;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
@@ -68,13 +72,15 @@ public class User implements Serializable {
     @Builder.Default
     private Integer userPoint = 0;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "user_rank", nullable = false, length = 20)
     @Builder.Default
-    private String userRank = "Bronze";
+    private UserRank userRank = UserRank.BRONZE;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "account_status", nullable = false, length = 20)
     @Builder.Default
-    private String accountStatus = "Pending";
+    private AccountStatus accountStatus = AccountStatus.PENDING;
 
     /** false = chưa xác thực email, true = đã xác thực. */
     @Column(name = "is_verified", nullable = false)

@@ -65,7 +65,7 @@ public class OtpService {
         // Success
         otpToken.setUsed(true);
         user.setIsVerified(true);
-        user.setAccountStatus("Active");
+        user.setAccountStatus(com.sportvenue.entity.enums.AccountStatus.ACTIVE);
         
         otpTokenRepository.save(otpToken);
         userRepository.save(user);

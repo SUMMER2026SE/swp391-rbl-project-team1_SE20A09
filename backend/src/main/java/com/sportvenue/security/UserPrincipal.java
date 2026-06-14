@@ -1,6 +1,7 @@
 package com.sportvenue.security;
 
 import com.sportvenue.entity.User;
+import com.sportvenue.entity.enums.AccountStatus;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -42,7 +43,7 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return !"Blocked".equalsIgnoreCase(user.getAccountStatus());
+        return user.getAccountStatus() != AccountStatus.BLOCKED;
     }
 
     @Override
@@ -52,6 +53,6 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return "Active".equalsIgnoreCase(user.getAccountStatus());
+        return user.getAccountStatus() == AccountStatus.ACTIVE;
     }
 }

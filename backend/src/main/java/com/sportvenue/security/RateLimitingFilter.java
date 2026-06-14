@@ -24,13 +24,32 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class RateLimitingFilter extends OncePerRequestFilter {
 
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(RateLimitingFilter.class);
+
+    private final boolean isDevOrTest;
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+
+    public RateLimitingFilter() {
+        this.isDevOrTest = false;
+    }
+
+    public RateLimitingFilter(boolean isDevOrTest) {
+        this.isDevOrTest = isDevOrTest;
+        if (isDevOrTest) {
+            LOG.warn("⚠️ Rate Limiting is BYPASSED because dev/test profile is active!");
+        }
+    }
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain filterChain) throws ServletException, IOException {
+
+        if (isDevOrTest) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         String path = request.getServletPath();
         String method = request.getMethod();

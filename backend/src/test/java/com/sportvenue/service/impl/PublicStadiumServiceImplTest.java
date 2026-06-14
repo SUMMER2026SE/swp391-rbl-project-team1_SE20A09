@@ -53,6 +53,7 @@ public class PublicStadiumServiceImplTest {
         stadium1.setLongitude(106.7009);
         stadium1.setSportType(sportType);
         stadium1.setAmenities(Collections.emptySet());
+        stadium1.setPricePerHour(java.math.BigDecimal.valueOf(150_000));
 
         Stadium stadium2 = new Stadium();
         stadium2.setStadiumId(2);
@@ -60,6 +61,7 @@ public class PublicStadiumServiceImplTest {
         stadium2.setLongitude(106.6297);
         stadium2.setSportType(sportType);
         stadium2.setAmenities(Collections.emptySet());
+        stadium2.setPricePerHour(java.math.BigDecimal.valueOf(200_000));
 
         when(stadiumRepository.findAll(any(Specification.class)))
                 .thenReturn(List.of(stadium2, stadium1));
@@ -76,9 +78,11 @@ public class PublicStadiumServiceImplTest {
         // Stadium 1 should be first because distance is 0
         assertEquals(1, response.getContent().get(0).getStadiumId());
         assertEquals(0.0, response.getContent().get(0).getDistanceInKm(), 0.1);
+        assertEquals(java.math.BigDecimal.valueOf(150_000), response.getContent().get(0).getPricePerHour());
 
         // Stadium 2 should be second
         assertEquals(2, response.getContent().get(1).getStadiumId());
         assertTrue(response.getContent().get(1).getDistanceInKm() > 0.0);
+        assertEquals(java.math.BigDecimal.valueOf(200_000), response.getContent().get(1).getPricePerHour());
     }
 }

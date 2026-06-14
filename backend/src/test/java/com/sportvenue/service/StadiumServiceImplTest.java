@@ -65,6 +65,9 @@ class StadiumServiceImplTest {
     @Mock
     private NotificationService notificationService;
 
+    @Mock
+    private org.springframework.core.env.Environment env;
+
     private StadiumServiceImpl stadiumService;
 
     @BeforeEach
@@ -79,7 +82,8 @@ class StadiumServiceImplTest {
                 amenityRepository,
                 stadiumMapper,
                 fileStorageProperties,
-                notificationService);
+                notificationService,
+                env);
     }
 
     @Test
@@ -116,9 +120,9 @@ class StadiumServiceImplTest {
     }
 
     @Test
-    void createStadiumRejectsExternalImageUrl() {
+    void createStadiumRejectsInvalidImageUrlScheme() {
         CreateStadiumRequest request = validRequest();
-        request.setImageUrls(List.of("https://example.com/image.jpg"));
+        request.setImageUrls(List.of("ftp://example.com/image.jpg"));
 
         assertThrows(BadRequestException.class, () -> stadiumService.createStadium(request, 1));
         verify(stadiumRepository, never()).save(any(Stadium.class));

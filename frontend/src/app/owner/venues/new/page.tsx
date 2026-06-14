@@ -254,7 +254,6 @@ function AddVenuePage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="address">Địa chỉ *</Label>
                     <AddressPicker
                       onAddressChange={(data) => {
                         form.setValue("address", data.addressText, { shouldValidate: true });

@@ -26,6 +26,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -43,6 +45,7 @@ public class StadiumServiceImpl implements StadiumService {
     private final StadiumMapper stadiumMapper;
     private final FileStorageProperties fileStorageProperties;
     private final NotificationService notificationService;
+    private final Environment env;
 
     @Override
     @Transactional
@@ -289,11 +292,20 @@ public class StadiumServiceImpl implements StadiumService {
         String baseUrl = fileStorageProperties.getBaseUrl();
         String normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         String allowedPrefix = normalizedBaseUrl + "/api/v1/files/stadiums/";
+        boolean isDevOrTest = env.acceptsProfiles(Profiles.of("dev", "test"));
 
         boolean hasInvalidUrl = imageUrls.stream()
-                .anyMatch(url -> !url.startsWith(allowedPrefix)
-                        || url.contains("..")
-                        || url.length() <= allowedPrefix.length());
+                .anyMatch(url -> {
+                    // Allow uploaded local stadium images
+                    if (url.startsWith(allowedPrefix) && !url.contains("..") && url.length() > allowedPrefix.length()) {
+                        return false;
+                    }
+                    // Allow external web URLs (http/https) only for mockups & seeding compatibility in dev/test profiles
+                    if (isDevOrTest && (url.startsWith("http://") || url.startsWith("https://")) && !url.contains("..")) {
+                        return false;
+                    }
+                    return true;
+                });
         if (hasInvalidUrl) {
             throw new BadRequestException("Image URLs must be uploaded through the stadium image endpoint");
         }

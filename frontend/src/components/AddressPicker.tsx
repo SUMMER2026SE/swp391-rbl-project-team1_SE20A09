@@ -118,6 +118,9 @@ export function AddressPicker({ initialAddress, initialLat, initialLng, onAddres
     const value = e.target.value
     setInputValue(value)
 
+    // Cập nhật địa chỉ về form cha khi người dùng gõ tay
+    onAddressChange({ addressText: value, lat: position.lat, lng: position.lng })
+
     if (value.trim().length < 3) {
       setSuggestions([])
       setShowDropdown(false)
@@ -151,7 +154,7 @@ export function AddressPicker({ initialAddress, initialLat, initialLng, onAddres
         setIsLoading(false)
       }
     }, 500)
-  }, [])
+  }, [onAddressChange, position])
 
   const selectSuggestion = useCallback(
     (item: LocationDTO) => {

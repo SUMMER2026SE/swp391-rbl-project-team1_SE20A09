@@ -96,6 +96,7 @@ class PublicStadiumServiceImplTest {
         assertNotNull(response);
         assertEquals(1, response.getStadiumId());
         assertEquals("Test Stadium", response.getStadiumName());
+        assertEquals(BigDecimal.valueOf(100_000), response.getPricePerHour());
         assertEquals("Football", response.getSportName());
         assertEquals(0L, response.getTotalReviews());
         assertNotNull(response.getOwner());

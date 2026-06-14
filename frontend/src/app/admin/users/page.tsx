@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState } from "react";
 import { Header } from "@/components/layout/Header";
@@ -23,8 +23,22 @@ import {
 } from "@/components/ui/select";
 import { Search, Lock, Unlock, Eye, AlertCircle } from "lucide-react";
 
+interface UserMock {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  avatar: string;
+  joinDate: string;
+  status: string;
+  type: string;
+  bookings?: number;
+  venues?: number;
+  revenue?: number;
+}
+
 function UserManagementPage() {
-  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [selectedUser, setSelectedUser] = useState<UserMock | null>(null);
 
   const users = [
     {
@@ -96,7 +110,7 @@ function UserManagementPage() {
     return <Badge className="bg-red-100 text-red-700">Đã khóa</Badge>;
   };
 
-  const UserRow = ({ user }: { user: any }) => (
+  const UserRow = ({ user }: { user: UserMock }) => (
     <tr className="border-b hover:bg-muted">
       <td className="p-3">
         <div className="flex items-center gap-3">
@@ -116,7 +130,7 @@ function UserManagementPage() {
         {user.type === "customer" ? user.bookings : user.venues}
       </td>
       {user.type === "owner" && (
-        <td className="p-3 text-right">{user.revenue.toLocaleString('vi-VN')}đ</td>
+        <td className="p-3 text-right">{(user.revenue ?? 0).toLocaleString('vi-VN')}đ</td>
       )}
       <td className="p-3">{getStatusBadge(user.status)}</td>
       <td className="p-3">
@@ -288,7 +302,7 @@ function UserManagementPage() {
                           Doanh thu tháng này
                         </div>
                         <div className="text-xl text-primary">
-                          {selectedUser.revenue.toLocaleString('vi-VN')}đ
+                          {(selectedUser.revenue ?? 0).toLocaleString('vi-VN')}đ
                         </div>
                       </div>
                     </>
