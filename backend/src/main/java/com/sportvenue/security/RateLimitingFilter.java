@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class RateLimitingFilter extends OncePerRequestFilter {
 
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(RateLimitingFilter.class);
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(RateLimitingFilter.class);
 
     private final boolean isDevOrTest;
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
@@ -37,7 +37,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     public RateLimitingFilter(boolean isDevOrTest) {
         this.isDevOrTest = isDevOrTest;
         if (isDevOrTest) {
-            logger.warn("⚠️ Rate Limiting is BYPASSED because dev/test profile is active!");
+            LOG.warn("⚠️ Rate Limiting is BYPASSED because dev/test profile is active!");
         }
     }
 
