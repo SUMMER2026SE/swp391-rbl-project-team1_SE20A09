@@ -174,14 +174,14 @@ VALUES
 INSERT INTO reviews (booking_id, user_id, stadium_id, rating_score, comment, owner_response)
 VALUES
     -- Đánh giá 1: Chưa có phản hồi từ Owner
-    (3, 
-     (SELECT user_id FROM users WHERE email = 'customer@sportvenue.com'),
-     (SELECT stadium_id FROM stadiums WHERE stadium_name = 'Sân Cầu Lông Quận 1'),
+    (4, 
+     (SELECT user_id FROM users WHERE email = 'customer3@sportvenue.com'),
+     (SELECT stadium_id FROM stadiums WHERE stadium_name = 'Sân Bóng Rổ Bình Thạnh'),
      4, 'Sân gỗ đẹp, ánh sáng tốt. Tuy nhiên bãi đỗ xe hơi chật vào giờ cao điểm.', NULL),
 
     -- Đánh giá 2: Đã có phản hồi của Owner
-    (1, 
-     (SELECT user_id FROM users WHERE email = 'customer@sportvenue.com'),
-     (SELECT stadium_id FROM stadiums WHERE stadium_name = 'Sân Bóng Đá Thủ Đức'),
+    (5, 
+     (SELECT user_id FROM users WHERE email = 'customer2@sportvenue.com'),
+     (SELECT stadium_id FROM stadiums WHERE stadium_name = 'Sân Bóng Đá Gò Vấp'),
      5, 'Cỏ nhân tạo êm, đá rất sướng chân. Sẽ quay lại thường xuyên.', 
      'Cảm ơn quý khách đã ủng hộ sân! Chúng tôi sẽ tiếp tục duy trì dịch vụ tốt nhất.');
