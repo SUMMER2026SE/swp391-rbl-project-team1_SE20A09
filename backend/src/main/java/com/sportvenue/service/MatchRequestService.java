@@ -5,8 +5,6 @@ import com.sportvenue.dto.response.MatchResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
-import java.util.List;
-
 /**
  * Service Interface cho việc quản lý kèo ghép thể thao (Matchmaking).
  * Tuân thủ quy tắc lập trình hướng giao diện (Entity -> Repository -> Service Interface -> ServiceImpl -> Controller).
