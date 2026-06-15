@@ -239,15 +239,13 @@ entity/enums/
 
 ---
 
-## 👥 Phân Công Task
+## 🛡️ Cơ Chế Kiểm Soát Chất Lượng (Quality Gate) & Quy Trình Review
+Để đảm bảo mã nguồn đồng bộ và không phát sinh lỗi khi tích hợp hệ thống:
+1. **Kiểm duyệt Pull Request (PR):** Tất cả các nhánh feature/fix trước khi merge vào `main` bắt buộc phải được review và Approve bởi các thành viên phụ trách chính (Lượng hoặc Huy). Thành viên sở hữu nhánh tuyệt đối không tự ý merge code của mình khi chưa có sự xác nhận của người duyệt.
+2. **Tuân thủ mẫu Code:** Bắt buộc tham chiếu các Controller & DTO mẫu chuẩn Validation (`@Valid`) đã được định nghĩa sẵn. Tuyệt đối không expose Entity trực tiếp ra ngoài Controller.
+3. **Quy tắc Routing & UI:** Phải sử dụng chung hệ thống UI (`shadcn/ui` + theme CSS config) để đảm bảo đồng bộ giao diện, không tự ý viết các class CSS tùy tiện phá vỡ bố cục chung.
 
-| Thành viên | Task chính | Scope nhánh |
-|---|---|---|
-| Nguyễn Xuân Huy | UC-OWN-01,02,04,05 — CRUD Venue, Notification | `feature/stadium/` |
-| Trần Minh An | UC-OV-01,04 — Home Page, Venue Detail | `feature/home/`, `feature/venue-detail/` |
-| Lý Chí Anh Hào | UC-OV-02,03 — Search, Filter Venue | `feature/search/` |
-| Mai Huy Hoàng | UC-OWN-06,07,08,09 — Booking, Review, Complaint | `feature/booking/` |
-| Mai Văn Lượng | UC-OWN-03,10,11,12 — Dashboard, Revenue, Accessory, Refund | `feature/report/`, `feature/accessory/` |
+
 
 ---
 
