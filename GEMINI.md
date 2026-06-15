@@ -239,22 +239,7 @@ entity/enums/
 
 ---
 
-## 👥 Phân Công Task & Quản Lý Năng Lực (Sprint Hiện Tại)
-
-> [!IMPORTANT]
-> Giai đoạn này tập trung chạy luồng chính và tính năng ghép kèo (USP). Các usecase ưu tiên thấp như AI Assistant, Recurring Booking, In-app Chat và Social Moderation tạm thời **bị loại bỏ hoàn toàn** để kịp tiến độ.
-
-### 📊 Phân chia cụm Task theo năng lực thành viên (Full-Stack A-Z)
-
-| Thành viên | Cụm Task đảm nhận (Backend + Frontend) | Dải số Flyway | Scope nhánh |
-|---|---|---|---|
-| **Mai Văn Lượng** | **Cụm Giao dịch & Tài chính:**<br>- UC-CUS-02: Pay Booking (VNPay/Momo)<br>- UC-CUS-05/06: Hủy đặt sân & Hoàn tiền<br>- UC-ADM-01: Admin Dashboard | `V3.0` đến `V3.9` | `feature/payment/` |
-| **Nguyễn Xuân Huy** | **Cụm Ghép kèo (USP):**<br>- UC-CUS-10/11/12: Tạo, Hủy và Xin tham gia kèo ghép | `V2.0` đến `V2.9` | `feature/matchmaking/` |
-| **Mai Huy Hoàng** | **Cụm Duyệt & Vận hành:**<br>- UC-ADM-06: Duyệt chủ sân (Owner)<br>- UC-CUS-09 / UC-ADM-09: Gửi & Xử lý khiếu nại | `V4.0` đến `V4.9` | `feature/operation/` |
-| **Trần Minh An** | **Cụm Hiển thị & CRUD tĩnh:**<br>- UC-CUS-03/04: Xem lịch sử & Chi tiết đặt sân (Read-only)<br>- UC-ADM-07/08: CRUD danh mục môn thể thao | `V5.0` đến `V5.9` | `feature/display/` |
-| **Lý Chí Anh Hào** | **Cụm Quản trị danh sách:**<br>- UC-ADM-02/03/04/05: View list & Lock/Unlock Customer/Owner<br>- UC-CUS-07/08: Viết & Sửa đánh giá sân | `V6.0` đến `V6.9` | `feature/moderation/` |
-
-### 🛡️ Cơ Chế Kiểm Soát Chất Lượng (Quality Gate) & Quy Trình Review
+## 🛡️ Cơ Chế Kiểm Soát Chất Lượng (Quality Gate) & Quy Trình Review
 Để đảm bảo mã nguồn đồng bộ và không phát sinh lỗi khi tích hợp hệ thống:
 1. **Kiểm duyệt Pull Request (PR):** Tất cả các nhánh feature/fix trước khi merge vào `main` bắt buộc phải được review và Approve bởi các thành viên phụ trách chính (Lượng hoặc Huy). Thành viên sở hữu nhánh tuyệt đối không tự ý merge code của mình khi chưa có sự xác nhận của người duyệt.
 2. **Tuân thủ mẫu Code:** Bắt buộc tham chiếu các Controller & DTO mẫu chuẩn Validation (`@Valid`) đã được định nghĩa sẵn. Tuyệt đối không expose Entity trực tiếp ra ngoài Controller.
