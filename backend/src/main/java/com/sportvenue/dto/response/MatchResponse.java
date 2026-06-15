@@ -1,5 +1,7 @@
 package com.sportvenue.dto.response;
 
+import com.sportvenue.entity.enums.MatchStatus;
+import com.sportvenue.entity.enums.SkillLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -22,7 +24,6 @@ public class MatchResponse {
 
     private Integer matchId;
     private String hostName;
-    private String hostEmail;
     private String stadiumName;
     private String stadiumAddress;
     private String sportName;
@@ -33,9 +34,9 @@ public class MatchResponse {
     private LocalTime endTime;
     private Integer maxPlayers;
     private Integer currentPlayers;
-    private String skillLevel;
+    private SkillLevel skillLevel;
     private Boolean splitPrice;
     private BigDecimal pricePerPlayer;
-    private String matchStatus;
+    private MatchStatus matchStatus;
     private LocalDateTime createdAt;
 }

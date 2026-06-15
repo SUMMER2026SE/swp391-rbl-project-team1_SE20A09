@@ -2,6 +2,8 @@ package com.sportvenue.service.impl;
 
 import com.sportvenue.dto.request.CreateMatchRequest;
 import com.sportvenue.dto.response.MatchResponse;
+import com.sportvenue.entity.enums.MatchStatus;
+import com.sportvenue.entity.enums.SkillLevel;
 import com.sportvenue.service.MatchRequestService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -19,6 +21,8 @@ import java.util.List;
 /**
  * Mock Service Implementation cho việc quản lý kèo ghép thể thao.
  * Giúp cả nhóm chạy thử nghiệm API độc lập mà không bị lỗi thiếu Bean Spring.
+ * 
+ * TODO(#39): Replace mock with real implementation — blocked on UC-CUS-10/11/12
  */
 @Service
 @Slf4j
@@ -28,11 +32,9 @@ public class MatchRequestServiceImpl implements MatchRequestService {
     public MatchResponse createMatch(CreateMatchRequest request, Integer userId) {
         log.info("Mocking: Creating match request with title: '{}' for user ID: {}", request.getTitle(), userId);
         
-        // Trả về DTO mẫu
         return MatchResponse.builder()
                 .matchId(101)
                 .hostName("Nguyễn Huy Xuân")
-                .hostEmail("customer@sportvenue.com")
                 .stadiumName("Sân Bóng Đá Thủ Đức")
                 .stadiumAddress("123 Võ Văn Ngân, Thủ Đức, TP.HCM")
                 .sportName("Football")
@@ -46,7 +48,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                 .skillLevel(request.getSkillLevel())
                 .splitPrice(request.getSplitPrice())
                 .pricePerPlayer(request.getPricePerPlayer())
-                .matchStatus("OPEN")
+                .matchStatus(MatchStatus.OPEN)
                 .createdAt(LocalDateTime.now())
                 .build();
     }
@@ -60,7 +62,6 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         matches.add(MatchResponse.builder()
                 .matchId(1)
                 .hostName("Nguyễn Huy Xuân")
-                .hostEmail("customer@sportvenue.com")
                 .stadiumName("Sân Bóng Đá Thủ Đức")
                 .stadiumAddress("123 Võ Văn Ngân, Thủ Đức, TP.HCM")
                 .sportName("Football")
@@ -71,17 +72,16 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                 .endTime(LocalTime.of(19, 30))
                 .maxPlayers(10)
                 .currentPlayers(8)
-                .skillLevel("INTERMEDIATE")
+                .skillLevel(SkillLevel.INTERMEDIATE)
                 .splitPrice(true)
                 .pricePerPlayer(BigDecimal.valueOf(45000))
-                .matchStatus("OPEN")
+                .matchStatus(MatchStatus.OPEN)
                 .createdAt(LocalDateTime.now().minusHours(2))
                 .build());
 
         matches.add(MatchResponse.builder()
                 .matchId(2)
                 .hostName("Lý Hào Chí Anh")
-                .hostEmail("customer2@sportvenue.com")
                 .stadiumName("Sân Cầu Lông Quận 1")
                 .stadiumAddress("45 Lê Lợi, Quận 1, TP.HCM")
                 .sportName("Badminton")
@@ -92,10 +92,10 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                 .endTime(LocalTime.of(10, 0))
                 .maxPlayers(4)
                 .currentPlayers(2)
-                .skillLevel("ADVANCED")
+                .skillLevel(SkillLevel.ADVANCED)
                 .splitPrice(false)
                 .pricePerPlayer(BigDecimal.ZERO)
-                .matchStatus("OPEN")
+                .matchStatus(MatchStatus.OPEN)
                 .createdAt(LocalDateTime.now().minusHours(5))
                 .build());
 

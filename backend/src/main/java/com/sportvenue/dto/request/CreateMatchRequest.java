@@ -1,6 +1,7 @@
 package com.sportvenue.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.sportvenue.entity.enums.SkillLevel;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -61,9 +62,8 @@ public class CreateMatchRequest {
     @Min(value = 2, message = "Max players must be at least 2")
     private Integer maxPlayers;
 
-    @NotBlank(message = "Skill level is required")
-    @Pattern(regexp = "^(BEGINNER|INTERMEDIATE|ADVANCED)$", message = "Skill level must be BEGINNER, INTERMEDIATE, or ADVANCED")
-    private String skillLevel;
+    @NotNull(message = "Skill level is required")
+    private SkillLevel skillLevel;
 
     @NotNull(message = "Split price configuration is required")
     private Boolean splitPrice;

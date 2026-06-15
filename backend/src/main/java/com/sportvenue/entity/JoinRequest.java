@@ -27,11 +27,15 @@ import java.time.LocalDateTime;
  * Đại diện cho yêu cầu xin tham gia kèo ghép của người dùng khác.
  */
 @Entity
-@Table(name = "join_requests", indexes = {
-        @Index(name = "idx_join_requests_match_id", columnList = "match_id"),
-        @Index(name = "idx_join_requests_user_id", columnList = "user_id"),
-        @Index(name = "idx_join_requests_status", columnList = "request_status")
-})
+@Table(name = "join_requests", 
+        uniqueConstraints = {
+                @jakarta.persistence.UniqueConstraint(name = "uq_match_user", columnNames = {"match_id", "user_id"})
+        },
+        indexes = {
+                @Index(name = "idx_join_requests_match_id", columnList = "match_id"),
+                @Index(name = "idx_join_requests_user_id", columnList = "user_id"),
+                @Index(name = "idx_join_requests_status", columnList = "request_status")
+        })
 @Getter
 @Setter
 @NoArgsConstructor

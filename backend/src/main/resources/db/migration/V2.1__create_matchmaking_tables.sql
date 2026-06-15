@@ -22,7 +22,8 @@ CREATE TABLE match_requests (
     price_per_player    DECIMAL(10, 2)  NOT NULL DEFAULT 0.00,
     match_status        VARCHAR(20)     NOT NULL DEFAULT 'OPEN'
                             CHECK (match_status IN ('OPEN', 'FULL', 'CANCELLED', 'COMPLETED')),
-    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP
 );
 
 -- ── 2. JoinRequests Table ───────────────────────────────────────────────────
@@ -34,7 +35,8 @@ CREATE TABLE join_requests (
     request_status      VARCHAR(20)     NOT NULL DEFAULT 'PENDING'
                             CHECK (request_status IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED')),
     message             TEXT,
-    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_match_user UNIQUE (match_id, user_id)
 );
 
 -- ── 3. Indexes ──────────────────────────────────────────────────────────────

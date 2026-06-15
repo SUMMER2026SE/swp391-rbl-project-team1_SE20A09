@@ -66,7 +66,7 @@ VALUES
 
 INSERT INTO payments (booking_id, payment_method, amount, transaction_code, payment_status, paid_at)
 VALUES
-    ((SELECT COALESCE(MAX(booking_id), 0) FROM bookings), 'MOMO', 100000.00, 'TXN-DASHBOARD-004', 'SUCCESS', CURRENT_TIMESTAMP - INTERVAL '1 day');
+    (currval('bookings_booking_id_seq'), 'MOMO', 100000.00, 'TXN-DASHBOARD-004', 'SUCCESS', CURRENT_TIMESTAMP - INTERVAL '1 day');
 
 -- Booking 5: Trận đấu bóng đá Gò Vấp hôm nay đã thanh toán VNPAY (CONFIRMED)
 INSERT INTO bookings (user_id, stadium_id, slot_id, total_price, booking_status, payment_status, booking_date)
@@ -78,7 +78,7 @@ VALUES
 
 INSERT INTO payments (booking_id, payment_method, amount, transaction_code, payment_status, paid_at)
 VALUES
-    ((SELECT COALESCE(MAX(booking_id), 0) FROM bookings), 'VNPAY', 160000.00, 'TXN-DASHBOARD-005', 'SUCCESS', CURRENT_TIMESTAMP);
+    (currval('bookings_booking_id_seq'), 'VNPAY', 160000.00, 'TXN-DASHBOARD-005', 'SUCCESS', CURRENT_TIMESTAMP);
 
 -- Booking 6: Đơn đặt sân thanh toán Thất Bại (PENDING & UNPAID)
 INSERT INTO bookings (user_id, stadium_id, slot_id, total_price, booking_status, payment_status, booking_date)
@@ -90,7 +90,7 @@ VALUES
 
 INSERT INTO payments (booking_id, payment_method, amount, transaction_code, payment_status, paid_at)
 VALUES
-    ((SELECT COALESCE(MAX(booking_id), 0) FROM bookings), 'VNPAY', 60000.00, 'TXN-FAILED-006', 'FAILED', CURRENT_TIMESTAMP);
+    (currval('bookings_booking_id_seq'), 'VNPAY', 60000.00, 'TXN-FAILED-006', 'FAILED', CURRENT_TIMESTAMP);
 
 -- ── 4. Seed MatchRequests (Ghép kèo - USP) ──────────────────────────────────
 INSERT INTO match_requests (user_id, stadium_id, sport_type_id, title, description, play_date, start_time, end_time, max_players, current_players, skill_level, split_price, price_per_player, match_status)

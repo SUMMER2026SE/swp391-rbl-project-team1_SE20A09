@@ -8,8 +8,10 @@ import com.sportvenue.service.MatchRequestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -28,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Controller xử lý các yêu cầu liên quan đến tính năng Ghép kèo thể thao (Matchmaking).
  * Được thiết kế làm mẫu chuẩn RESTful API cho cả nhóm tham khảo.
  */
+@Validated
 @RestController
 @RequestMapping("/api/v1/matchmaking")
 @RequiredArgsConstructor
@@ -76,7 +79,7 @@ public class MatchRequestController {
     public ResponseEntity<MessageResponse> joinMatch(
             @PathVariable Integer matchId,
             @AuthenticationPrincipal UserPrincipal userPrincipal,
-            @RequestParam(required = false, defaultValue = "") String message) {
+            @RequestParam(required = false, defaultValue = "") @Size(max = 500, message = "Message must not exceed 500 characters") String message) {
 
         log.info("REST request by User: {} to join Match ID: {}", userPrincipal.getUsername(), matchId);
         
