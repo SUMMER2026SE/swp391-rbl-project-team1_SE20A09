@@ -216,7 +216,7 @@ export function Header() {
   const isOwnerArea = pathname.startsWith("/owner");
 
   return (
-    <header className="border-b bg-card sticky top-0 z-[1000]">
+    <header className="border-b bg-card sticky top-0 z-40">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center space-x-2 shrink-0">
