@@ -77,30 +77,8 @@ public class MatchRequestServiceImpl implements MatchRequestService {
             throw new BadRequestException("The selected stadium does not support the sport type: " + sportType.getSportName());
         }
 
-        // 5. Kiểm tra trùng lịch kèo ghép khác của Host
-        boolean hasOverlappingMatch = matchRequestRepository.existsOverlappingMatchRequest(
-                userId,
-                request.getPlayDate(),
-                request.getStartTime(),
-                request.getEndTime()
-        );
-        if (hasOverlappingMatch) {
-            throw new BadRequestException("You already have another open or full match request overlapping with this time range");
-        }
-
-        // 6. Kiểm tra trùng lịch đặt sân thành công (Booking) của Host
-        LocalDateTime startOfDay = request.getPlayDate().atStartOfDay();
-        LocalDateTime endOfDay = request.getPlayDate().atTime(java.time.LocalTime.MAX);
-        boolean hasOverlappingBooking = bookingRepository.existsOverlappingBooking(
-                userId,
-                startOfDay,
-                endOfDay,
-                request.getStartTime(),
-                request.getEndTime()
-        );
-        if (hasOverlappingBooking) {
-            throw new BadRequestException("You have an active booking overlapping with this match request time range");
-        }
+        // 5. Kiểm tra trùng lịch kèo ghép và Booking của Host
+        validateOverlappingSchedule(userId, request);
 
         // 7. Tạo và lưu MatchRequest
         MatchRequest matchRequest = MatchRequest.builder()
@@ -141,6 +119,33 @@ public class MatchRequestServiceImpl implements MatchRequestService {
     public void joinMatch(Integer matchId, Integer userId, String message) {
         log.info("Mocking: User ID {} requested to join Match ID: {} with message: '{}'", userId, matchId, message);
         // Sẽ được triển khai chi tiết ở UC-CUS-12
+    }
+
+    private void validateOverlappingSchedule(Integer userId, CreateMatchRequest request) {
+        boolean hasOverlappingMatch = matchRequestRepository.existsOverlappingMatchRequest(
+                userId,
+                request.getPlayDate(),
+                request.getStartTime(),
+                request.getEndTime()
+        );
+        if (hasOverlappingMatch) {
+            throw new BadRequestException(
+                "You already have another open or full match request overlapping with this time range"
+            );
+        }
+
+        LocalDateTime startOfDay = request.getPlayDate().atStartOfDay();
+        LocalDateTime endOfDay = request.getPlayDate().atTime(java.time.LocalTime.MAX);
+        boolean hasOverlappingBooking = bookingRepository.existsOverlappingBooking(
+                userId,
+                startOfDay,
+                endOfDay,
+                request.getStartTime(),
+                request.getEndTime()
+        );
+        if (hasOverlappingBooking) {
+            throw new BadRequestException("You have an active booking overlapping with this match request time range");
+        }
     }
 
     private MatchResponse mapToResponse(MatchRequest match) {
