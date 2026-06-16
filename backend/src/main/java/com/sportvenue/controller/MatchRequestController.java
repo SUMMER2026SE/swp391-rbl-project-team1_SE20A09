@@ -135,4 +135,30 @@ public class MatchRequestController {
         matchRequestService.rejectJoinRequest(matchId, participantId, userPrincipal.getUser().getUserId());
         return ResponseEntity.ok(new MessageResponse("Từ chối yêu cầu tham gia thành công."));
     }
+
+    @GetMapping("/my-created")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Lấy danh sách kèo tôi đã tạo (Host sidebar)",
+            description = "Trả về tất cả kèo ghép mà người dùng hiện tại đã tạo ra, dùng cho sidebar 'Kèo của tôi'."
+    )
+    public ResponseEntity<List<MatchResponse>> getMyCreatedMatches(
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("REST request by User: {} to get their created matches", userPrincipal.getUsername());
+        List<MatchResponse> responses = matchRequestService.getMyCreatedMatches(userPrincipal.getUser().getUserId());
+        return ResponseEntity.ok(responses);
+    }
+
+    @GetMapping("/my-joined")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Lấy danh sách đơn đăng ký tham gia kèo của tôi (Guest sidebar)",
+            description = "Trả về tất cả các đơn đăng ký xin tham gia kèo mà người dùng hiện tại đã gửi."
+    )
+    public ResponseEntity<List<JoinRequestResponse>> getMyJoinedRequests(
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("REST request by User: {} to get their join requests", userPrincipal.getUsername());
+        List<JoinRequestResponse> responses = matchRequestService.getMyJoinedRequests(userPrincipal.getUsername());
+        return ResponseEntity.ok(responses);
+    }
 }

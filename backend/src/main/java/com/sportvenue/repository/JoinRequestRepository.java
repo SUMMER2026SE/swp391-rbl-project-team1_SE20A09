@@ -18,6 +18,9 @@ public interface JoinRequestRepository extends JpaRepository<JoinRequest, Intege
     @EntityGraph(attributePaths = {"user", "matchRequest", "matchRequest.stadium"})
     List<JoinRequest> findAllByUserEmailOrderByCreatedAtDesc(String email);
 
+    @EntityGraph(attributePaths = {"user", "matchRequest", "matchRequest.stadium", "matchRequest.sportType"})
+    List<JoinRequest> findAllByUserUserIdOrderByCreatedAtDesc(Integer userId);
+
     @EntityGraph(attributePaths = {"user", "matchRequest"})
     Optional<JoinRequest> findByJoinId(Integer joinId);
 

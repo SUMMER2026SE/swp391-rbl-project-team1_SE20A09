@@ -346,6 +346,33 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         joinRequestRepository.save(joinRequest);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<MatchResponse> getMyCreatedMatches(Integer userId) {
+        log.info("Retrieving matches created by User ID: {}", userId);
+        List<MatchRequest> matches = matchRequestRepository.findAllByUserUserIdOrderByCreatedAtDesc(userId);
+        return matches.stream().map(this::mapToResponse).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<JoinRequestResponse> getMyJoinedRequests(String email) {
+        log.info("Retrieving join requests sent by user email: {}", email);
+        List<JoinRequest> requests = joinRequestRepository.findAllByUserEmailOrderByCreatedAtDesc(email);
+        return requests.stream()
+                .map(req -> JoinRequestResponse.builder()
+                        .joinId(req.getJoinId())
+                        .matchId(req.getMatchRequest().getMatchId())
+                        .userId(req.getUser().getUserId())
+                        .fullName(req.getUser().getFullName())
+                        .email(req.getUser().getEmail())
+                        .requestStatus(req.getRequestStatus())
+                        .message(req.getMessage())
+                        .createdAt(req.getCreatedAt())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
     private MatchResponse mapToResponse(MatchRequest match) {
         return MatchResponse.builder()
                 .matchId(match.getMatchId())

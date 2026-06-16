@@ -65,4 +65,20 @@ public interface MatchRequestService {
      * @param hostUserId ID của người dùng gọi API (Host)
      */
     void rejectJoinRequest(Integer matchId, Integer joinId, Integer hostUserId);
+
+    /**
+     * Lấy danh sách các kèo ghép mà người dùng đã tạo (với tư cách Host).
+     *
+     * @param userId ID của người dùng
+     * @return danh sách kèo ghép đã tạo
+     */
+    List<MatchResponse> getMyCreatedMatches(Integer userId);
+
+    /**
+     * Lấy danh sách các đơn đăng ký tham gia kèo mà người dùng đã gửi (với tư cách Guest).
+     *
+     * @param email Email của người dùng
+     * @return danh sách đơn đăng ký
+     */
+    List<JoinRequestResponse> getMyJoinedRequests(String email);
 }

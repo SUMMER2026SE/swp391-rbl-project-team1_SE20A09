@@ -114,3 +114,13 @@ export async function rejectJoinRequest(
   );
   return res.data;
 }
+
+export async function getMyCreatedMatches(): Promise<MatchResponse[]> {
+  const res = await api.get<MatchResponse[]>("/matchmaking/my-created");
+  return res.data;
+}
+
+export async function getMyJoinedRequests(): Promise<JoinRequestResponse[]> {
+  const res = await api.get<JoinRequestResponse[]>("/matchmaking/my-joined");
+  return res.data;
+}

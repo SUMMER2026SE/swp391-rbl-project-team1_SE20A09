@@ -44,6 +44,9 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Inte
     List<MatchRequest> findAllByUserEmailOrderByCreatedAtDesc(String email);
 
     @EntityGraph(attributePaths = {"user", "stadium", "sportType"})
+    List<MatchRequest> findAllByUserUserIdOrderByCreatedAtDesc(Integer userId);
+
+    @EntityGraph(attributePaths = {"user", "stadium", "sportType"})
     Optional<MatchRequest> findByMatchId(Integer matchId);
 
     @Query("""
