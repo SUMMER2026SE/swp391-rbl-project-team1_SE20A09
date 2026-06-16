@@ -6,9 +6,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,4 +30,19 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Inte
 
     @EntityGraph(attributePaths = {"user", "stadium", "sportType"})
     Optional<MatchRequest> findByMatchId(Integer matchId);
+
+    @Query("""
+            SELECT COUNT(m) > 0 FROM MatchRequest m
+            WHERE m.user.userId = :userId
+            AND m.playDate = :playDate
+            AND m.matchStatus IN (com.sportvenue.entity.enums.MatchStatus.OPEN, com.sportvenue.entity.enums.MatchStatus.FULL)
+            AND m.startTime < :endTime
+            AND m.endTime > :startTime
+            """)
+    boolean existsOverlappingMatchRequest(
+            @Param("userId") Integer userId,
+            @Param("playDate") LocalDate playDate,
+            @Param("startTime") LocalTime startTime,
+            @Param("endTime") LocalTime endTime);
 }
+

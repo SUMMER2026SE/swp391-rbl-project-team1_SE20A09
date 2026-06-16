@@ -1,6 +1,7 @@
 package com.sportvenue.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.sportvenue.entity.enums.MatchingType;
 import com.sportvenue.entity.enums.SkillLevel;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
@@ -67,10 +68,13 @@ public class CreateMatchRequest {
     @NotNull(message = "Split price configuration is required")
     private Boolean splitPrice;
 
-    @NotNull(message = "Price per player is required")
     @DecimalMin(value = "0.0", message = "Price per player must be positive")
     @Digits(integer = 10, fraction = 2, message = "Invalid price format")
     private BigDecimal pricePerPlayer;
+
+    @NotNull(message = "Matching type is required")
+    @Builder.Default
+    private MatchingType matchingType = MatchingType.INDIVIDUAL;
 
     @AssertTrue(message = "End time must be after start time")
     public boolean isEndTimeAfterStartTime() {
@@ -86,5 +90,16 @@ public class CreateMatchRequest {
             return true;
         }
         return pricePerPlayer != null && pricePerPlayer.compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    @AssertTrue(message = "For Team vs Team matching, max players must be exactly 2")
+    public boolean isValidMaxPlayersForTeam() {
+        if (matchingType == null) {
+            return true;
+        }
+        if (matchingType == MatchingType.TEAM_VS_TEAM) {
+            return maxPlayers != null && maxPlayers == 2;
+        }
+        return true;
     }
 }

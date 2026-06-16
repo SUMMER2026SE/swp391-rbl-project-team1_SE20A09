@@ -110,9 +110,14 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
   const handleLogout = () => {
     signOut({ callbackUrl: "/" });
   };
+  const pathname = usePathname();
 
-  const navLinkClass =
-    "flex items-center rounded-md px-3 py-2.5 text-base font-medium hover:bg-accent hover:text-accent-foreground transition-colors";
+  const getNavLinkClass = (href: string) => {
+    const base = "flex items-center rounded-md px-3 py-2.5 text-base font-medium transition-colors";
+    return pathname === href
+      ? `${base} bg-primary/10 text-primary font-bold`
+      : `${base} hover:bg-accent hover:text-accent-foreground text-slate-700`;
+  };
 
   return (
     <Sheet>
@@ -133,12 +138,12 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
         </SheetHeader>
         <nav className="flex flex-col gap-1 px-2">
           <SheetClose asChild>
-            <Link href="/search" className={navLinkClass}>
+            <Link href="/search" className={getNavLinkClass("/search")}>
               Tìm sân
             </Link>
           </SheetClose>
           <SheetClose asChild>
-            <Link href="/community" className={navLinkClass}>
+            <Link href="/community" className={getNavLinkClass("/community")}>
               Cộng đồng
             </Link>
           </SheetClose>
@@ -152,9 +157,9 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
                 </p>
                 <p className="text-xs text-muted-foreground truncate">{user.email}</p>
               </div>
-              {user.roleName === "Admin" && (
+               {user.roleName === "Admin" && (
                 <SheetClose asChild>
-                  <Link href="/admin" className={navLinkClass}>
+                  <Link href="/admin" className={getNavLinkClass("/admin")}>
                     <Settings className="mr-2 h-4 w-4" />
                     Trang Admin
                   </Link>
@@ -162,14 +167,14 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
               )}
               {user.roleName === "Owner" && (
                 <SheetClose asChild>
-                  <Link href="/owner/dashboard" className={navLinkClass}>
+                  <Link href="/owner/dashboard" className={getNavLinkClass("/owner/dashboard")}>
                     <BarChart2 className="mr-2 h-4 w-4" />
                     Trang Chủ Sân
                   </Link>
                 </SheetClose>
               )}
               <SheetClose asChild>
-                <Link href="/profile" className={navLinkClass}>
+                <Link href="/profile" className={getNavLinkClass("/profile")}>
                   <UserIcon className="mr-2 h-4 w-4" />
                   Hồ sơ cá nhân
                 </Link>
@@ -177,7 +182,7 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
               <button
                 type="button"
                 onClick={handleLogout}
-                className={`${navLinkClass} w-full text-left text-red-600 hover:text-red-600`}
+                className={`${getNavLinkClass("/logout")} w-full text-left text-red-600 hover:text-red-600`}
               >
                 <LogOut className="mr-2 h-4 w-4" />
                 Đăng xuất
@@ -187,12 +192,12 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
             <>
               <div className="my-3 border-t" />
               <SheetClose asChild>
-                <Link href="/login" className={navLinkClass}>
+                <Link href="/login" className={getNavLinkClass("/login")}>
                   Đăng nhập
                 </Link>
               </SheetClose>
               <SheetClose asChild>
-                <Link href="/register" className={navLinkClass}>
+                <Link href="/register" className={getNavLinkClass("/register")}>
                   Đăng ký
                 </Link>
               </SheetClose>
@@ -211,7 +216,7 @@ export function Header() {
   const isOwnerArea = pathname.startsWith("/owner");
 
   return (
-    <header className="border-b bg-card sticky top-0 z-[1000]">
+    <header className="border-b bg-card sticky top-0 z-40">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center space-x-2 shrink-0">
@@ -223,10 +228,24 @@ export function Header() {
 
           <div className="flex items-center gap-2 md:gap-6">
             <nav className="hidden md:flex items-center space-x-6">
-              <Link href="/search" className="text-sm hover:text-primary transition-colors">
+              <Link 
+                href="/search" 
+                className={`text-sm transition-colors ${
+                  pathname === "/search" 
+                    ? "text-primary font-bold" 
+                    : "text-muted-foreground hover:text-primary"
+                }`}
+              >
                 Tìm sân
               </Link>
-              <Link href="/community" className="text-sm hover:text-primary transition-colors">
+              <Link 
+                href="/community" 
+                className={`text-sm transition-colors ${
+                  pathname === "/community" 
+                    ? "text-primary font-bold" 
+                    : "text-muted-foreground hover:text-primary"
+                }`}
+              >
                 Cộng đồng
               </Link>
             </nav>
