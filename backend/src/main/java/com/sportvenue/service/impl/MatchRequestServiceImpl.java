@@ -25,6 +25,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -115,7 +116,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                 .currentPlayers(1) // Host là thành viên đầu tiên
                 .skillLevel(request.getSkillLevel())
                 .splitPrice(request.getSplitPrice())
-                .pricePerPlayer(request.getPricePerPlayer())
+                .pricePerPlayer(request.getPricePerPlayer() != null ? request.getPricePerPlayer() : BigDecimal.ZERO)
                 .matchingType(request.getMatchingType())
                 .matchStatus(MatchStatus.OPEN)
                 .createdAt(LocalDateTime.now())
