@@ -1038,7 +1038,7 @@ function MatchRequestFeedPage() {
 
       {/* Host Manage Join Requests Dialog */}
       <Dialog open={showManageDialog} onOpenChange={setShowManageDialog}>
-        <DialogContent className="max-w-2xl bg-white border border-slate-200 p-6 max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-2xl bg-white border border-slate-200 p-6 max-h-[85vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader className="border-b pb-3 mb-4">
             <DialogTitle className="text-xl font-bold text-slate-800">
               Quản lý đơn đăng ký tham gia
