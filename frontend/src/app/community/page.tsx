@@ -78,6 +78,7 @@ function MatchRequestFeedPage() {
   const [searchKeyword, setSearchKeyword] = useState("");
   const [filterSport, setFilterSport] = useState("all");
   const [filterLevel, setFilterLevel] = useState("all-level");
+  const [filterMatchingType, setFilterMatchingType] = useState("all");
 
   // Fetch match requests
   const fetchFeed = async () => {
@@ -214,8 +215,9 @@ function MatchRequestFeedPage() {
 
     const matchesSport = filterSport === "all" || req.sportName.toLowerCase() === filterSport.toLowerCase();
     const matchesLevel = filterLevel === "all-level" || req.skillLevel === filterLevel;
+    const matchesMatchingType = filterMatchingType === "all" || req.matchingType === filterMatchingType;
 
-    return matchesKeyword && matchesSport && matchesLevel;
+    return matchesKeyword && matchesSport && matchesLevel && matchesMatchingType;
   });
 
   return (
@@ -269,6 +271,17 @@ function MatchRequestFeedPage() {
               <SelectItem value="BEGINNER">Mới bắt đầu</SelectItem>
               <SelectItem value="INTERMEDIATE">Trung bình</SelectItem>
               <SelectItem value="ADVANCED">Nâng cao</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={filterMatchingType} onValueChange={setFilterMatchingType}>
+            <SelectTrigger className="w-48 h-11 bg-white border-slate-200 font-medium text-slate-700">
+              <SelectValue placeholder="Tất cả hình thức" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tất cả hình thức</SelectItem>
+              <SelectItem value="INDIVIDUAL">Ghép lẻ</SelectItem>
+              <SelectItem value="TEAM_VS_TEAM">Cáp kèo Đội</SelectItem>
             </SelectContent>
           </Select>
         </div>
