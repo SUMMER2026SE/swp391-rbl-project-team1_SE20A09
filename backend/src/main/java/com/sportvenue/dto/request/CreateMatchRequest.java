@@ -67,7 +67,6 @@ public class CreateMatchRequest {
     @NotNull(message = "Split price configuration is required")
     private Boolean splitPrice;
 
-    @NotNull(message = "Price per player is required")
     @DecimalMin(value = "0.0", message = "Price per player must be positive")
     @Digits(integer = 10, fraction = 2, message = "Invalid price format")
     private BigDecimal pricePerPlayer;
