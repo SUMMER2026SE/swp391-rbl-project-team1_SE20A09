@@ -1,6 +1,7 @@
 package com.sportvenue.dto.response;
 
 import com.sportvenue.entity.enums.MatchStatus;
+import com.sportvenue.entity.enums.MatchingType;
 import com.sportvenue.entity.enums.SkillLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -38,5 +39,6 @@ public class MatchResponse {
     private Boolean splitPrice;
     private BigDecimal pricePerPlayer;
     private MatchStatus matchStatus;
+    private MatchingType matchingType;
     private LocalDateTime createdAt;
 }

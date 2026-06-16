@@ -9,6 +9,7 @@ import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.AccountStatus;
 import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.entity.enums.MatchStatus;
+import com.sportvenue.entity.enums.MatchingType;
 import com.sportvenue.entity.enums.SkillLevel;
 import com.sportvenue.entity.enums.StadiumStatus;
 import com.sportvenue.exception.BadRequestException;
@@ -130,6 +131,7 @@ class MatchRequestServiceImplTest {
         assertEquals("Trận đấu vui vẻ", saved.getTitle());
         assertEquals(LocalTime.of(18, 0), saved.getStartTime());
         assertEquals(LocalTime.of(20, 0), saved.getEndTime());
+        assertEquals(MatchingType.INDIVIDUAL, saved.getMatchingType());
     }
 
     @Test
@@ -295,6 +297,76 @@ class MatchRequestServiceImplTest {
         assertNotNull(result);
         assertEquals(1, result.getTotalElements());
         assertEquals("Nguyen An", result.getContent().get(0).getHostName());
+    }
+
+    @Test
+    void createMatch_TeamVsTeam_Success() {
+        // Arrange
+        Integer userId = 1;
+        CreateMatchRequest request = CreateMatchRequest.builder()
+                .stadiumId(10)
+                .sportTypeId(1)
+                .title("FC Hoa Lư thách đấu")
+                .description("Cần tìm đối thủ cáp kèo sân 7")
+                .playDate(LocalDate.now().plusDays(1))
+                .startTime(LocalTime.of(18, 0))
+                .endTime(LocalTime.of(20, 0))
+                .maxPlayers(2)
+                .skillLevel(SkillLevel.INTERMEDIATE)
+                .matchingType(MatchingType.TEAM_VS_TEAM)
+                .splitPrice(true)
+                .pricePerPlayer(BigDecimal.valueOf(150000))
+                .build();
+
+        User user = User.builder()
+                .userId(userId)
+                .firstName("Nguyen")
+                .lastName("An")
+                .accountStatus(AccountStatus.ACTIVE)
+                .build();
+
+        SportType sportType = SportType.builder()
+                .sportTypeId(1)
+                .sportName("Football")
+                .build();
+
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .stadiumName("Sân Hoa Lư")
+                .address("Quận 1")
+                .stadiumStatus(StadiumStatus.AVAILABLE)
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .sportType(sportType)
+                .build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(stadiumRepository.findById(request.getStadiumId())).thenReturn(Optional.of(stadium));
+        when(sportTypeRepository.findById(request.getSportTypeId())).thenReturn(Optional.of(sportType));
+
+        when(matchRequestRepository.existsOverlappingMatchRequest(any(), any(), any(), any())).thenReturn(false);
+        when(bookingRepository.existsOverlappingBooking(any(), any(), any(), any(), any())).thenReturn(false);
+
+        when(matchRequestRepository.save(any(MatchRequest.class))).thenAnswer(invocation -> {
+            MatchRequest mr = invocation.getArgument(0);
+            mr.setMatchId(200);
+            mr.setCreatedAt(LocalDateTime.now());
+            return mr;
+        });
+
+        // Act
+        MatchResponse response = matchRequestService.createMatch(request, userId);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(200, response.getMatchId());
+        assertEquals(MatchingType.TEAM_VS_TEAM, response.getMatchingType());
+        assertEquals(2, response.getMaxPlayers());
+
+        ArgumentCaptor<MatchRequest> captor = ArgumentCaptor.forClass(MatchRequest.class);
+        verify(matchRequestRepository).save(captor.capture());
+        MatchRequest saved = captor.getValue();
+        assertEquals(MatchingType.TEAM_VS_TEAM, saved.getMatchingType());
+        assertEquals(2, saved.getMaxPlayers());
     }
 
     private CreateMatchRequest validRequest() {

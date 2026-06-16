@@ -107,6 +107,11 @@ public class MatchRequest implements Serializable {
     @Builder.Default
     private MatchStatus matchStatus = MatchStatus.OPEN;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "matching_type", nullable = false, length = 30)
+    @Builder.Default
+    private com.sportvenue.entity.enums.MatchingType matchingType = com.sportvenue.entity.enums.MatchingType.INDIVIDUAL;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

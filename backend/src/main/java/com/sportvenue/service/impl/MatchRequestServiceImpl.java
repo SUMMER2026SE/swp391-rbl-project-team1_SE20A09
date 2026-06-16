@@ -116,6 +116,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                 .skillLevel(request.getSkillLevel())
                 .splitPrice(request.getSplitPrice())
                 .pricePerPlayer(request.getPricePerPlayer())
+                .matchingType(request.getMatchingType())
                 .matchStatus(MatchStatus.OPEN)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -159,6 +160,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                 .splitPrice(match.getSplitPrice())
                 .pricePerPlayer(match.getPricePerPlayer())
                 .matchStatus(match.getMatchStatus())
+                .matchingType(match.getMatchingType())
                 .createdAt(match.getCreatedAt())
                 .build();
     }
