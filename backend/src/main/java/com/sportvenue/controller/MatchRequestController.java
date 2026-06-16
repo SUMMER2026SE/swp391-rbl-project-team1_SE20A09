@@ -21,10 +21,13 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import java.util.List;
+import com.sportvenue.dto.response.JoinRequestResponse;
 
 /**
  * Controller xử lý các yêu cầu liên quan đến tính năng Ghép kèo thể thao (Matchmaking).
@@ -86,5 +89,50 @@ public class MatchRequestController {
         matchRequestService.joinMatch(matchId, userPrincipal.getUser().getUserId(), message);
         
         return ResponseEntity.ok(new MessageResponse("Gửi yêu cầu tham gia kèo thành công và đang chờ duyệt."));
+    }
+
+    @GetMapping("/{matchId}/participants")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Lấy danh sách các yêu cầu tham gia kèo (Host)",
+            description = "Cho phép chủ kèo xem toàn bộ các yêu cầu xin tham gia kèm theo lời nhắn."
+    )
+    public ResponseEntity<List<JoinRequestResponse>> getJoinRequests(
+            @PathVariable Integer matchId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("REST request by Host: {} to get join requests for Match ID: {}", userPrincipal.getUsername(), matchId);
+        List<JoinRequestResponse> responses =
+                matchRequestService.getJoinRequestsForMatch(matchId, userPrincipal.getUser().getUserId());
+        return ResponseEntity.ok(responses);
+    }
+
+    @PutMapping("/{matchId}/participants/{participantId}/approve")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Phê duyệt yêu cầu tham gia kèo (Host)",
+            description = "Cho phép chủ kèo phê duyệt yêu cầu xin tham gia của người chơi hoặc đội khác."
+    )
+    public ResponseEntity<MessageResponse> approveJoinRequest(
+            @PathVariable Integer matchId,
+            @PathVariable Integer participantId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("REST request by Host: {} to approve Join ID: {} for Match ID: {}", userPrincipal.getUsername(), participantId, matchId);
+        matchRequestService.approveJoinRequest(matchId, participantId, userPrincipal.getUser().getUserId());
+        return ResponseEntity.ok(new MessageResponse("Phê duyệt yêu cầu tham gia thành công."));
+    }
+
+    @PutMapping("/{matchId}/participants/{participantId}/reject")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Từ chối yêu cầu tham gia kèo (Host)",
+            description = "Cho phép chủ kèo từ chối yêu cầu xin tham gia của người chơi hoặc đội khác."
+    )
+    public ResponseEntity<MessageResponse> rejectJoinRequest(
+            @PathVariable Integer matchId,
+            @PathVariable Integer participantId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("REST request by Host: {} to reject Join ID: {} for Match ID: {}", userPrincipal.getUsername(), participantId, matchId);
+        matchRequestService.rejectJoinRequest(matchId, participantId, userPrincipal.getUser().getUserId());
+        return ResponseEntity.ok(new MessageResponse("Từ chối yêu cầu tham gia thành công."));
     }
 }

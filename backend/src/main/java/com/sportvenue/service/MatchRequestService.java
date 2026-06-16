@@ -36,4 +36,31 @@ public interface MatchRequestService {
      * @param message Lời nhắn đính kèm
      */
     void joinMatch(Integer matchId, Integer userId, String message);
+
+    /**
+     * Lấy danh sách các yêu cầu tham gia của một kèo (chỉ Host của kèo mới xem được).
+     *
+     * @param matchId ID của kèo ghép
+     * @param hostUserId ID của người dùng gọi API (bắt buộc phải là Host của kèo)
+     * @return danh sách yêu cầu tham gia
+     */
+    java.util.List<com.sportvenue.dto.response.JoinRequestResponse> getJoinRequestsForMatch(Integer matchId, Integer hostUserId);
+
+    /**
+     * Phê duyệt yêu cầu tham gia của người chơi (chỉ Host mới thực hiện được).
+     *
+     * @param matchId ID của kèo ghép
+     * @param joinId ID của yêu cầu tham gia cần duyệt
+     * @param hostUserId ID của người dùng gọi API (Host)
+     */
+    void approveJoinRequest(Integer matchId, Integer joinId, Integer hostUserId);
+
+    /**
+     * Từ chối yêu cầu tham gia của người chơi (chỉ Host mới thực hiện được).
+     *
+     * @param matchId ID của kèo ghép
+     * @param joinId ID của yêu cầu tham gia cần từ chối
+     * @param hostUserId ID của người dùng gọi API (Host)
+     */
+    void rejectJoinRequest(Integer matchId, Integer joinId, Integer hostUserId);
 }
