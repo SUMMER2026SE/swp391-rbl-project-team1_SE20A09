@@ -12,6 +12,7 @@ export interface CreateMatchRequestDto {
   skillLevel: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED'
   splitPrice: boolean
   pricePerPlayer?: number
+  matchingType?: 'INDIVIDUAL' | 'TEAM_VS_TEAM'
 }
 
 export interface MatchResponse {
@@ -31,6 +32,7 @@ export interface MatchResponse {
   splitPrice: boolean
   pricePerPlayer?: number
   matchStatus: 'OPEN' | 'FULL' | 'CANCELLED' | 'COMPLETED'
+  matchingType?: 'INDIVIDUAL' | 'TEAM_VS_TEAM'
   createdAt: string
 }
 

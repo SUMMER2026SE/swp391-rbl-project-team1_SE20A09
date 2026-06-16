@@ -67,6 +67,7 @@ function MatchRequestFeedPage() {
   const [maxPlayers, setMaxPlayers] = useState("");
   const [splitPrice, setSplitPrice] = useState(false);
   const [pricePerPlayer, setPricePerPlayer] = useState("");
+  const [matchingType, setMatchingType] = useState<"INDIVIDUAL" | "TEAM_VS_TEAM">("INDIVIDUAL");
   const [submitting, setSubmitting] = useState(false);
 
   // Join match states
@@ -130,7 +131,8 @@ function MatchRequestFeedPage() {
 
   const handleCreateMatch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !sportTypeId || !skillLevel || !playDate || !startTime || !endTime || !stadiumId || !maxPlayers) {
+    const isIndividual = matchingType === 'INDIVIDUAL';
+    if (!title || !sportTypeId || !skillLevel || !playDate || !startTime || !endTime || !stadiumId || (isIndividual && !maxPlayers)) {
       toast.error("Vui lòng điền đầy đủ các thông tin bắt buộc (*)");
       return;
     }
@@ -142,6 +144,7 @@ function MatchRequestFeedPage() {
 
     try {
       setSubmitting(true);
+      const finalMaxPlayers = isIndividual ? Number(maxPlayers) : 2;
       await createMatchRequest({
         title,
         description,
@@ -150,13 +153,14 @@ function MatchRequestFeedPage() {
         playDate,
         startTime: startTime.length === 5 ? `${startTime}:00` : startTime,
         endTime: endTime.length === 5 ? `${endTime}:00` : endTime,
-        maxPlayers: Number(maxPlayers),
+        maxPlayers: finalMaxPlayers,
         skillLevel: skillLevel as "BEGINNER" | "INTERMEDIATE" | "ADVANCED",
         splitPrice,
         pricePerPlayer: splitPrice ? Number(pricePerPlayer) : undefined,
+        matchingType,
       });
 
-      toast.success("Đã tạo lời mời ghép kèo thành công!");
+      toast.success(matchingType === 'TEAM_VS_TEAM' ? "Đã tạo lời mời cáp kèo đội thành công!" : "Đã tạo lời mời ghép kèo thành công!");
       setShowCreateDialog(false);
       // Reset form fields
       setTitle("");
@@ -170,6 +174,7 @@ function MatchRequestFeedPage() {
       setMaxPlayers("");
       setSplitPrice(false);
       setPricePerPlayer("");
+      setMatchingType("INDIVIDUAL");
       
       // Reload match requests
       fetchFeed();
@@ -182,6 +187,10 @@ function MatchRequestFeedPage() {
 
   const handleJoinMatch = async () => {
     if (!selectedRequest) return;
+    if (selectedRequest.matchingType === 'TEAM_VS_TEAM' && !joinNote.trim()) {
+      toast.error("Vui lòng nhập Tên đội bóng của bạn!");
+      return;
+    }
     try {
       setSubmittingJoin(true);
       await joinMatchRequest(selectedRequest.matchId, joinNote);
@@ -299,7 +308,17 @@ function MatchRequestFeedPage() {
                             <span className="text-slate-400 text-xs">• {new Date(request.createdAt).toLocaleDateString("vi-VN")}</span>
                           </div>
                           <h2 className="text-lg font-bold text-slate-800 mt-1 mb-2">{request.title}</h2>
-                          <div className="flex gap-2">
+                           <div className="flex gap-2">
+                            <Badge 
+                              variant="outline" 
+                              className={
+                                request.matchingType === 'TEAM_VS_TEAM'
+                                  ? "bg-blue-50 text-blue-700 border-blue-200/60 font-semibold"
+                                  : "bg-emerald-50 text-emerald-700 border-emerald-200/60 font-semibold"
+                              }
+                            >
+                              {request.matchingType === 'TEAM_VS_TEAM' ? "Đội vs Đội" : "Ghép lẻ"}
+                            </Badge>
                             <Badge variant="outline" className="text-slate-600 bg-slate-50 border-slate-200/85">{request.sportName}</Badge>
                             <Badge className={`font-semibold border ${getSkillLevelBadge(request.skillLevel)}`}>
                               {getSkillLevelLabel(request.skillLevel)}
@@ -307,14 +326,20 @@ function MatchRequestFeedPage() {
                           </div>
                         </div>
                         <Button
-                          disabled={request.currentPlayers >= request.maxPlayers}
+                          disabled={request.currentPlayers >= (request.matchingType === 'TEAM_VS_TEAM' ? 2 : request.maxPlayers)}
                           onClick={() => {
                             setSelectedRequest(request);
                             setShowJoinDialog(true);
                           }}
-                          className="shadow-sm font-semibold"
+                          className={`shadow-sm font-semibold ${
+                            request.matchingType === 'TEAM_VS_TEAM' && request.currentPlayers < 2 
+                              ? "bg-blue-600 hover:bg-blue-700 text-white" 
+                              : ""
+                          }`}
                         >
-                          {request.currentPlayers >= request.maxPlayers ? "Đã Đủ Người" : "Tham gia kèo"}
+                          {request.currentPlayers >= (request.matchingType === 'TEAM_VS_TEAM' ? 2 : request.maxPlayers) 
+                            ? (request.matchingType === 'TEAM_VS_TEAM' ? "Đã Đủ Đội" : "Đã Đủ Người") 
+                            : (request.matchingType === 'TEAM_VS_TEAM' ? "Cáp kèo" : "Tham gia kèo")}
                         </Button>
                       </div>
 
@@ -349,7 +374,11 @@ function MatchRequestFeedPage() {
                         <div className="flex items-center">
                           <Users className="h-4 w-4 mr-2.5 text-primary" />
                           <span>
-                            Sĩ số: <strong className="text-slate-700">{request.currentPlayers}/{request.maxPlayers} thành viên</strong>
+                            {request.matchingType === 'TEAM_VS_TEAM' ? (
+                              <>Trạng thái: <strong className="text-slate-700">{request.currentPlayers}/2 đội</strong></>
+                            ) : (
+                              <>Sĩ số: <strong className="text-slate-700">{request.currentPlayers}/{request.maxPlayers} thành viên</strong></>
+                            )}
                           </span>
                         </div>
                       </div>
@@ -358,7 +387,13 @@ function MatchRequestFeedPage() {
                       {request.splitPrice && request.pricePerPlayer !== undefined && (
                         <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50/50 px-2.5 py-1.5 rounded-lg w-fit">
                           <DollarSign className="w-4.5 h-4.5 text-emerald-500" />
-                          <span>Chia tiền sân: <strong className="text-emerald-700">{request.pricePerPlayer.toLocaleString("vi-VN")} đ / người</strong></span>
+                          <span>
+                            {request.matchingType === 'TEAM_VS_TEAM' ? (
+                              <>Chia đôi tiền sân: <strong className="text-emerald-700">{request.pricePerPlayer.toLocaleString("vi-VN")} đ / đội</strong></>
+                            ) : (
+                              <>Chia tiền sân: <strong className="text-emerald-700">{request.pricePerPlayer.toLocaleString("vi-VN")} đ / người</strong></>
+                            )}
+                          </span>
                         </div>
                       )}
 
@@ -366,9 +401,9 @@ function MatchRequestFeedPage() {
                       <div className="mt-4">
                         <div className="w-full bg-slate-100 rounded-full h-2">
                           <div
-                            className="bg-primary h-2 rounded-full transition-all duration-300"
+                            className={request.matchingType === 'TEAM_VS_TEAM' ? "bg-blue-600 h-2 rounded-full transition-all duration-300" : "bg-primary h-2 rounded-full transition-all duration-300"}
                             style={{
-                              width: `${Math.min(100, (request.currentPlayers / request.maxPlayers) * 100)}%`,
+                              width: `${Math.min(100, (request.currentPlayers / (request.matchingType === 'TEAM_VS_TEAM' ? 2 : request.maxPlayers)) * 100)}%`,
                             }}
                           />
                         </div>
@@ -399,6 +434,36 @@ function MatchRequestFeedPage() {
                 onChange={(e) => setTitle(e.target.value)}
                 className="border-slate-200"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="font-bold text-slate-700">Hình thức ghép kèo *</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => setMatchingType('INDIVIDUAL')}
+                  className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                    matchingType === 'INDIVIDUAL'
+                      ? 'border-primary bg-primary/5 text-primary ring-2 ring-primary/20'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="font-bold text-sm">Ghép người chơi lẻ</span>
+                  <span className="text-[10px] opacity-80 mt-0.5">Tìm thêm thành viên cho đủ đội</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMatchingType('TEAM_VS_TEAM')}
+                  className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${
+                    matchingType === 'TEAM_VS_TEAM'
+                      ? 'border-blue-600 bg-blue-50/50 text-blue-700 ring-2 ring-blue-600/20'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="font-bold text-sm">Cáp kèo Đội vs Đội</span>
+                  <span className="text-[10px] opacity-80 mt-0.5">Đội của bạn tìm đội đối thủ thách đấu</span>
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -488,16 +553,22 @@ function MatchRequestFeedPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="players" className="font-bold text-slate-700">Số người chơi tối đa *</Label>
-                <Input
-                  id="players"
-                  type="number"
-                  min="2"
-                  max="50"
-                  placeholder="VD: 10"
-                  value={maxPlayers}
-                  onChange={(e) => setMaxPlayers(e.target.value)}
-                  className="border-slate-200"
-                />
+                {matchingType === 'TEAM_VS_TEAM' ? (
+                  <div className="h-10 border border-slate-200 bg-slate-50 rounded-md flex items-center px-3 text-xs font-semibold text-slate-500">
+                    Mặc định là 2 đội (Chủ nhà & Đối thủ)
+                  </div>
+                ) : (
+                  <Input
+                    id="players"
+                    type="number"
+                    min="2"
+                    max="50"
+                    placeholder="VD: 10"
+                    value={maxPlayers}
+                    onChange={(e) => setMaxPlayers(e.target.value)}
+                    className="border-slate-200"
+                  />
+                )}
               </div>
             </div>
 
@@ -505,8 +576,14 @@ function MatchRequestFeedPage() {
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/70 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <Label htmlFor="split-price" className="font-bold text-slate-700 block">Chia tiền sân (Split Price)</Label>
-                  <span className="text-[11px] text-slate-500 font-medium">Bật nếu bạn muốn những người tham gia cùng chia sẻ chi phí sân chơi.</span>
+                  <Label htmlFor="split-price" className="font-bold text-slate-700 block">
+                    {matchingType === 'TEAM_VS_TEAM' ? "Chia đôi tiền sân (50/50)" : "Chia tiền sân (Split Price)"}
+                  </Label>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    {matchingType === 'TEAM_VS_TEAM' 
+                      ? "Bật nếu bạn muốn đội đối thủ cùng chia sẻ một nửa chi phí thuê sân."
+                      : "Bật nếu bạn muốn những người tham gia cùng chia sẻ chi phí sân chơi."}
+                  </span>
                 </div>
                 <Switch 
                   id="split-price" 
@@ -517,12 +594,14 @@ function MatchRequestFeedPage() {
 
               {splitPrice && (
                 <div className="space-y-2">
-                  <Label htmlFor="price-per-player" className="font-bold text-slate-700 text-xs">Chi phí mỗi người chơi (đ) *</Label>
+                  <Label htmlFor="price-per-player" className="font-bold text-slate-700 text-xs">
+                    {matchingType === 'TEAM_VS_TEAM' ? "Chi phí mỗi đội (đ) *" : "Chi phí mỗi người chơi (đ) *"}
+                  </Label>
                   <Input
                     id="price-per-player"
                     type="number"
                     min="1000"
-                    placeholder="VD: 50000"
+                    placeholder={matchingType === 'TEAM_VS_TEAM' ? "VD: 150000" : "VD: 50000"}
                     value={pricePerPlayer}
                     onChange={(e) => setPricePerPlayer(e.target.value)}
                     className="border-slate-200 bg-white"
@@ -585,17 +664,23 @@ function MatchRequestFeedPage() {
                       Sân vận động: <strong className="text-slate-700">{selectedRequest.stadiumName}</strong>
                     </div>
                     <div>
-                      Sĩ số: <strong className="text-slate-700">{selectedRequest.currentPlayers}/{selectedRequest.maxPlayers}</strong>
+                      {selectedRequest.matchingType === 'TEAM_VS_TEAM' ? (
+                        <>Trạng thái: <strong className="text-slate-700">{selectedRequest.currentPlayers}/2 đội</strong></>
+                      ) : (
+                        <>Sĩ số: <strong className="text-slate-700">{selectedRequest.currentPlayers}/{selectedRequest.maxPlayers}</strong></>
+                      )}
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
               <div className="space-y-2">
-                <Label htmlFor="join-note" className="font-bold text-slate-700">Lời nhắn tới chủ kèo (không bắt buộc)</Label>
+                <Label htmlFor="join-note" className="font-bold text-slate-700">
+                  {selectedRequest.matchingType === 'TEAM_VS_TEAM' ? "Tên đội bóng của bạn & lời nhắn *" : "Lời nhắn tới chủ kèo (không bắt buộc)"}
+                </Label>
                 <Textarea
                   id="join-note"
-                  placeholder="VD: Mình đá ở vị trí tiền đạo, trình độ trung bình, cho mình tham gia với nhé..."
+                  placeholder={selectedRequest.matchingType === 'TEAM_VS_TEAM' ? "VD: FC Phủi Quận 1, trình độ trung bình khá, xin cáp kèo đá giao lưu..." : "VD: Mình đá ở vị trí tiền đạo, trình độ trung bình, cho mình tham gia với nhé..."}
                   rows={3}
                   value={joinNote}
                   onChange={(e) => setJoinNote(e.target.value)}
