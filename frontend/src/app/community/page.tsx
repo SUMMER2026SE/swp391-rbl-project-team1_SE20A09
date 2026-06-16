@@ -538,7 +538,7 @@ function MatchRequestFeedPage() {
               <div className="space-y-2">
                 <Label htmlFor="venue-select" className="font-bold text-slate-700">Sân chơi *</Label>
                 <Select value={stadiumId} onValueChange={setStadiumId}>
-                  <SelectTrigger id="venue-select" className="border-slate-200">
+                  <SelectTrigger id="venue-select" className="border-slate-200 w-full overflow-hidden [&>span]:truncate">
                     <SelectValue placeholder="Chọn sân bóng" />
                   </SelectTrigger>
                   <SelectContent>
