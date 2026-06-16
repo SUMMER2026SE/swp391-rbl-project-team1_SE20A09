@@ -2,8 +2,10 @@ package com.sportvenue.service;
 
 import com.sportvenue.dto.request.CreateMatchRequest;
 import com.sportvenue.dto.response.MatchResponse;
+import com.sportvenue.dto.response.JoinRequestResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import java.util.List;
 
 /**
  * Service Interface cho việc quản lý kèo ghép thể thao (Matchmaking).
@@ -44,7 +46,7 @@ public interface MatchRequestService {
      * @param hostUserId ID của người dùng gọi API (bắt buộc phải là Host của kèo)
      * @return danh sách yêu cầu tham gia
      */
-    java.util.List<com.sportvenue.dto.response.JoinRequestResponse> getJoinRequestsForMatch(Integer matchId, Integer hostUserId);
+    List<JoinRequestResponse> getJoinRequestsForMatch(Integer matchId, Integer hostUserId);
 
     /**
      * Phê duyệt yêu cầu tham gia của người chơi (chỉ Host mới thực hiện được).
