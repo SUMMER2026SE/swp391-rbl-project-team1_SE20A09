@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
@@ -35,12 +36,19 @@ import {
   Loader2,
   Clock,
   DollarSign,
+  Check,
+  X,
+  ShieldAlert,
 } from "lucide-react";
 import {
   getActiveMatches,
   createMatchRequest,
   joinMatchRequest,
+  getJoinRequests,
+  approveJoinRequest,
+  rejectJoinRequest,
   MatchResponse,
+  JoinRequestResponse,
 } from "@/lib/api/matchmaking";
 import {
   getSportTypes,
@@ -49,11 +57,20 @@ import {
 } from "@/lib/api/stadium";
 
 function MatchRequestFeedPage() {
+  const { data: session } = useSession();
+
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<MatchResponse | null>(
     null,
   );
+
+  // Host manage dialog states
+  const [showManageDialog, setShowManageDialog] = useState(false);
+  const [selectedManageMatch, setSelectedManageMatch] = useState<MatchResponse | null>(null);
+  const [joinRequests, setJoinRequests] = useState<JoinRequestResponse[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [actioningId, setActioningId] = useState<number | null>(null);
 
   // Lists from APIs
   const [matchRequests, setMatchRequests] = useState<MatchResponse[]>([]);
@@ -236,6 +253,54 @@ function MatchRequestFeedPage() {
     }
   };
 
+  const fetchJoinRequests = async (matchId: number) => {
+    try {
+      setLoadingRequests(true);
+      const data = await getJoinRequests(matchId);
+      setJoinRequests(data);
+    } catch (err: any) {
+      toast.error(err.message || "Không thể tải danh sách đơn đăng ký.");
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedManageMatch && showManageDialog) {
+      fetchJoinRequests(selectedManageMatch.matchId);
+    }
+  }, [selectedManageMatch, showManageDialog]);
+
+  const handleApprove = async (joinId: number) => {
+    if (!selectedManageMatch) return;
+    try {
+      setActioningId(joinId);
+      await approveJoinRequest(selectedManageMatch.matchId, joinId);
+      toast.success("Đã phê duyệt yêu cầu tham gia thành công!");
+      await fetchJoinRequests(selectedManageMatch.matchId);
+      fetchFeed();
+    } catch (err: any) {
+      toast.error(err.message || "Lỗi khi phê duyệt yêu cầu.");
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleReject = async (joinId: number) => {
+    if (!selectedManageMatch) return;
+    try {
+      setActioningId(joinId);
+      await rejectJoinRequest(selectedManageMatch.matchId, joinId);
+      toast.success("Đã từ chối yêu cầu tham gia.");
+      await fetchJoinRequests(selectedManageMatch.matchId);
+      fetchFeed();
+    } catch (err: any) {
+      toast.error(err.message || "Lỗi khi từ chối yêu cầu.");
+    } finally {
+      setActioningId(null);
+    }
+  };
+
   // Filter local list based on user search
   const filteredRequests = matchRequests.filter((req) => {
     const matchesKeyword =
@@ -414,35 +479,48 @@ function MatchRequestFeedPage() {
                             </Badge>
                           </div>
                         </div>
-                        <Button
-                          disabled={
-                            request.currentPlayers >=
+                        {session?.user && (session.user as any).userId === request.hostUserId ? (
+                          <Button
+                            onClick={() => {
+                              setSelectedManageMatch(request);
+                              setShowManageDialog(true);
+                            }}
+                            className="bg-amber-500 hover:bg-amber-600 text-white shadow-sm font-semibold gap-1.5"
+                          >
+                            <Users className="w-4 h-4" />
+                            Quản lý đơn
+                          </Button>
+                        ) : (
+                          <Button
+                            disabled={
+                              request.currentPlayers >=
+                              (request.matchingType === "TEAM_VS_TEAM"
+                                ? 2
+                                : request.maxPlayers)
+                            }
+                            onClick={() => {
+                              setSelectedRequest(request);
+                              setShowJoinDialog(true);
+                            }}
+                            className={`shadow-sm font-semibold ${
+                              request.matchingType === "TEAM_VS_TEAM" &&
+                              request.currentPlayers < 2
+                                ? "bg-blue-600 hover:bg-blue-700 text-white"
+                                : ""
+                            }`}
+                          >
+                            {request.currentPlayers >=
                             (request.matchingType === "TEAM_VS_TEAM"
                               ? 2
                               : request.maxPlayers)
-                          }
-                          onClick={() => {
-                            setSelectedRequest(request);
-                            setShowJoinDialog(true);
-                          }}
-                          className={`shadow-sm font-semibold ${
-                            request.matchingType === "TEAM_VS_TEAM" &&
-                            request.currentPlayers < 2
-                              ? "bg-blue-600 hover:bg-blue-700 text-white"
-                              : ""
-                          }`}
-                        >
-                          {request.currentPlayers >=
-                          (request.matchingType === "TEAM_VS_TEAM"
-                            ? 2
-                            : request.maxPlayers)
-                            ? request.matchingType === "TEAM_VS_TEAM"
-                              ? "Đã Đủ Đội"
-                              : "Đã Đủ Người"
-                            : request.matchingType === "TEAM_VS_TEAM"
-                              ? "Cáp kèo"
-                              : "Tham gia kèo"}
-                        </Button>
+                              ? request.matchingType === "TEAM_VS_TEAM"
+                                ? "Đã Đủ Đội"
+                                : "Đã Đủ Người"
+                              : request.matchingType === "TEAM_VS_TEAM"
+                                ? "Cáp kèo"
+                                : "Tham gia kèo"}
+                          </Button>
+                        )}
                       </div>
 
                       {/* Description */}
@@ -952,6 +1030,145 @@ function MatchRequestFeedPage() {
                   )}
                   Gửi yêu cầu tham gia
                 </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Host Manage Join Requests Dialog */}
+      <Dialog open={showManageDialog} onOpenChange={setShowManageDialog}>
+        <DialogContent className="max-w-2xl bg-white border border-slate-200 p-6 max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="border-b pb-3 mb-4">
+            <DialogTitle className="text-xl font-bold text-slate-800">
+              Quản lý đơn đăng ký tham gia
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedManageMatch && (
+            <div className="space-y-5">
+              {/* Match Summary Card */}
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80">
+                <div className="flex justify-between items-start mb-2">
+                  <h3 className="font-extrabold text-slate-800 text-base">
+                    {selectedManageMatch.title}
+                  </h3>
+                  <Badge className={selectedManageMatch.matchStatus === "OPEN" ? "bg-emerald-500 hover:bg-emerald-600" : "bg-slate-500 hover:bg-slate-600"}>
+                    {selectedManageMatch.matchStatus === "OPEN" ? "Đang nhận đơn" : "Đã Đóng / Đầy"}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-xs font-semibold text-slate-500 mt-3">
+                  <div>Sân: <span className="text-slate-700">{selectedManageMatch.stadiumName}</span></div>
+                  <div>Ngày: <span className="text-slate-700">{new Date(selectedManageMatch.playDate).toLocaleDateString("vi-VN")}</span></div>
+                  <div>Thời gian: <span className="text-slate-700">{selectedManageMatch.startTime.substring(0, 5)} - {selectedManageMatch.endTime.substring(0, 5)}</span></div>
+                  <div>Sĩ số hiện tại: <span className="text-slate-700">{selectedManageMatch.currentPlayers}/{selectedManageMatch.matchingType === "TEAM_VS_TEAM" ? "2 đội" : selectedManageMatch.maxPlayers}</span></div>
+                </div>
+              </div>
+
+              {/* Join Requests List */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Danh sách đơn đăng ký
+                </h4>
+
+                {loadingRequests ? (
+                  <div className="flex justify-center items-center py-10">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary/50" />
+                  </div>
+                ) : joinRequests.length === 0 ? (
+                  <div className="text-center py-12 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                    <Users className="w-10 h-10 text-slate-300 mx-auto mb-2.5" />
+                    <p className="text-sm font-semibold text-slate-500">Chưa có ai đăng ký tham gia kèo này</p>
+                    <p className="text-xs text-slate-400 mt-1">Yêu cầu tham gia từ người dùng khác sẽ hiển thị tại đây.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {joinRequests.map((req) => (
+                      <div
+                        key={req.joinId}
+                        className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-slate-300 transition-colors"
+                      >
+                        {/* Requester Info */}
+                        <div className="flex gap-3 items-start flex-1 min-w-0">
+                          <Avatar className="h-10 w-10 border border-slate-100 shadow-2xs mt-0.5">
+                            <AvatarImage
+                              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(req.fullName)}`}
+                            />
+                            <AvatarFallback>{req.fullName[0]}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-slate-800 text-sm truncate">
+                              {req.fullName}
+                            </div>
+                            <div className="text-slate-400 text-[10px] truncate mt-0.5">
+                              {req.email} • {new Date(req.createdAt).toLocaleDateString("vi-VN")}
+                            </div>
+                            {req.message && (
+                              <div className="mt-2 bg-slate-50 border border-slate-100 p-2 rounded-lg text-xs text-slate-600 font-medium">
+                                <span className="font-bold text-slate-700">
+                                  {selectedManageMatch.matchingType === "TEAM_VS_TEAM" ? "Tên đội bóng: " : "Lời nhắn: "}
+                                </span>
+                                {req.message}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Status / Actions */}
+                        <div className="flex items-center gap-2 self-end md:self-center">
+                          {req.requestStatus === "PENDING" ? (
+                            <>
+                              <Button
+                                size="sm"
+                                onClick={() => handleReject(req.joinId)}
+                                disabled={actioningId !== null}
+                                variant="outline"
+                                className="border-rose-200 text-rose-600 hover:bg-rose-50/50 hover:text-rose-700 font-semibold text-xs h-9 px-3 gap-1"
+                              >
+                                {actioningId === req.joinId ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <X className="w-3.5 h-3.5" />
+                                )}
+                                Từ chối
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => handleApprove(req.joinId)}
+                                disabled={actioningId !== null}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 px-3 gap-1"
+                              >
+                                {actioningId === req.joinId ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Check className="w-3.5 h-3.5" />
+                                )}
+                                Phê duyệt
+                              </Button>
+                            </>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className={
+                                req.requestStatus === "APPROVED"
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200/60 font-bold px-2.5 py-1 text-xs"
+                                  : req.requestStatus === "REJECTED"
+                                    ? "bg-rose-50 text-rose-700 border-rose-200/60 font-bold px-2.5 py-1 text-xs"
+                                    : "bg-slate-50 text-slate-600 border-slate-200/60 font-bold px-2.5 py-1 text-xs"
+                              }
+                            >
+                              {req.requestStatus === "APPROVED"
+                                ? "Đã Phê Duyệt"
+                                : req.requestStatus === "REJECTED"
+                                  ? "Đã Từ Chối"
+                                  : "Đã Hủy"}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -18,6 +18,7 @@ export interface CreateMatchRequestDto {
 export interface MatchResponse {
   matchId: number;
   hostName: string;
+  hostUserId: number;
   stadiumName: string;
   stadiumAddress: string;
   sportName: string;
@@ -72,6 +73,44 @@ export async function joinMatchRequest(
     {
       params: { message },
     },
+  );
+  return res.data;
+}
+
+export interface JoinRequestResponse {
+  joinId: number;
+  matchId: number;
+  userId: number;
+  fullName: string;
+  email: string;
+  requestStatus: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+  message: string;
+  createdAt: string;
+}
+
+export async function getJoinRequests(
+  matchId: number,
+): Promise<JoinRequestResponse[]> {
+  const res = await api.get<JoinRequestResponse[]>(`/matchmaking/${matchId}/participants`);
+  return res.data;
+}
+
+export async function approveJoinRequest(
+  matchId: number,
+  participantId: number,
+): Promise<{ message: string }> {
+  const res = await api.put<{ message: string }>(
+    `/matchmaking/${matchId}/participants/${participantId}/approve`
+  );
+  return res.data;
+}
+
+export async function rejectJoinRequest(
+  matchId: number,
+  participantId: number,
+): Promise<{ message: string }> {
+  const res = await api.put<{ message: string }>(
+    `/matchmaking/${matchId}/participants/${participantId}/reject`
   );
   return res.data;
 }

@@ -350,6 +350,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         return MatchResponse.builder()
                 .matchId(match.getMatchId())
                 .hostName(match.getUser().getFullName())
+                .hostUserId(match.getUser().getUserId())
                 .stadiumName(match.getStadium().getStadiumName())
                 .stadiumAddress(match.getStadium().getAddress())
                 .sportName(match.getSportType().getSportName())
