@@ -144,7 +144,7 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
           </SheetClose>
           <SheetClose asChild>
             <Link href="/community" className={getNavLinkClass("/community")}>
-              Ghép kèo
+              Cộng đồng
             </Link>
           </SheetClose>
 
@@ -246,7 +246,7 @@ export function Header() {
                     : "text-muted-foreground hover:text-primary"
                 }`}
               >
-                Ghép kèo
+                Cộng đồng
               </Link>
             </nav>
 
