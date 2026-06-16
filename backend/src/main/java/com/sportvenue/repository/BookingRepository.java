@@ -219,5 +219,22 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     List<Booking> findFutureBookingsByStadiumId(
             @Param("stadiumId") Integer stadiumId,
             @Param("now") LocalDateTime now);
+
+    @Query("""
+            SELECT COUNT(b) > 0 FROM Booking b
+            WHERE b.user.userId = :userId
+            AND b.bookingDate >= :startOfDay
+            AND b.bookingDate <= :endOfDay
+            AND b.bookingStatus IN (com.sportvenue.entity.enums.BookingStatus.PENDING, com.sportvenue.entity.enums.BookingStatus.CONFIRMED)
+            AND b.slot.startTime < :endTime
+            AND b.slot.endTime > :startTime
+            """)
+    boolean existsOverlappingBooking(
+            @Param("userId") Integer userId,
+            @Param("startOfDay") LocalDateTime startOfDay,
+            @Param("endOfDay") LocalDateTime endOfDay,
+            @Param("startTime") java.time.LocalTime startTime,
+            @Param("endTime") java.time.LocalTime endTime);
 }
+
 
