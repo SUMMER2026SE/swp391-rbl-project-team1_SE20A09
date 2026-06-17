@@ -52,12 +52,12 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
             }
             
             if (statuses != null) {
-                pageResult = bookingRepository.findByUserUserIdAndBookingStatusInOrderByBookingDateDesc(userId, statuses, PageRequest.of(page, size));
+                pageResult = bookingRepository.findByUserUserIdAndBookingStatusInOrderByReservationDateDesc(userId, statuses, PageRequest.of(page, size));
             } else {
-                pageResult = bookingRepository.findByUserUserIdOrderByBookingDateDesc(userId, PageRequest.of(page, size));
+                pageResult = bookingRepository.findByUserUserIdOrderByReservationDateDesc(userId, PageRequest.of(page, size));
             }
         } else {
-            pageResult = bookingRepository.findByUserUserIdOrderByBookingDateDesc(userId, PageRequest.of(page, size));
+            pageResult = bookingRepository.findByUserUserIdOrderByReservationDateDesc(userId, PageRequest.of(page, size));
         }
 
         return PageResponse.<CustomerBookingHistoryDto>builder()
@@ -100,7 +100,7 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
     }
 
     private CustomerBookingHistoryDto toDto(Booking booking) {
-        String date = booking.getBookingDate().format(DATE_FMT);
+        String date = booking.getReservationDate().format(DATE_FMT);
         String time = booking.getSlot().getStartTime().format(TIME_FMT)
                 + " - "
                 + booking.getSlot().getEndTime().format(TIME_FMT);

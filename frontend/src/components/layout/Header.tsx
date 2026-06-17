@@ -93,6 +93,13 @@ function UserAccountMenu({ user }: { user: NonNullable<Session["user"]> }) {
           </Link>
         </DropdownMenuItem>
 
+        <DropdownMenuItem asChild>
+          <Link href="/profile?tab=bookings" className="cursor-pointer">
+            <Clock className="mr-2 h-4 w-4" />
+            <span>Lịch sử đặt sân</span>
+          </Link>
+        </DropdownMenuItem>
+
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={handleLogout}
@@ -274,6 +281,10 @@ export function Header() {
           </div>
         </div>
       </div>
+    </header>
+  );
+}
+   </div>
     </header>
   );
 }

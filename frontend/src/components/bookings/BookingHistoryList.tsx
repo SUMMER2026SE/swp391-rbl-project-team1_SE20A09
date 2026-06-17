@@ -175,6 +175,7 @@ interface BookingHistoryListProps {
 }
 
 export function BookingHistoryList({ isOwner = false }: BookingHistoryListProps) {
+  const router = useRouter();
   const [bookings, setBookings] = useState<BookingHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -276,7 +277,7 @@ export function BookingHistoryList({ isOwner = false }: BookingHistoryListProps)
         <EmptyTabMessage 
           message={emptyMsg} 
           actionLabel={activeTab !== "all" ? "Xem tất cả đơn" : "Đặt sân ngay"} 
-          onAction={() => activeTab !== "all" ? handleTabChange("all") : (window.location.href = "/venues")}
+          onAction={() => activeTab !== "all" ? handleTabChange("all") : router.push("/search")}
         />
       );
     }
