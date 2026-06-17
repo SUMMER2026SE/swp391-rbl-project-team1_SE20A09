@@ -35,12 +35,25 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<CustomerBookingHistoryDto> getMyBookings(UserPrincipal principal, int page, int size) {
+    public PageResponse<CustomerBookingHistoryDto> getMyBookings(UserPrincipal principal, String status, int page, int size) {
         User user = userRepository.findByEmail(principal.getUsername())
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
 
+        java.util.List<BookingStatus> statuses = null;
+        if (status != null && !status.isBlank() && !status.equalsIgnoreCase("all")) {
+            if (status.equalsIgnoreCase("upcoming")) {
+                statuses = java.util.List.of(BookingStatus.PENDING, BookingStatus.CONFIRMED);
+            } else {
+                try {
+                    statuses = java.util.List.of(BookingStatus.valueOf(status.toUpperCase()));
+                } catch (IllegalArgumentException e) {
+                    // Ignore invalid status
+                }
+            }
+        }
+
         Page<Booking> pageResult = bookingRepository
-                .findByUserUserIdOrderByBookingDateDesc(user.getUserId(), PageRequest.of(page, size));
+                .findByUserIdAndStatuses(user.getUserId(), statuses, PageRequest.of(page, size));
 
         return PageResponse.<CustomerBookingHistoryDto>builder()
                 .content(pageResult.getContent().stream().map(this::toDto).toList())
@@ -76,8 +89,7 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
             booking.getSlot().setSlotStatus(com.sportvenue.entity.enums.SlotStatus.AVAILABLE);
         }
         
-        paymentRepository.findByBookingBookingId(bookingId).ifPresent(paymentRepository::delete);
-        bookingRepository.delete(booking);
+        bookingRepository.save(booking);
     }
 
     private CustomerBookingHistoryDto toDto(Booking booking) {

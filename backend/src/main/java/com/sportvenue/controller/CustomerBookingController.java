@@ -25,12 +25,13 @@ public class CustomerBookingController {
     @GetMapping("/me")
     @Operation(
             summary = "Lịch sử đặt sân của tôi",
-            description = "Danh sách đơn đặt sân từ database, sắp xếp mới nhất trước, hỗ trợ phân trang")
+            description = "Danh sách đơn đặt sân từ database, sắp xếp mới nhất trước, hỗ trợ phân trang và lọc theo trạng thái")
     public ResponseEntity<PageResponse<CustomerBookingHistoryDto>> getMyBookings(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(customerBookingService.getMyBookings(userPrincipal, page, size));
+        return ResponseEntity.ok(customerBookingService.getMyBookings(userPrincipal, status, page, size));
     }
 
     @org.springframework.web.bind.annotation.PutMapping("/{id}/cancel")

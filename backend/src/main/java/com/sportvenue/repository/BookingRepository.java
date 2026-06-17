@@ -33,6 +33,18 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
 
     /** Lấy lịch sử đặt sân của khách hàng — dùng cho trang "Lịch sử đặt sân". */
     @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "slot"})
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.user.userId = :userId
+            AND (:statuses IS NULL OR b.bookingStatus IN :statuses)
+            ORDER BY b.bookingDate DESC
+            """)
+    Page<Booking> findByUserIdAndStatuses(
+            @Param("userId") Integer userId,
+            @Param("statuses") List<BookingStatus> statuses,
+            Pageable pageable);
+
+    @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "slot"})
     Page<Booking> findByUserUserIdOrderByBookingDateDesc(Integer userId, Pageable pageable);
 
     /** Lịch sắp tới — slot chưa kết thúc, đơn Pending hoặc Confirmed. */
