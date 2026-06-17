@@ -186,6 +186,12 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
                   Hồ sơ cá nhân
                 </Link>
               </SheetClose>
+              <SheetClose asChild>
+                <Link href="/profile?tab=bookings" className={getNavLinkClass("/profile?tab=bookings")}>
+                  <Clock className="mr-2 h-4 w-4" />
+                  Lịch sử đặt sân
+                </Link>
+              </SheetClose>
               <button
                 type="button"
                 onClick={handleLogout}
@@ -281,10 +287,6 @@ export function Header() {
           </div>
         </div>
       </div>
-    </header>
-  );
-}
-   </div>
     </header>
   );
 }
