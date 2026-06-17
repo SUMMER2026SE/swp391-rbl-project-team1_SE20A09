@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Calendar, Clock, FileText, Loader2, AlertCircle } from "lucide-react";
+import { MapPin, Calendar, Clock, FileText, Loader2, AlertCircle, ChevronLeft, ChevronRight, PlusCircle } from "lucide-react";
 import Image from "next/image";
 import {
   fetchMyBookings,
@@ -15,53 +15,60 @@ import {
 } from "@/lib/bookings-api";
 
 const STATUS_CONFIG = {
-  confirmed: { label: "Đã xác nhận", className: "bg-green-100 text-green-700" },
-  pending: { label: "Chờ xác nhận", className: "bg-yellow-100 text-yellow-700" },
-  completed: { label: "Hoàn thành", className: "bg-gray-100 text-gray-700" },
-  cancelled: { label: "Đã hủy", className: "bg-red-100 text-red-700" },
+  confirmed: { label: "Đã xác nhận", className: "bg-green-50 text-green-700 border-green-200" },
+  pending: { label: "Chờ xác nhận", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  completed: { label: "Hoàn thành", className: "bg-slate-50 text-slate-600 border-slate-200" },
+  cancelled: { label: "Đã hủy", className: "bg-red-50 text-red-600 border-red-200" },
 } as const;
 
 function getStatusBadge(status: BookingHistoryItem["status"]) {
-  const config = STATUS_CONFIG[status] || { label: status, className: "bg-gray-100 text-gray-700" };
-  return <Badge className={config.className}>{config.label}</Badge>;
+  const config = STATUS_CONFIG[status] || { label: status, className: "bg-slate-50 text-slate-600" };
+  return (
+    <Badge variant="outline" className={`${config.className} font-medium px-2.5 py-0.5 rounded-full`}>
+      {config.label}
+    </Badge>
+  );
 }
 
 function getActionButtons(booking: BookingHistoryItem, isOwner: boolean = false) {
   if (isOwner) {
     return (
-      <Button variant="outline" size="sm" asChild>
+      <Button asChild className="rounded-xl w-full sm:w-auto" variant="outline">
         <Link href={`/owner/bookings/${booking.id}`}>Xem chi tiết</Link>
       </Button>
     );
   }
 
+  const primaryBtnClass = "rounded-xl px-6 w-full sm:w-auto font-medium";
+  const secondaryBtnClass = "rounded-xl px-6 w-full sm:w-auto font-medium border-slate-200 text-slate-600";
+
   switch (booking.status) {
-    case "confirmed":
     case "pending":
+    case "confirmed":
       return (
         <>
-          <Button variant="outline" size="sm" asChild>
+          <Button asChild variant="outline" className={secondaryBtnClass}>
             <Link href={`/booking/${booking.id}`}>Xem chi tiết</Link>
           </Button>
-          <Button variant="destructive" size="sm" asChild>
-            <Link href={`/booking/${booking.id}/cancel`}>Hủy đặt sân</Link>
+          <Button asChild variant="destructive" className={primaryBtnClass}>
+            <Link href={`/booking/${booking.id}/cancel`}>Hủy lịch</Link>
           </Button>
         </>
       );
     case "completed":
       return (
         <>
-          <Button variant="outline" size="sm" asChild>
+          <Button asChild variant="outline" className={secondaryBtnClass}>
             <Link href={`/booking/${booking.id}`}>Xem chi tiết</Link>
           </Button>
-          <Button size="sm" asChild>
-            <Link href={`/booking/${booking.id}/review`}>Viết đánh giá</Link>
+          <Button asChild className={`${primaryBtnClass} bg-emerald-600 hover:bg-emerald-700 text-white`}>
+            <Link href={`/booking/${booking.id}/review`}>Đánh giá</Link>
           </Button>
         </>
       );
     case "cancelled":
       return (
-        <Button variant="outline" size="sm" asChild>
+        <Button asChild variant="outline" className={`${secondaryBtnClass} w-full`}>
           <Link href={`/booking/${booking.id}`}>Xem chi tiết</Link>
         </Button>
       );
@@ -72,52 +79,60 @@ function getActionButtons(booking: BookingHistoryItem, isOwner: boolean = false)
 
 function BookingCard({ booking, isOwner = false }: { booking: BookingHistoryItem; isOwner?: boolean }) {
   return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex gap-4">
-          <div className="h-24 w-24 relative rounded-lg overflow-hidden shrink-0">
-            <Image
-              src={booking.imageUrl}
-              alt={booking.venue}
-              fill
-              className="object-cover"
-              unoptimized
-            />
+    <Card className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md">
+      <CardContent className="space-y-4 p-4 md:p-5">
+        {/* Header: Sân + Trạng thái */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex gap-4">
+            <div className="relative h-14 w-14 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 shrink-0">
+              <Image
+                src={booking.imageUrl}
+                alt={booking.venue}
+                fill
+                className="object-cover"
+                unoptimized
+              />
+            </div>
+            <div className="min-w-0">
+              <h3 className="truncate text-base font-bold text-slate-900 md:text-lg">
+                {booking.venue}
+              </h3>
+              <p className="text-sm font-medium text-slate-500">{booking.sportType}</p>
+            </div>
           </div>
-          <div className="flex-1">
-            <div className="mb-2 flex items-start justify-between">
-              <div>
-                <h3 className="mb-1 font-semibold">{booking.venue}</h3>
-                <Badge variant="outline">{booking.sportType}</Badge>
-              </div>
-              {getStatusBadge(booking.status)}
-            </div>
+          {getStatusBadge(booking.status)}
+        </div>
 
-            <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-muted-foreground sm:grid-cols-2">
-              <div className="flex items-center">
-                <Calendar className="mr-2 h-4 w-4 shrink-0" />
-                {booking.date}
-              </div>
-              <div className="flex items-center">
-                <Clock className="mr-2 h-4 w-4 shrink-0" />
-                {booking.time}
-              </div>
-              <div className="flex items-center">
-                <MapPin className="mr-2 h-4 w-4 shrink-0" />
-                {booking.location}
-              </div>
-              <div className="flex items-center">
-                <FileText className="mr-2 h-4 w-4 shrink-0" />
-                {booking.displayId}
-              </div>
-            </div>
+        {/* Meta: Ngày giờ + Địa điểm */}
+        <div className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm text-slate-600 sm:grid-cols-2">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-slate-400" />
+            <span className="font-medium">{booking.date}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-slate-400" />
+            <span className="font-medium">{booking.time}</span>
+          </div>
+          <div className="flex items-center gap-2 sm:col-span-2">
+            <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
+            <span className="truncate">{booking.location}</span>
+          </div>
+          <div className="flex items-center gap-2 sm:col-span-2">
+            <FileText className="h-4 w-4 text-slate-400" />
+            <span className="text-slate-500">Mã đơn: <span className="text-slate-700 font-mono">{booking.displayId}</span></span>
+          </div>
+        </div>
 
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <div className="text-xl font-semibold text-primary">
-                {booking.price.toLocaleString("vi-VN")}đ
-              </div>
-              <div className="flex flex-wrap gap-2">{getActionButtons(booking, isOwner)}</div>
-            </div>
+        {/* Footer: Giá + Nút bấm */}
+        <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Tổng thanh toán</p>
+            <p className="text-xl font-bold text-primary">
+              {booking.price.toLocaleString("vi-VN")}đ
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            {getActionButtons(booking, isOwner)}
           </div>
         </div>
       </CardContent>
@@ -125,10 +140,32 @@ function BookingCard({ booking, isOwner = false }: { booking: BookingHistoryItem
   );
 }
 
-function EmptyTabMessage({ message }: { message: string }) {
+function EmptyTabMessage({ 
+  message, 
+  icon: Icon = PlusCircle,
+  actionLabel, 
+  onAction 
+}: { 
+  message: string; 
+  icon?: any;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
   return (
-    <Card className="border-dashed">
-      <CardContent className="py-12 text-center text-muted-foreground">{message}</CardContent>
+    <Card className="border-dashed border-2 bg-slate-50/50">
+      <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="mb-4 rounded-full bg-slate-100 p-4">
+          <Icon className="h-8 w-8 text-slate-400" />
+        </div>
+        <p className="max-w-[240px] text-slate-500 font-medium mb-6">
+          {message}
+        </p>
+        {actionLabel && (
+          <Button onClick={onAction} className="rounded-xl px-8 bg-green-800 hover:bg-green-900">
+            {actionLabel}
+          </Button>
+        )}
+      </CardContent>
     </Card>
   );
 }
@@ -141,91 +178,166 @@ export function BookingHistoryList({ isOwner = false }: BookingHistoryListProps)
   const [bookings, setBookings] = useState<BookingHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [activeTab, setActiveTab] = useState("all");
+
+  const pageSize = 8; // Desktop optimized page size
 
   const loadBookings = useCallback(() => {
     setLoading(true);
     setError(null);
     const fetchFn = isOwner ? fetchOwnerBookings : fetchMyBookings;
-    fetchFn()
-      .then((result) => setBookings(result.bookings))
+    
+    // Proper filtering at API level
+    fetchFn(page, pageSize, activeTab)
+      .then((result) => {
+        setBookings(result.bookings);
+        setTotalPages(result.totalPages);
+        setTotalElements(result.totalElements);
+      })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : "Không tải được lịch sử đặt sân.");
       })
       .finally(() => setLoading(false));
-  }, [isOwner]);
+  }, [isOwner, page, activeTab]);
 
   useEffect(() => {
     loadBookings();
   }, [loadBookings]);
 
-  const upcoming = useMemo(
-    () => bookings.filter((b) => b.status === "confirmed" || b.status === "pending"),
-    [bookings],
-  );
-
-  const filterByStatus = (status?: BookingHistoryItem["status"]) => {
-    if (!status) return bookings;
-    return bookings.filter((b) => b.status === status);
+  const handleTabChange = (val: string) => {
+    setActiveTab(val);
+    setPage(0); // Reset to first page when changing tabs
   };
 
-  const renderList = (items: BookingHistoryItem[], emptyMessage: string) => {
-    if (items.length === 0) {
-      return <EmptyTabMessage message={emptyMessage} />;
-    }
-    return (
-      <div className="space-y-4">
-        {items.map((booking) => (
-          <BookingCard key={booking.id} booking={booking} isOwner={isOwner} />
-        ))}
-      </div>
-    );
-  };
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
 
-  if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-20">
-        <Loader2 className="h-10 w-10 animate-spin text-green-800" />
-        <p className="text-sm text-muted-foreground">Đang tải lịch sử đặt sân...</p>
-      </div>
-    );
-  }
+      <div className="mt-8 flex items-center justify-center gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          className="rounded-xl"
+          onClick={() => setPage((p) => Math.max(0, p - 1))}
+          disabled={page === 0}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        
+        <div className="flex items-center gap-1.5 px-4 text-sm font-semibold text-slate-700">
+          <span>Trang</span>
+          <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-primary">{page + 1}</span>
+          <span className="text-slate-400">/</span>
+          <span>{totalPages}</span>
+        </div>
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-4 py-20">
-        <AlertCircle className="h-12 w-12 text-destructive" />
-        <p className="text-center text-muted-foreground">{error}</p>
-        <Button onClick={loadBookings} className="bg-green-800 hover:bg-green-900">
-          Thử lại
+        <Button
+          variant="outline"
+          size="icon"
+          className="rounded-xl"
+          onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+          disabled={page >= totalPages - 1}
+        >
+          <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
     );
-  }
+  };
+
+  const renderContent = (emptyMsg: string) => {
+    if (loading) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-3 py-24">
+          <Loader2 className="h-10 w-10 animate-spin text-green-800" />
+          <p className="text-sm font-medium text-slate-500">Đang tải lịch sử đặt sân...</p>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+          <div className="rounded-full bg-red-50 p-4">
+            <AlertCircle className="h-10 w-10 text-red-500" />
+          </div>
+          <p className="max-w-xs text-slate-600 font-medium">{error}</p>
+          <Button onClick={loadBookings} variant="outline" className="rounded-xl border-slate-200">
+            Thử lại
+          </Button>
+        </div>
+      );
+    }
+
+    if (bookings.length === 0) {
+      return (
+        <EmptyTabMessage 
+          message={emptyMsg} 
+          actionLabel={activeTab !== "all" ? "Xem tất cả đơn" : "Đặt sân ngay"} 
+          onAction={() => activeTab !== "all" ? handleTabChange("all") : (window.location.href = "/venues")}
+        />
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-1">
+          {bookings.map((booking) => (
+            <BookingCard key={booking.id} booking={booking} isOwner={isOwner} />
+          ))}
+        </div>
+        {renderPagination()}
+      </div>
+    );
+  };
 
   return (
-    <Tabs defaultValue="all" className="w-full">
-      <TabsList className="mb-6 flex overflow-x-auto w-full sm:w-auto h-auto p-1 bg-white border">
-        <TabsTrigger className="whitespace-nowrap flex-1" value="all">Tất cả ({bookings.length})</TabsTrigger>
-        <TabsTrigger className="whitespace-nowrap flex-1" value="upcoming">Sắp tới ({upcoming.length})</TabsTrigger>
-        <TabsTrigger className="whitespace-nowrap flex-1" value="completed">Hoàn thành ({filterByStatus("completed").length})</TabsTrigger>
-        <TabsTrigger className="whitespace-nowrap flex-1" value="cancelled">Đã hủy ({filterByStatus("cancelled").length})</TabsTrigger>
-      </TabsList>
+    <div className="w-full max-w-4xl mx-auto">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
+        <TabsList className="flex h-auto w-full gap-2 overflow-x-auto rounded-2xl bg-slate-100 p-1.5 scrollbar-hide">
+          <TabsTrigger 
+            value="all" 
+            className="rounded-xl px-5 py-2.5 whitespace-nowrap data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold"
+          >
+            Tất cả
+          </TabsTrigger>
+          <TabsTrigger 
+            value="upcoming" 
+            className="rounded-xl px-5 py-2.5 whitespace-nowrap data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold"
+          >
+            Sắp tới
+          </TabsTrigger>
+          <TabsTrigger 
+            value="completed" 
+            className="rounded-xl px-5 py-2.5 whitespace-nowrap data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold"
+          >
+            Hoàn thành
+          </TabsTrigger>
+          <TabsTrigger 
+            value="cancelled" 
+            className="rounded-xl px-5 py-2.5 whitespace-nowrap data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold"
+          >
+            Đã hủy
+          </TabsTrigger>
+        </TabsList>
 
-      <TabsContent value="all">
-        {renderList(bookings, "Bạn chưa có đơn đặt sân nào.")}
-      </TabsContent>
-
-      <TabsContent value="upcoming">
-        {renderList(upcoming, "Không có lịch sắp tới. Hãy đặt sân để bắt đầu!")}
-      </TabsContent>
-
-      <TabsContent value="completed">
-        {renderList(filterByStatus("completed"), "Chưa có đơn đã hoàn thành.")}
-      </TabsContent>
-
-      <TabsContent value="cancelled">
-        {renderList(filterByStatus("cancelled"), "Không có đơn đã hủy.")}
-      </TabsContent>
-    </Tabs>
+        <div className="relative">
+          <TabsContent value="all" className="m-0 focus-visible:outline-none">
+            {renderContent("Bạn chưa có đơn đặt sân nào. Hãy bắt đầu hành trình ngay!")}
+          </TabsContent>
+          <TabsContent value="upcoming" className="m-0 focus-visible:outline-none">
+            {renderContent("Hiện tại không có lịch sắp tới. Đặt ngay để không lỡ trận nào nhé!")}
+          </TabsContent>
+          <TabsContent value="completed" className="m-0 focus-visible:outline-none">
+            {renderContent("Chưa có đơn đã hoàn thành. Hãy cùng ra sân vận động nhé!")}
+          </TabsContent>
+          <TabsContent value="cancelled" className="m-0 focus-visible:outline-none">
+            {renderContent("Tuyệt vời, bạn chưa có đơn nào bị hủy.")}
+          </TabsContent>
+        </div>
+      </Tabs>
+    </div>
   );
 }
