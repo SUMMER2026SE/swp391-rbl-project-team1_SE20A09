@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from "next-auth/react";
 import type { Session } from "next-auth";
-import { Menu, LogOut, User as UserIcon, Settings, BarChart2 } from "lucide-react";
+import { Menu, LogOut, User as UserIcon, Settings, BarChart2, Clock } from "lucide-react";
 import { Button } from "../ui/button";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -186,6 +186,12 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
                   Hồ sơ cá nhân
                 </Link>
               </SheetClose>
+              <SheetClose asChild>
+                <Link href="/profile?tab=bookings" className={getNavLinkClass("/profile?tab=bookings")}>
+                  <Clock className="mr-2 h-4 w-4" />
+                  Lịch sử đặt sân
+                </Link>
+              </SheetClose>
               <button
                 type="button"
                 onClick={handleLogout}
@@ -281,10 +287,6 @@ export function Header() {
           </div>
         </div>
       </div>
-    </header>
-  );
-}
-   </div>
     </header>
   );
 }
