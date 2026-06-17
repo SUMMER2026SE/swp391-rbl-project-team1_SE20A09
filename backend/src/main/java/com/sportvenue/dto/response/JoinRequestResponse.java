@@ -37,4 +37,5 @@ public class JoinRequestResponse {
     private String hostEmail;
     private MatchStatus matchStatus;
     private MatchingType matchingType;
+    private String cancelReason;
 }

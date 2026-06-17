@@ -270,6 +270,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                         .hostEmail(req.getMatchRequest().getUser().getEmail())
                         .matchStatus(req.getMatchRequest().getMatchStatus())
                         .matchingType(req.getMatchRequest().getMatchingType())
+                        .cancelReason(req.getMatchRequest().getCancelReason())
                         .build())
                 .collect(Collectors.toList());
     }
@@ -314,13 +315,11 @@ public class MatchRequestServiceImpl implements MatchRequestService {
             match.setMatchStatus(MatchStatus.FULL);
             log.info("Match ID: {} is now FULL. Auto-rejecting remaining pending requests.", matchId);
             
-            List<JoinRequest> allRequests = joinRequestRepository.findAllByMatchRequestMatchId(matchId);
-            for (JoinRequest req : allRequests) {
-                if (req.getRequestStatus() == JoinRequestStatus.PENDING) {
-                    req.setRequestStatus(JoinRequestStatus.REJECTED);
-                    joinRequestRepository.save(req);
-                }
-            }
+            joinRequestRepository.bulkUpdateStatus(
+                    matchId,
+                    JoinRequestStatus.REJECTED,
+                    Arrays.asList(JoinRequestStatus.PENDING)
+            );
         }
         matchRequestRepository.save(match);
     }
@@ -389,8 +388,49 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                         .hostEmail(req.getMatchRequest().getUser().getEmail())
                         .matchStatus(req.getMatchRequest().getMatchStatus())
                         .matchingType(req.getMatchRequest().getMatchingType())
+                        .cancelReason(req.getMatchRequest().getCancelReason())
                         .build())
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public void cancelMatch(Integer matchId, Integer userId, String reason) {
+        log.info("User ID {} requesting to cancel Match ID: {} with reason: {}", userId, matchId, reason);
+
+        MatchRequest match = matchRequestRepository.findById(matchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Match request not found with ID: " + matchId));
+
+        // 1. Kiểm tra quyền sở hữu (Phải là Host)
+        if (!match.getUser().getUserId().equals(userId)) {
+            throw new BadRequestException("Only the host of this match can cancel it");
+        }
+
+        // 2. Kiểm tra trạng thái hợp lệ để hủy
+        if (match.getMatchStatus() != MatchStatus.OPEN && match.getMatchStatus() != MatchStatus.FULL) {
+            throw new BadRequestException("Match request cannot be cancelled in its current status: " + match.getMatchStatus());
+        }
+
+        // 3. Kiểm tra thời gian (Kèo chưa diễn ra)
+        LocalDate nowDate = LocalDate.now();
+        LocalTime nowTime = LocalTime.now();
+        if (match.getPlayDate().isBefore(nowDate) || 
+            (match.getPlayDate().isEqual(nowDate) && match.getStartTime().isBefore(nowTime))) {
+            throw new BadRequestException("Cannot cancel a match that has already started or finished");
+        }
+
+        // 4. Cập nhật trạng thái kèo sang CANCELLED và lý do hủy
+        String finalReason = (reason == null || reason.trim().isEmpty()) ? "Chủ nhà không cung cấp lý do cụ thể" : reason.trim();
+        matchRequestRepository.updateStatusAndReason(matchId, MatchStatus.CANCELLED, finalReason);
+
+        // 5. Bulk update các JoinRequest liên quan sang CANCELLED
+        int affectedRows = joinRequestRepository.bulkUpdateStatus(
+                matchId,
+                JoinRequestStatus.CANCELLED,
+                Arrays.asList(JoinRequestStatus.PENDING, JoinRequestStatus.APPROVED)
+        );
+
+        log.info("Successfully cancelled Match ID: {}. Affected {} join requests.", matchId, affectedRows);
     }
 
     private MatchResponse mapToResponse(MatchRequest match) {
@@ -413,6 +453,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                 .pricePerPlayer(match.getPricePerPlayer())
                 .matchStatus(match.getMatchStatus())
                 .matchingType(match.getMatchingType())
+                .cancelReason(match.getCancelReason())
                 .createdAt(match.getCreatedAt())
                 .build();
     }

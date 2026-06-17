@@ -41,5 +41,6 @@ public class MatchResponse {
     private BigDecimal pricePerPlayer;
     private MatchStatus matchStatus;
     private MatchingType matchingType;
+    private String cancelReason;
     private LocalDateTime createdAt;
 }

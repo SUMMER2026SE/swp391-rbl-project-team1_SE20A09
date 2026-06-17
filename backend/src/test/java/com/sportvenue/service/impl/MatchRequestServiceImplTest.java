@@ -529,26 +529,98 @@ class MatchRequestServiceImplTest {
                 .requestStatus(JoinRequestStatus.PENDING)
                 .build();
 
-        JoinRequest otherPending = JoinRequest.builder()
-                .joinId(501)
-                .matchRequest(match)
-                .user(User.builder().userId(3).build())
-                .requestStatus(JoinRequestStatus.PENDING)
-                .build();
-
         when(matchRequestRepository.findById(matchId)).thenReturn(Optional.of(match));
         when(joinRequestRepository.findById(joinId)).thenReturn(Optional.of(joinRequest));
-        when(joinRequestRepository.findAllByMatchRequestMatchId(matchId)).thenReturn(List.of(joinRequest, otherPending));
 
         matchRequestService.approveJoinRequest(matchId, joinId, hostUserId);
 
         assertEquals(JoinRequestStatus.APPROVED, joinRequest.getRequestStatus());
         assertEquals(2, match.getCurrentPlayers());
         assertEquals(MatchStatus.FULL, match.getMatchStatus());
-        assertEquals(JoinRequestStatus.REJECTED, otherPending.getRequestStatus());
 
         verify(joinRequestRepository).save(joinRequest);
-        verify(joinRequestRepository).save(otherPending);
+        verify(joinRequestRepository).bulkUpdateStatus(eq(matchId), eq(JoinRequestStatus.REJECTED), any());
         verify(matchRequestRepository).save(match);
+    }
+
+    @Test
+    void cancelMatch_Success() {
+        Integer matchId = 100;
+        Integer hostUserId = 1;
+
+        User host = User.builder().userId(hostUserId).build();
+        MatchRequest match = MatchRequest.builder()
+                .matchId(matchId)
+                .user(host)
+                .matchStatus(MatchStatus.OPEN)
+                .playDate(LocalDate.now().plusDays(1))
+                .startTime(LocalTime.of(18, 0))
+                .build();
+
+        when(matchRequestRepository.findById(matchId)).thenReturn(Optional.of(match));
+        when(joinRequestRepository.bulkUpdateStatus(any(), any(), any())).thenReturn(2);
+
+        matchRequestService.cancelMatch(matchId, hostUserId, "Lý do cá nhân");
+
+        verify(matchRequestRepository).updateStatusAndReason(eq(matchId), eq(MatchStatus.CANCELLED), eq("Lý do cá nhân"));
+        verify(joinRequestRepository).bulkUpdateStatus(eq(matchId), eq(JoinRequestStatus.CANCELLED), any());
+    }
+
+    @Test
+    void cancelMatch_NotHost_ThrowsBadRequestException() {
+        Integer matchId = 100;
+        Integer hostUserId = 1;
+        Integer otherUserId = 2;
+
+        User host = User.builder().userId(hostUserId).build();
+        MatchRequest match = MatchRequest.builder()
+                .matchId(matchId)
+                .user(host)
+                .build();
+
+        when(matchRequestRepository.findById(matchId)).thenReturn(Optional.of(match));
+
+        assertThrows(BadRequestException.class, () ->
+                matchRequestService.cancelMatch(matchId, otherUserId, "Lý do cá nhân"));
+    }
+
+    @Test
+    void cancelMatch_AlreadyExpired_ThrowsBadRequestException() {
+        Integer matchId = 100;
+        Integer hostUserId = 1;
+
+        User host = User.builder().userId(hostUserId).build();
+        MatchRequest match = MatchRequest.builder()
+                .matchId(matchId)
+                .user(host)
+                .matchStatus(MatchStatus.OPEN)
+                .playDate(LocalDate.now().minusDays(1)) // Đã qua ngày
+                .startTime(LocalTime.of(18, 0))
+                .build();
+
+        when(matchRequestRepository.findById(matchId)).thenReturn(Optional.of(match));
+
+        assertThrows(BadRequestException.class, () ->
+                matchRequestService.cancelMatch(matchId, hostUserId, "Lý do cá nhân"));
+    }
+
+    @Test
+    void cancelMatch_InvalidStatus_ThrowsBadRequestException() {
+        Integer matchId = 100;
+        Integer hostUserId = 1;
+
+        User host = User.builder().userId(hostUserId).build();
+        MatchRequest match = MatchRequest.builder()
+                .matchId(matchId)
+                .user(host)
+                .matchStatus(MatchStatus.COMPLETED) // Trạng thái không được hủy
+                .playDate(LocalDate.now().plusDays(1))
+                .startTime(LocalTime.of(18, 0))
+                .build();
+
+        when(matchRequestRepository.findById(matchId)).thenReturn(Optional.of(match));
+
+        assertThrows(BadRequestException.class, () ->
+                matchRequestService.cancelMatch(matchId, hostUserId, "Lý do cá nhân"));
     }
 }
