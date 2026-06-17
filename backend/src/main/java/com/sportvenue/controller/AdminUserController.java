@@ -17,6 +17,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -89,6 +90,22 @@ public class AdminUserController {
                 .code(200)
                 .message("Lấy danh sách khách hàng thành công")
                 .result(result)
+                .build());
+    }
+
+    @PatchMapping("/customers/{id}/lock")
+    @Operation(summary = "Khoá/Mở khoá tài khoản khách hàng", description = "Thay đổi trạng thái enabled của Customer")
+    public ResponseEntity<ApiResponse<Void>> lockUnlockCustomer(
+            @Parameter(description = "ID khách hàng") @org.springframework.web.bind.annotation.PathVariable Integer id,
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody com.sportvenue.dto.request.LockUserRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.sportvenue.security.UserPrincipal userPrincipal
+    ) {
+        adminUserService.lockUnlockCustomer(id, request.getEnabled(), userPrincipal.getUser().getUserId());
+        String actionMsg = request.getEnabled() ? "Mở khóa" : "Khóa";
+        
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .code(200)
+                .message(actionMsg + " tài khoản thành công")
                 .build());
     }
 }

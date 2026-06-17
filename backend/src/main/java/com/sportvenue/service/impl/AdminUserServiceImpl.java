@@ -64,4 +64,25 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .createdAt(user.getCreatedAt())
                 .build();
     }
+
+    @Override
+    @Transactional
+    public void lockUnlockCustomer(Integer userId, boolean enabled, Integer currentAdminId) {
+        if (userId.equals(currentAdminId)) {
+            throw new IllegalArgumentException("Admin không thể tự khóa tài khoản của chính mình");
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new com.sportvenue.exception.ResourceNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+
+        if (!ROLE_CUSTOMER.equalsIgnoreCase(user.getRole().getRoleName())) {
+            throw new com.sportvenue.exception.ResourceNotFoundException("Người dùng không phải là Customer");
+        }
+
+        AccountStatus newStatus = enabled ? AccountStatus.ACTIVE : AccountStatus.BLOCKED;
+        
+        log.info("Admin {} changing status of customer {} to {}", currentAdminId, userId, newStatus);
+        user.setAccountStatus(newStatus);
+        userRepository.save(user);
+    }
 }

@@ -23,4 +23,12 @@ public interface AdminUserService {
      * @return PageResponse chứa danh sách AdminCustomerResponse
      */
     PageResponse<AdminCustomerResponse> getCustomers(String search, AccountStatus accountStatus, Pageable pageable);
+
+    /**
+     * UC-ADM-03: Khoá hoặc mở khoá tài khoản khách hàng.
+     * @param userId ID của khách hàng
+     * @param enabled true = ACTIVE, false = BLOCKED
+     * @param currentAdminId ID của admin đang thao tác
+     */
+    void lockUnlockCustomer(Integer userId, boolean enabled, Integer currentAdminId);
 }
