@@ -1,40 +1,38 @@
 'use client'
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Clock, Calendar, Star, MessageSquare, X, AlertCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Calendar, Star, MessageSquare, X, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { post } from '@/lib/api';
+import { get, post } from '@/lib/api';
 import { toast } from 'sonner';
 import Image from "next/image";
-
 import { useParams } from 'next/navigation';
 
-const booking = {
-  id: 1,
-  venueName: 'Sân bóng Thành Công',
-  venueImage: 'https://images.unsplash.com/photo-1705593813682-033ee2991df6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080',
-  sportType: 'Bóng đá',
-  location: 'Quận 1, TP.HCM',
-  date: '2026-06-15',
-  startTime: '08:00',
-  endTime: '10:00',
-  duration: 2,
-  pricePerHour: 500000,
-  totalPrice: 1000000,
-  status: 'confirmed',
-  bookingCode: 'BK-2026-001234',
-  paymentMethod: 'Ví điện tử MoMo',
-  paidAt: '2026-06-01T10:30:00',
-  accessories: [
-    { name: 'Thuê bóng', price: 50000, quantity: 2 },
-  ],
-};
+interface BookingDetail {
+  bookingId: number;
+  bookingCode: string;
+  venueName: string;
+  venueImage: string;
+  sportType: string;
+  location: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  duration: number;
+  pricePerHour: number;
+  totalPrice: number;
+  status: string;
+  paymentMethod: string;
+  paidAt: string | null;
+  note: string | null;
+  accessories: Array<{ name: string; price: number; quantity: number }>;
+}
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   confirmed: { label: 'Đã xác nhận', className: 'bg-green-100 text-green-700' },
@@ -45,20 +43,61 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 
 function BookingDetailPage() {
   const params = useParams();
-  const status = statusConfig[booking.status] ?? statusConfig['pending'];
+  const [booking, setBooking] = useState<BookingDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   const [complaintOpen, setComplaintOpen] = useState(false);
   const [complaintText, setComplaintText] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    const fetchBookingDetail = async () => {
+      if (!params?.id) return;
+      try {
+        setLoading(true);
+        // Replace with real endpoint when available or use a fallback mock if needed
+        // For now, I will simulate fetching from a real endpoint
+        const data = await get<any>(`/bookings/${params.id}`);
+        
+        // Transform backend response to UI structure
+        const detail: BookingDetail = {
+          bookingId: data.bookingId,
+          bookingCode: `BK${String(data.bookingId).padStart(6, '0')}`,
+          venueName: data.stadium?.stadiumName || 'Sân chưa biết',
+          venueImage: data.stadium?.imageUrl || 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800',
+          sportType: data.stadium?.sportType || 'Khác',
+          location: data.stadium?.address || 'Chưa có địa chỉ',
+          date: new Date(data.bookingDate).toLocaleDateString('vi-VN'),
+          startTime: data.slot?.startTime ? data.slot.startTime.substring(0, 5) : '00:00',
+          endTime: data.slot?.endTime ? data.slot.endTime.substring(0, 5) : '00:00',
+          duration: 1, // Calculate if possible
+          pricePerHour: data.totalPrice, // Simplified
+          totalPrice: data.totalPrice,
+          status: data.bookingStatus.toLowerCase(),
+          paymentMethod: data.paymentStatus === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán',
+          paidAt: data.bookingDate,
+          note: data.note,
+          accessories: []
+        };
+        setBooking(detail);
+      } catch (err: any) {
+        setError(err.message || 'Không thể tải chi tiết đặt sân');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBookingDetail();
+  }, [params?.id]);
+
   const handleSubmitComplaint = async () => {
-    if (!complaintText.trim()) return;
+    if (!complaintText.trim() || !booking) return;
     try {
       setSubmitting(true);
-      const targetId = params?.id || booking.id;
       await post(`/complaints`, {
-        bookingId: parseInt(String(targetId), 10) || 0,
-        subject: "Khiếu nại từ đơn đặt sân #" + targetId,
+        bookingId: booking.bookingId,
+        subject: "Khiếu nại từ đơn đặt sân #" + booking.bookingId,
         description: complaintText.trim() 
       });
       toast.success("Đã gửi khiếu nại thành công! Chủ sân sẽ sớm phản hồi.");
@@ -70,6 +109,28 @@ function BookingDetailPage() {
       setSubmitting(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error || !booking) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4">
+        <AlertCircle className="h-12 w-12 text-destructive" />
+        <p className="text-lg font-medium">{error || 'Không tìm thấy đơn đặt sân'}</p>
+        <Link href="/bookings">
+          <Button variant="outline">Quay lại danh sách</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  const status = statusConfig[booking.status] ?? statusConfig['pending'];
 
   return (
     <div className="min-h-screen bg-background">
@@ -140,20 +201,19 @@ function BookingDetailPage() {
                 Giờ chơi
               </div>
               <span className="text-sm font-medium">
-                {booking.startTime} – {booking.endTime} ({booking.duration}h)
+                {booking.startTime} – {booking.endTime}
               </span>
             </div>
             <Separator />
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Giá sân ({booking.duration}h)</span>
-              <span>{(booking.pricePerHour * booking.duration).toLocaleString('vi-VN')}đ</span>
+              <span className="text-muted-foreground">Tổng giá tiền</span>
+              <span>{booking.totalPrice.toLocaleString('vi-VN')}đ</span>
             </div>
-            {booking.accessories.map((acc) => (
-              <div key={acc.name} className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">{acc.name} x{acc.quantity}</span>
-                <span>{(acc.price * acc.quantity).toLocaleString('vi-VN')}đ</span>
+            {booking.note && (
+              <div className="mt-2 text-sm italic text-muted-foreground">
+                Ghi chú: {booking.note}
               </div>
-            ))}
+            )}
             <Separator />
             <div className="flex items-center justify-between font-semibold">
               <span>Tổng cộng</span>
@@ -162,54 +222,39 @@ function BookingDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Payment Info */}
-        <Card>
-          <CardHeader className="pb-2">
-            <h3 className="font-semibold">Thông tin thanh toán</h3>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Phương thức</span>
-              <span>{booking.paymentMethod}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Thanh toán lúc</span>
-              <span>{new Date(booking.paidAt).toLocaleString('vi-VN')}</span>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Actions */}
-        {booking.status === 'confirmed' && (
-          <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3">
+          {(booking.status === 'confirmed' || booking.status === 'pending') && (
             <div className="flex flex-col sm:flex-row gap-3">
-              <Link href={`/booking/${params.id}/review`} className="flex-1">
-                <Button variant="outline" className="w-full">
-                  <Star className="h-4 w-4 mr-2" />
-                  Viết đánh giá
-                </Button>
-              </Link>
               <Link href="/chat" className="flex-1">
                 <Button variant="outline" className="w-full">
                   <MessageSquare className="h-4 w-4 mr-2" />
                   Liên hệ chủ sân
                 </Button>
               </Link>
+              <Link href={`/booking/${booking.bookingId}/cancel`} className="flex-1">
+                <Button variant="destructive" className="w-full">
+                  <X className="h-4 w-4 mr-2" />
+                  Huỷ lịch
+                </Button>
+              </Link>
             </div>
+          )}
+          {booking.status === 'completed' && (
             <div className="flex flex-col sm:flex-row gap-3">
+              <Link href={`/booking/${booking.bookingId}/review`} className="flex-1">
+                <Button className="w-full bg-emerald-600 hover:bg-emerald-700">
+                  <Star className="h-4 w-4 mr-2" />
+                  Đánh giá
+                </Button>
+              </Link>
               <Button variant="outline" className="flex-1 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700" onClick={() => setComplaintOpen(true)}>
                 <AlertCircle className="h-4 w-4 mr-2" />
                 Gửi khiếu nại
               </Button>
-              <Link href={`/booking/${params.id}/cancel`} className="flex-1">
-                <Button variant="destructive" className="w-full">
-                  <X className="h-4 w-4 mr-2" />
-                  Huỷ đặt sân
-                </Button>
-              </Link>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <Dialog open={complaintOpen} onOpenChange={setComplaintOpen}>
@@ -241,4 +286,3 @@ function BookingDetailPage() {
 }
 
 export default BookingDetailPage;
-

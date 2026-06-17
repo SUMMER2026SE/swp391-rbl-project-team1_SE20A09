@@ -38,7 +38,7 @@ export type BookingPageResult = {
  */
 export async function fetchMyBookings(
   page = 0,
-  size = 50,
+  size = 10,
   status?: string
 ): Promise<BookingPageResult> {
   const query = new URLSearchParams({
@@ -84,10 +84,19 @@ type OwnerBookingDto = {
 
 export async function fetchOwnerBookings(
   page = 0,
-  size = 50
+  size = 10,
+  status?: string
 ): Promise<BookingPageResult> {
+  const query = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+  });
+  if (status && status !== "all") {
+    query.append("status", status);
+  }
+
   const data = await get<PageResponse<OwnerBookingDto>>(
-    `/owner/bookings/page?page=${page}&size=${size}`
+    `/owner/bookings/page?${query.toString()}`
   );
 
   const bookings: BookingHistoryItem[] = (data.content ?? []).map((b) => ({

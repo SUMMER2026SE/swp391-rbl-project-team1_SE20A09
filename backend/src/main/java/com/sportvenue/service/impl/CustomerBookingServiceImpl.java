@@ -36,24 +36,30 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<CustomerBookingHistoryDto> getMyBookings(UserPrincipal principal, String status, int page, int size) {
-        User user = userRepository.findByEmail(principal.getUsername())
-                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
+        Integer userId = principal.getUser().getUserId();
 
-        java.util.List<BookingStatus> statuses = null;
+        Page<Booking> pageResult;
+        
         if (status != null && !status.isBlank() && !status.equalsIgnoreCase("all")) {
+            java.util.List<BookingStatus> statuses;
             if (status.equalsIgnoreCase("upcoming")) {
                 statuses = java.util.List.of(BookingStatus.PENDING, BookingStatus.CONFIRMED);
             } else {
                 try {
                     statuses = java.util.List.of(BookingStatus.valueOf(status.toUpperCase()));
                 } catch (IllegalArgumentException e) {
-                    // Ignore invalid status
+                    statuses = null; // Fallback to all or empty
                 }
             }
+            
+            if (statuses != null) {
+                pageResult = bookingRepository.findByUserUserIdAndBookingStatusInOrderByBookingDateDesc(userId, statuses, PageRequest.of(page, size));
+            } else {
+                pageResult = bookingRepository.findByUserUserIdOrderByBookingDateDesc(userId, PageRequest.of(page, size));
+            }
+        } else {
+            pageResult = bookingRepository.findByUserUserIdOrderByBookingDateDesc(userId, PageRequest.of(page, size));
         }
-
-        Page<Booking> pageResult = bookingRepository
-                .findByUserIdAndStatuses(user.getUserId(), statuses, PageRequest.of(page, size));
 
         return PageResponse.<CustomerBookingHistoryDto>builder()
                 .content(pageResult.getContent().stream().map(this::toDto).toList())
@@ -68,13 +74,12 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
     @Override
     @Transactional
     public void cancelBooking(UserPrincipal principal, Integer bookingId, String reason) {
-        User user = userRepository.findByEmail(principal.getUsername())
-                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
+        Integer userId = principal.getUser().getUserId();
 
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân"));
 
-        if (!booking.getUser().getUserId().equals(user.getUserId())) {
+        if (!booking.getUser().getUserId().equals(userId)) {
             throw new com.sportvenue.exception.BadRequestException("Bạn không có quyền huỷ đơn đặt sân này");
         }
 
@@ -87,6 +92,9 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
         
         if (booking.getSlot() != null) {
             booking.getSlot().setSlotStatus(com.sportvenue.entity.enums.SlotStatus.AVAILABLE);
+            // Explicitly save the slot status change
+            // (Assuming cascade or dirty checking works, but explicit save is safer if no cascade)
+            // paymentRepository is already injected if needed for other logic
         }
         
         bookingRepository.save(booking);

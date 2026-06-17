@@ -183,7 +183,7 @@ export function BookingHistoryList({ isOwner = false }: BookingHistoryListProps)
   const [totalElements, setTotalElements] = useState(0);
   const [activeTab, setActiveTab] = useState("all");
 
-  const pageSize = 8; // Desktop optimized page size
+  const pageSize = 10; // Aligned with backend default and api size
 
   const loadBookings = useCallback(() => {
     setLoading(true);
