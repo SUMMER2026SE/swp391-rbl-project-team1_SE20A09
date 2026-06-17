@@ -12,6 +12,10 @@ import com.sportvenue.entity.enums.MatchStatus;
 import com.sportvenue.entity.enums.MatchingType;
 import com.sportvenue.entity.enums.SkillLevel;
 import com.sportvenue.entity.enums.StadiumStatus;
+import com.sportvenue.entity.JoinRequest;
+import com.sportvenue.entity.enums.JoinRequestStatus;
+import com.sportvenue.dto.response.JoinRequestResponse;
+import com.sportvenue.repository.JoinRequestRepository;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
@@ -59,6 +63,9 @@ class MatchRequestServiceImplTest {
     @Mock
     private BookingRepository bookingRepository;
 
+    @Mock
+    private JoinRequestRepository joinRequestRepository;
+
     private MatchRequestServiceImpl matchRequestService;
 
     @BeforeEach
@@ -68,7 +75,8 @@ class MatchRequestServiceImplTest {
                 userRepository,
                 stadiumRepository,
                 sportTypeRepository,
-                bookingRepository
+                bookingRepository,
+                joinRequestRepository
         );
     }
 
@@ -288,7 +296,7 @@ class MatchRequestServiceImplTest {
                 .build();
 
         Page<MatchRequest> page = new PageImpl<>(List.of(mr), pageable, 1);
-        when(matchRequestRepository.findAllByMatchStatus(MatchStatus.OPEN, pageable)).thenReturn(page);
+        when(matchRequestRepository.findActiveMatchesSorted(any(), any(), any(), eq(pageable))).thenReturn(page);
 
         // Act
         Page<MatchResponse> result = matchRequestService.getActiveMatches(pageable);
@@ -381,7 +389,166 @@ class MatchRequestServiceImplTest {
                 .maxPlayers(10)
                 .skillLevel(SkillLevel.INTERMEDIATE)
                 .splitPrice(true)
-                .pricePerPlayer(BigDecimal.valueOf(50000))
+        .pricePerPlayer(BigDecimal.valueOf(50000))
                 .build();
+    }
+
+    @Test
+    void joinMatch_Success() {
+        Integer matchId = 100;
+        Integer guestUserId = 2;
+
+        User host = User.builder().userId(1).build();
+        MatchRequest match = MatchRequest.builder()
+                .matchId(matchId)
+                .user(host)
+                .matchStatus(MatchStatus.OPEN)
+                .playDate(LocalDate.now().plusDays(2))
+                .startTime(LocalTime.of(18, 0))
+                .endTime(LocalTime.of(20, 0))
+                .matchingType(MatchingType.INDIVIDUAL)
+                .build();
+
+        User guest = User.builder()
+                .userId(guestUserId)
+                .accountStatus(AccountStatus.ACTIVE)
+                .build();
+
+        when(matchRequestRepository.findById(matchId)).thenReturn(Optional.of(match));
+        when(userRepository.findById(guestUserId)).thenReturn(Optional.of(guest));
+        when(joinRequestRepository.existsByMatchRequestMatchIdAndUserUserIdAndRequestStatusIn(
+                eq(matchId), eq(guestUserId), any())).thenReturn(false);
+        when(matchRequestRepository.existsOverlappingMatchRequest(any(), any(), any(), any())).thenReturn(false);
+        when(bookingRepository.existsOverlappingBooking(any(), any(), any(), any(), any())).thenReturn(false);
+
+        matchRequestService.joinMatch(matchId, guestUserId, "Xin tham gia");
+
+        ArgumentCaptor<JoinRequest> captor = ArgumentCaptor.forClass(JoinRequest.class);
+        verify(joinRequestRepository).save(captor.capture());
+        JoinRequest saved = captor.getValue();
+        assertEquals(JoinRequestStatus.PENDING, saved.getRequestStatus());
+        assertEquals("Xin tham gia", saved.getMessage());
+        assertEquals(guestUserId, saved.getUser().getUserId());
+    }
+
+    @Test
+    void joinMatch_OwnMatch_ThrowsBadRequestException() {
+        Integer matchId = 100;
+        Integer hostUserId = 1;
+
+        User host = User.builder().userId(hostUserId).build();
+        MatchRequest match = MatchRequest.builder()
+                .matchId(matchId)
+                .user(host)
+                .matchStatus(MatchStatus.OPEN)
+                .playDate(LocalDate.now().plusDays(2))
+                .startTime(LocalTime.of(18, 0))
+                .endTime(LocalTime.of(20, 0))
+                .build();
+
+        when(matchRequestRepository.findById(matchId)).thenReturn(Optional.of(match));
+
+        assertThrows(BadRequestException.class, () ->
+                matchRequestService.joinMatch(matchId, hostUserId, "Xin gia nhập"));
+    }
+
+    @Test
+    void getJoinRequestsForMatch_Success() {
+        Integer matchId = 100;
+        Integer hostUserId = 1;
+
+        SportType sportType = SportType.builder()
+                .sportTypeId(1)
+                .sportName("Football")
+                .build();
+
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .stadiumName("Sân Hoa Lư")
+                .address("Quận 1")
+                .stadiumStatus(StadiumStatus.AVAILABLE)
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .sportType(sportType)
+                .build();
+
+        User host = User.builder().userId(hostUserId).firstName("Nguyen").lastName("A").email("host@gmail.com").build();
+        MatchRequest match = MatchRequest.builder()
+                .matchId(matchId)
+                .user(host)
+                .stadium(stadium)
+                .sportType(sportType)
+                .title("Kèo đá bóng")
+                .playDate(LocalDate.now())
+                .startTime(LocalTime.of(18, 0))
+                .endTime(LocalTime.of(20, 0))
+                .matchStatus(MatchStatus.OPEN)
+                .matchingType(MatchingType.INDIVIDUAL)
+                .build();
+
+        User guest = User.builder().userId(2).firstName("Nguyen").lastName("B").email("b@gmail.com").build();
+        JoinRequest request = JoinRequest.builder()
+                .joinId(500)
+                .matchRequest(match)
+                .user(guest)
+                .requestStatus(JoinRequestStatus.PENDING)
+                .message("Hello")
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        when(matchRequestRepository.findById(matchId)).thenReturn(Optional.of(match));
+        when(joinRequestRepository.findAllByMatchRequestMatchId(matchId)).thenReturn(List.of(request));
+
+        List<JoinRequestResponse> responses = matchRequestService.getJoinRequestsForMatch(matchId, hostUserId);
+
+        assertNotNull(responses);
+        assertEquals(1, responses.size());
+        assertEquals(500, responses.get(0).getJoinId());
+        assertEquals("Nguyen B", responses.get(0).getFullName());
+    }
+
+    @Test
+    void approveJoinRequest_Success_MatchBecomesFull() {
+        Integer matchId = 100;
+        Integer hostUserId = 1;
+        Integer joinId = 500;
+
+        User host = User.builder().userId(hostUserId).build();
+        MatchRequest match = MatchRequest.builder()
+                .matchId(matchId)
+                .user(host)
+                .matchStatus(MatchStatus.OPEN)
+                .maxPlayers(2)
+                .currentPlayers(1)
+                .build();
+
+        User guest = User.builder().userId(2).build();
+        JoinRequest joinRequest = JoinRequest.builder()
+                .joinId(joinId)
+                .matchRequest(match)
+                .user(guest)
+                .requestStatus(JoinRequestStatus.PENDING)
+                .build();
+
+        JoinRequest otherPending = JoinRequest.builder()
+                .joinId(501)
+                .matchRequest(match)
+                .user(User.builder().userId(3).build())
+                .requestStatus(JoinRequestStatus.PENDING)
+                .build();
+
+        when(matchRequestRepository.findById(matchId)).thenReturn(Optional.of(match));
+        when(joinRequestRepository.findById(joinId)).thenReturn(Optional.of(joinRequest));
+        when(joinRequestRepository.findAllByMatchRequestMatchId(matchId)).thenReturn(List.of(joinRequest, otherPending));
+
+        matchRequestService.approveJoinRequest(matchId, joinId, hostUserId);
+
+        assertEquals(JoinRequestStatus.APPROVED, joinRequest.getRequestStatus());
+        assertEquals(2, match.getCurrentPlayers());
+        assertEquals(MatchStatus.FULL, match.getMatchStatus());
+        assertEquals(JoinRequestStatus.REJECTED, otherPending.getRequestStatus());
+
+        verify(joinRequestRepository).save(joinRequest);
+        verify(joinRequestRepository).save(otherPending);
+        verify(matchRequestRepository).save(match);
     }
 }
