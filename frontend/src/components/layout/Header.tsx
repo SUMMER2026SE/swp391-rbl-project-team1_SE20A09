@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from "next-auth/react";
 import type { Session } from "next-auth";
-import { Menu, LogOut, User as UserIcon, Settings, BarChart2 } from "lucide-react";
+import { Menu, LogOut, User as UserIcon, Settings, BarChart2, Clock } from "lucide-react";
 import { Button } from "../ui/button";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
