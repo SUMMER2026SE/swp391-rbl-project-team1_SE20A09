@@ -12,10 +12,10 @@ import java.util.Optional;
 @Repository
 public interface JoinRequestRepository extends JpaRepository<JoinRequest, Integer> {
 
-    @EntityGraph(attributePaths = {"user", "matchRequest", "matchRequest.stadium"})
+    @EntityGraph(attributePaths = {"user", "matchRequest", "matchRequest.stadium", "matchRequest.user", "matchRequest.sportType"})
     List<JoinRequest> findAllByMatchRequestMatchId(Integer matchId);
 
-    @EntityGraph(attributePaths = {"user", "matchRequest", "matchRequest.stadium"})
+    @EntityGraph(attributePaths = {"user", "matchRequest", "matchRequest.stadium", "matchRequest.user", "matchRequest.sportType"})
     List<JoinRequest> findAllByUserEmailOrderByCreatedAtDesc(String email);
 
     @EntityGraph(attributePaths = {"user", "matchRequest", "matchRequest.stadium", "matchRequest.sportType"})

@@ -457,8 +457,33 @@ class MatchRequestServiceImplTest {
         Integer matchId = 100;
         Integer hostUserId = 1;
 
-        User host = User.builder().userId(hostUserId).build();
-        MatchRequest match = MatchRequest.builder().matchId(matchId).user(host).build();
+        SportType sportType = SportType.builder()
+                .sportTypeId(1)
+                .sportName("Football")
+                .build();
+
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .stadiumName("Sân Hoa Lư")
+                .address("Quận 1")
+                .stadiumStatus(StadiumStatus.AVAILABLE)
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .sportType(sportType)
+                .build();
+
+        User host = User.builder().userId(hostUserId).firstName("Nguyen").lastName("A").email("host@gmail.com").build();
+        MatchRequest match = MatchRequest.builder()
+                .matchId(matchId)
+                .user(host)
+                .stadium(stadium)
+                .sportType(sportType)
+                .title("Kèo đá bóng")
+                .playDate(LocalDate.now())
+                .startTime(LocalTime.of(18, 0))
+                .endTime(LocalTime.of(20, 0))
+                .matchStatus(MatchStatus.OPEN)
+                .matchingType(MatchingType.INDIVIDUAL)
+                .build();
 
         User guest = User.builder().userId(2).firstName("Nguyen").lastName("B").email("b@gmail.com").build();
         JoinRequest request = JoinRequest.builder()

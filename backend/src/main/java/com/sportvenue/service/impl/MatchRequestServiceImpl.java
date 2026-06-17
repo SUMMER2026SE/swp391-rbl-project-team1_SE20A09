@@ -224,7 +224,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         }
 
         LocalDateTime startOfDay = request.getPlayDate().atStartOfDay();
-        LocalDateTime endOfDay = request.getPlayDate().atTime(java.time.LocalTime.MAX);
+        LocalDateTime endOfDay = request.getPlayDate().atTime(LocalTime.MAX);
         boolean hasOverlappingBooking = bookingRepository.existsOverlappingBooking(
                 userId,
                 startOfDay,
@@ -260,6 +260,16 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                         .requestStatus(req.getRequestStatus())
                         .message(req.getMessage())
                         .createdAt(req.getCreatedAt())
+                        .matchTitle(req.getMatchRequest().getTitle())
+                        .stadiumName(req.getMatchRequest().getStadium().getStadiumName())
+                        .sportName(req.getMatchRequest().getSportType().getSportName())
+                        .playDate(req.getMatchRequest().getPlayDate())
+                        .startTime(req.getMatchRequest().getStartTime())
+                        .endTime(req.getMatchRequest().getEndTime())
+                        .hostName(req.getMatchRequest().getUser().getFullName())
+                        .hostEmail(req.getMatchRequest().getUser().getEmail())
+                        .matchStatus(req.getMatchRequest().getMatchStatus())
+                        .matchingType(req.getMatchRequest().getMatchingType())
                         .build())
                 .collect(Collectors.toList());
     }
@@ -369,6 +379,16 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                         .requestStatus(req.getRequestStatus())
                         .message(req.getMessage())
                         .createdAt(req.getCreatedAt())
+                        .matchTitle(req.getMatchRequest().getTitle())
+                        .stadiumName(req.getMatchRequest().getStadium().getStadiumName())
+                        .sportName(req.getMatchRequest().getSportType().getSportName())
+                        .playDate(req.getMatchRequest().getPlayDate())
+                        .startTime(req.getMatchRequest().getStartTime())
+                        .endTime(req.getMatchRequest().getEndTime())
+                        .hostName(req.getMatchRequest().getUser().getFullName())
+                        .hostEmail(req.getMatchRequest().getUser().getEmail())
+                        .matchStatus(req.getMatchRequest().getMatchStatus())
+                        .matchingType(req.getMatchRequest().getMatchingType())
                         .build())
                 .collect(Collectors.toList());
     }

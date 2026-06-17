@@ -86,6 +86,16 @@ export interface JoinRequestResponse {
   requestStatus: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
   message: string;
   createdAt: string;
+  matchTitle?: string;
+  stadiumName?: string;
+  sportName?: string;
+  playDate?: string;
+  startTime?: string;
+  endTime?: string;
+  hostName?: string;
+  hostEmail?: string;
+  matchStatus?: "OPEN" | "FULL" | "CANCELLED" | "COMPLETED";
+  matchingType?: "INDIVIDUAL" | "TEAM_VS_TEAM";
 }
 
 export async function getJoinRequests(
