@@ -31,14 +31,13 @@ function AIAssistantPage() {
   ];
 
   const venueRecommendation = {
-    name: "Sân bóng Thành Công",
-    image:
-      "https://images.unsplash.com/photo-1705593813682-033ee2991df6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=300",
+    name: "Sân bóng mẫu",
+    image: "",
     sportType: "Bóng đá",
-    price: 500000,
-    rating: 4.8,
-    location: "Quận 1, TP.HCM",
-    availableSlots: "18:00 - 20:00",
+    price: 0,
+    rating: 0,
+    location: "TP.HCM",
+    availableSlots: "Trống",
   };
 
   const handleSend = () => {

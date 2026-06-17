@@ -65,7 +65,7 @@ function BookingDetailPage() {
           bookingId: data.bookingId,
           bookingCode: `BK${String(data.bookingId).padStart(6, '0')}`,
           venueName: data.stadium?.stadiumName || 'Sân chưa biết',
-          venueImage: data.stadium?.imageUrl || 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800',
+          venueImage: data.stadium?.imageUrl || '',
           sportType: data.stadium?.sportType || 'Khác',
           location: data.stadium?.address || 'Chưa có địa chỉ',
           date: new Date(data.bookingDate).toLocaleDateString('vi-VN'),

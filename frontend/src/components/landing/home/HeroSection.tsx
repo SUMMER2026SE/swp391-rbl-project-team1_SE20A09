@@ -8,15 +8,9 @@ import { StatsStrip } from "@/components/landing/home/StatsStrip";
 
 export function HeroSection() {
   return (
-    <section className="relative min-h-[88vh] flex flex-col justify-center overflow-hidden">
+    <section className="relative min-h-[88vh] flex flex-col justify-center overflow-hidden bg-emerald-950">
       {/* Background layers */}
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat scale-105"
-        style={{
-          backgroundImage:
-            "url(https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1920&q=80)",
-        }}
-      />
+      <div className="absolute inset-0 bg-gradient-to-br from-emerald-900 via-emerald-950 to-black" />
       <div className="absolute inset-0 bg-gradient-to-b from-emerald-950/85 via-emerald-900/75 to-background" />
       <div className="absolute inset-0 home-grid-pattern opacity-[0.07]" />
 
