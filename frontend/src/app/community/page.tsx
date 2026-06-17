@@ -51,6 +51,7 @@ import {
   rejectJoinRequest,
   getMyCreatedMatches,
   getMyJoinedRequests,
+  cancelMatchRequest,
   MatchResponse,
   JoinRequestResponse,
 } from "@/lib/api/matchmaking";
@@ -59,9 +60,45 @@ import {
   searchStadiums,
   StadiumResponse,
 } from "@/lib/api/stadium";
+import { useConfirm } from "@/hooks/useConfirm";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+
+// Helper functions for MatchStatus display
+const isMatchEnded = (playDate: string, endTime: string) => {
+  if (!playDate || !endTime) return false;
+  const endDateTime = new Date(`${playDate}T${endTime}`);
+  return new Date() > endDateTime;
+};
+
+const isMatchInProgress = (playDate: string, startTime: string, endTime: string) => {
+  if (!playDate || !startTime || !endTime) return false;
+  const startDateTime = new Date(`${playDate}T${startTime}`);
+  const endDateTime = new Date(`${playDate}T${endTime}`);
+  const now = new Date();
+  return now >= startDateTime && now <= endDateTime;
+};
+
+const getMatchDisplayStatus = (m: MatchResponse) => {
+  if (m.matchStatus === "CANCELLED") return "Đã hủy";
+  if (isMatchEnded(m.playDate, m.endTime)) return "Đã kết thúc";
+  if (isMatchInProgress(m.playDate, m.startTime, m.endTime)) return "Đang diễn ra";
+  if (m.matchStatus === "OPEN") return "Mở";
+  if (m.matchStatus === "FULL") return "Đầy";
+  return m.matchStatus;
+};
+
+const getMatchStatusBadgeClass = (m: MatchResponse) => {
+  if (m.matchStatus === "CANCELLED") return "bg-rose-500 hover:bg-rose-600";
+  if (isMatchEnded(m.playDate, m.endTime)) return "bg-slate-500 hover:bg-slate-600";
+  if (isMatchInProgress(m.playDate, m.startTime, m.endTime)) return "bg-blue-500 hover:bg-blue-600";
+  if (m.matchStatus === "OPEN") return "bg-emerald-500 hover:bg-emerald-600";
+  if (m.matchStatus === "FULL") return "bg-amber-500 hover:bg-amber-600";
+  return "bg-slate-400 hover:bg-slate-500";
+};
 
 function MatchRequestFeedPage() {
   const { data: session } = useSession();
+  const { isOpen, options, confirm, close, execute, isLoading: confirming } = useConfirm();
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
@@ -77,6 +114,10 @@ function MatchRequestFeedPage() {
   const [joinRequests, setJoinRequests] = useState<JoinRequestResponse[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [actioningId, setActioningId] = useState<number | null>(null);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [matchIdToCancel, setMatchIdToCancel] = useState<number | null>(null);
+  const [submittingCancel, setSubmittingCancel] = useState(false);
 
   // Lists from APIs
   const [matchRequests, setMatchRequests] = useState<MatchResponse[]>([]);
@@ -148,6 +189,23 @@ function MatchRequestFeedPage() {
       console.error("Lỗi khi tải dữ liệu sidebar:", err);
     } finally {
       setLoadingSidebar(false);
+    }
+  };
+
+  const handleExecuteCancelMatch = async () => {
+    if (!matchIdToCancel) return;
+    try {
+      setSubmittingCancel(true);
+      await cancelMatchRequest(matchIdToCancel, cancelReason);
+      toast.success("Hủy kèo ghép thành công.");
+      setShowCancelDialog(false);
+      setShowManageDialog(false);
+      fetchFeed();
+      fetchSidebarData();
+    } catch (err: any) {
+      toast.error(err.message || "Lỗi khi hủy kèo.");
+    } finally {
+      setSubmittingCancel(false);
     }
   };
 
@@ -280,7 +338,7 @@ function MatchRequestFeedPage() {
       setSubmittingJoin(true);
       await joinMatchRequest(selectedRequest.matchId, joinNote);
       toast.success(
-        "Gửi yêu cầu tham gia kèo thành công! Đang chờ chủ kèo phê duyệt.",
+        "Gửi yêu cầu tham gia kèo thành công! Đang chờ Host phê duyệt.",
       );
       setShowJoinDialog(false);
       setJoinNote("");
@@ -710,15 +768,9 @@ function MatchRequestFeedPage() {
                         <div className="flex flex-col items-end gap-2 shrink-0">
                           <Badge
                             variant="outline"
-                            className={`text-[9px] px-2 py-0.5 border-0 font-bold text-white shrink-0 ${
-                              m.matchStatus === "OPEN"
-                                ? "bg-emerald-500 hover:bg-emerald-600"
-                                : m.matchStatus === "FULL"
-                                ? "bg-amber-500 hover:bg-amber-600"
-                                : "bg-slate-400 hover:bg-slate-500"
-                            }`}
+                            className={`text-[9px] px-2 py-0.5 border-0 font-bold text-white shrink-0 ${getMatchStatusBadgeClass(m)}`}
                           >
-                            {m.matchStatus === "OPEN" ? "Mở" : m.matchStatus === "FULL" ? "Đầy" : m.matchStatus}
+                            {getMatchDisplayStatus(m)}
                           </Badge>
                           <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
                         </div>
@@ -780,6 +832,8 @@ function MatchRequestFeedPage() {
                                 ? "bg-amber-500 hover:bg-amber-600"
                                 : req.requestStatus === "APPROVED"
                                 ? "bg-emerald-500 hover:bg-emerald-600"
+                                : req.requestStatus === "CANCELLED"
+                                ? "bg-slate-400 hover:bg-slate-500"
                                 : "bg-rose-500 hover:bg-rose-600"
                             }`}
                           >
@@ -787,6 +841,8 @@ function MatchRequestFeedPage() {
                               ? "Chờ"
                               : req.requestStatus === "APPROVED"
                               ? "Duyệt"
+                              : req.requestStatus === "CANCELLED"
+                              ? "Đã hủy"
                               : "Từ chối"}
                           </Badge>
                           <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
@@ -1151,7 +1207,7 @@ function MatchRequestFeedPage() {
                 <Label htmlFor="join-note" className="font-bold text-slate-700">
                   {selectedRequest.matchingType === "TEAM_VS_TEAM"
                     ? "Tên đội bóng của bạn & lời nhắn *"
-                    : "Lời nhắn tới chủ kèo (không bắt buộc)"}
+                    : "Lời nhắn tới Host (không bắt buộc)"}
                 </Label>
                 <Textarea
                   id="join-note"
@@ -1210,8 +1266,8 @@ function MatchRequestFeedPage() {
                   <h3 className="font-extrabold text-slate-900 text-base leading-snug">
                     {selectedManageMatch.title}
                   </h3>
-                  <Badge className={selectedManageMatch.matchStatus === "OPEN" ? "bg-emerald-500 hover:bg-emerald-600 text-white" : "bg-slate-500 hover:bg-slate-600 text-white"}>
-                    {selectedManageMatch.matchStatus === "OPEN" ? "Đang nhận đơn" : "Đã Đóng / Đầy"}
+                  <Badge className={`${getMatchStatusBadgeClass(selectedManageMatch)} text-white border-0`}>
+                    {getMatchDisplayStatus(selectedManageMatch)}
                   </Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-y-2.5 gap-x-6 text-xs font-semibold text-slate-500 border-t border-slate-200/60 pt-3">
@@ -1334,7 +1390,22 @@ function MatchRequestFeedPage() {
           )}
 
           {/* Footer close button */}
-          <div className="border-t pt-4 flex justify-end">
+          <div className="border-t pt-4 flex justify-between items-center">
+            {(selectedManageMatch?.matchStatus === "OPEN" ||
+              selectedManageMatch?.matchStatus === "FULL") && (
+              <Button
+                variant="outline"
+                className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 font-bold px-4 h-10 gap-2"
+                onClick={() => {
+                  setMatchIdToCancel(selectedManageMatch.matchId);
+                  setCancelReason("");
+                  setShowCancelDialog(true);
+                }}
+              >
+                <ShieldAlert className="w-4 h-4" />
+                Hủy kèo ghép
+              </Button>
+            )}
             <Button
               variant="outline"
               className="font-bold px-6 h-10 border-slate-200 hover:bg-slate-50 text-slate-700"
@@ -1409,19 +1480,33 @@ function MatchRequestFeedPage() {
                     ? "bg-amber-50/50 border-amber-200/60 text-amber-800"
                     : selectedJoinedRequest.requestStatus === "APPROVED"
                     ? "bg-emerald-50/50 border-emerald-200/60 text-emerald-800"
+                    : selectedJoinedRequest.requestStatus === "CANCELLED"
+                    ? "bg-slate-50 border-slate-200 text-slate-700"
                     : "bg-rose-50/50 border-rose-200/60 text-rose-800"
                 }`}>
                   <div className="flex-1">
                     <div className="font-bold text-sm">
-                      {selectedJoinedRequest.requestStatus === "PENDING" && "Đang chờ chủ kèo phê duyệt"}
+                      {selectedJoinedRequest.requestStatus === "PENDING" && "Đang chờ Host phê duyệt"}
                       {selectedJoinedRequest.requestStatus === "APPROVED" && "Đã được phê duyệt tham gia"}
                       {selectedJoinedRequest.requestStatus === "REJECTED" && "Yêu cầu đã bị từ chối"}
+                      {selectedJoinedRequest.requestStatus === "CANCELLED" && "Kèo đã bị hủy bởi Host"}
                     </div>
-                    <p className="text-xs mt-1 text-slate-500 font-semibold leading-relaxed">
-                      {selectedJoinedRequest.requestStatus === "PENDING" && "Chủ kèo đang xem xét lời mời tham gia của bạn. Vui lòng quay lại kiểm tra sau."}
-                      {selectedJoinedRequest.requestStatus === "APPROVED" && "Chúc mừng! Bạn đã trở thành một phần của kèo này. Hãy liên hệ với chủ kèo."}
+                    <div className="text-xs mt-1 text-slate-500 font-semibold leading-relaxed">
+                      {selectedJoinedRequest.requestStatus === "PENDING" && "Host đang xem xét lời mời tham gia của bạn. Vui lòng quay lại kiểm tra sau."}
+                      {selectedJoinedRequest.requestStatus === "APPROVED" && "Chúc mừng! Bạn đã trở thành một phần của kèo này. Hãy liên hệ với Host."}
                       {selectedJoinedRequest.requestStatus === "REJECTED" && "Rất tiếc, yêu cầu tham gia của bạn không được phê duyệt lần này. Hãy tìm các kèo khác nhé!"}
-                    </p>
+                      {selectedJoinedRequest.requestStatus === "CANCELLED" && (
+                        <div className="space-y-2.5">
+                          <div>Kèo chơi này đã bị hủy bởi người tạo kèo. Bạn vui lòng tìm kiếm các kèo chơi khác nhé!</div>
+                          {selectedJoinedRequest.cancelReason && (
+                            <div className="p-3 bg-slate-100/90 border border-slate-200/50 rounded-xl text-slate-700 font-bold not-italic">
+                              <span className="font-extrabold text-[10px] text-slate-400 block uppercase tracking-wider mb-1">Lý do hủy từ Host:</span>
+                              <span className="italic font-medium text-slate-600">&ldquo;{selectedJoinedRequest.cancelReason}&rdquo;</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1441,10 +1526,10 @@ function MatchRequestFeedPage() {
               {/* Contact info for approved status */}
               {selectedJoinedRequest.requestStatus === "APPROVED" && selectedJoinedRequest.hostName && (
                 <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl space-y-3">
-                  <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">📞 Thông tin liên hệ chủ kèo</span>
+                  <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">📞 Thông tin liên hệ Host</span>
                   <div className="space-y-2 text-xs text-slate-600 font-medium">
                     <div className="flex justify-between items-center">
-                      <span>Tên chủ kèo:</span>
+                      <span>Tên Host:</span>
                       <span className="text-slate-800 font-bold">{selectedJoinedRequest.hostName}</span>
                     </div>
                     <div className="flex justify-between items-center">
@@ -1468,6 +1553,77 @@ function MatchRequestFeedPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Host Cancel Match Request Dialog */}
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent className="max-w-md bg-white border border-slate-200 p-6">
+          <DialogHeader className="border-b pb-3 mb-4">
+            <DialogTitle className="text-xl font-bold text-slate-800">
+              Hủy kèo ghép
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="p-3.5 bg-rose-50 border border-rose-100 rounded-xl text-xs text-rose-800 flex gap-2.5 items-start">
+              <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <div className="font-bold text-sm mb-0.5">Xác nhận hủy kèo chơi này?</div>
+                Hành động này không thể hoàn tác. Tất cả người dùng đã được duyệt hoặc đang chờ sẽ nhận được thông báo hủy và trạng thái đơn của họ sẽ tự động chuyển sang đã hủy.
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cancel-reason" className="font-bold text-slate-700 text-sm">
+                Lý do hủy kèo <span className="text-slate-400 font-normal">(không bắt buộc)</span>
+              </Label>
+              <Textarea
+                id="cancel-reason"
+                placeholder="VD: Sân bận đột xuất, thời tiết xấu, bận việc cá nhân..."
+                rows={3}
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="border-slate-200 text-sm focus:ring-primary/20"
+                maxLength={200}
+              />
+              <p className="text-[10px] text-slate-400 text-right">Tối đa 200 ký tự</p>
+            </div>
+
+            <div className="flex gap-3 border-t pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 font-semibold border-slate-200"
+                onClick={() => setShowCancelDialog(false)}
+                disabled={submittingCancel}
+              >
+                Quay lại
+              </Button>
+              <Button
+                onClick={handleExecuteCancelMatch}
+                disabled={submittingCancel}
+                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-md shadow-rose-600/10"
+              >
+                {submittingCancel && (
+                  <Loader2 className="w-4.5 h-4.5 animate-spin mr-1.5" />
+                )}
+                Xác nhận hủy
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        isOpen={isOpen}
+        onClose={close}
+        onConfirm={execute}
+        title={options?.title || ""}
+        description={options?.description || ""}
+        confirmText={options?.confirmText}
+        cancelText={options?.cancelText}
+        variant={options?.variant}
+        isLoading={confirming}
+      />
 
       <Footer />
     </div>

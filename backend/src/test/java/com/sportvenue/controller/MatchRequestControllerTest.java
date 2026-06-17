@@ -97,4 +97,22 @@ class MatchRequestControllerTest {
         assertEquals(1, result.getBody().getTotalElements());
         verify(matchRequestService).getActiveMatches(pageable);
     }
+
+    @Test
+    void cancelMatch_Success() {
+        // Arrange
+        Integer matchId = 100;
+        Integer userId = 1;
+        String reason = "Lý do cá nhân";
+
+        // Act
+        ResponseEntity<com.sportvenue.dto.response.MessageResponse> result = 
+                matchRequestController.cancelMatch(matchId, reason, userPrincipal);
+
+        // Assert
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertNotNull(result.getBody());
+        assertEquals("Hủy kèo thành công.", result.getBody().message());
+        verify(matchRequestService).cancelMatch(matchId, userId, reason);
+    }
 }

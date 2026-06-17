@@ -112,6 +112,9 @@ public class MatchRequest implements Serializable {
     @Builder.Default
     private com.sportvenue.entity.enums.MatchingType matchingType = com.sportvenue.entity.enums.MatchingType.INDIVIDUAL;
 
+    @Column(name = "cancel_reason", length = 255)
+    private String cancelReason;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

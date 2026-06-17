@@ -81,4 +81,13 @@ public interface MatchRequestService {
      * @return danh sách đơn đăng ký
      */
     List<JoinRequestResponse> getMyJoinedRequests(String email);
+
+    /**
+     * Hủy kèo ghép (chỉ Host mới thực hiện được).
+     *
+     * @param matchId ID của kèo cần hủy
+     * @param userId ID của người thực hiện hủy (phải là Host)
+     * @param reason Lý do hủy kèo
+     */
+    void cancelMatch(Integer matchId, Integer userId, String reason);
 }

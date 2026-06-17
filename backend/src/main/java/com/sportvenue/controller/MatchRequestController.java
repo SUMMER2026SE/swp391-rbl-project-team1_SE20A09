@@ -161,4 +161,19 @@ public class MatchRequestController {
         List<JoinRequestResponse> responses = matchRequestService.getMyJoinedRequests(userPrincipal.getUsername());
         return ResponseEntity.ok(responses);
     }
+
+    @PutMapping("/{matchId}/cancel")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Hủy kèo ghép (Host)",
+            description = "Cho phép chủ kèo hủy kèo đang ở trạng thái OPEN hoặc FULL."
+    )
+    public ResponseEntity<MessageResponse> cancelMatch(
+            @PathVariable Integer matchId,
+            @RequestParam(value = "reason", required = false) String reason,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("REST request by Host: {} to cancel Match ID: {} with reason: {}", userPrincipal.getUsername(), matchId, reason);
+        matchRequestService.cancelMatch(matchId, userPrincipal.getUser().getUserId(), reason);
+        return ResponseEntity.ok(new MessageResponse("Hủy kèo thành công."));
+    }
 }

@@ -34,6 +34,7 @@ export interface MatchResponse {
   pricePerPlayer?: number;
   matchStatus: "OPEN" | "FULL" | "CANCELLED" | "COMPLETED";
   matchingType?: "INDIVIDUAL" | "TEAM_VS_TEAM";
+  cancelReason?: string;
   createdAt: string;
 }
 
@@ -96,6 +97,7 @@ export interface JoinRequestResponse {
   hostEmail?: string;
   matchStatus?: "OPEN" | "FULL" | "CANCELLED" | "COMPLETED";
   matchingType?: "INDIVIDUAL" | "TEAM_VS_TEAM";
+  cancelReason?: string;
 }
 
 export async function getJoinRequests(
@@ -132,5 +134,16 @@ export async function getMyCreatedMatches(): Promise<MatchResponse[]> {
 
 export async function getMyJoinedRequests(): Promise<JoinRequestResponse[]> {
   const res = await api.get<JoinRequestResponse[]>("/matchmaking/my-joined");
+  return res.data;
+}
+
+export async function cancelMatchRequest(
+  matchId: number,
+  reason?: string
+): Promise<{ message: string }> {
+  const url = reason 
+    ? `/matchmaking/${matchId}/cancel?reason=${encodeURIComponent(reason)}`
+    : `/matchmaking/${matchId}/cancel`;
+  const res = await api.put<{ message: string }>(url);
   return res.data;
 }
