@@ -1,5 +1,6 @@
 package com.sportvenue.service.impl;
 
+import com.sportvenue.dto.booking.CustomerBookingDetailDto;
 import com.sportvenue.dto.booking.CustomerBookingHistoryDto;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.entity.Booking;
@@ -16,6 +17,7 @@ import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,10 +29,11 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
             DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.forLanguageTag("vi-VN"));
     private static final DateTimeFormatter TIME_FMT =
             DateTimeFormatter.ofPattern("HH:mm", Locale.forLanguageTag("vi-VN"));
+    private static final DateTimeFormatter DATETIME_FMT =
+            DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy", Locale.forLanguageTag("vi-VN"));
 
     private final UserRepository userRepository;
     private final BookingRepository bookingRepository;
-    private final com.sportvenue.repository.PaymentRepository paymentRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -71,6 +74,21 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public CustomerBookingDetailDto getBookingDetail(UserPrincipal principal, Integer bookingId) {
+        Integer userId = principal.getUser().getUserId();
+
+        Booking booking = bookingRepository.findDetailById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân"));
+
+        if (!booking.getUser().getUserId().equals(userId)) {
+            throw new AccessDeniedException("Bạn không có quyền xem đơn đặt sân này");
+        }
+
+        return toDetailDto(booking);
+    }
+
+    @Override
     @Transactional
     public void cancelBooking(UserPrincipal principal, Integer bookingId, String reason) {
         Integer userId = principal.getUser().getUserId();
@@ -79,7 +97,7 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân"));
 
         if (!booking.getUser().getUserId().equals(userId)) {
-            throw new com.sportvenue.exception.BadRequestException("Bạn không có quyền huỷ đơn đặt sân này");
+            throw new AccessDeniedException("Bạn không có quyền huỷ đơn đặt sân này");
         }
 
         if (booking.getBookingStatus() == BookingStatus.COMPLETED || booking.getBookingStatus() == BookingStatus.CANCELLED) {
@@ -117,6 +135,25 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
                 booking.getTotalPrice(),
                 toFrontendStatus(booking.getBookingStatus())
         );
+    }
+
+    private CustomerBookingDetailDto toDetailDto(Booking booking) {
+        return CustomerBookingDetailDto.builder()
+                .id(String.valueOf(booking.getBookingId()))
+                .displayId("BK" + String.format("%06d", booking.getBookingId()))
+                .venueName(booking.getStadium().getStadiumName())
+                .sportType(toSportLabel(booking.getStadium().getSportType().getSportName()))
+                .imageUrl(resolveImageUrl(booking.getStadium()))
+                .playDate(booking.getReservationDate().format(DATE_FMT))
+                .startTime(booking.getSlot().getStartTime().format(TIME_FMT))
+                .endTime(booking.getSlot().getEndTime().format(TIME_FMT))
+                .address(booking.getStadium().getAddress())
+                .totalPrice(booking.getTotalPrice())
+                .status(toFrontendStatus(booking.getBookingStatus()))
+                .paymentStatus(booking.getPaymentStatus().name().toLowerCase())
+                .createdAt(booking.getBookingDate().format(DATETIME_FMT))
+                .note(booking.getNote())
+                .build();
     }
 
     private String toFrontendStatus(BookingStatus status) {

@@ -1,5 +1,6 @@
 package com.sportvenue.controller;
 
+import com.sportvenue.dto.booking.CustomerBookingDetailDto;
 import com.sportvenue.dto.booking.CustomerBookingHistoryDto;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.security.UserPrincipal;
@@ -39,6 +40,17 @@ public class CustomerBookingController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         return ResponseEntity.ok(customerBookingService.getMyBookings(userPrincipal, status, page, size));
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Chi tiết đơn đặt sân",
+            description = "Xem chi tiết một đơn đặt sân theo ID")
+    public ResponseEntity<CustomerBookingDetailDto> getBookingDetail(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable Integer id) {
+        return ResponseEntity.ok(customerBookingService.getBookingDetail(userPrincipal, id));
     }
 
     @PutMapping("/{id}/cancel")
