@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Star, Send } from "lucide-react";
 import { Header } from "@/components/layout/Header";
@@ -11,8 +11,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { post } from "@/lib/api";
 
-export default function ReviewPage({ params }: { params: { id: string } }) {
+export default function ReviewPage() {
   const router = useRouter();
+  const params = useParams();
+  const id = params?.id as string;
+  
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
   const [comment, setComment] = useState("");
@@ -22,12 +25,12 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (rating === 0) return;
+    if (rating === 0 || !id) return;
     
     setIsSubmitting(true);
     setError(null);
     try {
-      await post(`/bookings/${params.id}/reviews`, {
+      await post(`/bookings/${id}/reviews`, {
         ratingScore: rating,
         comment: comment
       });
@@ -46,7 +49,7 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <Header />
       <div className="flex-1 container mx-auto px-4 py-8 max-w-2xl">
-        <Link href={`/booking/${params.id}`} className="inline-flex items-center text-sm text-slate-500 hover:text-slate-900 mb-6 transition-colors">
+        <Link href={`/booking/${id}`} className="inline-flex items-center text-sm text-slate-500 hover:text-slate-900 mb-6 transition-colors">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Quay lại chi tiết đặt sân
         </Link>
@@ -58,7 +61,7 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
             </div>
             <CardTitle className="text-2xl font-bold">Đánh giá trải nghiệm</CardTitle>
             <CardDescription className="text-base">
-              Mã đặt sân: #{params.id}
+              Mã đặt sân: #{id}
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
