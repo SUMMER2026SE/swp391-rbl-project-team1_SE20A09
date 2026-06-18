@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MapPin, Calendar, Clock, FileText, Loader2, AlertCircle, ChevronLeft, ChevronRight, PlusCircle } from "lucide-react";
 import Image from "next/image";
-import {
-  fetchMyBookings,
-  fetchOwnerBookings,
-  type BookingHistoryItem,
-} from "@/lib/bookings-api";
+import { useBookingHistory } from "@/hooks/useBookingHistory";
+import { type BookingHistoryItem } from "@/lib/bookings-api";
 
 const STATUS_CONFIG = {
   confirmed: { label: "Đã xác nhận", className: "bg-green-50 text-green-700 border-green-200" },
@@ -82,7 +79,6 @@ function BookingCard({ booking, isOwner = false }: { booking: BookingHistoryItem
   return (
     <Card className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md">
       <CardContent className="space-y-4 p-4 md:p-5">
-        {/* Header: Sân + Trạng thái */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex gap-4">
             <div className="relative h-14 w-14 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 shrink-0">
@@ -104,7 +100,6 @@ function BookingCard({ booking, isOwner = false }: { booking: BookingHistoryItem
           {getStatusBadge(booking.status)}
         </div>
 
-        {/* Meta: Ngày giờ + Địa điểm */}
         <div className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm text-slate-600 sm:grid-cols-2">
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-slate-400" />
@@ -112,7 +107,7 @@ function BookingCard({ booking, isOwner = false }: { booking: BookingHistoryItem
           </div>
           <div className="flex items-center gap-2">
             <Clock className="h-4 w-4 text-slate-400" />
-            <span className="font-medium">{booking.time}</span>
+            <span className="font-medium whitespace-nowrap">{booking.time}</span>
           </div>
           <div className="flex items-center gap-2 sm:col-span-2">
             <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
@@ -124,7 +119,6 @@ function BookingCard({ booking, isOwner = false }: { booking: BookingHistoryItem
           </div>
         </div>
 
-        {/* Footer: Giá + Nút bấm */}
         <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Tổng thanh toán</p>
@@ -171,47 +165,69 @@ function EmptyTabMessage({
   );
 }
 
+// ── SUBCOMPONENTS FOR CLEAN ARCHITECTURE ──────────────────────────────────────
+
+function LoadingState() {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 py-24">
+      <Loader2 className="h-10 w-10 animate-spin text-green-800" />
+      <p className="text-sm font-medium text-slate-500">Đang tải lịch sử đặt sân...</p>
+    </div>
+  );
+}
+
+function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+      <div className="rounded-full bg-red-50 p-4">
+        <AlertCircle className="h-10 w-10 text-red-500" />
+      </div>
+      <p className="max-w-xs text-slate-600 font-medium">{error}</p>
+      <Button onClick={onRetry} variant="outline" className="rounded-xl border-slate-200">
+        Thử lại
+      </Button>
+    </div>
+  );
+}
+
+function EmptyState({ 
+  message, 
+  actionLabel, 
+  onAction 
+}: { 
+  message: string; 
+  actionLabel?: string; 
+  onAction?: () => void;
+}) {
+  return (
+    <EmptyTabMessage 
+      message={message} 
+      actionLabel={actionLabel} 
+      onAction={onAction}
+    />
+  );
+}
+
 interface BookingHistoryListProps {
   isOwner?: boolean;
 }
 
 export function BookingHistoryList({ isOwner = false }: BookingHistoryListProps) {
   const router = useRouter();
-  const [bookings, setBookings] = useState<BookingHistoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
-  const [totalElements, setTotalElements] = useState(0);
   const [activeTab, setActiveTab] = useState("all");
 
-  const pageSize = 10; // Aligned with backend default and api size
-
-  const loadBookings = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    const fetchFn = isOwner ? fetchOwnerBookings : fetchMyBookings;
-    
-    // Proper filtering at API level
-    fetchFn(page, pageSize, activeTab)
-      .then((result) => {
-        setBookings(result.bookings);
-        setTotalPages(result.totalPages);
-        setTotalElements(result.totalElements);
-      })
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "Không tải được lịch sử đặt sân.");
-      })
-      .finally(() => setLoading(false));
-  }, [isOwner, page, activeTab]);
-
-  useEffect(() => {
-    loadBookings();
-  }, [loadBookings]);
+  const {
+    bookings,
+    totalPages,
+    loading,
+    error,
+    page,
+    setPage,
+    reload
+  } = useBookingHistory(isOwner, activeTab);
 
   const handleTabChange = (val: string) => {
     setActiveTab(val);
-    setPage(0); // Reset to first page when changing tabs
   };
 
   const renderPagination = () => {
@@ -250,32 +266,12 @@ export function BookingHistoryList({ isOwner = false }: BookingHistoryListProps)
   };
 
   const renderContent = (emptyMsg: string) => {
-    if (loading) {
-      return (
-        <div className="flex flex-col items-center justify-center gap-3 py-24">
-          <Loader2 className="h-10 w-10 animate-spin text-green-800" />
-          <p className="text-sm font-medium text-slate-500">Đang tải lịch sử đặt sân...</p>
-        </div>
-      );
-    }
-
-    if (error) {
-      return (
-        <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
-          <div className="rounded-full bg-red-50 p-4">
-            <AlertCircle className="h-10 w-10 text-red-500" />
-          </div>
-          <p className="max-w-xs text-slate-600 font-medium">{error}</p>
-          <Button onClick={loadBookings} variant="outline" className="rounded-xl border-slate-200">
-            Thử lại
-          </Button>
-        </div>
-      );
-    }
-
+    if (loading) return <LoadingState />;
+    if (error) return <ErrorState error={error} onRetry={reload} />;
+    
     if (bookings.length === 0) {
       return (
-        <EmptyTabMessage 
+        <EmptyState 
           message={emptyMsg} 
           actionLabel={activeTab !== "all" ? "Xem tất cả đơn" : "Đặt sân ngay"} 
           onAction={() => activeTab !== "all" ? handleTabChange("all") : router.push("/search")}
@@ -299,30 +295,10 @@ export function BookingHistoryList({ isOwner = false }: BookingHistoryListProps)
     <div className="w-full max-w-4xl mx-auto">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
         <TabsList className="flex h-auto w-full gap-2 overflow-x-auto rounded-2xl bg-slate-100 p-1.5 scrollbar-hide">
-          <TabsTrigger 
-            value="all" 
-            className="rounded-xl px-5 py-2.5 whitespace-nowrap data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold"
-          >
-            Tất cả
-          </TabsTrigger>
-          <TabsTrigger 
-            value="upcoming" 
-            className="rounded-xl px-5 py-2.5 whitespace-nowrap data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold"
-          >
-            Sắp tới
-          </TabsTrigger>
-          <TabsTrigger 
-            value="completed" 
-            className="rounded-xl px-5 py-2.5 whitespace-nowrap data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold"
-          >
-            Hoàn thành
-          </TabsTrigger>
-          <TabsTrigger 
-            value="cancelled" 
-            className="rounded-xl px-5 py-2.5 whitespace-nowrap data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold"
-          >
-            Đã hủy
-          </TabsTrigger>
+          <TabsTrigger value="all" className="rounded-xl px-5 py-2.5 whitespace-nowrap data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold">Tất cả</TabsTrigger>
+          <TabsTrigger value="upcoming" className="rounded-xl px-5 py-2.5 whitespace-nowrap data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold">Sắp tới</TabsTrigger>
+          <TabsTrigger value="completed" className="rounded-xl px-5 py-2.5 whitespace-nowrap data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold">Hoàn thành</TabsTrigger>
+          <TabsTrigger value="cancelled" className="rounded-xl px-5 py-2.5 whitespace-nowrap data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold">Đã hủy</TabsTrigger>
         </TabsList>
 
         <div className="relative">
