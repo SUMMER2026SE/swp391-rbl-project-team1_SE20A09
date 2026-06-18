@@ -46,6 +46,10 @@ public class SportTypeServiceImpl implements SportTypeService {
                 .sportCode(request.getSportCode())
                 .description(request.getDescription())
                 .isActive(request.getIsActive())
+                .isFootballType(
+                    Boolean.TRUE.equals(request.getIsFootballType()) ||
+                    (request.getSportCode() != null && request.getSportCode().toUpperCase().startsWith("FOOTBALL"))
+                )
                 .build();
 
         SportType saved = sportTypeRepository.save(sportType);
