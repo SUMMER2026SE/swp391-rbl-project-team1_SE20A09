@@ -3,12 +3,16 @@ import { get, post } from "@/lib/api";
 export interface SportType {
   sportTypeId: number;
   sportName: string;
-  nameEn: string;
+  nameEn?: string;
   icon: string;
   sportCode: string;
-  description: string;
+  description?: string;
   isActive: boolean;
+  isFootballType?: boolean;
   createdAt: string;
+  fieldTypes?: string[];
+  internalNote?: string;
+  priority?: number;
 }
 
 export interface CreateSportTypeRequest {
@@ -18,6 +22,10 @@ export interface CreateSportTypeRequest {
   sportCode: string;
   description?: string;
   isActive?: boolean;
+  isFootballType?: boolean;
+  fieldTypes?: string[];
+  internalNote?: string;
+  priority?: number;
 }
 
 export async function fetchSportTypes(): Promise<SportType[]> {
