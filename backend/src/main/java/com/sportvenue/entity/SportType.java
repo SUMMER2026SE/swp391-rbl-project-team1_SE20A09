@@ -54,6 +54,10 @@ public class SportType implements Serializable {
     @Builder.Default
     private Boolean isActive = true;
 
+    @Column(name = "is_football_type", nullable = false)
+    @Builder.Default
+    private Boolean isFootballType = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

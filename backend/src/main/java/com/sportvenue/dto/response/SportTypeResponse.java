@@ -19,5 +19,6 @@ public class SportTypeResponse {
     private String sportCode;
     private String description;
     private Boolean isActive;
+    private Boolean isFootballType;
     private LocalDateTime createdAt;
 }
