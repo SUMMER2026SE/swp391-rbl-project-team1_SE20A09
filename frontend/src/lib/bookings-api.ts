@@ -32,6 +32,17 @@ export type BookingPageResult = {
   last: boolean;
 };
 
+function buildQueryString(page: number, size: number, status?: string): string {
+  const query = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+  });
+  if (status && status !== "all") {
+    query.append("status", status);
+  }
+  return query.toString();
+}
+
 /**
  * Lấy lịch sử đặt sân của customer — hỗ trợ phân trang và lọc theo trạng thái.
  * Backend trả về PageResponse<CustomerBookingHistoryDto>.
@@ -41,16 +52,9 @@ export async function fetchMyBookings(
   size = 10,
   status?: string
 ): Promise<BookingPageResult> {
-  const query = new URLSearchParams({
-    page: String(page),
-    size: String(size),
-  });
-  if (status && status !== "all") {
-    query.append("status", status);
-  }
-
+  const queryString = buildQueryString(page, size, status);
   const data = await get<PageResponse<BookingHistoryItem>>(
-    `/bookings/me?${query.toString()}`
+    `/bookings/me?${queryString}`
   );
 
   const bookings = (data.content ?? []).map((b) => ({
@@ -87,16 +91,9 @@ export async function fetchOwnerBookings(
   size = 10,
   status?: string
 ): Promise<BookingPageResult> {
-  const query = new URLSearchParams({
-    page: String(page),
-    size: String(size),
-  });
-  if (status && status !== "all") {
-    query.append("status", status);
-  }
-
+  const queryString = buildQueryString(page, size, status);
   const data = await get<PageResponse<OwnerBookingDto>>(
-    `/owner/bookings/page?${query.toString()}`
+    `/owner/bookings/page?${queryString}`
   );
 
   const bookings: BookingHistoryItem[] = (data.content ?? []).map((b) => ({
@@ -122,5 +119,35 @@ export async function fetchOwnerBookings(
     totalPages: data.totalPages,
     pageNo: data.pageNo ?? data.pageNumber,
     last: data.last,
+  };
+}
+
+export type BookingDetailItem = {
+  id: string;
+  displayId: string;
+  venueName: string;
+  sportType: string;
+  imageUrl: string;
+  playDate: string;
+  startTime: string;
+  endTime: string;
+  address: string;
+  totalPrice: number;
+  status: "pending" | "confirmed" | "completed" | "cancelled";
+  paymentStatus: string;
+  createdAt: string;
+  note: string | null;
+};
+
+/**
+ * Lấy chi tiết một đơn đặt sân.
+ * Trả về CustomerBookingDetailDto từ backend.
+ */
+export async function fetchBookingDetail(id: string | number): Promise<BookingDetailItem> {
+  const data = await get<any>(`/bookings/${id}`);
+  
+  return {
+    ...data,
+    totalPrice: typeof data.totalPrice === "number" ? data.totalPrice : Number(data.totalPrice),
   };
 }

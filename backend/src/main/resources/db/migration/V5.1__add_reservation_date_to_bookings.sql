@@ -1,4 +1,4 @@
--- V3.3__add_reservation_date_to_bookings.sql
+-- V5.1__add_reservation_date_to_bookings.sql
 -- Thêm cột reservation_date để phân biệt với booking_date (ngày tạo đơn)
 ALTER TABLE bookings ADD COLUMN reservation_date DATE;
 
