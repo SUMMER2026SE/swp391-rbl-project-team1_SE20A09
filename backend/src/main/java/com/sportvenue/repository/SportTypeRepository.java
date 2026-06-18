@@ -16,4 +16,6 @@ public interface SportTypeRepository extends JpaRepository<SportType, Integer> {
     Optional<SportType> findBySportName(String sportName);
 
     boolean existsBySportName(String sportName);
+
+    boolean existsBySportCode(String sportCode);
 }
