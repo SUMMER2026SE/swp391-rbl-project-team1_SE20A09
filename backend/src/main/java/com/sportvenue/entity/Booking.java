@@ -96,4 +96,8 @@ public class Booking implements Serializable {
 
     @Column(name = "longitude")
     private Double longitude;
+
+    /** Ngày khách hàng thực sự ra sân chơi. */
+    @Column(name = "reservation_date", nullable = false)
+    private java.time.LocalDate reservationDate;
 }

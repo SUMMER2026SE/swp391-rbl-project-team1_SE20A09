@@ -14,6 +14,7 @@ export interface StadiumResponse {
   pricePerHour: number
   capacity: number
   averageRating: number
+  totalReviews?: number
   latitude?: number
   longitude?: number
   distanceInKm?: number

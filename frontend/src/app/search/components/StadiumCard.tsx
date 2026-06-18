@@ -12,8 +12,6 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 export function StadiumCard({ stadium, isUrgent = false }: StadiumCardProps) {
-  const mockReviewCount = Math.floor(Math.random() * 200) + 50 // Giả lập số lượng đánh giá
-
   return (
     <Card className="overflow-hidden bg-card hover:shadow-2xl transition-all duration-300 border-gray-100 dark:border-border group cursor-pointer flex flex-col h-full rounded-2xl">
       <Link href={`/venues/${stadium.stadiumId}`} className="flex flex-col flex-1">
@@ -45,7 +43,7 @@ export function StadiumCard({ stadium, isUrgent = false }: StadiumCardProps) {
             <div className="flex items-center text-sm font-medium mb-1.5 bg-black/40 w-fit px-2 py-0.5 rounded-full backdrop-blur-sm">
               <Star className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400 mr-1" />
               <span className="font-bold">{stadium.averageRating}</span>
-              <span className="text-gray-300 ml-1.5 text-xs font-normal">({mockReviewCount} đánh giá)</span>
+              <span className="text-gray-300 ml-1.5 text-xs font-normal">({stadium.totalReviews || 0} đánh giá)</span>
             </div>
             <h3 className="text-xl font-bold truncate text-white drop-shadow-md">{stadium.stadiumName}</h3>
           </div>

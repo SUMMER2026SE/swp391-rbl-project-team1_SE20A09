@@ -71,24 +71,21 @@ function PaymentContent() {
   };
 
   // Default fallback if session data is missing
-  const defaultSummary: BookingSummary = {
-    venueId: 1,
-    stadiumName: "Sân bóng Thành Công",
-    imageUrl: "https://images.unsplash.com/photo-1575361204480-aadea25e6e68?w=800&auto=format&fit=crop",
-    address: "123 Đường ABC, Quận 1, TP.HCM",
-    sportName: "Bóng đá",
-    date: "2024-05-22",
-    time: "18:00 - 20:00",
-    venuePrice: 500000,
-    accessories: [
-      { name: "Bóng đá", quantity: 1, price: 50000 }
-    ],
-    accessoryTotal: 50000,
-    total: 570000,
-  };
-
-  const activeSummary = summary || defaultSummary;
+  const activeSummary = summary;
   const platformFee = 20000;
+
+  if (!activeSummary) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col justify-between">
+        <Header />
+        <div className="flex-grow flex flex-col items-center justify-center p-8">
+          <h2 className="text-xl font-bold mb-4">Không tìm thấy thông tin thanh toán</h2>
+          <Button onClick={() => router.push("/search")}>Quay lại tìm kiếm</Button>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col justify-between">
@@ -206,15 +203,8 @@ function PaymentContent() {
                       Thanh toán nhanh chóng qua quét mã QR VNPay hoặc thẻ ngân hàng
                     </div>
                   </Label>
-                  <div className="relative w-16 h-6 flex-shrink-0 bg-white rounded border flex items-center justify-center p-1">
-                    <Image
-                      src="https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=100&auto=format&fit=crop"
-                      alt="VNPay"
-                      width={60}
-                      height={20}
-                      className="object-contain filter hue-rotate-15"
-                      unoptimized
-                    />
+                  <div className="relative w-16 h-6 flex-shrink-0 bg-blue-600 rounded border flex items-center justify-center p-1">
+                    <span className="text-[10px] font-bold text-white">VNPAY</span>
                   </div>
                 </div>
 
@@ -234,15 +224,8 @@ function PaymentContent() {
                       Thanh toán trực tuyến an toàn bằng ứng dụng ví MoMo
                     </div>
                   </Label>
-                  <div className="relative w-10 h-10 flex-shrink-0 bg-white rounded border flex items-center justify-center p-0.5">
-                    <Image
-                      src="https://images.unsplash.com/photo-1592709823855-d152f523155a?w=100&auto=format&fit=crop"
-                      alt="MoMo"
-                      width={32}
-                      height={32}
-                      className="object-contain rounded"
-                      unoptimized
-                    />
+                  <div className="relative w-10 h-10 flex-shrink-0 bg-[#a50064] rounded border flex items-center justify-center p-0.5">
+                    <span className="text-[10px] font-bold text-white">MOMO</span>
                   </div>
                 </div>
               </RadioGroup>

@@ -33,15 +33,24 @@ export type BookingPageResult = {
 };
 
 /**
- * Lấy lịch sử đặt sân của customer — hỗ trợ phân trang.
+ * Lấy lịch sử đặt sân của customer — hỗ trợ phân trang và lọc theo trạng thái.
  * Backend trả về PageResponse<CustomerBookingHistoryDto>.
  */
 export async function fetchMyBookings(
   page = 0,
-  size = 50
+  size = 10,
+  status?: string
 ): Promise<BookingPageResult> {
+  const query = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+  });
+  if (status && status !== "all") {
+    query.append("status", status);
+  }
+
   const data = await get<PageResponse<BookingHistoryItem>>(
-    `/bookings/me?page=${page}&size=${size}`
+    `/bookings/me?${query.toString()}`
   );
 
   const bookings = (data.content ?? []).map((b) => ({
@@ -75,10 +84,19 @@ type OwnerBookingDto = {
 
 export async function fetchOwnerBookings(
   page = 0,
-  size = 50
+  size = 10,
+  status?: string
 ): Promise<BookingPageResult> {
+  const query = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+  });
+  if (status && status !== "all") {
+    query.append("status", status);
+  }
+
   const data = await get<PageResponse<OwnerBookingDto>>(
-    `/owner/bookings/page?page=${page}&size=${size}`
+    `/owner/bookings/page?${query.toString()}`
   );
 
   const bookings: BookingHistoryItem[] = (data.content ?? []).map((b) => ({

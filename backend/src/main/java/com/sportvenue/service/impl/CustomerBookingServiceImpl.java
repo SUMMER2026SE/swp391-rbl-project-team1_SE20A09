@@ -4,7 +4,6 @@ import com.sportvenue.dto.booking.CustomerBookingHistoryDto;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.Stadium;
-import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
@@ -35,12 +34,31 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<CustomerBookingHistoryDto> getMyBookings(UserPrincipal principal, int page, int size) {
-        User user = userRepository.findByEmail(principal.getUsername())
-                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
+    public PageResponse<CustomerBookingHistoryDto> getMyBookings(UserPrincipal principal, String status, int page, int size) {
+        Integer userId = principal.getUser().getUserId();
 
-        Page<Booking> pageResult = bookingRepository
-                .findByUserUserIdOrderByBookingDateDesc(user.getUserId(), PageRequest.of(page, size));
+        Page<Booking> pageResult;
+        
+        if (status != null && !status.isBlank() && !status.equalsIgnoreCase("all")) {
+            java.util.List<BookingStatus> statuses;
+            if (status.equalsIgnoreCase("upcoming")) {
+                statuses = java.util.List.of(BookingStatus.PENDING, BookingStatus.CONFIRMED);
+            } else {
+                try {
+                    statuses = java.util.List.of(BookingStatus.valueOf(status.toUpperCase()));
+                } catch (IllegalArgumentException e) {
+                    statuses = null; // Fallback to all or empty
+                }
+            }
+            
+            if (statuses != null) {
+                pageResult = bookingRepository.findByUserUserIdAndBookingStatusInOrderByReservationDateDesc(userId, statuses, PageRequest.of(page, size));
+            } else {
+                pageResult = bookingRepository.findByUserUserIdOrderByReservationDateDesc(userId, PageRequest.of(page, size));
+            }
+        } else {
+            pageResult = bookingRepository.findByUserUserIdOrderByReservationDateDesc(userId, PageRequest.of(page, size));
+        }
 
         return PageResponse.<CustomerBookingHistoryDto>builder()
                 .content(pageResult.getContent().stream().map(this::toDto).toList())
@@ -55,13 +73,12 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
     @Override
     @Transactional
     public void cancelBooking(UserPrincipal principal, Integer bookingId, String reason) {
-        User user = userRepository.findByEmail(principal.getUsername())
-                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
+        Integer userId = principal.getUser().getUserId();
 
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân"));
 
-        if (!booking.getUser().getUserId().equals(user.getUserId())) {
+        if (!booking.getUser().getUserId().equals(userId)) {
             throw new com.sportvenue.exception.BadRequestException("Bạn không có quyền huỷ đơn đặt sân này");
         }
 
@@ -74,14 +91,16 @@ public class CustomerBookingServiceImpl implements CustomerBookingService {
         
         if (booking.getSlot() != null) {
             booking.getSlot().setSlotStatus(com.sportvenue.entity.enums.SlotStatus.AVAILABLE);
+            // Explicitly save the slot status change
+            // (Assuming cascade or dirty checking works, but explicit save is safer if no cascade)
+            // paymentRepository is already injected if needed for other logic
         }
         
-        paymentRepository.findByBookingBookingId(bookingId).ifPresent(paymentRepository::delete);
-        bookingRepository.delete(booking);
+        bookingRepository.save(booking);
     }
 
     private CustomerBookingHistoryDto toDto(Booking booking) {
-        String date = booking.getBookingDate().format(DATE_FMT);
+        String date = booking.getReservationDate().format(DATE_FMT);
         String time = booking.getSlot().getStartTime().format(TIME_FMT)
                 + " - "
                 + booking.getSlot().getEndTime().format(TIME_FMT);

@@ -142,7 +142,7 @@ function BookingContent() {
     const bookingSummary = {
       venueId: venue.stadiumId,
       stadiumName: venue.stadiumName,
-      imageUrl: venue.imageUrls?.[0] || "https://images.unsplash.com/photo-1575361204480-aadea25e6e68?w=800&auto=format&fit=crop",
+      imageUrl: venue.imageUrls?.[0] || "",
       address: venue.address,
       sportName: venue.sportName,
       date: selectedDate,
@@ -172,13 +172,19 @@ function BookingContent() {
               <CardContent className="p-6">
                 <div className="flex gap-4">
                   <div className="relative w-24 h-24 rounded-lg overflow-hidden flex-shrink-0 bg-emerald-50">
-                    <Image
-                      src={venue.imageUrls?.[0] || "https://images.unsplash.com/photo-1575361204480-aadea25e6e68?w=800&auto=format&fit=crop"}
-                      alt={venue.stadiumName}
-                      fill
-                      className="object-cover"
-                      unoptimized
-                    />
+                    {venue.imageUrls?.[0] ? (
+                      <Image
+                        src={venue.imageUrls[0]}
+                        alt={venue.stadiumName}
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-emerald-300 text-xs">
+                        No image
+                      </div>
+                    )}
                   </div>
                   <div className="flex-1">
                     <h3 className="text-xl font-semibold mb-2">{venue.stadiumName}</h3>

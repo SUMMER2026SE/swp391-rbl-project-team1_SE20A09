@@ -44,14 +44,20 @@ export function VenueCard({
     <Link href={href} className="block group h-full">
       <Card className="overflow-hidden border-border/80 transition-all duration-300 hover:-translate-y-1 hover:border-primary/25 hover:shadow-xl hover:shadow-primary/10 h-full flex flex-col justify-between">
         <div>
-          <div className="relative h-52 overflow-hidden">
-            <Image
-              src={image}
-              alt={name}
-              fill
-              className="object-cover transition-transform duration-500 group-hover:scale-110"
-              unoptimized
-            />
+          <div className="relative h-52 overflow-hidden bg-emerald-50">
+            {image ? (
+              <Image
+                src={image}
+                alt={name}
+                fill
+                className="object-cover transition-transform duration-500 group-hover:scale-110"
+                unoptimized
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-emerald-200 font-medium">
+                No Image
+              </div>
+            )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
             <Badge className="absolute right-3 top-3 border-0 bg-primary/95 shadow-md">
               {sportType}

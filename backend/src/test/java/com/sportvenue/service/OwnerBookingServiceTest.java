@@ -82,6 +82,7 @@ class OwnerBookingServiceTest {
         booking.setPaymentStatus(PaymentStatus.UNPAID);
         booking.setTotalPrice(BigDecimal.valueOf(100000));
         booking.setBookingDate(LocalDateTime.now());
+        booking.setReservationDate(java.time.LocalDate.now());
     }
 
     @Test
