@@ -26,6 +26,10 @@ import com.sportvenue.entity.enums.BookingStatus;
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Integer> {
 
+    @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "slot"})
+    @Query("SELECT b FROM Booking b WHERE b.bookingId = :id")
+    Optional<Booking> findDetailById(@Param("id") Integer id);
+
     /** Tìm kiếm đơn đặt sân kèm theo Pessimistic Write Lock để tránh Race Condition (Double Refund) */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT b FROM Booking b WHERE b.bookingId = :id")
