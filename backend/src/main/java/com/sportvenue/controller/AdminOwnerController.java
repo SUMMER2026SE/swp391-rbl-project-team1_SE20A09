@@ -22,7 +22,7 @@ public class AdminOwnerController {
     private final AdminOwnerService adminOwnerService;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('Admin')")
     public ResponseEntity<ApiResponse<PageResponse<AdminOwnerResponse>>> getOwners(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,

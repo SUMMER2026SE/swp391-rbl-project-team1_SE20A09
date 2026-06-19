@@ -38,9 +38,9 @@ public interface OwnerRepository extends JpaRepository<Owner, Integer> {
         FROM Owner o
         JOIN o.user u
         WHERE (:search IS NULL OR 
-               LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')) OR 
-               LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :search, '%')) OR
-               LOWER(o.businessName) LIKE LOWER(CONCAT('%', :search, '%')))
+               LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR 
+               LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR
+               LOWER(o.businessName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
           AND (:accountStatus IS NULL OR u.accountStatus = :accountStatus)
           AND (:approvedStatus IS NULL OR o.approvedStatus = :approvedStatus)
     """)
