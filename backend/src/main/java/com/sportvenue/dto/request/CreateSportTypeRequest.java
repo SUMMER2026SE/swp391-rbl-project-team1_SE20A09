@@ -20,8 +20,6 @@ public class CreateSportTypeRequest {
     @Size(max = 50, message = "Tên tiếng Anh không được vượt quá 50 ký tự")
     private String nameEn;
 
-    @Size(max = 10, message = "Icon không được vượt quá 10 ký tự")
-    private String icon;
 
     @NotBlank(message = "Mã môn thể thao không được để trống")
     @Size(max = 20, message = "Mã môn thể thao không được vượt quá 20 ký tự")

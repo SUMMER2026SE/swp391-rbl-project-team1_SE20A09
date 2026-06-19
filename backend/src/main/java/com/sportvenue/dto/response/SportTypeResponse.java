@@ -15,7 +15,6 @@ public class SportTypeResponse {
     private Integer sportTypeId;
     private String sportName;
     private String nameEn;
-    private String icon;
     private String sportCode;
     private String description;
     private Boolean isActive;

@@ -12,6 +12,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import org.hibernate.annotations.CreationTimestamp;
+
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
@@ -41,8 +43,6 @@ public class SportType implements Serializable {
     @Column(name = "name_en", length = 50)
     private String nameEn;
 
-    @Column(name = "icon", length = 10)
-    private String icon;
 
     @Column(name = "sport_code", nullable = false, unique = true, length = 20)
     private String sportCode;
@@ -58,7 +58,7 @@ public class SportType implements Serializable {
     @Builder.Default
     private Boolean isFootballType = false;
 
+    @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
-    @Builder.Default
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDateTime createdAt;
 }
