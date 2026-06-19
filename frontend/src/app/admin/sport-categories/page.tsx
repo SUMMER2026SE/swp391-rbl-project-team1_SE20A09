@@ -13,13 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Plus, Edit, Trash2, Trophy, Loader2, MoreVertical, Ban, X } from "lucide-react";
+import { Plus, Trash2, Trophy, Loader2, X } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -204,28 +198,14 @@ function SportCategoriesPage() {
                       </div>
                     </div>
                     <div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="h-4 w-4" />
-                            <span className="sr-only">Mở menu</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem disabled>
-                            <Edit className="mr-2 h-4 w-4" />
-                            <span>Chỉnh sửa</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Ban className="mr-2 h-4 w-4" />
-                            <span>Tạm ngưng</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:bg-destructive/10">
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            <span>Xóa</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        title="Xóa"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
 
