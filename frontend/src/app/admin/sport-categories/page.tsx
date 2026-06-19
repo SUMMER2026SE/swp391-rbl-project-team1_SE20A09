@@ -25,11 +25,6 @@ const categorySchema = z.object({
     .min(1, "Tên môn thể thao là bắt buộc")
     .max(50, "Tối đa 50 ký tự")
     .regex(/^[^<>]*$/, "Không được chứa ký tự đặc biệt < hoặc >"),
-  icon: z.string()
-    .max(10, "Tối đa 10 ký tự")
-    .regex(/^[^<>]*$/, "Không được chứa ký tự đặc biệt < hoặc >")
-    .optional()
-    .or(z.literal("")),
   fieldTypes: z.array(z.string()),
   internalNote: z.string()
     .max(500, "Tối đa 500 ký tự")
@@ -103,7 +98,6 @@ function SportCategoriesPage() {
     resolver: zodResolver(categorySchema),
     defaultValues: {
       sportName: "",
-      icon: "",
       fieldTypes: [],
       internalNote: "",
     },
@@ -138,14 +132,10 @@ function SportCategoriesPage() {
       const code = formatSportCode(values.sportName);
       const payload: CreateSportTypeRequest = {
         sportName: values.sportName,
-        icon: values.icon || undefined,
         sportCode: code,
         description: values.internalNote || undefined,
         isActive: true,
         isFootballType: code.startsWith("FOOTBALL"),
-        fieldTypes: values.fieldTypes,
-        internalNote: values.internalNote || undefined,
-        priority: 0,
       };
       const newCategory = await createSportType(payload);
       toast.success("Thêm loại môn thể thao thành công");
@@ -189,7 +179,9 @@ function SportCategoriesPage() {
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="text-4xl">{category.icon || "🏆"}</div>
+                      <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                        <Trophy className="h-6 w-6" />
+                      </div>
                       <div>
                         <h3 className="text-lg font-semibold text-foreground leading-tight">{category.sportName}</h3>
                         <p className="text-xs font-mono text-muted-foreground/80 mt-1 uppercase">
@@ -249,32 +241,17 @@ function SportCategoriesPage() {
             <DialogTitle>Thêm môn thể thao mới</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 pt-4">
-            <div className="grid grid-cols-4 gap-4">
-              <div className="col-span-3 space-y-2">
-                <Label htmlFor="sportName">Tên môn thể thao *</Label>
-                <Input
-                  id="sportName"
-                  {...register("sportName")}
-                  placeholder="VD: Bóng đá, Cầu lông"
-                  className="w-full"
-                />
-                {errors.sportName && (
-                  <p className="text-xs text-destructive">{errors.sportName.message}</p>
-                )}
-              </div>
-              <div className="col-span-1 space-y-2">
-                <Label htmlFor="icon">Icon / Emoji</Label>
-                <Input
-                  id="icon"
-                  {...register("icon")}
-                  placeholder="VD: ⚽"
-                  maxLength={2}
-                  className="w-full text-center"
-                />
-                {errors.icon && (
-                  <p className="text-xs text-destructive">{errors.icon.message}</p>
-                )}
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="sportName">Tên môn thể thao *</Label>
+              <Input
+                id="sportName"
+                {...register("sportName")}
+                placeholder="VD: Bóng đá, Cầu lông"
+                className="w-full"
+              />
+              {errors.sportName && (
+                <p className="text-xs text-destructive">{errors.sportName.message}</p>
+              )}
             </div>
 
             <div className="space-y-2">

@@ -71,7 +71,7 @@ function UserAccountMenu({ user }: { user: NonNullable<Session["user"]> }) {
 
         {user.roleName === "Admin" && (
           <DropdownMenuItem asChild>
-            <Link href="/admin" className="cursor-pointer">
+            <Link href="/admin/dashboard" className="cursor-pointer">
               <Settings className="mr-2 h-4 w-4" />
               <span>Trang Admin</span>
             </Link>
@@ -166,7 +166,7 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
               </div>
                {user.roleName === "Admin" && (
                 <SheetClose asChild>
-                  <Link href="/admin" className={getNavLinkClass("/admin")}>
+                  <Link href="/admin/dashboard" className={getNavLinkClass("/admin/dashboard")}>
                     <Settings className="mr-2 h-4 w-4" />
                     Trang Admin
                   </Link>

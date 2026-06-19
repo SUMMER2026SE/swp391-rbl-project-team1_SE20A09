@@ -4,28 +4,20 @@ export interface SportType {
   sportTypeId: number;
   sportName: string;
   nameEn?: string;
-  icon: string;
   sportCode: string;
   description?: string;
   isActive: boolean;
   isFootballType?: boolean;
   createdAt: string;
-  fieldTypes?: string[];
-  internalNote?: string;
-  priority?: number;
 }
 
 export interface CreateSportTypeRequest {
   sportName: string;
   nameEn?: string;
-  icon?: string;
   sportCode: string;
   description?: string;
   isActive?: boolean;
   isFootballType?: boolean;
-  fieldTypes?: string[];
-  internalNote?: string;
-  priority?: number;
 }
 
 export async function fetchSportTypes(): Promise<SportType[]> {

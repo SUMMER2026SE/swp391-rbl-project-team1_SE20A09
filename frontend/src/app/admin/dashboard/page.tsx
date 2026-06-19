@@ -147,10 +147,12 @@ function AdminDashboardPage() {
                 Sân
               </Button>
             </Link>
-            <Button variant="ghost" className="w-full justify-start" size="sm">
-              <UserCog className="mr-3 h-4 w-4" />
-              Danh mục
-            </Button>
+            <Link href="/admin/sport-categories" className="block w-full">
+              <Button variant="ghost" className="w-full justify-start" size="sm">
+                <UserCog className="mr-3 h-4 w-4" />
+                Danh mục
+              </Button>
+            </Link>
             <Button variant="ghost" className="w-full justify-start" size="sm">
               <AlertCircle className="mr-3 h-4 w-4" />
               Khiếu nại
