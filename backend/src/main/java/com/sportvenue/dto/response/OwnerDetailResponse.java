@@ -26,4 +26,6 @@ public class OwnerDetailResponse {
     private ApprovedStatus approvedStatus;
     private String rejectionReason;
     private LocalDateTime createdAt;
+    private String approvedByEmail;
+    private LocalDateTime approvedAt;
 }

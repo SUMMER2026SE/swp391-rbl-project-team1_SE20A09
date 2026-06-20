@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -76,6 +77,23 @@ public class UserController {
                 .build());
     }
 
+    @PatchMapping("/me/resubmit-owner")
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(
+        summary = "Owner bị từ chối nộp lại hồ sơ",
+        description = "Chỉ dành cho Owner đã bị Admin từ chối (REJECTED). Cập nhật thông tin và gửi lại hồ sơ phê duyệt."
+    )
+    public ResponseEntity<ApiResponse<OwnerDetailResponse>> resubmitOwnerProfile(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @Valid @RequestBody UpgradeToOwnerRequest request) {
+        OwnerDetailResponse response = ownerRegistrationService.resubmitOwnerProfile(
+                userPrincipal.getUser(), request);
+        return ResponseEntity.ok(ApiResponse.<OwnerDetailResponse>builder()
+                .code(200)
+                .message("Nộp lại hồ sơ thành công. Đang chờ Admin phê duyệt lại.")
+                .result(response)
+                .build());
+    }
     @GetMapping("/me/owner-profile")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Lấy hồ sơ chủ sân của tài khoản hiện tại", description = "Lấy thông tin và trạng thái phê duyệt của hồ sơ chủ sân gắn với tài khoản đang đăng nhập. Yêu cầu Bearer JWT Token ở Header")

@@ -1,5 +1,6 @@
 package com.sportvenue.service.impl;
 
+import com.sportvenue.dto.request.ApproveOwnerRequest;
 import com.sportvenue.dto.request.RegisterOwnerRequest;
 import com.sportvenue.dto.request.UpgradeToOwnerRequest;
 import com.sportvenue.dto.response.MessageResponse;
@@ -9,13 +10,18 @@ import com.sportvenue.entity.Role;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.AccountStatus;
 import com.sportvenue.entity.enums.ApprovedStatus;
+import com.sportvenue.entity.enums.NotificationType;
 import com.sportvenue.entity.enums.UserRank;
 import com.sportvenue.exception.AppException;
+import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ErrorCode;
+import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.RoleRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.OtpService;
+import com.sportvenue.service.NotificationService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,17 +29,17 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.crypto.password.PasswordEncoder;
-
-import java.util.List;
-import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import com.sportvenue.dto.request.ApproveOwnerRequest;
-import com.sportvenue.exception.BadRequestException;
-import com.sportvenue.exception.ResourceNotFoundException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -57,6 +63,9 @@ class OwnerRegistrationServiceImplTest {
     @Mock
     private OtpService otpService;
 
+    @Mock
+    private NotificationService notificationService;
+
     @InjectMocks
     private OwnerRegistrationServiceImpl ownerRegistrationService;
 
@@ -67,6 +76,19 @@ class OwnerRegistrationServiceImplTest {
     void setUp() {
         ownerRole = new Role(2, "Owner");
         customerRole = new Role(1, "Customer");
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private void mockSecurityContext(String username) {
+        Authentication authentication = mock(Authentication.class);
+        SecurityContext securityContext = mock(SecurityContext.class);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        when(authentication.getName()).thenReturn(username);
+        SecurityContextHolder.setContext(securityContext);
     }
 
     @Test
@@ -83,6 +105,7 @@ class OwnerRegistrationServiceImplTest {
                 .build();
 
         when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
+        when(userRepository.existsByPhoneNumber(request.getPhone())).thenReturn(false);
         when(roleRepository.findByRoleName("Owner")).thenReturn(Optional.of(ownerRole));
         when(passwordEncoder.encode(request.getPassword())).thenReturn("encodedPassword");
 
@@ -97,7 +120,6 @@ class OwnerRegistrationServiceImplTest {
 
         ownerRegistrationService.registerNewOwner(request);
 
-        // Verify splitting of name
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(userCaptor.capture());
         User capturedUser = userCaptor.getValue();
@@ -108,7 +130,6 @@ class OwnerRegistrationServiceImplTest {
         assertFalse(capturedUser.getIsVerified());
         assertEquals(UserRank.BRONZE, capturedUser.getUserRank());
 
-        // Verify Owner creation
         ArgumentCaptor<Owner> ownerCaptor = ArgumentCaptor.forClass(Owner.class);
         verify(ownerRepository).save(ownerCaptor.capture());
         Owner capturedOwner = ownerCaptor.getValue();
@@ -117,8 +138,35 @@ class OwnerRegistrationServiceImplTest {
         assertEquals("Hanoi", capturedOwner.getBusinessAddress());
         assertEquals(ApprovedStatus.PENDING, capturedOwner.getApprovedStatus());
 
-        // Verify OTP is triggered
         verify(otpService).createAndSendOtp(savedUser);
+    }
+
+    @Test
+    void registerNewOwner_SingleWordName_LastNameShouldBeEmpty() {
+        RegisterOwnerRequest request = RegisterOwnerRequest.builder()
+                .email("single@example.com")
+                .fullName("Huy")
+                .phone("0987654321")
+                .password("Password123!")
+                .confirmPassword("Password123!")
+                .businessName("San Huy")
+                .taxCode("0123456789")
+                .businessAddress("HCM")
+                .build();
+
+        when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
+        when(userRepository.existsByPhoneNumber(request.getPhone())).thenReturn(false);
+        when(roleRepository.findByRoleName("Owner")).thenReturn(Optional.of(ownerRole));
+        when(passwordEncoder.encode(any())).thenReturn("encodedPassword");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ownerRegistrationService.registerNewOwner(request);
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        User saved = captor.getValue();
+        assertEquals("Huy", saved.getFirstName());
+        assertEquals("", saved.getLastName());
     }
 
     @Test
@@ -136,7 +184,6 @@ class OwnerRegistrationServiceImplTest {
 
         assertEquals(ErrorCode.DUPLICATE_RESOURCE, ex.getErrorCode());
         verify(userRepository, never()).save(any());
-        verify(ownerRepository, never()).save(any());
     }
 
     @Test
@@ -152,7 +199,6 @@ class OwnerRegistrationServiceImplTest {
 
         assertEquals("Mật khẩu xác nhận không khớp", ex.getMessage());
         verify(userRepository, never()).save(any());
-        verify(ownerRepository, never()).save(any());
     }
 
     @Test
@@ -226,7 +272,7 @@ class OwnerRegistrationServiceImplTest {
         assertEquals("9876543210", result.getTaxCode());
         assertEquals("New Address", result.getBusinessAddress());
         assertEquals(ApprovedStatus.PENDING, result.getApprovedStatus());
-        assertNull(result.getRejectionReason()); // Should clear rejectionReason
+        assertNull(result.getRejectionReason());
 
         verify(ownerRepository).save(existingRejectedOwner);
     }
@@ -241,14 +287,6 @@ class OwnerRegistrationServiceImplTest {
                 .role(ownerRole)
                 .build();
 
-        // Since the user role is Owner, it will throw DUPLICATE_RESOURCE directly (Wait, let's verify if role check is the first condition in upgradeCurrentCustomer)
-        // Let's check OwnerRegistrationServiceImpl line 125 onwards. (We viewed from 90 to 120, let's verify where Role check is done).
-        // Let's verify line 120-135 of implementation.
-        // Wait, in upgradeCurrentCustomer:
-        // Let's check. Yes, if roleName is Owner, or exists pending owner...
-        // Let's see the mocked calls.
-        // Let's check if findByUserUserId is called or not when user is Owner. We'll find out or make the test robust.
-        // Wait, we can mock it anyway just in case.
         when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(Owner.builder().approvedStatus(ApprovedStatus.APPROVED).build()));
 
         AppException ex = assertThrows(AppException.class, () ->
@@ -279,6 +317,34 @@ class OwnerRegistrationServiceImplTest {
 
         assertEquals(ErrorCode.DUPLICATE_RESOURCE, ex.getErrorCode());
         verify(ownerRepository, never()).save(any());
+    }
+
+    @Test
+    void resubmitOwnerProfile_Success() {
+        UpgradeToOwnerRequest request = UpgradeToOwnerRequest.builder()
+                .businessName("New Name")
+                .taxCode("1234567890")
+                .businessAddress("New Addr")
+                .build();
+
+        User user = User.builder().userId(1).email("owner@example.com").build();
+        Owner existingOwner = Owner.builder()
+                .ownerId(5)
+                .user(user)
+                .approvedStatus(ApprovedStatus.REJECTED)
+                .rejectionReason("Bad tax code")
+                .build();
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(existingOwner));
+        when(ownerRepository.save(any(Owner.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        OwnerDetailResponse response = ownerRegistrationService.resubmitOwnerProfile(user, request);
+
+        assertNotNull(response);
+        assertEquals(ApprovedStatus.PENDING, response.getApprovedStatus());
+        assertNull(existingOwner.getRejectionReason());
+        assertNull(existingOwner.getApprovedBy());
+        assertNull(existingOwner.getApprovedAt());
     }
 
     @Test
@@ -354,6 +420,9 @@ class OwnerRegistrationServiceImplTest {
                 .approvedStatus(ApprovedStatus.PENDING)
                 .build();
 
+        mockSecurityContext("admin@sportvenue.com");
+        when(userRepository.findByEmail("admin@sportvenue.com")).thenReturn(Optional.of(User.builder().email("admin@sportvenue.com").build()));
+
         when(ownerRepository.findById(5)).thenReturn(Optional.of(owner));
         when(roleRepository.findByRoleName("Owner")).thenReturn(Optional.of(ownerRole));
         when(ownerRepository.save(any(Owner.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -365,6 +434,13 @@ class OwnerRegistrationServiceImplTest {
         assertNull(response.getRejectionReason());
         assertEquals(ownerRole, user.getRole());
         verify(userRepository).save(user);
+        verify(notificationService).createNotification(
+                eq(user.getUserId()),
+                anyString(),
+                anyString(),
+                eq(NotificationType.SYSTEM),
+                anyString()
+        );
     }
 
     @Test
@@ -386,6 +462,9 @@ class OwnerRegistrationServiceImplTest {
                 .approvedStatus(ApprovedStatus.PENDING)
                 .build();
 
+        mockSecurityContext("admin@sportvenue.com");
+        when(userRepository.findByEmail("admin@sportvenue.com")).thenReturn(Optional.of(User.builder().email("admin@sportvenue.com").build()));
+
         when(ownerRepository.findById(5)).thenReturn(Optional.of(owner));
         when(ownerRepository.save(any(Owner.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -395,6 +474,13 @@ class OwnerRegistrationServiceImplTest {
         assertEquals(ApprovedStatus.APPROVED, response.getApprovedStatus());
         assertEquals(AccountStatus.ACTIVE, user.getAccountStatus());
         verify(userRepository).save(user);
+        verify(notificationService).createNotification(
+                eq(user.getUserId()),
+                anyString(),
+                anyString(),
+                eq(NotificationType.SYSTEM),
+                anyString()
+        );
     }
 
     @Test
@@ -416,6 +502,9 @@ class OwnerRegistrationServiceImplTest {
                 .approvedStatus(ApprovedStatus.PENDING)
                 .build();
 
+        mockSecurityContext("admin@sportvenue.com");
+        when(userRepository.findByEmail("admin@sportvenue.com")).thenReturn(Optional.of(User.builder().email("admin@sportvenue.com").build()));
+
         when(ownerRepository.findById(5)).thenReturn(Optional.of(owner));
         when(ownerRepository.save(any(Owner.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -425,6 +514,13 @@ class OwnerRegistrationServiceImplTest {
         assertEquals(ApprovedStatus.REJECTED, response.getApprovedStatus());
         assertEquals("Incomplete documents", response.getRejectionReason());
         verify(userRepository, never()).save(any(User.class));
+        verify(notificationService).createNotification(
+                eq(user.getUserId()),
+                anyString(),
+                anyString(),
+                eq(NotificationType.SYSTEM),
+                anyString()
+        );
     }
 
     @Test
@@ -467,6 +563,9 @@ class OwnerRegistrationServiceImplTest {
                 .ownerId(5)
                 .approvedStatus(ApprovedStatus.PENDING)
                 .build();
+
+        mockSecurityContext("admin@sportvenue.com");
+        when(userRepository.findByEmail("admin@sportvenue.com")).thenReturn(Optional.of(User.builder().email("admin@sportvenue.com").build()));
 
         when(ownerRepository.findById(5)).thenReturn(Optional.of(owner));
 

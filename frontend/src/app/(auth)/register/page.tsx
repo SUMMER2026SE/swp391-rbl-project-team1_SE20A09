@@ -130,8 +130,11 @@ function RegisterPage() {
         businessAddress: values.businessAddress,
       });
 
-      toast.success("Đăng ký tài khoản đối tác thành công! Vui lòng chờ Admin phê duyệt.");
-      router.push("/login?info=registered_owner");
+      toast.success("Đăng ký tài khoản đối tác thành công! Vui lòng xác thực email để hoàn tất đăng ký.");
+      sessionStorage.setItem("pending_login_email", values.email);
+      sessionStorage.setItem("pending_login_password", values.password);
+      sessionStorage.setItem("is_owner_registration", "true"); // Flag để verify-otp phân biệt flow Owner vs Customer
+      router.push(`/verify-otp?email=${encodeURIComponent(values.email)}`);
     } catch (error: any) {
       toast.error(error.message || "Đăng ký đối tác thất bại");
     } finally {

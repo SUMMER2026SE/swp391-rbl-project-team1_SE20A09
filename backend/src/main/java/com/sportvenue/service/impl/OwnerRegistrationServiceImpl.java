@@ -10,16 +10,18 @@ import com.sportvenue.entity.Role;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.AccountStatus;
 import com.sportvenue.entity.enums.ApprovedStatus;
+import com.sportvenue.entity.enums.NotificationType;
+import com.sportvenue.entity.enums.UserRank;
 import com.sportvenue.exception.AppException;
-import com.sportvenue.exception.ErrorCode;
 import com.sportvenue.exception.BadRequestException;
+import com.sportvenue.exception.ErrorCode;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.RoleRepository;
 import com.sportvenue.repository.UserRepository;
-import com.sportvenue.service.OwnerRegistrationService;
 import com.sportvenue.service.OtpService;
-import com.sportvenue.entity.enums.UserRank;
+import com.sportvenue.service.NotificationService;
+import com.sportvenue.service.OwnerRegistrationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -38,6 +40,7 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final OtpService otpService;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -45,21 +48,22 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         log.info("Processing sign up request for new owner email: {}", request.getEmail());
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new AppException(ErrorCode.DUPLICATE_RESOURCE); // Ném lỗi nếu trùng email
+            throw new AppException(ErrorCode.DUPLICATE_RESOURCE);
+        }
+        if (userRepository.existsByPhoneNumber(request.getPhone())) {
+            throw new AppException(ErrorCode.DUPLICATE_RESOURCE);
         }
         if (!request.getPassword().equals(request.getConfirmPassword())) {
             throw new IllegalArgumentException("Mật khẩu xác nhận không khớp");
         }
 
         Role ownerRole = roleRepository.findByRoleName("Owner")
-                .orElseThrow(() -> new RuntimeException("Role 'Owner' not found in database"));
+                .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
 
-        // Tách họ và tên (Tránh BUG hardcode lastName rỗng)
         String[] nameParts = request.getFullName().trim().split("\\s+", 2);
         String firstName = nameParts[0];
-        String lastName = nameParts.length > 1 ? nameParts[1] : firstName;
+        String lastName = nameParts.length > 1 ? nameParts[1] : "";
 
-        // 1. Tạo tài khoản User mới có role = Owner, trạng thái ban đầu là PENDING (chờ duyệt)
         User user = User.builder()
                 .firstName(firstName)
                 .lastName(lastName)
@@ -74,7 +78,6 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                 .build();
         User savedUser = userRepository.save(user);
 
-        // 2. Tạo hồ sơ kinh doanh Owner trạng thái PENDING
         Owner owner = Owner.builder()
                 .user(savedUser)
                 .businessName(request.getBusinessName())
@@ -84,7 +87,6 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                 .build();
         ownerRepository.save(owner);
 
-        // 3. Gửi OTP xác thực tài khoản qua email để tránh spam
         otpService.createAndSendOtp(savedUser);
 
         return new MessageResponse("Đăng ký thành công. Vui lòng kiểm tra email để nhận mã xác thực OTP.");
@@ -101,18 +103,18 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         if (existingOwnerOpt.isPresent()) {
             Owner existingOwner = existingOwnerOpt.get();
             if (existingOwner.getApprovedStatus() == ApprovedStatus.REJECTED) {
-                // Cho phép cập nhật lại thông tin và gửi duyệt lại
                 existingOwner.setBusinessName(request.getBusinessName());
                 existingOwner.setTaxCode(request.getTaxCode());
                 existingOwner.setBusinessAddress(request.getBusinessAddress());
                 existingOwner.setApprovedStatus(ApprovedStatus.PENDING);
                 existingOwner.setRejectionReason(null);
+                existingOwner.setApprovedBy(null);
+                existingOwner.setApprovedAt(null);
                 owner = existingOwner;
             } else {
                 throw new AppException(ErrorCode.DUPLICATE_RESOURCE);
             }
         } else {
-            // Tạo mới hồ sơ Owner PENDING
             owner = Owner.builder()
                     .user(currentUser)
                     .businessName(request.getBusinessName())
@@ -123,19 +125,33 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         }
 
         Owner savedOwner = ownerRepository.save(owner);
+        return mapToOwnerDetailResponse(savedOwner);
+    }
 
-        return OwnerDetailResponse.builder()
-                .ownerId(savedOwner.getOwnerId())
-                .userId(currentUser.getUserId())
-                .fullName(currentUser.getFullName())
-                .email(currentUser.getEmail())
-                .phoneNumber(currentUser.getPhoneNumber())
-                .businessName(savedOwner.getBusinessName())
-                .taxCode(savedOwner.getTaxCode())
-                .businessAddress(savedOwner.getBusinessAddress())
-                .approvedStatus(savedOwner.getApprovedStatus())
-                .createdAt(savedOwner.getCreatedAt())
-                .build();
+    @Override
+    @Transactional
+    public OwnerDetailResponse resubmitOwnerProfile(User currentUser, UpgradeToOwnerRequest request) {
+        log.info("Processing resubmit profile for rejected Owner: {}", currentUser.getEmail());
+
+        Owner existingOwner = ownerRepository.findByUserUserId(currentUser.getUserId())
+                .orElseThrow(() -> new AppException(ErrorCode.OWNER_PROFILE_NOT_FOUND));
+
+        if (existingOwner.getApprovedStatus() != ApprovedStatus.REJECTED) {
+            throw new AppException(ErrorCode.DUPLICATE_RESOURCE);
+        }
+
+        existingOwner.setBusinessName(request.getBusinessName());
+        existingOwner.setTaxCode(request.getTaxCode());
+        existingOwner.setBusinessAddress(request.getBusinessAddress());
+        existingOwner.setApprovedStatus(ApprovedStatus.PENDING);
+        existingOwner.setRejectionReason(null);
+        existingOwner.setApprovedBy(null);
+        existingOwner.setApprovedAt(null);
+        Owner savedOwner = ownerRepository.save(existingOwner);
+
+        log.info("Owner {} resubmitted profile successfully, status reset to PENDING", currentUser.getEmail());
+
+        return mapToOwnerDetailResponse(savedOwner);
     }
 
     @Override
@@ -168,19 +184,23 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
 
         User user = owner.getUser();
 
+        String adminEmail = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getName();
+        User admin = userRepository.findByEmail(adminEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thông tin Admin"));
+
+        owner.setApprovedBy(admin);
+        owner.setApprovedAt(java.time.LocalDateTime.now());
+
         if (request.getApprovedStatus() == ApprovedStatus.APPROVED) {
-            // 1. Cập nhật hồ sơ chủ sân sang APPROVED
             owner.setApprovedStatus(ApprovedStatus.APPROVED);
             owner.setRejectionReason(null);
 
-            // 2. Nâng cấp vai trò của User lên Owner nếu hiện tại là Customer
             if ("Customer".equals(user.getRole().getRoleName())) {
                 Role ownerRole = roleRepository.findByRoleName("Owner")
                         .orElseThrow(() -> new RuntimeException("Không tìm thấy Role Owner trong DB"));
                 user.setRole(ownerRole);
             }
 
-            // 3. Kích hoạt tài khoản User nếu đang chờ duyệt
             if (user.getAccountStatus() == AccountStatus.PENDING) {
                 user.setAccountStatus(AccountStatus.ACTIVE);
             }
@@ -188,16 +208,31 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
             userRepository.save(user);
             log.info("Owner registration APPROVED for email: {}. Role upgraded to Owner.", user.getEmail());
 
+            notificationService.createNotification(
+                    user.getUserId(),
+                    "Hồ sơ đối tác đã được duyệt",
+                    "Chúc mừng! Hồ sơ đối tác cho doanh nghiệp '" + owner.getBusinessName() + "' đã được Admin phê duyệt thành công. Bạn hiện có quyền của Chủ sân.",
+                    NotificationType.SYSTEM,
+                    owner.getOwnerId().toString()
+            );
+
         } else if (request.getApprovedStatus() == ApprovedStatus.REJECTED) {
             if (request.getRejectionReason() == null || request.getRejectionReason().trim().isEmpty()) {
                 throw new BadRequestException("Lý do từ chối là bắt buộc");
             }
 
-            // 1. Từ chối hồ sơ
             owner.setApprovedStatus(ApprovedStatus.REJECTED);
             owner.setRejectionReason(request.getRejectionReason().trim());
 
             log.info("Owner registration REJECTED for email: {}. Reason: {}", user.getEmail(), request.getRejectionReason());
+
+            notificationService.createNotification(
+                    user.getUserId(),
+                    "Hồ sơ đối tác bị từ chối",
+                    "Hồ sơ đối tác cho doanh nghiệp '" + owner.getBusinessName() + "' đã bị từ chối. Lý do: " + request.getRejectionReason(),
+                    NotificationType.SYSTEM,
+                    owner.getOwnerId().toString()
+            );
         }
 
         Owner savedOwner = ownerRepository.save(owner);
@@ -217,6 +252,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                 .approvedStatus(owner.getApprovedStatus())
                 .rejectionReason(owner.getRejectionReason())
                 .createdAt(owner.getCreatedAt())
+                .approvedByEmail(owner.getApprovedBy() != null ? owner.getApprovedBy().getEmail() : null)
+                .approvedAt(owner.getApprovedAt())
                 .build();
     }
 }
