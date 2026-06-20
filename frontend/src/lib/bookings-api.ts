@@ -204,6 +204,61 @@ export async function getSlotsByDate(
   return data ?? [];
 }
 
+// ── UC-CUS-01: Weekly schedule ──────────────────────────────────────────────
+
+/** Trạng thái của một slot trong weekly grid. */
+export type WeeklySlotStatus = "AVAILABLE" | "BOOKED" | "PAST";
+
+/** Một khung giờ của sân trong weekly grid — kèm trạng thái cho một ngày cụ thể. */
+export type WeeklySlotItem = {
+  slotId: number;
+  /** HH:mm */
+  startTime: string;
+  /** HH:mm */
+  endTime: string;
+  price: number;
+  status: WeeklySlotStatus;
+};
+
+/** Một ngày trong weekly grid — kèm tên thứ tiếng Việt. */
+export type WeeklySlotDay = {
+  /** ISO yyyy-MM-dd */
+  date: string;
+  /** "Thứ 2" / "Chủ nhật" / ... */
+  dayName: string;
+  slots: WeeklySlotItem[];
+};
+
+/**
+ * Response của `GET /api/v1/stadiums/{id}/weekly-slots?weekStart=YYYY-MM-DD`.
+ *
+ * Trả về 7 ngày (thứ 2 → chủ nhật) của tuần chứa {@link weekStart}.
+ * BE tự snap về thứ 2 nếu FE truyền ngày khác.
+ */
+export type WeeklySlotsResponse = {
+  /** ISO yyyy-MM-dd — luôn là thứ 2. */
+  weekStart: string;
+  /** ISO yyyy-MM-dd — luôn là chủ nhật (weekStart + 6). */
+  weekEnd: string;
+  days: WeeklySlotDay[];
+};
+
+/**
+ * Lấy lịch khung giờ theo tuần của một sân.
+ * Public endpoint — không yêu cầu auth.
+ *
+ * @param stadiumId ID sân
+ * @param weekStart một ngày bất kỳ trong tuần (ISO yyyy-MM-dd); BE sẽ snap về thứ 2.
+ */
+export async function getWeeklySlots(
+  stadiumId: number,
+  weekStart: string
+): Promise<WeeklySlotsResponse> {
+  return get<WeeklySlotsResponse>(
+    `/stadiums/${stadiumId}/weekly-slots?weekStart=${encodeURIComponent(weekStart)}`
+  );
+}
+
 /**
  * Tạo đơn đặt sân đơn lẻ — POST /api/v1/bookings.
  * Trả 409 nếu slot đã bị đặt active trên cùng ngày; 400 nếu đã qua giờ.
