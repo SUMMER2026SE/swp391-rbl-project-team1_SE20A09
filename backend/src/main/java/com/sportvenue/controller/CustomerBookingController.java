@@ -3,8 +3,10 @@ package com.sportvenue.controller;
 import com.sportvenue.dto.booking.CustomerBookingDetailDto;
 import com.sportvenue.dto.booking.CustomerBookingHistoryDto;
 import com.sportvenue.dto.response.PageResponse;
+import com.sportvenue.dto.response.VnpayPaymentUrlResponse;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.CustomerBookingService;
+import com.sportvenue.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,6 +31,7 @@ import java.util.Map;
 public class CustomerBookingController {
 
     private final CustomerBookingService customerBookingService;
+    private final PaymentService paymentService;
 
     @GetMapping("/me")
     @PreAuthorize("hasRole('Customer')")
@@ -64,5 +68,21 @@ public class CustomerBookingController {
             @RequestBody Map<String, String> request) {
         customerBookingService.cancelBooking(userPrincipal, id, request.get("reason"));
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * UC-CUS-02: Sinh URL thanh toán VNPay cho đơn đặt sân PENDING.
+     * Không nhận body — amount đọc từ DB, không bao giờ từ client.
+     */
+    @PostMapping("/{id}/pay")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Tạo URL thanh toán VNPay",
+            description = "Sinh paymentUrl VNPay cho đơn đặt sân PENDING của customer hiện tại. "
+                    + "Số tiền lấy từ booking.totalPrice trong DB, không nhận từ request body.")
+    public ResponseEntity<VnpayPaymentUrlResponse> payBooking(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable Integer id) {
+        return ResponseEntity.ok(paymentService.createVnpayPaymentUrl(userPrincipal, id));
     }
 }
