@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Search, Loader2 } from "lucide-react";
@@ -66,12 +66,24 @@ export default function AdminOwnersPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [accountStatusFilter, setAccountStatusFilter] = useState("ALL");
   const [approvedStatusFilter, setApprovedStatusFilter] = useState("ALL");
 
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(0);
+    }, 400);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [search]);
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["admin-owners", page, search, accountStatusFilter, approvedStatusFilter],
-    queryFn: () => fetchOwners(page, 10, search, accountStatusFilter, approvedStatusFilter),
+    queryKey: ["admin-owners", page, debouncedSearch, accountStatusFilter, approvedStatusFilter],
+    queryFn: () => fetchOwners(page, 10, debouncedSearch, accountStatusFilter, approvedStatusFilter),
   });
 
   return (

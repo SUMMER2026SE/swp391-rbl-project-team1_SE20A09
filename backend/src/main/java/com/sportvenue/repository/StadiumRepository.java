@@ -45,8 +45,8 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
     @Query("""
             SELECT s FROM Stadium s
             WHERE s.stadiumStatus = 'AVAILABLE'
-            AND (LOWER(s.stadiumName) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
-                 OR LOWER(s.address) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%')))
+            AND (LOWER(s.stadiumName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                 OR LOWER(s.address) LIKE LOWER(CONCAT('%', :keyword, '%')))
             """)
     Page<Stadium> searchByKeyword(@Param("keyword") String keyword, Pageable pageable);
 

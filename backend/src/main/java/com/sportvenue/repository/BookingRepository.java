@@ -76,7 +76,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
 
     /** Tổng số phút chơi từ các booking hoàn thành — dùng cho PersonalStats. */
     @Query(value = """
-            SELECT CAST(COALESCE(SUM(EXTRACT(EPOCH FROM (s.end_time - s.start_time)) / 60), 0) AS BIGINT)
+            SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (s.end_time - s.start_time)) / 60), 0)
             FROM bookings b
             JOIN time_slots s ON b.slot_id = s.slot_id
             WHERE b.user_id = :userId
