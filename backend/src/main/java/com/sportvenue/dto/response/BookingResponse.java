@@ -37,6 +37,12 @@ public class BookingResponse {
     private String note;
     private LocalDateTime bookingDate;
 
+    /**
+     * UC-CUS-01: Mã chuỗi đặt sân định kỳ — NULL nếu là đơn đơn lẻ.
+     * Owner dashboard dùng để gom nhóm các đơn thuộc cùng chuỗi.
+     */
+    private String recurringGroupId;
+
     /** Thông tin khách hàng (nested DTO). */
     @Getter
     @Setter

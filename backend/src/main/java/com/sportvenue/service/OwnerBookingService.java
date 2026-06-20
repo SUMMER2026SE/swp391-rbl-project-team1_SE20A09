@@ -199,6 +199,7 @@ public class OwnerBookingService {
                 .paymentStatus(booking.getPaymentStatus().name())
                 .note(booking.getNote())
                 .bookingDate(booking.getBookingDate())
+                .recurringGroupId(booking.getRecurringGroupId())
                 .build();
     }
 

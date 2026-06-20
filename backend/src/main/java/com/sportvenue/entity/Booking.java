@@ -32,7 +32,8 @@ import java.time.LocalDateTime;
 @Table(name = "bookings", indexes = {
         @Index(name = "idx_bookings_user_id", columnList = "user_id"),
         @Index(name = "idx_bookings_stadium_id", columnList = "stadium_id"),
-        @Index(name = "idx_bookings_status", columnList = "booking_status")
+        @Index(name = "idx_bookings_status", columnList = "booking_status"),
+        @Index(name = "idx_bookings_recurring_group_id", columnList = "recurring_group_id")
 })
 @Getter
 @Setter
@@ -100,4 +101,11 @@ public class Booking implements Serializable {
     /** Ngày khách hàng thực sự ra sân chơi. */
     @Column(name = "reservation_date", nullable = false)
     private java.time.LocalDate reservationDate;
+
+    /**
+     * Mã định danh chuỗi đặt sân định kỳ (UC-CUS-01) — UUID v4 dạng chuỗi.
+     * NULL cho đơn đặt đơn lẻ; cùng giá trị cho tất cả đơn thuộc một chuỗi recurring.
+     */
+    @Column(name = "recurring_group_id", length = 36)
+    private String recurringGroupId;
 }

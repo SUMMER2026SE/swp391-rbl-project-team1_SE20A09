@@ -1,6 +1,7 @@
 package com.sportvenue.repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -242,6 +243,30 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("endOfDay") LocalDateTime endOfDay,
             @Param("startTime") java.time.LocalTime startTime,
             @Param("endTime") java.time.LocalTime endTime);
+
+    /**
+     * UC-CUS-01: Kiểm tra xem (stadium, slot, reservationDate) đã có đơn active (PENDING/CONFIRMED) nào chưa.
+     * Dùng cho recurring booking — phát hiện conflict per-(sân, khung giờ, ngày chơi) bất kể user nào.
+     */
+    @Query("""
+            SELECT COUNT(b) > 0 FROM Booking b
+            WHERE b.stadium.stadiumId = :stadiumId
+            AND b.slot.slotId = :slotId
+            AND b.reservationDate = :reservationDate
+            AND b.bookingStatus IN :statuses
+            """)
+    boolean existsByStadiumSlotAndDate(
+            @Param("stadiumId") Integer stadiumId,
+            @Param("slotId") Integer slotId,
+            @Param("reservationDate") LocalDate reservationDate,
+            @Param("statuses") List<BookingStatus> statuses);
+
+    /**
+     * UC-CUS-01: Lấy tất cả đơn thuộc cùng một chuỗi đặt sân định kỳ.
+     * Dùng cho "Hủy cả chuỗi" tương lai và cho Owner dashboard hiển thị nhóm đơn.
+     */
+    @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "slot"})
+    List<Booking> findAllByRecurringGroupId(String recurringGroupId);
 }
 
 
