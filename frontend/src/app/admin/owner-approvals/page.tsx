@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Header } from "@/components/layout/Header";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,268 +14,289 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CheckCircle, XCircle, FileText, MapPin, Building } from "lucide-react";
+import { CheckCircle, XCircle, MapPin, Building, Loader2, Mail, Phone, Calendar } from "lucide-react";
+import { adminOwnerService, OwnerDetail } from "@/lib/services/admin-owner";
+import { toast } from "sonner";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
-interface OwnerMock {
-  name: string;
-  email: string;
-  phone: string;
-  avatar: string;
-}
+export default function OwnerApprovalPage() {
+  const router = useRouter();
+  const { data: session, status: sessionStatus } = useSession();
 
-interface VenueMock {
-  name: string;
-  address: string;
-  sportType: string;
-  description?: string;
-}
-
-interface OwnerApplicationMock {
-  id: number;
-  owner: OwnerMock;
-  venue: VenueMock;
-  documents?: string[];
-  submittedDate: string;
-  approvedDate?: string;
-  rejectedDate?: string;
-  rejectionReason?: string;
-  status: string;
-}
-
-function OwnerApprovalPage() {
-  const [selectedApplication, setSelectedApplication] = useState<OwnerApplicationMock | null>(null);
+  const [activeTab, setActiveTab] = useState<'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
+  const [applications, setApplications] = useState<OwnerDetail[]>([]);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loading, setLoading] = useState(true);
+  
+  const [selectedApplication, setSelectedApplication] = useState<OwnerDetail | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
 
-  const applications = [
-    {
-      id: 1,
-      owner: {
-        name: "Nguyễn Văn A",
-        email: "owner1@email.com",
-        phone: "0901234567",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=owner1",
-      },
-      venue: {
-        name: "Sân bóng Phú Nhuận",
-        address: "123 Đường ABC, Phú Nhuận, TP.HCM",
-        sportType: "Bóng đá",
-        description: "Sân bóng chất lượng cao với cỏ nhân tạo...",
-      },
-      documents: [
-        "Chứng minh nhân dân",
-        "Giấy phép kinh doanh",
-        "Hợp đồng thuê mặt bằng",
-      ],
-      submittedDate: "20/05/2024",
-      status: "pending",
-    },
-    {
-      id: 2,
-      owner: {
-        name: "Trần Thị B",
-        email: "owner2@email.com",
-        phone: "0909876543",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=owner2",
-      },
-      venue: {
-        name: "Sân cầu lông Quận 3",
-        address: "456 Đường XYZ, Quận 3, TP.HCM",
-        sportType: "Cầu lông",
-        description: "Hệ thống 4 sân cầu lông tiêu chuẩn thi đấu...",
-      },
-      documents: [
-        "Chứng minh nhân dân",
-        "Giấy phép kinh doanh",
-        "Hợp đồng thuê mặt bằng",
-      ],
-      submittedDate: "21/05/2024",
-      status: "pending",
-    },
-  ];
+  // Authentication guard
+  useEffect(() => {
+    if (sessionStatus === "unauthenticated") {
+      router.replace("/login");
+    } else if (sessionStatus === "authenticated" && session?.user?.roleName !== "Admin") {
+      toast.error("Bạn không có quyền truy cập trang này");
+      router.replace("/");
+    }
+  }, [sessionStatus, session, router]);
 
-  const approvedApplications = [
-    {
-      id: 3,
-      owner: {
-        name: "Lê Văn C",
-        email: "owner3@email.com",
-        phone: "0903456789",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=owner3",
-      },
-      venue: {
-        name: "Sân quần vợt Quận 7",
-        address: "789 Đường DEF, Quận 7, TP.HCM",
-        sportType: "Quần vợt",
-      },
-      submittedDate: "15/05/2024",
-      approvedDate: "18/05/2024",
-      status: "approved",
-    },
-  ];
-
-  const rejectedApplications = [
-    {
-      id: 4,
-      owner: {
-        name: "Phạm Thị D",
-        email: "owner4@email.com",
-        phone: "0904567890",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=owner4",
-      },
-      venue: {
-        name: "Sân bóng rổ Bình Thạnh",
-        address: "321 Đường GHI, Bình Thạnh, TP.HCM",
-        sportType: "Bóng rổ",
-      },
-      submittedDate: "12/05/2024",
-      rejectedDate: "14/05/2024",
-      rejectionReason: "Giấy tờ không đầy đủ",
-      status: "rejected",
-    },
-  ];
-
-  const getStatusBadge = (status: string) => {
-    const config = {
-      pending: { label: "Chờ duyệt", className: "bg-yellow-100 text-yellow-700" },
-      approved: { label: "Đã duyệt", className: "bg-green-100 text-green-700" },
-      rejected: { label: "Từ chối", className: "bg-red-100 text-red-700" },
-    };
-    const item = config[status as keyof typeof config];
-    return <Badge className={item.className}>{item.label}</Badge>;
+  const fetchApplications = async (status: 'PENDING' | 'APPROVED' | 'REJECTED', pageNum: number) => {
+    setLoading(true);
+    try {
+      const res = await adminOwnerService.getRegistrations(status, pageNum, 10);
+      if (res.code === 200 && res.result) {
+        setApplications(res.result.content);
+        setTotalPages(res.result.totalPages);
+      } else {
+        toast.error(res.message || "Không thể tải danh sách hồ sơ");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Lỗi khi tải danh sách hồ sơ");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const ApplicationCard = ({ application }: { application: OwnerApplicationMock }) => (
-    <Card className="mb-4">
+  useEffect(() => {
+    if (sessionStatus === "authenticated" && session?.user?.roleName === "Admin") {
+      fetchApplications(activeTab, page);
+    }
+  }, [sessionStatus, session, activeTab, page]);
+
+  const handleTabChange = (val: string) => {
+    setActiveTab(val as 'PENDING' | 'APPROVED' | 'REJECTED');
+    setPage(0); // reset to page 0 when tab changes
+  };
+
+  const handleApprove = async (ownerId: number) => {
+    setActionLoadingId(ownerId);
+    try {
+      const res = await adminOwnerService.approveOrReject(ownerId, { approvedStatus: 'APPROVED' });
+      if (res.code === 200) {
+        toast.success("Đã phê duyệt hồ sơ đối tác thành công");
+        fetchApplications(activeTab, page);
+      } else {
+        toast.error(res.message || "Không thể phê duyệt hồ sơ");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Có lỗi xảy ra khi phê duyệt");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleRejectClick = (app: OwnerDetail) => {
+    setSelectedApplication(app);
+    setRejectReason("");
+  };
+
+  const handleConfirmReject = async () => {
+    if (!selectedApplication) return;
+    if (!rejectReason.trim()) {
+      toast.error("Vui lòng nhập lý do từ chối");
+      return;
+    }
+
+    setActionLoadingId(selectedApplication.ownerId);
+    try {
+      const res = await adminOwnerService.approveOrReject(selectedApplication.ownerId, {
+        approvedStatus: 'REJECTED',
+        rejectionReason: rejectReason.trim()
+      });
+      if (res.code === 200) {
+        toast.success("Đã từ chối đơn đăng ký thành công");
+        setSelectedApplication(null);
+        fetchApplications(activeTab, page);
+      } else {
+        toast.error(res.message || "Không thể từ chối hồ sơ");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Có lỗi xảy ra khi từ chối");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "PENDING":
+        return <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">Chờ duyệt</Badge>;
+      case "APPROVED":
+        return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Đã duyệt</Badge>;
+      case "REJECTED":
+        return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Từ từ chối</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const ApplicationCard = ({ application }: { application: OwnerDetail }) => (
+    <Card className="mb-4 border-slate-200 hover:shadow-sm transition-shadow">
       <CardContent className="p-6">
-        <div className="flex items-start justify-between mb-4">
+        <div className="flex flex-col md:flex-row items-start justify-between gap-4 mb-4">
           <div className="flex items-start gap-4">
             <Avatar className="h-12 w-12">
-              <AvatarImage src={application.owner.avatar} />
-              <AvatarFallback>{application.owner.name[0]}</AvatarFallback>
+              <AvatarImage src={`https://api.dicebear.com/7.x/adventurer/svg?seed=${application.email}`} />
+              <AvatarFallback>{application.fullName[0]}</AvatarFallback>
             </Avatar>
             <div>
-              <h3 className="mb-1">{application.owner.name}</h3>
-              <div className="text-sm text-muted-foreground mb-2">
-                {application.owner.email} • {application.owner.phone}
+              <h3 className="text-lg font-bold mb-1">{application.fullName}</h3>
+              <div className="flex flex-col gap-1 text-sm text-muted-foreground mb-2">
+                <span className="flex items-center gap-1.5">
+                  <Mail className="h-3.5 w-3.5" /> {application.email}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Phone className="h-3.5 w-3.5" /> {application.phoneNumber}
+                </span>
               </div>
-              {getStatusBadge(application.status)}
+              {getStatusBadge(application.approvedStatus)}
             </div>
           </div>
-          <div className="text-sm text-muted-foreground">
-            Ngày nộp: {application.submittedDate}
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground self-end md:self-start">
+            <Calendar className="h-4 w-4" />
+            <span>Ngày nộp: {new Date(application.createdAt).toLocaleDateString('vi-VN')}</span>
           </div>
         </div>
 
         <div className="bg-muted/50 rounded-lg p-4 mb-4">
           <div className="flex items-center gap-2 mb-3">
             <Building className="h-5 w-5 text-primary" />
-            <h4>Thông tin sân</h4>
+            <h4 className="font-semibold text-slate-800">Thông tin doanh nghiệp / hộ kinh doanh</h4>
           </div>
-          <div className="space-y-2 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <div>
-              <span className="text-muted-foreground">Tên sân:</span>{" "}
-              {application.venue.name}
-            </div>
-            <div className="flex items-start gap-2">
-              <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground" />
-              <span>{application.venue.address}</span>
+              <span className="text-muted-foreground block md:inline font-medium">Tên thương hiệu:</span>{" "}
+              <span className="font-semibold text-slate-700">{application.businessName}</span>
             </div>
             <div>
-              <span className="text-muted-foreground">Loại:</span>{" "}
-              <Badge variant="outline">{application.venue.sportType}</Badge>
+              <span className="text-muted-foreground block md:inline font-medium">Mã số thuế:</span>{" "}
+              <span className="font-semibold text-slate-700">{application.taxCode}</span>
             </div>
-            {application.venue.description && (
-              <div>
-                <span className="text-muted-foreground">Mô tả:</span>{" "}
-                {application.venue.description}
-              </div>
-            )}
+            <div className="md:col-span-2 flex items-start gap-1.5">
+              <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+              <span>
+                <span className="text-muted-foreground font-medium">Địa chỉ kinh doanh:</span>{" "}
+                {application.businessAddress}
+              </span>
+            </div>
           </div>
         </div>
 
-        {application.documents && (
-          <div className="mb-4">
-            <div className="flex items-center gap-2 mb-2">
-              <FileText className="h-4 w-4 text-primary" />
-              <h4 className="text-sm">Tài liệu đính kèm</h4>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {application.documents.map((doc: string, idx: number) => (
-                <Badge key={idx} variant="outline">
-                  {doc}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {application.status === "pending" && (
-          <div className="flex gap-2">
+        {application.approvedStatus === "PENDING" && (
+          <div className="flex flex-wrap gap-3 mt-4">
             <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setSelectedApplication(application)}
+              className="flex-1 min-w-[120px]"
+              disabled={actionLoadingId !== null}
+              onClick={() => handleApprove(application.ownerId)}
             >
-              Xem chi tiết
-            </Button>
-            <Button variant="default" className="flex-1">
-              <CheckCircle className="h-4 w-4 mr-2" />
+              {actionLoadingId === application.ownerId ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <CheckCircle className="h-4 w-4 mr-2" />
+              )}
               Phê duyệt
             </Button>
-            <Button variant="destructive" className="flex-1">
+            <Button
+              variant="destructive"
+              className="flex-1 min-w-[120px]"
+              disabled={actionLoadingId !== null}
+              onClick={() => handleRejectClick(application)}
+            >
               <XCircle className="h-4 w-4 mr-2" />
               Từ chối
             </Button>
           </div>
         )}
 
-        {application.status === "rejected" && application.rejectionReason && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <div className="text-sm">
-              <strong>Lý do từ chối:</strong> {application.rejectionReason}
-            </div>
+        {application.approvedStatus === "REJECTED" && application.rejectionReason && (
+          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            <strong>Lý do từ chối:</strong> {application.rejectionReason}
           </div>
         )}
       </CardContent>
     </Card>
   );
 
+  if (sessionStatus === "loading") {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="flex justify-center items-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
 
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl mb-8">Duyệt chủ sân</h1>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold">Duyệt hồ sơ chủ sân</h1>
+            <p className="text-muted-foreground mt-1">Xem xét hồ sơ đăng ký kinh doanh và yêu cầu nâng cấp lên Chủ sân.</p>
+          </div>
+          <Button variant="outline" onClick={() => router.push("/admin/dashboard")}>
+            Quay lại Dashboard
+          </Button>
+        </div>
 
-        <Tabs defaultValue="pending">
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList className="mb-6">
-            <TabsTrigger value="pending">
-              Chờ duyệt ({applications.length})
-            </TabsTrigger>
-            <TabsTrigger value="approved">
-              Đã duyệt ({approvedApplications.length})
-            </TabsTrigger>
-            <TabsTrigger value="rejected">
-              Từ chối ({rejectedApplications.length})
-            </TabsTrigger>
+            <TabsTrigger value="PENDING">Chờ duyệt</TabsTrigger>
+            <TabsTrigger value="APPROVED">Đã duyệt</TabsTrigger>
+            <TabsTrigger value="REJECTED">Từ chối</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="pending">
-            {applications.map((app) => (
-              <ApplicationCard key={app.id} application={app} />
-            ))}
-          </TabsContent>
+          <TabsContent value={activeTab}>
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground">Đang tải danh sách hồ sơ...</span>
+              </div>
+            ) : applications.length === 0 ? (
+              <div className="text-center py-20 text-muted-foreground border-2 border-dashed rounded-lg bg-card">
+                {activeTab === "PENDING" && "Hiện tại không có hồ sơ nào đang chờ duyệt."}
+                {activeTab === "APPROVED" && "Chưa có hồ sơ đối tác nào được duyệt."}
+                {activeTab === "REJECTED" && "Chưa có hồ sơ đối tác nào bị từ chối."}
+              </div>
+            ) : (
+              <div>
+                {applications.map((app) => (
+                  <ApplicationCard key={app.ownerId} application={app} />
+                ))}
 
-          <TabsContent value="approved">
-            {approvedApplications.map((app) => (
-              <ApplicationCard key={app.id} application={app} />
-            ))}
-          </TabsContent>
-
-          <TabsContent value="rejected">
-            {rejectedApplications.map((app) => (
-              <ApplicationCard key={app.id} application={app} />
-            ))}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 mt-6">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page === 0 || loading}
+                      onClick={() => setPage(prev => prev - 1)}
+                    >
+                      Trang trước
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      Trang {page + 1} / {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page >= totalPages - 1 || loading}
+                      onClick={() => setPage(prev => prev + 1)}
+                    >
+                      Trang sau
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
 
@@ -290,7 +311,10 @@ function OwnerApprovalPage() {
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <label className="block mb-2">Lý do từ chối *</label>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Từ chối hồ sơ đăng ký của <strong>{selectedApplication?.fullName}</strong> ({selectedApplication?.businessName}).
+                </p>
+                <label className="block text-sm font-medium mb-2">Lý do từ chối *</label>
                 <Textarea
                   placeholder="Nhập lý do từ chối..."
                   value={rejectReason}
@@ -298,19 +322,20 @@ function OwnerApprovalPage() {
                   rows={4}
                 />
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 justify-end">
                 <Button
                   variant="outline"
-                  className="flex-1"
                   onClick={() => setSelectedApplication(null)}
+                  disabled={actionLoadingId !== null}
                 >
                   Hủy
                 </Button>
                 <Button
                   variant="destructive"
-                  className="flex-1"
-                  disabled={!rejectReason}
+                  disabled={!rejectReason.trim() || actionLoadingId !== null}
+                  onClick={handleConfirmReject}
                 >
+                  {actionLoadingId !== null && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                   Xác nhận từ chối
                 </Button>
               </div>
@@ -321,5 +346,3 @@ function OwnerApprovalPage() {
     </div>
   );
 }
-
-export default OwnerApprovalPage;

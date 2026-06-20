@@ -1,5 +1,6 @@
 package com.sportvenue.service.impl;
 
+import com.sportvenue.dto.request.ApproveOwnerRequest;
 import com.sportvenue.dto.request.RegisterOwnerRequest;
 import com.sportvenue.dto.request.UpgradeToOwnerRequest;
 import com.sportvenue.dto.response.MessageResponse;
@@ -11,6 +12,8 @@ import com.sportvenue.entity.enums.AccountStatus;
 import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.exception.AppException;
 import com.sportvenue.exception.ErrorCode;
+import com.sportvenue.exception.BadRequestException;
+import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.RoleRepository;
 import com.sportvenue.repository.UserRepository;
@@ -19,6 +22,8 @@ import com.sportvenue.service.OtpService;
 import com.sportvenue.entity.enums.UserRank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -137,19 +142,81 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
     @Transactional(readOnly = true)
     public OwnerDetailResponse getOwnerProfileOfUser(User currentUser) {
         return ownerRepository.findByUserUserId(currentUser.getUserId())
-                .map(owner -> OwnerDetailResponse.builder()
-                        .ownerId(owner.getOwnerId())
-                        .userId(currentUser.getUserId())
-                        .fullName(currentUser.getFullName())
-                        .email(currentUser.getEmail())
-                        .phoneNumber(currentUser.getPhoneNumber())
-                        .businessName(owner.getBusinessName())
-                        .taxCode(owner.getTaxCode())
-                        .businessAddress(owner.getBusinessAddress())
-                        .approvedStatus(owner.getApprovedStatus())
-                        .rejectionReason(owner.getRejectionReason())
-                        .createdAt(owner.getCreatedAt())
-                        .build())
+                .map(this::mapToOwnerDetailResponse)
                 .orElse(null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<OwnerDetailResponse> getOwnerRegistrations(ApprovedStatus status, Pageable pageable) {
+        log.info("Admin fetching owner registrations with status: {}", status);
+        Page<Owner> owners = ownerRepository.findByApprovedStatus(status, pageable);
+        return owners.map(this::mapToOwnerDetailResponse);
+    }
+
+    @Override
+    @Transactional
+    public OwnerDetailResponse approveOrRejectOwner(Integer ownerId, ApproveOwnerRequest request) {
+        log.info("Admin is processing ownerId: {} with status: {}", ownerId, request.getApprovedStatus());
+
+        Owner owner = ownerRepository.findById(ownerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hồ sơ đối tác với ID: " + ownerId));
+
+        if (owner.getApprovedStatus() != ApprovedStatus.PENDING) {
+            throw new BadRequestException("Hồ sơ này đã được xử lý và không thể thay đổi trạng thái.");
+        }
+
+        User user = owner.getUser();
+
+        if (request.getApprovedStatus() == ApprovedStatus.APPROVED) {
+            // 1. Cập nhật hồ sơ chủ sân sang APPROVED
+            owner.setApprovedStatus(ApprovedStatus.APPROVED);
+            owner.setRejectionReason(null);
+
+            // 2. Nâng cấp vai trò của User lên Owner nếu hiện tại là Customer
+            if ("Customer".equals(user.getRole().getRoleName())) {
+                Role ownerRole = roleRepository.findByRoleName("Owner")
+                        .orElseThrow(() -> new RuntimeException("Không tìm thấy Role Owner trong DB"));
+                user.setRole(ownerRole);
+            }
+
+            // 3. Kích hoạt tài khoản User nếu đang chờ duyệt
+            if (user.getAccountStatus() == AccountStatus.PENDING) {
+                user.setAccountStatus(AccountStatus.ACTIVE);
+            }
+
+            userRepository.save(user);
+            log.info("Owner registration APPROVED for email: {}. Role upgraded to Owner.", user.getEmail());
+
+        } else if (request.getApprovedStatus() == ApprovedStatus.REJECTED) {
+            if (request.getRejectionReason() == null || request.getRejectionReason().trim().isEmpty()) {
+                throw new BadRequestException("Lý do từ chối là bắt buộc");
+            }
+
+            // 1. Từ chối hồ sơ
+            owner.setApprovedStatus(ApprovedStatus.REJECTED);
+            owner.setRejectionReason(request.getRejectionReason().trim());
+
+            log.info("Owner registration REJECTED for email: {}. Reason: {}", user.getEmail(), request.getRejectionReason());
+        }
+
+        Owner savedOwner = ownerRepository.save(owner);
+        return mapToOwnerDetailResponse(savedOwner);
+    }
+
+    private OwnerDetailResponse mapToOwnerDetailResponse(Owner owner) {
+        return OwnerDetailResponse.builder()
+                .ownerId(owner.getOwnerId())
+                .userId(owner.getUser().getUserId())
+                .fullName(owner.getUser().getFullName())
+                .email(owner.getUser().getEmail())
+                .phoneNumber(owner.getUser().getPhoneNumber())
+                .businessName(owner.getBusinessName())
+                .taxCode(owner.getTaxCode())
+                .businessAddress(owner.getBusinessAddress())
+                .approvedStatus(owner.getApprovedStatus())
+                .rejectionReason(owner.getRejectionReason())
+                .createdAt(owner.getCreatedAt())
+                .build();
     }
 }

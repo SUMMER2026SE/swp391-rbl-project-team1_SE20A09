@@ -25,7 +25,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import com.sportvenue.dto.request.ApproveOwnerRequest;
+import com.sportvenue.exception.BadRequestException;
+import com.sportvenue.exception.ResourceNotFoundException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -304,5 +312,165 @@ class OwnerRegistrationServiceImplTest {
         OwnerDetailResponse response = ownerRegistrationService.getOwnerProfileOfUser(user);
 
         assertNull(response);
+    }
+
+    @Test
+    void getOwnerRegistrations_Success() {
+        Pageable pageable = PageRequest.of(0, 10);
+        User user = User.builder().userId(1).email("owner@example.com").build();
+        Owner owner = Owner.builder()
+                .ownerId(5)
+                .user(user)
+                .businessName("My Business")
+                .approvedStatus(ApprovedStatus.PENDING)
+                .build();
+        Page<Owner> ownerPage = new PageImpl<>(List.of(owner));
+
+        when(ownerRepository.findByApprovedStatus(ApprovedStatus.PENDING, pageable)).thenReturn(ownerPage);
+
+        Page<OwnerDetailResponse> result = ownerRegistrationService.getOwnerRegistrations(ApprovedStatus.PENDING, pageable);
+
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+        assertEquals("My Business", result.getContent().get(0).getBusinessName());
+    }
+
+    @Test
+    void approveOrRejectOwner_Approve_CustomerUpgrade_Success() {
+        ApproveOwnerRequest request = ApproveOwnerRequest.builder()
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .build();
+
+        User user = User.builder()
+                .userId(1)
+                .email("customer@example.com")
+                .role(customerRole)
+                .accountStatus(AccountStatus.ACTIVE)
+                .build();
+
+        Owner owner = Owner.builder()
+                .ownerId(5)
+                .user(user)
+                .approvedStatus(ApprovedStatus.PENDING)
+                .build();
+
+        when(ownerRepository.findById(5)).thenReturn(Optional.of(owner));
+        when(roleRepository.findByRoleName("Owner")).thenReturn(Optional.of(ownerRole));
+        when(ownerRepository.save(any(Owner.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OwnerDetailResponse response = ownerRegistrationService.approveOrRejectOwner(5, request);
+
+        assertNotNull(response);
+        assertEquals(ApprovedStatus.APPROVED, response.getApprovedStatus());
+        assertNull(response.getRejectionReason());
+        assertEquals(ownerRole, user.getRole());
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void approveOrRejectOwner_Approve_DirectOwnerPending_Success() {
+        ApproveOwnerRequest request = ApproveOwnerRequest.builder()
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .build();
+
+        User user = User.builder()
+                .userId(1)
+                .email("owner@example.com")
+                .role(ownerRole)
+                .accountStatus(AccountStatus.PENDING)
+                .build();
+
+        Owner owner = Owner.builder()
+                .ownerId(5)
+                .user(user)
+                .approvedStatus(ApprovedStatus.PENDING)
+                .build();
+
+        when(ownerRepository.findById(5)).thenReturn(Optional.of(owner));
+        when(ownerRepository.save(any(Owner.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OwnerDetailResponse response = ownerRegistrationService.approveOrRejectOwner(5, request);
+
+        assertNotNull(response);
+        assertEquals(ApprovedStatus.APPROVED, response.getApprovedStatus());
+        assertEquals(AccountStatus.ACTIVE, user.getAccountStatus());
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void approveOrRejectOwner_Reject_Success() {
+        ApproveOwnerRequest request = ApproveOwnerRequest.builder()
+                .approvedStatus(ApprovedStatus.REJECTED)
+                .rejectionReason("Incomplete documents")
+                .build();
+
+        User user = User.builder()
+                .userId(1)
+                .email("customer@example.com")
+                .role(customerRole)
+                .build();
+
+        Owner owner = Owner.builder()
+                .ownerId(5)
+                .user(user)
+                .approvedStatus(ApprovedStatus.PENDING)
+                .build();
+
+        when(ownerRepository.findById(5)).thenReturn(Optional.of(owner));
+        when(ownerRepository.save(any(Owner.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OwnerDetailResponse response = ownerRegistrationService.approveOrRejectOwner(5, request);
+
+        assertNotNull(response);
+        assertEquals(ApprovedStatus.REJECTED, response.getApprovedStatus());
+        assertEquals("Incomplete documents", response.getRejectionReason());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void approveOrRejectOwner_OwnerNotFound_ThrowsException() {
+        ApproveOwnerRequest request = ApproveOwnerRequest.builder()
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .build();
+
+        when(ownerRepository.findById(999)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () ->
+                ownerRegistrationService.approveOrRejectOwner(999, request));
+    }
+
+    @Test
+    void approveOrRejectOwner_AlreadyProcessed_ThrowsException() {
+        ApproveOwnerRequest request = ApproveOwnerRequest.builder()
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .build();
+
+        Owner owner = Owner.builder()
+                .ownerId(5)
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .build();
+
+        when(ownerRepository.findById(5)).thenReturn(Optional.of(owner));
+
+        assertThrows(BadRequestException.class, () ->
+                ownerRegistrationService.approveOrRejectOwner(5, request));
+    }
+
+    @Test
+    void approveOrRejectOwner_Reject_MissingReason_ThrowsException() {
+        ApproveOwnerRequest request = ApproveOwnerRequest.builder()
+                .approvedStatus(ApprovedStatus.REJECTED)
+                .rejectionReason("")
+                .build();
+
+        Owner owner = Owner.builder()
+                .ownerId(5)
+                .approvedStatus(ApprovedStatus.PENDING)
+                .build();
+
+        when(ownerRepository.findById(5)).thenReturn(Optional.of(owner));
+
+        assertThrows(BadRequestException.class, () ->
+                ownerRegistrationService.approveOrRejectOwner(5, request));
     }
 }
