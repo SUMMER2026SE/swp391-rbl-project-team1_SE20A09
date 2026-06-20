@@ -67,4 +67,6 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Inte
             @Param("playDate") LocalDate playDate,
             @Param("startTime") LocalTime startTime,
             @Param("endTime") LocalTime endTime);
+
+    boolean existsBySportTypeSportTypeId(Integer sportTypeId);
 }

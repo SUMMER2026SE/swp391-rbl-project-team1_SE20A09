@@ -61,6 +61,9 @@ public class Owner implements Serializable {
     @Builder.Default
     private ApprovedStatus approvedStatus = ApprovedStatus.PENDING;
 
+    @Column(name = "rejection_reason", length = 255)
+    private String rejectionReason;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

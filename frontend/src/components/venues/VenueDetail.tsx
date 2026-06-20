@@ -7,7 +7,6 @@ import {
   IconBallFootball,
   IconClock,
   IconClockOff,
-  IconUsers,
   IconCategory,
   IconCircleCheck,
   IconCircleX,
@@ -56,7 +55,6 @@ export interface VenueDetailProps {
     pricePerHour: number
     openTime: string        // "06:00"
     closeTime: string       // "22:00"
-    capacity: number
     status: string
     description: string
     images: string[]        // array of image URLs, length >= 5
@@ -560,13 +558,6 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                     <div className="leading-tight">
                       <span className="block text-[11px] text-gray-400 font-normal">Giờ mở cửa</span>
                       <span className="text-[13px] font-medium text-gray-700">{venue.openTime} – {venue.closeTime}</span>
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 rounded-[8px] p-[11px_12px] flex items-center gap-3 border-[0.5px] border-gray-100">
-                    <IconUsers className="w-5 h-5 text-[#1a8a4a] shrink-0" />
-                    <div className="leading-tight">
-                      <span className="block text-[11px] text-gray-400 font-normal">Sức chứa</span>
-                      <span className="text-[13px] font-medium text-gray-700">{venue.capacity} người</span>
                     </div>
                   </div>
                   <div className="bg-gray-50 rounded-[8px] p-[11px_12px] flex items-center gap-3 border-[0.5px] border-gray-100">

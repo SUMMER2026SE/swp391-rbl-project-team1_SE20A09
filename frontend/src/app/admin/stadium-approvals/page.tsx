@@ -122,7 +122,7 @@ export default function StadiumApprovalPage() {
               </p>
               <p className="flex items-center gap-1">
                 <Building className="h-4 w-4 shrink-0" />
-                <span>Giá thuê: {stadium.pricePerHour.toLocaleString('vi-VN')}đ/giờ • Sức chứa: {stadium.capacity} người</span>
+                <span>Giá thuê: {stadium.pricePerHour.toLocaleString('vi-VN')}đ/giờ</span>
               </p>
               {stadium.description && (
                 <p className="text-xs line-clamp-2 italic">Mô tả: {stadium.description}</p>

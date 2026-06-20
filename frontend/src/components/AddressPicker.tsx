@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Card } from '@/components/ui/card'
 import { MapPin } from 'lucide-react'
 import 'leaflet/dist/leaflet.css'
+import { get } from '@/lib/api'
 
 const DA_NANG_CENTER = { lat: 16.0544, lng: 108.2022 }
 
@@ -51,6 +52,7 @@ export function AddressPicker({ initialAddress, initialLat, initialLng, onAddres
   const [suggestions, setSuggestions] = useState<LocationDTO[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isFocused, setIsFocused] = useState(false)
   const debounceTimerRef = useRef<NodeJS.Timeout>()
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [isClient, setIsClient] = useState(false)
@@ -58,6 +60,20 @@ export function AddressPicker({ initialAddress, initialLat, initialLng, onAddres
   // Memory cache
   const cacheRef = useRef<Map<string, LocationDTO[]>>(new Map())
   const reverseCacheRef = useRef<Map<string, LocationDTO>>(new Map())
+
+  // Keep local input value in sync with prop from react-hook-form parent only when not typing
+  useEffect(() => {
+    if (!isFocused && initialAddress !== undefined && initialAddress !== inputValue) {
+      setInputValue(initialAddress)
+    }
+  }, [initialAddress, inputValue, isFocused])
+
+  // Keep local map position in sync with prop from react-hook-form parent
+  useEffect(() => {
+    if (initialLat !== undefined && initialLng !== undefined && (initialLat !== position.lat || initialLng !== position.lng)) {
+      setPosition({ lat: initialLat, lng: initialLng })
+    }
+  }, [initialLat, initialLng, position])
 
   useEffect(() => {
     setIsClient(true)
@@ -93,9 +109,7 @@ export function AddressPicker({ initialAddress, initialLat, initialLng, onAddres
       }
 
       try {
-        const res = await fetch(`/api/v1/geocoding/reverse?lat=${lat}&lng=${lng}`)
-        if (!res.ok) throw new Error('Reverse fetch failed')
-        const data: LocationDTO = await res.json()
+        const data = await get<LocationDTO>(`/geocoding/reverse?lat=${lat}&lng=${lng}`)
         
         if (data && data.displayName) {
           reverseCacheRef.current.set(cacheKey, data)
@@ -140,9 +154,7 @@ export function AddressPicker({ initialAddress, initialLat, initialLng, onAddres
 
       setIsLoading(true)
       try {
-        const res = await fetch(`/api/v1/geocoding/search?q=${encodeURIComponent(q)}`)
-        if (!res.ok) throw new Error('Search failed')
-        const data: LocationDTO[] = await res.json()
+        const data = await get<LocationDTO[]>(`/geocoding/search?q=${encodeURIComponent(q)}`)
         cacheRef.current.set(q, data)
         setSuggestions(data)
         setShowDropdown(true)
@@ -214,7 +226,11 @@ export function AddressPicker({ initialAddress, initialLat, initialLng, onAddres
             value={inputValue}
             onChange={handleInputChange}
             onFocus={() => {
+              setIsFocused(true)
               if (inputValue.length >= 3) setShowDropdown(true)
+            }}
+            onBlur={() => {
+              setIsFocused(false)
             }}
             placeholder={inputValue === '' ? 'Nhập tay địa chỉ (Không tìm thấy tự động)' : 'Nhập địa chỉ (VD: 45 Lê Lợi, Quận 1...)'}
             className="pl-10"
@@ -227,21 +243,31 @@ export function AddressPicker({ initialAddress, initialLat, initialLng, onAddres
           )}
         </div>
         {showDropdown && (
-          <Card className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto">
+          <Card className="absolute z-50 w-full mt-1 max-h-60 overflow-y-auto p-1 space-y-1">
+            <button
+              type="button"
+              onClick={() => {
+                setShowDropdown(false)
+                onAddressChange({ addressText: inputValue, lat: position.lat, lng: position.lng })
+              }}
+              className="w-full text-left px-4 py-2.5 hover:bg-muted text-primary transition-colors text-sm font-semibold border-b last:border-b-0 flex items-center gap-2"
+            >
+              <span className="text-muted-foreground font-normal text-xs">Sử dụng địa chỉ đã gõ:</span> "{inputValue}"
+            </button>
             {suggestions.length > 0 ? (
               suggestions.map((item, idx) => (
                 <button
                   key={idx}
                   type="button"
                   onClick={() => selectSuggestion(item)}
-                  className="w-full text-left px-4 py-3 hover:bg-muted transition-colors text-sm border-b last:border-b-0"
+                  className="w-full text-left px-4 py-3 hover:bg-muted transition-colors text-sm border-b last:border-b-0 rounded-sm"
                 >
                   {item.displayName}
                 </button>
               ))
             ) : (
-              <div className="px-4 py-3 text-sm text-muted-foreground">
-                Không tìm thấy địa chỉ phù hợp.
+              <div className="px-4 py-3 text-xs text-muted-foreground italic">
+                Không tìm thấy gợi ý tự động. Bạn vẫn có thể nhấp vào nút "Sử dụng địa chỉ đã gõ" ở trên.
               </div>
             )}
           </Card>

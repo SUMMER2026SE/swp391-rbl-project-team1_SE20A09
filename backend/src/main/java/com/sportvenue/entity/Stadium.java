@@ -87,10 +87,6 @@ public class Stadium implements Serializable {
     @Column(name = "price_per_hour", precision = 10, scale = 2)
     private BigDecimal pricePerHour;
 
-    /** Sức chứa tối đa (số người). */
-    @Column(name = "capacity")
-    private Integer capacity;
-
     /** Trạng thái hoạt động của sân. */
     @Enumerated(EnumType.STRING)
     @Column(name = "stadium_status", nullable = false, length = 20)

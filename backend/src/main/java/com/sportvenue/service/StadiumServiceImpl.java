@@ -198,7 +198,6 @@ public class StadiumServiceImpl implements StadiumService {
         stadium.setOpenTime(request.getOpenTime());
         stadium.setCloseTime(request.getCloseTime());
         stadium.setPricePerHour(request.getPricePerHour());
-        stadium.setCapacity(request.getCapacity());
         stadium.setLatitude(request.getLatitude().doubleValue());
         stadium.setLongitude(request.getLongitude().doubleValue());
 

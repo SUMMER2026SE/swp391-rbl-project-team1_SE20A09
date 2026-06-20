@@ -41,7 +41,6 @@ export interface StadiumResponse {
   totalReviews?: number;
   imageUrls: string[];
   approvedStatus: string;
-  capacity?: number;
 }
 
 export interface SportType {

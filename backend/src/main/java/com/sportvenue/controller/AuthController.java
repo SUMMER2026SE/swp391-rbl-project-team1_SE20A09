@@ -6,6 +6,7 @@ import com.sportvenue.dto.UpdateProfileRequest;
 import com.sportvenue.dto.request.GoogleLoginRequest;
 import com.sportvenue.dto.request.LoginRequest;
 import com.sportvenue.dto.request.RegisterRequest;
+import com.sportvenue.dto.request.RegisterOwnerRequest;
 import com.sportvenue.dto.request.ResendOtpRequest;
 import com.sportvenue.dto.request.VerifyOtpRequest;
 import com.sportvenue.dto.response.AuthResponse;
@@ -13,6 +14,7 @@ import com.sportvenue.dto.response.MessageResponse;
 import com.sportvenue.dto.response.UserResponse;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.AuthService;
+import com.sportvenue.service.OwnerRegistrationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -38,11 +40,18 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final OwnerRegistrationService ownerRegistrationService;
 
     @PostMapping("/register")
     @Operation(summary = "Đăng ký tài khoản", description = "Tạo tài khoản mới và gửi mã OTP qua email")
     public ResponseEntity<MessageResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
+    }
+
+    @PostMapping("/register/owner")
+    @Operation(summary = "Đăng ký tài khoản đối tác chủ sân mới", description = "Tạo tài khoản chủ sân và hồ sơ kinh doanh ở trạng thái PENDING")
+    public ResponseEntity<MessageResponse> registerOwner(@Valid @RequestBody RegisterOwnerRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ownerRegistrationService.registerNewOwner(request));
     }
 
     @PostMapping("/verify-otp")
