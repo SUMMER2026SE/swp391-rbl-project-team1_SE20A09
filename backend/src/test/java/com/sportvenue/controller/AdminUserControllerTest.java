@@ -82,16 +82,20 @@ class AdminUserControllerTest {
     }
 
     @Test
-    void getCustomers_InvalidSortBy_ThrowsException() {
+    void getCustomers_InvalidSortBy_UsesFallback() {
         // Arrange
         String invalidSortBy = "invalidField";
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 10, 
+                org.springframework.data.domain.Sort.by("createdAt").descending());
+        when(adminUserService.getCustomers(eq(null), eq(null), eq(pageable))).thenReturn(new PageResponse<>());
 
-        // Act & Assert
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> adminUserController.getCustomers(0, 10, null, null, invalidSortBy, "desc")
-        );
-        assertEquals("Trường sắp xếp không hợp lệ: invalidField", exception.getMessage());
+        // Act
+        ResponseEntity<ApiResponse<PageResponse<AdminCustomerResponse>>> result = 
+                adminUserController.getCustomers(0, 10, null, null, invalidSortBy, "desc");
+
+        // Assert
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        verify(adminUserService).getCustomers(eq(null), eq(null), eq(pageable));
     }
 
 
