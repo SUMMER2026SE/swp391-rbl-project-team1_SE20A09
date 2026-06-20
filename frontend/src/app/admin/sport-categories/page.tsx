@@ -210,18 +210,22 @@ function SportCategoriesPage() {
                       </div>
                     </div>
                     <div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        title="Xóa"
-                        onClick={() => {
-                          setCategoryToDelete(category);
-                          setShowDeleteDialog(true);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {!category.isActive ? (
+                        <span className="text-xs text-muted-foreground italic px-2 py-1 bg-muted rounded">Đã tạm ngưng</span>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          title="Xóa"
+                          onClick={() => {
+                            setCategoryToDelete(category);
+                            setShowDeleteDialog(true);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
 
