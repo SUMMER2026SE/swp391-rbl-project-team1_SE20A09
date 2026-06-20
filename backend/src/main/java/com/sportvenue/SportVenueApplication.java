@@ -15,4 +15,4 @@ public class SportVenueApplication {
     public static void main(String[] args) {
         SpringApplication.run(SportVenueApplication.class, args);
     }
-}
+} // trigger CI
