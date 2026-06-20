@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import Image from 'next/image'
+import Link from 'next/link'
 import {
   IconBallFootball,
   IconClock,
@@ -16,6 +17,7 @@ import {
   IconStarHalf,
   IconCalendar,
   IconCalendarPlus,
+  IconCalendarRepeat,
   IconPackage,
   IconMessageCircle,
   IconMessageOff,
@@ -971,7 +973,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
               </div>
 
               {/* CTA Booking Button */}
-              <button 
+              <button
                 onClick={handleBookingRedirect}
                 className="w-full flex items-center justify-center gap-1.5 bg-[#1a8a4a] hover:bg-[#157a3e] text-white font-medium text-[14px] py-3 rounded-[8px] transition-colors border-none"
                 type="button"
@@ -979,6 +981,15 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                 <IconCalendarPlus className="w-[18px] h-[18px]" />
                 <span>Đặt sân ngay</span>
               </button>
+
+              {/* UC-CUS-01: Secondary CTA — đặt sân định kỳ */}
+              <Link
+                href={`/venues/${venue.id}/recurring-booking`}
+                className="w-full flex items-center justify-center gap-1.5 bg-white border-[0.5px] border-[#1a8a4a] text-[#1a8a4a] hover:bg-[#e8f7ee] font-medium text-[14px] py-3 rounded-[8px] transition-colors no-underline"
+              >
+                <IconCalendarRepeat className="w-[18px] h-[18px]" />
+                <span>Đặt sân định kỳ</span>
+              </Link>
 
               <div className="border-t-[0.5px] border-gray-200 pt-3 flex flex-col gap-2">
                 <span className="block text-[11px] font-medium tracking-[0.5px] uppercase text-gray-400">
