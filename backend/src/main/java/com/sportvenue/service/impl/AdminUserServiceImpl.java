@@ -44,7 +44,6 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .toList());
     }
 
-
     /**
      * Map từ User entity sang AdminCustomerResponse DTO.
      * Không expose password_hash, role_id hay các field nhạy cảm khác.
@@ -66,4 +65,26 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .build();
     }
 
+    @Override
+    @Transactional
+    public void lockUnlockCustomer(Integer id, Boolean enabled, Integer currentAdminId) {
+        log.info("Admin {} requesting to lock/unlock customer id={}, enabled={}", currentAdminId, id, enabled);
+
+        if (id.equals(currentAdminId)) {
+            throw new com.sportvenue.exception.BadRequestException("Bạn không thể tự khóa tài khoản của chính mình.");
+        }
+
+        User customer = userRepository.findById(id)
+                .orElseThrow(() -> new com.sportvenue.exception.AppException(com.sportvenue.exception.ErrorCode.USER_NOT_FOUND));
+
+        if (!ROLE_CUSTOMER.equalsIgnoreCase(customer.getRole().getRoleName())) {
+            throw new com.sportvenue.exception.ResourceNotFoundException("Người dùng không phải là khách hàng (Customer).");
+        }
+
+        AccountStatus newStatus = Boolean.TRUE.equals(enabled) ? AccountStatus.ACTIVE : AccountStatus.BLOCKED;
+        customer.setAccountStatus(newStatus);
+        userRepository.save(customer);
+        
+        log.info("Successfully updated account status to {} for customer id={}", newStatus, id);
+    }
 }
