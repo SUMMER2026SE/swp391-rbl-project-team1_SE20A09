@@ -114,6 +114,33 @@ class OwnerRegistrationServiceImplTest {
     }
 
     @Test
+    void registerNewOwner_SingleWordName_LastNameShouldBeEmpty() {
+        RegisterOwnerRequest request = RegisterOwnerRequest.builder()
+                .email("single@example.com")
+                .fullName("Huy")  // chỉ 1 chữ — bug cũ sẽ tạo ra "Huy Huy"
+                .phone("0987654321")
+                .password("Password123!")
+                .confirmPassword("Password123!")
+                .businessName("San Huy")
+                .taxCode("0123456789")
+                .businessAddress("HCM")
+                .build();
+
+        when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
+        when(roleRepository.findByRoleName("Owner")).thenReturn(Optional.of(ownerRole));
+        when(passwordEncoder.encode(any())).thenReturn("encodedPassword");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ownerRegistrationService.registerNewOwner(request);
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        User saved = captor.getValue();
+        assertEquals("Huy", saved.getFirstName());
+        assertEquals("", saved.getLastName());  // ← phải là chuỗi rỗng, không phải "Huy"
+    }
+
+    @Test
     void registerNewOwner_DuplicateEmail_ThrowsException() {
         RegisterOwnerRequest request = RegisterOwnerRequest.builder()
                 .email("owner@example.com")

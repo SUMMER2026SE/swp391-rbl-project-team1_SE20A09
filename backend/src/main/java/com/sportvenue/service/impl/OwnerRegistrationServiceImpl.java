@@ -47,12 +47,12 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         }
 
         Role ownerRole = roleRepository.findByRoleName("Owner")
-                .orElseThrow(() -> new RuntimeException("Role 'Owner' not found in database"));
+                .orElseThrow(() -> new AppException(ErrorCode.INTERNAL_SERVER_ERROR));
 
         // Tách họ và tên (Tránh BUG hardcode lastName rỗng)
         String[] nameParts = request.getFullName().trim().split("\\s+", 2);
         String firstName = nameParts[0];
-        String lastName = nameParts.length > 1 ? nameParts[1] : firstName;
+        String lastName = nameParts.length > 1 ? nameParts[1] : "";
 
         // 1. Tạo tài khoản User mới có role = Owner, trạng thái ban đầu là PENDING (chờ duyệt)
         User user = User.builder()

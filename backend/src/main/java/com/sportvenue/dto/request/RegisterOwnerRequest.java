@@ -44,6 +44,10 @@ public class RegisterOwnerRequest {
     private String businessName;
 
     @NotBlank(message = "Mã số thuế không được để trống")
+    @Pattern(
+            regexp = "^(?:\\d{10}|\\d{13}|\\d{10}-\\d{3})$",
+            message = "Mã số thuế không hợp lệ (phải gồm 10 hoặc 13 chữ số)"
+    )
     @Size(max = 30, message = "Mã số thuế không được vượt quá 30 ký tự")
     private String taxCode;
 
