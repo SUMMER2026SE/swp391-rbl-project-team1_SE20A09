@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { get, post } from "@/lib/api";
+import { get, post, patch } from "@/lib/api";
 import { BookingHistoryList } from "@/components/bookings/BookingHistoryList";
 import { ReviewHistoryList } from "@/components/reviews/ReviewHistoryList";
 import { OwnerReviewHistoryList } from "@/components/reviews/OwnerReviewHistoryList";
@@ -190,17 +190,36 @@ function UserProfilePage() {
       setUpgradeLoading(true);
       setUpgradeError(null);
       setUpgradeSuccess(null);
-      const res = await post<ApiResponse<OwnerDetailResponse>>("/users/me/upgrade-to-owner", {
-        businessName: values.businessName,
-        taxCode: values.taxCode,
-        businessAddress: values.businessAddress,
-      });
+      
+      let res;
+      if (profile?.roleName === "Owner") {
+        res = await patch<ApiResponse<OwnerDetailResponse>>("/users/me/resubmit-owner", {
+          businessName: values.businessName,
+          taxCode: values.taxCode,
+          businessAddress: values.businessAddress,
+        });
+      } else {
+        res = await post<ApiResponse<OwnerDetailResponse>>("/users/me/upgrade-to-owner", {
+          businessName: values.businessName,
+          taxCode: values.taxCode,
+          businessAddress: values.businessAddress,
+        });
+      }
+      
       setOwnerProfile(res.result);
-      setUpgradeSuccess("Gửi yêu cầu nâng cấp đối tác chủ sân thành công! Vui lòng chờ Admin phê duyệt.");
-      toast.success("Gửi hồ sơ nâng cấp thành công!");
+      setUpgradeSuccess(
+        profile?.roleName === "Owner"
+          ? "Nộp lại hồ sơ thành công! Vui lòng chờ Admin phê duyệt lại."
+          : "Gửi yêu cầu nâng cấp đối tác chủ sân thành công! Vui lòng chờ Admin phê duyệt."
+      );
+      toast.success(
+        profile?.roleName === "Owner"
+          ? "Nộp lại hồ sơ thành công!"
+          : "Gửi hồ sơ nâng cấp thành công!"
+      );
     } catch (err: any) {
-      setUpgradeError(err.message || "Có lỗi xảy ra khi gửi yêu cầu nâng cấp.");
-      toast.error("Gửi yêu cầu nâng cấp thất bại.");
+      setUpgradeError(err.message || "Có lỗi xảy ra khi gửi yêu cầu.");
+      toast.error("Gửi yêu cầu thất bại.");
     } finally {
       setUpgradeLoading(false);
     }
@@ -514,7 +533,7 @@ function UserProfilePage() {
                 </Card>
 
                 {/* Upgrade to Owner section */}
-                {profile.roleName === "Customer" && (
+                {(profile.roleName === "Customer" || (profile.roleName === "Owner" && ownerProfile && ownerProfile.approvedStatus !== "APPROVED")) && (
                   <Card className="border-none shadow-sm bg-white overflow-hidden">
                     <CardHeader className="pb-3 border-b border-slate-50 bg-gradient-to-r from-teal-50/50 to-cyan-50/50">
                       <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
