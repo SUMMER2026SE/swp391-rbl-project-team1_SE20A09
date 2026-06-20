@@ -3,6 +3,9 @@ package com.sportvenue.service;
 import com.sportvenue.config.FileStorageProperties;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.util.ImageContentValidator;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import java.net.MalformedURLException;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -155,5 +158,25 @@ public class LocalFileStorageService implements FileStorageService {
 
     public Path getAvatarDirectory() {
         return avatarDir;
+    }
+
+    @Override
+    public Resource loadDocumentAsResource(String fileName) {
+        try {
+            Path filePath = this.documentDir.resolve(fileName).normalize();
+            Resource resource = new UrlResource(filePath.toUri());
+            if (resource.exists() && resource.isReadable()) {
+                return resource;
+            } else {
+                throw new BadRequestException("Không tìm thấy tài liệu hoặc tài liệu không thể đọc.");
+            }
+        } catch (MalformedURLException e) {
+            throw new BadRequestException("Không thể đọc file tài liệu.");
+        }
+    }
+
+    @Override
+    public Path getDocumentDirectory() {
+        return this.documentDir;
     }
 }

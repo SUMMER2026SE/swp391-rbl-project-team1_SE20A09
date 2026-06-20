@@ -11,11 +11,22 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.sportvenue.entity.Owner;
+import com.sportvenue.repository.OwnerRepository;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/files")
@@ -24,6 +35,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class FileController {
 
     private final FileStorageService fileStorageService;
+    private final com.sportvenue.repository.OwnerRepository ownerRepository;
 
     @PostMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Tải ảnh đại diện", description = "Upload ảnh từ máy tính hoặc Google Drive (tải về rồi gửi lên)")
@@ -76,5 +88,48 @@ public class FileController {
                 .url(url)
                 .fileName(fileName)
                 .build());
+    }
+
+    @GetMapping("/documents/{fileName}")
+    @Operation(summary = "Xem tài liệu đăng ký", description = "Kiểm tra phân quyền động: chỉ Admin hoặc chính chủ sở hữu tài liệu mới được xem sau khi hồ sơ đã lưu.")
+    public ResponseEntity<Resource> getDocument(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable("fileName") String fileName) {
+        
+        Optional<Owner> ownerOpt = ownerRepository
+                .findByBusinessLicenseUrlContainingOrIdentityCardUrlContaining(fileName, fileName);
+
+        if (ownerOpt.isPresent()) {
+            Owner owner = ownerOpt.get();
+            if (userPrincipal == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            }
+
+            boolean isAdmin = userPrincipal.getAuthorities().stream()
+                    .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()) || "ADMIN".equals(a.getAuthority()));
+            boolean isOwnerSelf = owner.getUser().getUserId().equals(userPrincipal.getUser().getUserId());
+
+            if (!isAdmin && !isOwnerSelf) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+        }
+
+        Resource resource = fileStorageService.loadDocumentAsResource(fileName);
+        
+        String contentType = "image/jpeg";
+        try {
+            Path filePath = fileStorageService.getDocumentDirectory().resolve(fileName).normalize();
+            String probedType = Files.probeContentType(filePath);
+            if (probedType != null) {
+                contentType = probedType;
+            }
+        } catch (IOException e) {
+            // Fallback
+        }
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resource.getFilename() + "\"")
+                .body(resource);
     }
 }
