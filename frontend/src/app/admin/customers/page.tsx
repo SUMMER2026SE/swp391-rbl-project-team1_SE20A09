@@ -25,6 +25,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { useDebounceValue } from "usehooks-ts";
 
 
 export interface AdminCustomerResponse {
@@ -74,17 +84,7 @@ const fetchCustomers = async (page: number, size: number, search: string, status
   return data.result;
 };
 
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 
-import { useDebounceValue } from "usehooks-ts";
 
 export default function AdminCustomersPage() {
   const queryClient = useQueryClient();

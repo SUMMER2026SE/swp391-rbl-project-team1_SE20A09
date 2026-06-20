@@ -88,7 +88,7 @@ public class AdminUserController {
                 "phoneNumber", "accountStatus", "createdAt"
         );
         if (!allowedSortBy.contains(sortBy)) {
-            throw new IllegalArgumentException("Trường sắp xếp không hợp lệ: " + sortBy);
+            sortBy = "createdAt"; // fallback an toàn
         }
 
         Sort sort = sortDir.equalsIgnoreCase("asc")
