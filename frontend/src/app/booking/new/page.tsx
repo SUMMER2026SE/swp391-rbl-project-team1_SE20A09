@@ -145,6 +145,7 @@ function BookingContent() {
     const selectedAccs = accessoryItems
       .filter((item) => (accessories[item.accessoryId] || 0) > 0)
       .map((item) => ({
+        accessoryId: item.accessoryId,
         name: item.name,
         quantity: accessories[item.accessoryId],
         price: item.pricePerUnit * accessories[item.accessoryId],

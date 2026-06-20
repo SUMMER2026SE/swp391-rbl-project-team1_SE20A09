@@ -23,7 +23,7 @@ interface BookingSummary {
   date: string;
   time: string;
   venuePrice: number;
-  accessories: { name: string; quantity: number; price: number }[];
+  accessories: { accessoryId?: number; name: string; quantity: number; price: number }[];
   accessoryTotal: number;
   total: number;
   slotId: number;
@@ -75,6 +75,13 @@ function PaymentContent() {
 
     try {
       setIsSubmitting(true);
+      const accessoriesPayload = activeSummary.accessories
+        .filter((a) => typeof a.accessoryId === "number")
+        .map((a) => ({
+          accessoryId: a.accessoryId as number,
+          quantity: a.quantity,
+        }));
+
       await createBooking({
         stadiumId: activeSummary.venueId,
         slotId: activeSummary.slotId,
@@ -86,6 +93,7 @@ function PaymentContent() {
             ? "VNPay"
             : "MoMo"
         }`,
+        accessories: accessoriesPayload.length > 0 ? accessoriesPayload : undefined,
       });
 
       toast.success("Thanh toán thành công! Sân của bạn đã được đặt.");

@@ -169,12 +169,19 @@ export type SlotAvailability = {
 };
 
 /** Payload tạo đơn đặt sân đơn lẻ (UC-CUS-01). */
+export type AccessoryItemPayload = {
+  accessoryId: number;
+  quantity: number;
+};
+
 export type CreateBookingPayload = {
   stadiumId: number;
   slotId: number;
   /** ISO yyyy-MM-dd */
   reservationDate: string;
   note?: string;
+  /** Optional: phụ kiện kèm theo. Server tự tính unitPrice — không gửi. */
+  accessories?: AccessoryItemPayload[];
 };
 
 /** Response trả về sau khi tạo booking thành công (BookingDetailResponse). */

@@ -2,6 +2,7 @@ package com.sportvenue.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -10,6 +11,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * UC-CUS-01: Request tạo một đơn đặt sân đơn lẻ (single booking) cho Customer.
@@ -22,6 +24,8 @@ import java.time.LocalDate;
  *   <li>Slot datetime (reservationDate + slot.startTime) phải là tương lai.</li>
  *   <li>Không có booking PENDING/CONFIRMED nào khác cho cùng
  *       (stadiumId, slotId, reservationDate).</li>
+ *   <li>TotalPrice = slot.pricePerSlot + accessoriesTotal + serviceFee — server
+ *       TÍNH, không tin client.</li>
  * </ul>
  */
 @Data
@@ -46,4 +50,10 @@ public class CreateBookingRequest {
     @Schema(description = "Ghi chú tùy chọn của khách", example = "Vui lòng chuẩn bị sân trước 15 phút")
     @Size(max = 500, message = "note cannot exceed 500 characters")
     private String note;
+
+    /** Phụ kiện kèm theo — optional. Server chỉ nhận ID + quantity, tự tính unitPrice. */
+    @Schema(description = "Phụ kiện kèm theo (optional). Server tự lookup giá từ DB.")
+    @Valid
+    @Size(max = 50, message = "Không được chọn quá 50 phụ kiện")
+    private List<AccessoryItem> accessories;
 }

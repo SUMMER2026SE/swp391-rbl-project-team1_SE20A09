@@ -2,13 +2,16 @@ package com.sportvenue.service.impl;
 
 import com.sportvenue.dto.booking.BookingDetailResponse;
 import com.sportvenue.dto.booking.BookingHistoryItemDto;
+import com.sportvenue.dto.request.AccessoryItem;
 import com.sportvenue.dto.request.CreateBookingRequest;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.dto.response.TimeSlotResponse;
 import com.sportvenue.dto.response.WeeklySlotDayDto;
 import com.sportvenue.dto.response.WeeklySlotItemDto;
 import com.sportvenue.dto.response.WeeklySlotResponse;
+import com.sportvenue.entity.Accessory;
 import com.sportvenue.entity.Booking;
+import com.sportvenue.entity.BookingAccessory;
 import com.sportvenue.entity.SportType;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.StadiumImage;
@@ -20,6 +23,8 @@ import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.DuplicateResourceException;
 import com.sportvenue.exception.ResourceNotFoundException;
+import com.sportvenue.repository.AccessoryRepository;
+import com.sportvenue.repository.BookingAccessoryRepository;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.TimeSlotRepository;
@@ -34,13 +39,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -66,10 +70,15 @@ public class BookingServiceImpl implements BookingService {
     private static final List<BookingStatus> ACTIVE_STATUSES =
             List.of(BookingStatus.PENDING, BookingStatus.CONFIRMED);
 
+    /** Phí dịch vụ cố định (VNĐ) — server-side only, KHÔNG nhận từ client. */
+    private static final BigDecimal SERVICE_FEE = new BigDecimal("20000");
+
     private final UserRepository userRepository;
     private final StadiumRepository stadiumRepository;
     private final TimeSlotRepository timeSlotRepository;
     private final BookingRepository bookingRepository;
+    private final AccessoryRepository accessoryRepository;
+    private final BookingAccessoryRepository bookingAccessoryRepository;
 
     @Override
     @Transactional
@@ -117,11 +126,43 @@ public class BookingServiceImpl implements BookingService {
                             + ". Vui lòng chọn khung giờ hoặc ngày khác.");
         }
 
+        // UC-CUS-01: Tính tổng tiền server-side từ (slot price + accessories + service fee).
+        // KHÔNG BAO GIỜ tin unitPrice từ client — luôn lookup giá từ DB để snapshot.
+        BigDecimal accessoriesTotal = BigDecimal.ZERO;
+        List<BookingAccessory> persistedAccessories = new ArrayList<>();
+
+        if (request.getAccessories() != null && !request.getAccessories().isEmpty()) {
+            for (AccessoryItem item : request.getAccessories()) {
+                Accessory acc = accessoryRepository.findById(item.getAccessoryId())
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "Không tìm thấy phụ kiện với ID " + item.getAccessoryId()));
+
+                if (!Boolean.TRUE.equals(acc.getIsAvailable())) {
+                    throw new BadRequestException(
+                            "Phụ kiện #" + acc.getAccessoryId() + " hiện không khả dụng");
+                }
+
+                BigDecimal lineTotal = acc.getPricePerUnit()
+                        .multiply(BigDecimal.valueOf(item.getQuantity()));
+                accessoriesTotal = accessoriesTotal.add(lineTotal);
+
+                persistedAccessories.add(BookingAccessory.builder()
+                        .accessoryId(acc.getAccessoryId())
+                        .quantity(item.getQuantity())
+                        .unitPrice(acc.getPricePerUnit())
+                        .build());
+            }
+        }
+
+        BigDecimal totalPrice = slot.getPricePerSlot()
+                .add(accessoriesTotal)
+                .add(SERVICE_FEE);
+
         Booking booking = Booking.builder()
                 .user(customer)
                 .stadium(stadium)
                 .slot(slot)
-                .totalPrice(slot.getPricePerSlot())
+                .totalPrice(totalPrice)
                 .bookingStatus(BookingStatus.PENDING)
                 .paymentStatus(PaymentStatus.UNPAID)
                 .reservationDate(request.getReservationDate())
@@ -129,9 +170,20 @@ public class BookingServiceImpl implements BookingService {
                 .build();
 
         Booking saved = bookingRepository.save(booking);
-        log.info("✅ UC-CUS-01: Customer {} đặt sân {} slot {} ngày {} — bookingId={}",
+
+        // Persist accessories (gắn bookingId sau khi save để có ID).
+        if (!persistedAccessories.isEmpty()) {
+            for (BookingAccessory ba : persistedAccessories) {
+                ba.setBooking(saved);
+            }
+            bookingAccessoryRepository.saveAll(persistedAccessories);
+            log.info("🎾 UC-CUS-01: Booking #{} kèm {} phụ kiện, accessoriesTotal={}, totalPrice={}",
+                    saved.getBookingId(), persistedAccessories.size(), accessoriesTotal, totalPrice);
+        }
+
+        log.info("✅ UC-CUS-01: Customer {} đặt sân {} slot {} ngày {} — bookingId={}, totalPrice={}",
                 customer.getEmail(), stadium.getStadiumId(), slot.getSlotId(),
-                request.getReservationDate(), saved.getBookingId());
+                request.getReservationDate(), saved.getBookingId(), totalPrice);
 
         return toBookingDetailResponse(saved, stadium, slot);
     }
