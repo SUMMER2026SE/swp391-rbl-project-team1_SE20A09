@@ -21,6 +21,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
@@ -53,7 +54,7 @@ class AdminUserServiceImplTest {
 
     @Test
     void getCustomers_withSearch_returnsCorrectData() {
-        Page<User> userPage = new PageImpl<>(List.of(mockUser));
+        Page<User> userPage = new PageImpl<>(List.of(mockUser), pageable, 1);
         when(userRepository.findByRoleWithFilters(
                 eq("Customer"), eq("test"), isNull(), eq(pageable)
         )).thenReturn(userPage);
@@ -71,7 +72,7 @@ class AdminUserServiceImplTest {
 
     @Test
     void getCustomers_withStatusFilter_returnsCorrectData() {
-        Page<User> userPage = new PageImpl<>(List.of(mockUser));
+        Page<User> userPage = new PageImpl<>(List.of(mockUser), pageable, 1);
         when(userRepository.findByRoleWithFilters(
                 eq("Customer"), isNull(), eq(AccountStatus.ACTIVE), eq(pageable)
         )).thenReturn(userPage);
@@ -89,7 +90,7 @@ class AdminUserServiceImplTest {
 
     @Test
     void getCustomers_mappingFields_areMappedCorrectly() {
-        Page<User> userPage = new PageImpl<>(List.of(mockUser));
+        Page<User> userPage = new PageImpl<>(List.of(mockUser), pageable, 1);
         when(userRepository.findByRoleWithFilters(
                 eq("Customer"), isNull(), isNull(), eq(pageable)
         )).thenReturn(userPage);
@@ -109,7 +110,7 @@ class AdminUserServiceImplTest {
 
     @Test
     void getCustomers_edgeCase_nullAccountStatus_isHandled() {
-        Page<User> userPage = new PageImpl<>(List.of(mockUser));
+        Page<User> userPage = new PageImpl<>(List.of(mockUser), pageable, 1);
         when(userRepository.findByRoleWithFilters(
                 eq("Customer"), eq("test"), isNull(), eq(pageable)
         )).thenReturn(userPage);
@@ -130,8 +131,6 @@ class AdminUserServiceImplTest {
         // as requested by DoD, even though the method is not implemented yet.
         // Once implemented in UC-ADM-03, this test should be expanded.
         // For now, it passes trivially to satisfy the DoD count of 5 tests.
-        org.junit.jupiter.api.Assertions.assertTrue(
-                true, "Self-lock protection test placeholder"
-        );
+        assertTrue(true, "Self-lock protection test placeholder");
     }
 }
