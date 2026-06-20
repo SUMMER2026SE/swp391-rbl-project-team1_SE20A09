@@ -638,7 +638,7 @@ function UserProfilePage() {
                             )}
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                          <div className="flex flex-col gap-4 mt-4">
                             <div className="space-y-1.5">
                               <Label className="text-xs font-semibold text-slate-700">Giấy phép đăng ký kinh doanh (Ảnh)</Label>
                               <Controller

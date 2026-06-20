@@ -1,10 +1,9 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { FileText, Loader2, UploadCloud, X } from 'lucide-react'
+import { Loader2, UploadCloud, X, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { uploadDocument } from '@/lib/api'
-import Image from 'next/image'
 
 interface DocumentUploaderProps {
   value?: string
@@ -40,8 +39,9 @@ export function DocumentUploader({
     try {
       const result = await uploadDocument(file)
       onChange(result.url)
-    } catch (err: any) {
-      setError(err.message || 'Tải file lên thất bại')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Tải file lên thất bại'
+      setError(message)
     } finally {
       setIsUploading(false)
     }
@@ -59,44 +59,52 @@ export function DocumentUploader({
       {label && <label className="text-sm font-medium text-foreground">{label}</label>}
 
       {value ? (
-        <div className="relative border border-border rounded-lg p-2 bg-muted/30 flex items-center gap-4 group">
-          <div className="relative w-16 h-16 rounded overflow-hidden border border-border bg-white flex items-center justify-center shrink-0">
-            <Image
-              src={value}
-              alt="Document preview"
-              fill
-              className="object-cover"
-              sizes="64px"
-            />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-muted-foreground truncate">Tài liệu đã được tải lên</p>
-            <a
-              href={value}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs text-primary font-medium hover:underline truncate block"
-            >
-              Xem ảnh gốc
-            </a>
-          </div>
+        /* ── Trạng thái: đã có ảnh — hiển thị preview lớn ── */
+        <div className="relative border border-border rounded-xl overflow-hidden bg-muted/20 group">
+          {/* Nút xoá */}
           {!disabled && (
             <Button
               type="button"
-              variant="ghost"
+              variant="destructive"
               size="icon"
-              className="absolute top-2 right-2 h-6 w-6 text-muted-foreground hover:text-destructive rounded-full"
+              className="absolute top-2 right-2 z-10 h-7 w-7 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={handleRemove}
             >
               <X className="h-4 w-4" />
             </Button>
           )}
+
+          {/* Preview ảnh — dùng <img> thường để tránh lỗi domain whitelist next/image */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={value}
+            alt="Xem trước tài liệu"
+            className="w-full object-contain max-h-52 bg-white"
+          />
+
+          {/* Footer: link xem gốc */}
+          <div className="px-3 py-2 border-t border-border bg-muted/30 flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground truncate flex-1">Tài liệu đã được tải lên</p>
+            <a
+              href={value}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-primary font-semibold hover:underline flex items-center gap-1 shrink-0"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ExternalLink className="h-3 w-3" />
+              Xem ảnh gốc
+            </a>
+          </div>
         </div>
       ) : (
+        /* ── Trạng thái: chưa upload ── */
         <div
           onClick={() => !disabled && !isUploading && fileInputRef.current?.click()}
-          className={`border-2 border-dashed border-muted-foreground/20 rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors ${
-            disabled ? 'opacity-50 cursor-not-allowed' : ''
+          className={`border-2 border-dashed border-muted-foreground/25 rounded-xl p-8 text-center transition-colors ${
+            disabled
+              ? 'opacity-50 cursor-not-allowed'
+              : 'cursor-pointer hover:border-teal-400 hover:bg-teal-50/30'
           }`}
         >
           <input
@@ -109,14 +117,16 @@ export function DocumentUploader({
           />
           {isUploading ? (
             <div className="flex flex-col items-center gap-2">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="text-sm font-medium text-muted-foreground">Đang tải tài liệu lên...</p>
+              <Loader2 className="h-9 w-9 animate-spin text-teal-600" />
+              <p className="text-sm font-medium text-muted-foreground">Đang tải ảnh lên...</p>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-2">
-              <UploadCloud className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
-              <p className="text-sm font-semibold">Tải ảnh lên</p>
-              <p className="text-xs text-muted-foreground">Nhấp để tải lên JPG, PNG hoặc WEBP (tối đa 5MB)</p>
+              <div className="w-12 h-12 rounded-full bg-teal-50 flex items-center justify-center">
+                <UploadCloud className="h-6 w-6 text-teal-600" />
+              </div>
+              <p className="text-sm font-semibold text-slate-700">Nhấn để tải ảnh lên</p>
+              <p className="text-xs text-muted-foreground">JPG, PNG hoặc WEBP · Tối đa 5MB</p>
             </div>
           )}
         </div>
