@@ -44,6 +44,7 @@ import {
   type RegisterOwnerFormValues 
 } from "@/lib/validations/auth.schema";
 import { PasswordStrengthIndicator } from "@/components/auth/PasswordStrengthIndicator";
+import { DocumentUploader } from "@/components/shared/DocumentUploader";
 
 function RegisterPage() {
   const router = useRouter();
@@ -87,6 +88,8 @@ function RegisterPage() {
       businessName: "",
       taxCode: "",
       businessAddress: "",
+      businessLicenseUrl: "",
+      identityCardUrl: "",
       terms: false,
     },
   });
@@ -128,6 +131,8 @@ function RegisterPage() {
         businessName: values.businessName,
         taxCode: values.taxCode,
         businessAddress: values.businessAddress,
+        businessLicenseUrl: values.businessLicenseUrl,
+        identityCardUrl: values.identityCardUrl,
       });
 
       toast.success("Đăng ký tài khoản đối tác thành công! Vui lòng xác thực email để hoàn tất đăng ký.");
@@ -557,6 +562,44 @@ function RegisterPage() {
                         </FormItem>
                       )}
                     />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                      <FormField
+                        control={ownerForm.control}
+                        name="businessLicenseUrl"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <DocumentUploader
+                                label="Giấy phép đăng ký kinh doanh (Ảnh)"
+                                value={field.value}
+                                onChange={field.onChange}
+                                disabled={isBusy}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={ownerForm.control}
+                        name="identityCardUrl"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <DocumentUploader
+                                label="Ảnh CCCD/CMND người đại diện"
+                                value={field.value}
+                                onChange={field.onChange}
+                                disabled={isBusy}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   </div>
 
                   <FormField

@@ -19,9 +19,10 @@ import { BookingHistoryList } from "@/components/bookings/BookingHistoryList";
 import { ReviewHistoryList } from "@/components/reviews/ReviewHistoryList";
 import { OwnerReviewHistoryList } from "@/components/reviews/OwnerReviewHistoryList";
 import { ComplaintList } from "@/components/complaints/ComplaintList";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { upgradeToOwnerSchema, type UpgradeToOwnerFormValues } from "@/lib/validations/auth.schema";
+import { DocumentUploader } from "@/components/shared/DocumentUploader";
 import { toast } from "sonner";
 
 import {
@@ -121,6 +122,7 @@ function UserProfilePage() {
     register: registerUpgrade,
     handleSubmit: handleSubmitUpgrade,
     setValue: setUpgradeValue,
+    control: upgradeControl,
     formState: { errors: upgradeFormErrors },
   } = useForm<UpgradeToOwnerFormValues>({
     resolver: zodResolver(upgradeToOwnerSchema),
@@ -128,6 +130,8 @@ function UserProfilePage() {
       businessName: "",
       taxCode: "",
       businessAddress: "",
+      businessLicenseUrl: "",
+      identityCardUrl: "",
     },
   });
 
@@ -194,6 +198,8 @@ function UserProfilePage() {
         businessName: values.businessName,
         taxCode: values.taxCode,
         businessAddress: values.businessAddress,
+        businessLicenseUrl: values.businessLicenseUrl,
+        identityCardUrl: values.identityCardUrl,
       });
       setOwnerProfile(res.result);
       setUpgradeSuccess("Gửi yêu cầu nâng cấp đối tác chủ sân thành công! Vui lòng chờ Admin phê duyệt.");
@@ -221,6 +227,8 @@ function UserProfilePage() {
             setUpgradeValue("businessName", res.result.businessName);
             setUpgradeValue("taxCode", res.result.taxCode);
             setUpgradeValue("businessAddress", res.result.businessAddress);
+            setUpgradeValue("businessLicenseUrl", res.result.businessLicenseUrl || "");
+            setUpgradeValue("identityCardUrl", res.result.identityCardUrl || "");
           }
         } catch (err) {
           // Silent fallback for DoD compliance (no console.error in production code)
@@ -613,6 +621,44 @@ function UserProfilePage() {
                             )}
                           </div>
 
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold text-slate-700">Giấy phép đăng ký kinh doanh (Ảnh)</Label>
+                              <Controller
+                                control={upgradeControl}
+                                name="businessLicenseUrl"
+                                render={({ field }) => (
+                                  <DocumentUploader
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    disabled={upgradeLoading}
+                                  />
+                                )}
+                              />
+                              {upgradeFormErrors.businessLicenseUrl && (
+                                <p className="text-red-500 text-[11px] font-medium">{upgradeFormErrors.businessLicenseUrl.message}</p>
+                              )}
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold text-slate-700">Ảnh CCCD/CMND người đại diện</Label>
+                              <Controller
+                                control={upgradeControl}
+                                name="identityCardUrl"
+                                render={({ field }) => (
+                                  <DocumentUploader
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    disabled={upgradeLoading}
+                                  />
+                                )}
+                              />
+                              {upgradeFormErrors.identityCardUrl && (
+                                <p className="text-red-500 text-[11px] font-medium">{upgradeFormErrors.identityCardUrl.message}</p>
+                              )}
+                            </div>
+                          </div>
+
                           <Button type="submit" disabled={upgradeLoading} className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold">
                             {upgradeLoading ? (
                               <>
@@ -635,9 +681,25 @@ function UserProfilePage() {
                             <span className="text-slate-400 text-xs">Mã số thuế:</span>
                             <span className="font-semibold text-xs text-slate-800">{ownerProfile.taxCode}</span>
                           </div>
-                          <div className="flex justify-between py-1.5">
+                          <div className="flex justify-between py-1.5 border-b border-slate-100">
                             <span className="text-slate-400 text-xs">Địa chỉ:</span>
                             <span className="font-semibold text-xs text-slate-800 text-right max-w-[180px] truncate">{ownerProfile.businessAddress}</span>
+                          </div>
+                          <div className="flex justify-between py-1.5 border-b border-slate-100">
+                            <span className="text-slate-400 text-xs">Giấy phép kinh doanh:</span>
+                            {ownerProfile.businessLicenseUrl ? (
+                              <a href={ownerProfile.businessLicenseUrl} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline font-semibold text-xs">Xem ảnh</a>
+                            ) : (
+                              <span className="text-slate-400 text-xs font-semibold">Chưa tải lên</span>
+                            )}
+                          </div>
+                          <div className="flex justify-between py-1.5">
+                            <span className="text-slate-400 text-xs">Ảnh CCCD/CMND:</span>
+                            {ownerProfile.identityCardUrl ? (
+                              <a href={ownerProfile.identityCardUrl} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline font-semibold text-xs">Xem ảnh</a>
+                            ) : (
+                              <span className="text-slate-400 text-xs font-semibold">Chưa tải lên</span>
+                            )}
                           </div>
                         </div>
                       )}

@@ -62,4 +62,23 @@ public class FileController {
                 .fileName(fileName)
                 .build());
     }
+
+    @PostMapping(value = "/document", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Tải tài liệu đăng ký chủ sân", description = "Upload ảnh Giấy phép kinh doanh hoặc CCCD. Yêu cầu đăng nhập.")
+    public ResponseEntity<FileUploadResponse> uploadDocument(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestParam("file") MultipartFile file) {
+        if (userPrincipal == null) {
+            throw new BadRequestException("Bạn cần đăng nhập để tải ảnh.");
+        }
+
+        String url = fileStorageService.storeDocument(file, userPrincipal.getUser().getUserId());
+        String fileName = url.substring(url.lastIndexOf('/') + 1);
+
+        return ResponseEntity.ok(FileUploadResponse.builder()
+                .url(url)
+                .fileName(fileName)
+                .build());
+    }
 }

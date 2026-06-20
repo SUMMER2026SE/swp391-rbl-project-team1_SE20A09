@@ -30,4 +30,10 @@ public class UpgradeToOwnerRequest {
 
     @NotBlank(message = "Địa chỉ kinh doanh không được để trống")
     private String businessAddress;
+
+    @NotBlank(message = "Giấy phép đăng ký kinh doanh không được để trống")
+    private String businessLicenseUrl;
+
+    @NotBlank(message = "Ảnh CCCD/CMND không được để trống")
+    private String identityCardUrl;
 }
