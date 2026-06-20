@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
 import java.util.List;
 
 /**
@@ -105,6 +104,22 @@ public class AdminUserController {
                 .build());
     }
 
+    /**
+     * UC-ADM-03: Khóa/Mở khóa tài khoản khách hàng.
+     */
+    @org.springframework.web.bind.annotation.PatchMapping("/customers/{id}/lock")
+    @Operation(summary = "Khóa/Mở khóa khách hàng", description = "Thay đổi trạng thái ACTIVE/BLOCKED của khách hàng")
+    public ResponseEntity<ApiResponse<Void>> lockUnlockCustomer(
+            @Parameter(description = "ID của khách hàng") @org.springframework.web.bind.annotation.PathVariable Integer id,
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody com.sportvenue.dto.request.LockCustomerRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.sportvenue.security.UserPrincipal currentUser) {
 
+        adminUserService.lockUnlockCustomer(id, request.getEnabled(), currentUser.getUser().getUserId());
 
+        String statusMessage = Boolean.TRUE.equals(request.getEnabled()) ? "mở khóa" : "khóa";
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .code(200)
+                .message("Đã " + statusMessage + " tài khoản thành công")
+                .build());
+    }
 }
