@@ -5,6 +5,7 @@ import com.sportvenue.dto.booking.BookingHistoryItemDto;
 import com.sportvenue.dto.request.CreateBookingRequest;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.dto.response.TimeSlotResponse;
+import com.sportvenue.dto.response.WeeklySlotResponse;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.BookingService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -69,6 +70,29 @@ public class BookingController {
             @PathVariable("id") Integer stadiumId,
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ResponseEntity.ok(bookingService.getSlotsByDate(stadiumId, date));
+    }
+
+    /**
+     * UC-CUS-01: Lịch khung giờ theo tuần của một sân — phục vụ weekly grid UI.
+     * Trả về 7 ngày (thứ 2 → chủ nhật) của tuần chứa {@code weekStart}.
+     *
+     * <p>Public — không yêu cầu auth — đã đăng ký trong
+     * {@code SecurityConfig.PUBLIC_ENDPOINTS}.</p>
+     *
+     * @param stadiumId ID sân
+     * @param weekStart một ngày bất kỳ trong tuần (ISO yyyy-MM-dd) — server snap về thứ 2.
+     */
+    @GetMapping("/api/v1/stadiums/{id}/weekly-slots")
+    @Operation(
+            summary = "Lịch khung giờ theo tuần của sân — public",
+            description = "Trả về 7 ngày × N khung giờ kèm trạng thái "
+                    + "AVAILABLE | BOOKED | PAST. BE tự snap về thứ 2 của tuần chứa weekStart. "
+                    + "BOOKED = có booking PENDING/CONFIRMED trên (stadiumId, slotId, date). "
+                    + "PAST = (date + slot.startTime) < now. KHÔNG trả về customerName.")
+    public ResponseEntity<WeeklySlotResponse> getWeeklySlots(
+            @PathVariable("id") Integer stadiumId,
+            @RequestParam("weekStart") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate weekStart) {
+        return ResponseEntity.ok(bookingService.getWeeklySlots(stadiumId, weekStart));
     }
 
     /**

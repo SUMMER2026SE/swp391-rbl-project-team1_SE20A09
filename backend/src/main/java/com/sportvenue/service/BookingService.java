@@ -5,6 +5,7 @@ import com.sportvenue.dto.booking.BookingHistoryItemDto;
 import com.sportvenue.dto.request.CreateBookingRequest;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.dto.response.TimeSlotResponse;
+import com.sportvenue.dto.response.WeeklySlotResponse;
 import com.sportvenue.security.UserPrincipal;
 
 import java.time.LocalDate;
@@ -70,4 +71,22 @@ public interface BookingService {
             int page,
             int size,
             String statusFilter);
+
+    /**
+     * UC-CUS-01: Lịch khung giờ theo tuần của một sân — phục vụ
+     * {@code GET /api/v1/stadiums/{id}/weekly-slots?weekStart=YYYY-MM-DD}.
+     *
+     * <p>Trả về 7 ngày (thứ 2 → chủ nhật) của tuần chứa {@code weekStart}.
+     * {@code weekStart} được snap về thứ 2 gần nhất nếu FE truyền ngày khác.</p>
+     *
+     * <p>Trạng thái của mỗi slot (theo từng ngày):</p>
+     * <ul>
+     *   <li>{@code BOOKED}   — đã có booking PENDING/CONFIRMED cho (stadiumId, slotId, date).</li>
+     *   <li>{@code PAST}     — datetime bắt đầu (date + slot.startTime) đã qua so với hiện tại.</li>
+     *   <li>{@code AVAILABLE} — còn lại.</li>
+     * </ul>
+     *
+     * <p>KHÔNG trả về {@code customerName} hay thông tin khách hàng.</p>
+     */
+    WeeklySlotResponse getWeeklySlots(Integer stadiumId, LocalDate weekStart);
 }

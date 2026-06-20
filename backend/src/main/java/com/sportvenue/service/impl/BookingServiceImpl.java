@@ -5,6 +5,9 @@ import com.sportvenue.dto.booking.BookingHistoryItemDto;
 import com.sportvenue.dto.request.CreateBookingRequest;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.dto.response.TimeSlotResponse;
+import com.sportvenue.dto.response.WeeklySlotDayDto;
+import com.sportvenue.dto.response.WeeklySlotItemDto;
+import com.sportvenue.dto.response.WeeklySlotResponse;
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.SportType;
 import com.sportvenue.entity.Stadium;
@@ -35,8 +38,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * UC-CUS-01: Triển khai single booking cho Customer.
@@ -144,6 +152,99 @@ public class BookingServiceImpl implements BookingService {
                 .map(slot -> toTimeSlotResponse(slot, bookedSlotIds.contains(slot.getSlotId()),
                         LocalDateTime.of(date, slot.getStartTime()).isAfter(now)))
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public WeeklySlotResponse getWeeklySlots(Integer stadiumId, LocalDate weekStart) {
+        Stadium stadium = stadiumRepository.findById(stadiumId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy sân với ID " + stadiumId));
+
+        // Snap về thứ 2 gần nhất — cho phép FE truyền bất kỳ ngày nào trong tuần.
+        LocalDate monday = snapToMonday(weekStart);
+        LocalDate sunday = monday.plusDays(6);
+
+        List<TimeSlot> slots = timeSlotRepository.findByStadiumStadiumIdAndSlotStatus(
+                stadium.getStadiumId(), SlotStatus.AVAILABLE);
+
+        List<Booking> weeklyBookings = bookingRepository.findWeeklyBookings(
+                stadiumId, monday, sunday, ACTIVE_STATUSES);
+
+        // Map (date → tập slotId đã được đặt active) — service trả về
+        // Set<slotId> cho từng ngày để render nhanh trong vòng lặp 7 ngày.
+        Map<LocalDate, Set<Integer>> bookedByDate = weeklyBookings.stream()
+                .collect(Collectors.groupingBy(
+                        Booking::getReservationDate,
+                        Collectors.mapping(
+                                b -> b.getSlot().getSlotId(),
+                                Collectors.toSet())));
+
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter hhmm = DateTimeFormatter.ofPattern("HH:mm");
+
+        List<WeeklySlotDayDto> days = new ArrayList<>(7);
+        for (int i = 0; i < 7; i++) {
+            LocalDate date = monday.plusDays(i);
+            Set<Integer> bookedSlotIds = bookedByDate.getOrDefault(date, Set.of());
+
+            List<WeeklySlotItemDto> daySlots = slots.stream()
+                    .sorted(Comparator.comparing(TimeSlot::getStartTime))
+                    .map(slot -> {
+                        LocalDateTime slotStart = LocalDateTime.of(date, slot.getStartTime());
+                        String status;
+                        if (bookedSlotIds.contains(slot.getSlotId())) {
+                            status = "BOOKED";
+                        } else if (!slotStart.isAfter(now)) {
+                            status = "PAST";
+                        } else {
+                            status = "AVAILABLE";
+                        }
+                        return WeeklySlotItemDto.builder()
+                                .slotId(slot.getSlotId())
+                                .startTime(slot.getStartTime() != null
+                                        ? slot.getStartTime().format(hhmm) : null)
+                                .endTime(slot.getEndTime() != null
+                                        ? slot.getEndTime().format(hhmm) : null)
+                                .price(slot.getPricePerSlot())
+                                .status(status)
+                                .build();
+                    })
+                    .toList();
+
+            days.add(WeeklySlotDayDto.builder()
+                    .date(date.toString())
+                    .dayName(vietnameseDayName(date))
+                    .slots(daySlots)
+                    .build());
+        }
+
+        log.info("📅 UC-CUS-01: Stadium {} weekly slots — {}..{} ({} bookings)",
+                stadiumId, monday, sunday, weeklyBookings.size());
+
+        return WeeklySlotResponse.builder()
+                .weekStart(monday.toString())
+                .weekEnd(sunday.toString())
+                .days(days)
+                .build();
+    }
+
+    /** Snap {@code date} về thứ 2 của tuần đó (DayOfWeek.MONDAY = 1). */
+    private LocalDate snapToMonday(LocalDate date) {
+        return date.minusDays(date.getDayOfWeek().getValue() - 1L);
+    }
+
+    /** Tên thứ tiếng Việt — dùng cho UI weekly grid. */
+    private String vietnameseDayName(LocalDate date) {
+        return switch (date.getDayOfWeek()) {
+            case MONDAY -> "Thứ 2";
+            case TUESDAY -> "Thứ 3";
+            case WEDNESDAY -> "Thứ 4";
+            case THURSDAY -> "Thứ 5";
+            case FRIDAY -> "Thứ 6";
+            case SATURDAY -> "Thứ 7";
+            case SUNDAY -> "Chủ nhật";
+        };
     }
 
     @Override
