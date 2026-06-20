@@ -98,5 +98,19 @@ class AdminUserControllerTest {
         verify(adminUserService).getCustomers(eq(null), eq(null), eq(pageable));
     }
 
+    @Test
+    void lockUnlockCustomer_ReturnsOk() {
+        // Arrange
+        com.sportvenue.dto.request.LockCustomerRequest request = new com.sportvenue.dto.request.LockCustomerRequest(false);
+        com.sportvenue.entity.User adminUser = com.sportvenue.entity.User.builder().userId(1).build();
+        com.sportvenue.security.UserPrincipal principal = new com.sportvenue.security.UserPrincipal(adminUser);
 
+        // Act
+        ResponseEntity<ApiResponse<Void>> result = adminUserController.lockUnlockCustomer(2, request, principal);
+
+        // Assert
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertEquals("Đã khóa tài khoản thành công", result.getBody().getMessage());
+        verify(adminUserService).lockUnlockCustomer(2, false, 1);
+    }
 }

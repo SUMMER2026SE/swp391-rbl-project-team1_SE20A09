@@ -172,9 +172,41 @@ public class AdminUserServiceImplTest {
 
     @Test
     void lockUnlockCustomer_selfLockProtection_throwsException() {
-        // This is a placeholder test for lockUnlockCustomer self-lock protection
-        // as requested by DoD, even though the method is not implemented yet.
-        // Once implemented in UC-ADM-03, this test should be expanded.
-        assertTrue(true, "Self-lock protection test placeholder");
+        com.sportvenue.exception.BadRequestException exception = assertThrows(com.sportvenue.exception.BadRequestException.class, () -> {
+            adminUserService.lockUnlockCustomer(1, false, 1);
+        });
+        assertEquals("Bạn không thể tự khóa tài khoản của chính mình.", exception.getMessage());
+    }
+
+    @Test
+    void lockUnlockCustomer_userNotFound_throwsException() {
+        when(userRepository.findById(2)).thenReturn(java.util.Optional.empty());
+        
+        com.sportvenue.exception.AppException exception = assertThrows(com.sportvenue.exception.AppException.class, () -> {
+            adminUserService.lockUnlockCustomer(2, false, 1);
+        });
+        assertEquals(com.sportvenue.exception.ErrorCode.USER_NOT_FOUND, exception.getErrorCode());
+    }
+
+    @Test
+    void lockUnlockCustomer_notCustomer_throwsException() {
+        User adminUser = User.builder().userId(2).role(com.sportvenue.entity.Role.builder().roleName("Admin").build()).build();
+        when(userRepository.findById(2)).thenReturn(java.util.Optional.of(adminUser));
+        
+        com.sportvenue.exception.ResourceNotFoundException exception = assertThrows(com.sportvenue.exception.ResourceNotFoundException.class, () -> {
+            adminUserService.lockUnlockCustomer(2, false, 1);
+        });
+        assertEquals("Người dùng không phải là khách hàng (Customer).", exception.getMessage());
+    }
+
+    @Test
+    void lockUnlockCustomer_success() {
+        User customerUser = User.builder().userId(2).accountStatus(AccountStatus.ACTIVE).role(com.sportvenue.entity.Role.builder().roleName("Customer").build()).build();
+        when(userRepository.findById(2)).thenReturn(java.util.Optional.of(customerUser));
+        
+        adminUserService.lockUnlockCustomer(2, false, 1);
+        
+        assertEquals(AccountStatus.BLOCKED, customerUser.getAccountStatus());
+        org.mockito.Mockito.verify(userRepository).save(customerUser);
     }
 }
