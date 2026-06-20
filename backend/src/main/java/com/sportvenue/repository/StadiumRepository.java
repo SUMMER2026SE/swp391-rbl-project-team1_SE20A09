@@ -78,4 +78,6 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
             WHERE u.email = :ownerEmail
             """)
     long countStadiumsByOwnerEmail(@Param("ownerEmail") String ownerEmail);
+
+    boolean existsBySportTypeSportTypeId(Integer sportTypeId);
 }
