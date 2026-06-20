@@ -20,6 +20,7 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     @Modifying
     void deleteAllByIsVerifiedFalseAndCreatedAtBefore(LocalDateTime threshold);
 
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"role"})
     Optional<User> findByEmail(String email);
 
     boolean existsByEmail(String email);
@@ -31,6 +32,8 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     /**
      * Tìm danh sách user theo role, hỗ trợ search (tên/email) và lọc theo accountStatus.
      * Dùng FETCH JOIN để tránh N+1 query trên bảng roles.
+     * Note: Hibernate will not log warning HHH90003004 because role is @ManyToOne, 
+     * but always verify integration tests logs to ensure it's not applied in memory.
      */
     @Query("""
         SELECT u FROM User u JOIN FETCH u.role r

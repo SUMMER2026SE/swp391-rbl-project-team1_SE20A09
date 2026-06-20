@@ -85,7 +85,7 @@ public class AdminUserController {
     ) {
         List<String> allowedSortBy = List.of(
                 "userId", "firstName", "lastName", "email",
-                "phoneNumber", "accountStatus", "createdAt", "updatedAt"
+                "phoneNumber", "accountStatus", "createdAt"
         );
         if (!allowedSortBy.contains(sortBy)) {
             throw new IllegalArgumentException("Trường sắp xếp không hợp lệ: " + sortBy);

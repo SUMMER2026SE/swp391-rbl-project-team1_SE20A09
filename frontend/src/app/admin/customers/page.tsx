@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Search, Lock, Unlock, Loader2 } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 
@@ -25,16 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+
 
 export interface AdminCustomerResponse {
   userId: number;
@@ -57,6 +48,23 @@ interface ApiResponse<T> {
   result: T;
 }
 
+interface CreateCustomerRequest {
+  fullName: string;
+  email: string;
+  phoneNumber?: string;
+  phone?: string;
+  password?: string;
+  confirmPassword?: string;
+}
+
+interface ApiError {
+  response?: {
+    data?: { message?: string } | Record<string, string>;
+    status?: number;
+  };
+  message?: string;
+}
+
 const fetchCustomers = async (page: number, size: number, search: string, status: string) => {
   const params: Record<string, string | number> = { page, pageSize: size };
   if (search) params.search = search;
@@ -76,6 +84,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
+import { useDebounce } from "usehooks-ts";
 
 export default function AdminCustomersPage() {
   const queryClient = useQueryClient();
@@ -83,19 +92,10 @@ export default function AdminCustomersPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   
-  const [selectedCustomer, setSelectedCustomer] = useState<AdminCustomerResponse | null>(null);
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ fullName: "", email: "", phoneNumber: "", password: "", confirmPassword: "" });
 
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, 500);
-    return () => clearTimeout(handler);
-  }, [search]);
+  const debouncedSearch = useDebounce(search, 500);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["admin-customers", page, debouncedSearch, statusFilter],
@@ -103,7 +103,7 @@ export default function AdminCustomersPage() {
   });
 
   const addCustomerMutation = useMutation({
-    mutationFn: async (customerData: any) => {
+    mutationFn: async (customerData: CreateCustomerRequest) => {
       // Gọi API register của hệ thống
       const { data } = await api.post("/auth/register", customerData);
       return data;
@@ -114,7 +114,7 @@ export default function AdminCustomersPage() {
       setIsAddModalOpen(false);
       setNewCustomer({ fullName: "", email: "", phoneNumber: "", password: "", confirmPassword: "" });
     },
-    onError: (error: any) => {
+    onError: (error: ApiError) => {
       // API Backend có thể trả về error.response.data với cấu trúc map lỗi validation
       if (error.response?.data && typeof error.response.data === 'object' && !error.response.data.message) {
          // Nếu backend trả về map field errors (VD: { phone: "...", password: "..." })
@@ -243,19 +243,19 @@ export default function AdminCustomersPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center">
+                <TableCell colSpan={5} className="h-32 text-center">
                   <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
                 </TableCell>
               </TableRow>
             ) : isError ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-red-500 font-medium">
+                <TableCell colSpan={5} className="h-32 text-center text-red-500 font-medium">
                   Đã xảy ra lỗi khi tải dữ liệu! Vui lòng thử lại.
                 </TableCell>
               </TableRow>
             ) : data?.content?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-gray-500">
+                <TableCell colSpan={5} className="h-32 text-center text-gray-500">
                   Không tìm thấy khách hàng nào phù hợp với bộ lọc.
                 </TableCell>
               </TableRow>
