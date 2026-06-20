@@ -8,6 +8,8 @@ import com.sportvenue.entity.User;
 
 public interface OwnerRegistrationService {
     MessageResponse registerNewOwner(RegisterOwnerRequest request);
+
     OwnerDetailResponse upgradeCurrentCustomer(User currentUser, UpgradeToOwnerRequest request);
+
     OwnerDetailResponse getOwnerProfileOfUser(User currentUser);
 }

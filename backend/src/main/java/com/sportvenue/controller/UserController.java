@@ -77,6 +77,7 @@ public class UserController {
     }
 
     @GetMapping("/me/owner-profile")
+    @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Lấy hồ sơ chủ sân của tài khoản hiện tại", description = "Lấy thông tin và trạng thái phê duyệt của hồ sơ chủ sân gắn với tài khoản đang đăng nhập. Yêu cầu Bearer JWT Token ở Header")
     public ResponseEntity<ApiResponse<OwnerDetailResponse>> getOwnerProfile(
             @AuthenticationPrincipal UserPrincipal userPrincipal) {

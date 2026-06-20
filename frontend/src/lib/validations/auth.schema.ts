@@ -40,7 +40,9 @@ export const registerOwnerSchema = z
       .regex(/[^A-Za-z0-9]/, "Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt"),
     confirmPassword: z.string(),
     businessName: z.string().min(2, "Tên doanh nghiệp phải có ít nhất 2 ký tự"),
-    taxCode: z.string().min(5, "Mã số thuế phải có ít nhất 5 ký tự"),
+    taxCode: z
+      .string()
+      .regex(/^(?:\d{10}|\d{13}|\d{10}-\d{3})$/, "Mã số thuế phải gồm 10 hoặc 13 chữ số (ví dụ: 0312456789 hoặc 0312456789-001)"),
     businessAddress: z.string().min(5, "Địa chỉ kinh doanh phải có ít nhất 5 ký tự"),
     terms: z.boolean().refine((val) => val === true, {
       message: "Vui lòng đồng ý với điều khoản sử dụng",
@@ -55,7 +57,9 @@ export type RegisterOwnerFormValues = z.infer<typeof registerOwnerSchema>;
 
 export const upgradeToOwnerSchema = z.object({
   businessName: z.string().min(2, "Tên doanh nghiệp phải có ít nhất 2 ký tự"),
-  taxCode: z.string().min(5, "Mã số thuế phải có ít nhất 5 ký tự"),
+  taxCode: z
+    .string()
+    .regex(/^(?:\d{10}|\d{13}|\d{10}-\d{3})$/, "Mã số thuế phải gồm 10 hoặc 13 chữ số (ví dụ: 0312456789 hoặc 0312456789-001)"),
   businessAddress: z.string().min(5, "Địa chỉ kinh doanh phải có ít nhất 5 ký tự"),
 });
 

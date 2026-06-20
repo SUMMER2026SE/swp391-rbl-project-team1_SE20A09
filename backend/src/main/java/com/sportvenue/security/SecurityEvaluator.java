@@ -3,11 +3,14 @@ package com.sportvenue.security;
 import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.repository.OwnerRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.Optional;
 
@@ -28,6 +31,26 @@ public class SecurityEvaluator {
      * @return true nếu người dùng là Owner và trạng thái hồ sơ là APPROVED, ngược lại false
      */
     public boolean isApprovedOwner() {
+        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        HttpServletRequest request = null;
+        if (attributes != null) {
+            request = attributes.getRequest();
+            Boolean cached = (Boolean) request.getAttribute("IS_APPROVED_OWNER_KEY");
+            if (cached != null) {
+                return cached;
+            }
+        }
+
+        boolean result = evaluateIsApprovedOwner();
+
+        if (request != null) {
+            request.setAttribute("IS_APPROVED_OWNER_KEY", result);
+        }
+
+        return result;
+    }
+
+    private boolean evaluateIsApprovedOwner() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             return false;

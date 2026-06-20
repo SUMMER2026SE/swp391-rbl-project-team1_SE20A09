@@ -15,6 +15,8 @@ import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.RoleRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.OwnerRegistrationService;
+import com.sportvenue.service.OtpService;
+import com.sportvenue.entity.enums.UserRank;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,6 +32,7 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
     private final OwnerRepository ownerRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final OtpService otpService;
 
     @Override
     @Transactional
@@ -46,16 +49,23 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         Role ownerRole = roleRepository.findByRoleName("Owner")
                 .orElseThrow(() -> new RuntimeException("Role 'Owner' not found in database"));
 
+        // Tách họ và tên (Tránh BUG hardcode lastName rỗng)
+        String[] nameParts = request.getFullName().trim().split("\\s+", 2);
+        String firstName = nameParts[0];
+        String lastName = nameParts.length > 1 ? nameParts[1] : firstName;
+
         // 1. Tạo tài khoản User mới có role = Owner, trạng thái ban đầu là PENDING (chờ duyệt)
         User user = User.builder()
-                .firstName(request.getFullName())
-                .lastName("") // Tách họ tên nếu cần
+                .firstName(firstName)
+                .lastName(lastName)
                 .email(request.getEmail())
                 .phoneNumber(request.getPhone())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(ownerRole)
                 .accountStatus(AccountStatus.PENDING)
                 .isVerified(false)
+                .userRank(UserRank.BRONZE)
+                .userPoint(0)
                 .build();
         User savedUser = userRepository.save(user);
 
@@ -69,7 +79,10 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                 .build();
         ownerRepository.save(owner);
 
-        return new MessageResponse("Đăng ký tài khoản đối tác thành công. Vui lòng chờ Admin phê duyệt để hoạt động.");
+        // 3. Gửi OTP xác thực tài khoản qua email để tránh spam
+        otpService.createAndSendOtp(savedUser);
+
+        return new MessageResponse("Đăng ký thành công. Vui lòng kiểm tra email để nhận mã xác thực OTP.");
     }
 
     @Override

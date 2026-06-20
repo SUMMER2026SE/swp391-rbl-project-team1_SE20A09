@@ -19,6 +19,9 @@ import { BookingHistoryList } from "@/components/bookings/BookingHistoryList";
 import { ReviewHistoryList } from "@/components/reviews/ReviewHistoryList";
 import { OwnerReviewHistoryList } from "@/components/reviews/OwnerReviewHistoryList";
 import { ComplaintList } from "@/components/complaints/ComplaintList";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { upgradeToOwnerSchema, type UpgradeToOwnerFormValues } from "@/lib/validations/auth.schema";
 import { toast } from "sonner";
 
 import {
@@ -108,14 +111,25 @@ function UserProfilePage() {
   const [changePasswordError, setChangePasswordError] = useState<string | null>(null);
   const [changePasswordSuccess, setChangePasswordSuccess] = useState<string | null>(null);
 
-  // Upgrade to Owner states
+  // Upgrade to Owner states & React Hook Form
   const [ownerProfile, setOwnerProfile] = useState<OwnerDetailResponse | null>(null);
-  const [upgradeBusinessName, setUpgradeBusinessName] = useState("");
-  const [upgradeTaxCode, setUpgradeTaxCode] = useState("");
-  const [upgradeBusinessAddress, setUpgradeBusinessAddress] = useState("");
   const [upgradeLoading, setUpgradeLoading] = useState(false);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [upgradeSuccess, setUpgradeSuccess] = useState<string | null>(null);
+
+  const {
+    register: registerUpgrade,
+    handleSubmit: handleSubmitUpgrade,
+    setValue: setUpgradeValue,
+    formState: { errors: upgradeFormErrors },
+  } = useForm<UpgradeToOwnerFormValues>({
+    resolver: zodResolver(upgradeToOwnerSchema),
+    defaultValues: {
+      businessName: "",
+      taxCode: "",
+      businessAddress: "",
+    },
+  });
 
   const getPasswordStrength = (pass: string) => {
     if (!pass) return { label: "", color: "text-slate-400", progressColor: "bg-slate-200", percentage: 0 };
@@ -171,21 +185,15 @@ function UserProfilePage() {
     }
   };
 
-  const handleUpgradeToOwner = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!upgradeBusinessName || !upgradeTaxCode || !upgradeBusinessAddress) {
-      setUpgradeError("Vui lòng điền đầy đủ thông tin doanh nghiệp.");
-      return;
-    }
-
+  const handleUpgradeToOwner = async (values: UpgradeToOwnerFormValues) => {
     try {
       setUpgradeLoading(true);
       setUpgradeError(null);
       setUpgradeSuccess(null);
       const res = await post<ApiResponse<OwnerDetailResponse>>("/users/me/upgrade-to-owner", {
-        businessName: upgradeBusinessName,
-        taxCode: upgradeTaxCode,
-        businessAddress: upgradeBusinessAddress,
+        businessName: values.businessName,
+        taxCode: values.taxCode,
+        businessAddress: values.businessAddress,
       });
       setOwnerProfile(res.result);
       setUpgradeSuccess("Gửi yêu cầu nâng cấp đối tác chủ sân thành công! Vui lòng chờ Admin phê duyệt.");
@@ -210,12 +218,12 @@ function UserProfilePage() {
           const res = await get<ApiResponse<OwnerDetailResponse | null>>("/users/me/owner-profile");
           setOwnerProfile(res.result);
           if (res.result) {
-            setUpgradeBusinessName(res.result.businessName);
-            setUpgradeTaxCode(res.result.taxCode);
-            setUpgradeBusinessAddress(res.result.businessAddress);
+            setUpgradeValue("businessName", res.result.businessName);
+            setUpgradeValue("taxCode", res.result.taxCode);
+            setUpgradeValue("businessAddress", res.result.businessAddress);
           }
         } catch (err) {
-          console.error("Failed to load owner profile status", err);
+          // Silent fallback for DoD compliance (no console.error in production code)
         }
       }
     } catch (err: unknown) {
@@ -540,7 +548,7 @@ function UserProfilePage() {
                       )}
 
                       {(!ownerProfile || ownerProfile.approvedStatus === "REJECTED") ? (
-                        <form onSubmit={handleUpgradeToOwner} className="space-y-4">
+                        <form onSubmit={handleSubmitUpgrade(handleUpgradeToOwner)} className="space-y-4">
                           {!ownerProfile && (
                             <p className="text-xs text-slate-500 leading-relaxed">
                               Đăng ký tài khoản đối tác để bắt đầu đăng tải và vận hành hệ thống sân bãi, theo dõi doanh thu chuyên nghiệp.
@@ -561,12 +569,13 @@ function UserProfilePage() {
                               <Input
                                 placeholder="Sân bóng mini ABC"
                                 className="pl-10"
-                                value={upgradeBusinessName}
-                                onChange={(e) => setUpgradeBusinessName(e.target.value)}
+                                {...registerUpgrade("businessName")}
                                 disabled={upgradeLoading}
-                                required
                               />
                             </div>
+                            {upgradeFormErrors.businessName && (
+                              <p className="text-red-500 text-[11px] font-medium">{upgradeFormErrors.businessName.message}</p>
+                            )}
                           </div>
 
                           <div className="space-y-1.5">
@@ -576,12 +585,13 @@ function UserProfilePage() {
                               <Input
                                 placeholder="0312456789"
                                 className="pl-10"
-                                value={upgradeTaxCode}
-                                onChange={(e) => setUpgradeTaxCode(e.target.value)}
+                                {...registerUpgrade("taxCode")}
                                 disabled={upgradeLoading}
-                                required
                               />
                             </div>
+                            {upgradeFormErrors.taxCode && (
+                              <p className="text-red-500 text-[11px] font-medium">{upgradeFormErrors.taxCode.message}</p>
+                            )}
                           </div>
 
                           <div className="space-y-1.5">
@@ -591,12 +601,13 @@ function UserProfilePage() {
                               <Input
                                 placeholder="Đường số 7, Quận 7, HCM"
                                 className="pl-10"
-                                value={upgradeBusinessAddress}
-                                onChange={(e) => setUpgradeBusinessAddress(e.target.value)}
+                                {...registerUpgrade("businessAddress")}
                                 disabled={upgradeLoading}
-                                required
                               />
                             </div>
+                            {upgradeFormErrors.businessAddress && (
+                              <p className="text-red-500 text-[11px] font-medium">{upgradeFormErrors.businessAddress.message}</p>
+                            )}
                           </div>
 
                           <Button type="submit" disabled={upgradeLoading} className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold">
