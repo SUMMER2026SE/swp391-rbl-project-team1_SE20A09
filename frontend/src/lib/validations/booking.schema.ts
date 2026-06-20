@@ -76,3 +76,26 @@ export const recurringBookingSchema = z
   );
 
 export type RecurringBookingFormValues = z.infer<typeof recurringBookingSchema>;
+
+// ─────────────────────────────────────────────────────────────────────────
+// UC-CUS-01: Single booking (đặt sân đơn lẻ) — schema cho createBooking API.
+// Server TỰ tính tổng tiền + lookup unitPrice — client chỉ gửi ID + quantity.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const accessoryItemSchema = z.object({
+  accessoryId: z.number().int().positive("accessoryId phải là số dương"),
+  quantity: z.number().int().min(1, "Số lượng phải ≥ 1"),
+});
+
+export const createBookingSchema = z.object({
+  stadiumId: z.number().int().positive("Vui lòng chọn sân"),
+  slotId: z.number().int().positive("Vui lòng chọn khung giờ"),
+  reservationDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Ngày phải có định dạng yyyy-MM-dd"),
+  note: z.string().max(500, "Ghi chú không quá 500 ký tự").optional(),
+  accessories: z.array(accessoryItemSchema).max(50, "Không quá 50 phụ kiện").optional(),
+});
+
+export type CreateBookingFormValues = z.infer<typeof createBookingSchema>;
+export type AccessoryItemFormValue = z.infer<typeof accessoryItemSchema>;
