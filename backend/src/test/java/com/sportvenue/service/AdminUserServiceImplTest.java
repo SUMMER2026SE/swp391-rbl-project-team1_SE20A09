@@ -55,7 +55,7 @@ class AdminUserServiceImplTest {
     @Test
     void getCustomers_withSearch_returnsCorrectData() {
         Page<User> userPage = new PageImpl<>(List.of(mockUser));
-        when(userRepository.findByRoleWithFilters(eq("Customer"), eq("test"), any(), eq(pageable)))
+        when(userRepository.findByRoleWithFilters(eq("Customer"), eq("test"), isNull(), eq(pageable)))
                 .thenReturn(userPage);
 
         PageResponse<AdminCustomerResponse> response = adminUserService.getCustomers("test", null, pageable);
@@ -63,13 +63,13 @@ class AdminUserServiceImplTest {
         assertNotNull(response);
         assertEquals(1, response.getContent().size());
         assertEquals("test@example.com", response.getContent().get(0).getEmail());
-        verify(userRepository).findByRoleWithFilters(eq("Customer"), eq("test"), any(), eq(pageable));
+        verify(userRepository).findByRoleWithFilters(eq("Customer"), eq("test"), isNull(), eq(pageable));
     }
 
     @Test
     void getCustomers_withStatusFilter_returnsCorrectData() {
         Page<User> userPage = new PageImpl<>(List.of(mockUser));
-        when(userRepository.findByRoleWithFilters(eq("Customer"), any(), eq(AccountStatus.ACTIVE), eq(pageable)))
+        when(userRepository.findByRoleWithFilters(eq("Customer"), isNull(), eq(AccountStatus.ACTIVE), eq(pageable)))
                 .thenReturn(userPage);
 
         PageResponse<AdminCustomerResponse> response = adminUserService.getCustomers(null, AccountStatus.ACTIVE, pageable);
@@ -77,13 +77,13 @@ class AdminUserServiceImplTest {
         assertNotNull(response);
         assertEquals(1, response.getContent().size());
         assertEquals(AccountStatus.ACTIVE, response.getContent().get(0).getAccountStatus());
-        verify(userRepository).findByRoleWithFilters(eq("Customer"), any(), eq(AccountStatus.ACTIVE), eq(pageable));
+        verify(userRepository).findByRoleWithFilters(eq("Customer"), isNull(), eq(AccountStatus.ACTIVE), eq(pageable));
     }
 
     @Test
     void getCustomers_mappingFields_areMappedCorrectly() {
         Page<User> userPage = new PageImpl<>(List.of(mockUser));
-        when(userRepository.findByRoleWithFilters(eq("Customer"), any(), any(), eq(pageable)))
+        when(userRepository.findByRoleWithFilters(eq("Customer"), isNull(), isNull(), eq(pageable)))
                 .thenReturn(userPage);
 
         PageResponse<AdminCustomerResponse> response = adminUserService.getCustomers(null, null, pageable);
