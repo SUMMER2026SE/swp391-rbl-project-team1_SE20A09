@@ -4,6 +4,7 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { getVenueDetail } from "@/lib/api/venue";
+import { getSlotsByDate } from "@/lib/bookings-api";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,13 @@ function BookingContent() {
     queryKey: ["venue-detail", venueId],
     queryFn: () => getVenueDetail(venueId),
     enabled: !!venueId,
+  });
+
+  const { data: slotAvailabilities } = useQuery({
+    queryKey: ["venue-slots", venueId, selectedDate],
+    queryFn: () => getSlotsByDate(venueId, selectedDate),
+    enabled: !!venueId && !!selectedDate,
+    refetchInterval: 5000,
   });
 
   if (isLoading) {
@@ -106,7 +114,10 @@ function BookingContent() {
         return timePart.substring(0, 5) === hourStr;
       });
 
-      const available = matched ? (matched.slotStatus === "AVAILABLE") : true;
+      const availabilityMatched = slotAvailabilities?.find(s => s.slotId === matched?.slotId);
+      const available = availabilityMatched 
+        ? availabilityMatched.available 
+        : (matched ? matched.slotStatus === "AVAILABLE" : true);
 
       return {
         id: hourStr,
@@ -139,6 +150,12 @@ function BookingContent() {
         price: item.pricePerUnit * accessories[item.accessoryId],
       }));
 
+    // Find the slot ID from the selected slot (hour string like "08:00")
+    const matchedSlot = venue.timeSlots?.find((s) => {
+      const timePart = s.startTime.includes("T") ? s.startTime.split("T")[1] : s.startTime;
+      return timePart.substring(0, 5) === selectedSlot;
+    });
+
     const bookingSummary = {
       venueId: venue.stadiumId,
       stadiumName: venue.stadiumName,
@@ -151,6 +168,7 @@ function BookingContent() {
       accessories: selectedAccs,
       accessoryTotal: calculateAccessoryTotal(),
       total: total,
+      slotId: matchedSlot?.slotId,
     };
 
     sessionStorage.setItem("booking_summary", JSON.stringify(bookingSummary));
