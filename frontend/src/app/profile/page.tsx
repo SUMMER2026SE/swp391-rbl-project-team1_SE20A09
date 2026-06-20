@@ -19,6 +19,7 @@ import { BookingHistoryList } from "@/components/bookings/BookingHistoryList";
 import { ReviewHistoryList } from "@/components/reviews/ReviewHistoryList";
 import { OwnerReviewHistoryList } from "@/components/reviews/OwnerReviewHistoryList";
 import { ComplaintList } from "@/components/complaints/ComplaintList";
+import { toast } from "sonner";
 
 import {
   Camera,
@@ -39,6 +40,9 @@ import {
   Clock,
   MapPin,
   FileText,
+  AlertTriangle,
+  Building,
+  CheckCircle2,
 } from "lucide-react";
 
 interface UserProfileResponse {
@@ -64,6 +68,26 @@ const rankMap: Record<string, { label: string; color: string; bg: string; next: 
   Diamond: { label: "Hạng Kim Cương", color: "text-blue-700 border-blue-200", bg: "bg-blue-50", next: "Vô Song", target: 5000 },
 };
 
+interface OwnerDetailResponse {
+  ownerId: number;
+  userId: number;
+  fullName: string;
+  email: string;
+  phoneNumber: string;
+  businessName: string;
+  taxCode: string;
+  businessAddress: string;
+  approvedStatus: "PENDING" | "APPROVED" | "REJECTED";
+  rejectionReason?: string;
+  createdAt: string;
+}
+
+interface ApiResponse<T> {
+  code: number;
+  message: string;
+  result: T;
+}
+
 function UserProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -83,6 +107,15 @@ function UserProfilePage() {
   const [changePasswordLoading, setChangePasswordLoading] = useState(false);
   const [changePasswordError, setChangePasswordError] = useState<string | null>(null);
   const [changePasswordSuccess, setChangePasswordSuccess] = useState<string | null>(null);
+
+  // Upgrade to Owner states
+  const [ownerProfile, setOwnerProfile] = useState<OwnerDetailResponse | null>(null);
+  const [upgradeBusinessName, setUpgradeBusinessName] = useState("");
+  const [upgradeTaxCode, setUpgradeTaxCode] = useState("");
+  const [upgradeBusinessAddress, setUpgradeBusinessAddress] = useState("");
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
+  const [upgradeSuccess, setUpgradeSuccess] = useState<string | null>(null);
 
   const getPasswordStrength = (pass: string) => {
     if (!pass) return { label: "", color: "text-slate-400", progressColor: "bg-slate-200", percentage: 0 };
@@ -138,12 +171,53 @@ function UserProfilePage() {
     }
   };
 
+  const handleUpgradeToOwner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!upgradeBusinessName || !upgradeTaxCode || !upgradeBusinessAddress) {
+      setUpgradeError("Vui lòng điền đầy đủ thông tin doanh nghiệp.");
+      return;
+    }
+
+    try {
+      setUpgradeLoading(true);
+      setUpgradeError(null);
+      setUpgradeSuccess(null);
+      const res = await post<ApiResponse<OwnerDetailResponse>>("/users/me/upgrade-to-owner", {
+        businessName: upgradeBusinessName,
+        taxCode: upgradeTaxCode,
+        businessAddress: upgradeBusinessAddress,
+      });
+      setOwnerProfile(res.result);
+      setUpgradeSuccess("Gửi yêu cầu nâng cấp đối tác chủ sân thành công! Vui lòng chờ Admin phê duyệt.");
+      toast.success("Gửi hồ sơ nâng cấp thành công!");
+    } catch (err: any) {
+      setUpgradeError(err.message || "Có lỗi xảy ra khi gửi yêu cầu nâng cấp.");
+      toast.error("Gửi yêu cầu nâng cấp thất bại.");
+    } finally {
+      setUpgradeLoading(false);
+    }
+  };
+
   const fetchUserProfile = async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await get<UserProfileResponse>("/users/me");
       setProfile(data);
+
+      if (data.roleName === "Customer" || data.roleName === "Owner") {
+        try {
+          const res = await get<ApiResponse<OwnerDetailResponse | null>>("/users/me/owner-profile");
+          setOwnerProfile(res.result);
+          if (res.result) {
+            setUpgradeBusinessName(res.result.businessName);
+            setUpgradeTaxCode(res.result.taxCode);
+            setUpgradeBusinessAddress(res.result.businessAddress);
+          }
+        } catch (err) {
+          console.error("Failed to load owner profile status", err);
+        }
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Không thể tải thông tin hồ sơ.";
       const httpStatus = (err as Error & { status?: number }).status;
@@ -430,6 +504,132 @@ function UserProfilePage() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Upgrade to Owner section */}
+                {profile.roleName === "Customer" && (
+                  <Card className="border-none shadow-sm bg-white overflow-hidden">
+                    <CardHeader className="pb-3 border-b border-slate-50 bg-gradient-to-r from-teal-50/50 to-cyan-50/50">
+                      <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <Building className="h-5 w-5 text-teal-600" />
+                        Trở thành đối tác chủ sân
+                      </h3>
+                    </CardHeader>
+                    <CardContent className="pt-4 space-y-4">
+                      {ownerProfile?.approvedStatus === "PENDING" && (
+                        <div className="p-4 bg-amber-50/80 border border-amber-200/60 rounded-xl space-y-2">
+                          <div className="flex items-center gap-2 text-amber-800 font-bold text-sm">
+                            <Clock className="h-4.5 w-4.5 animate-pulse text-amber-600" />
+                            Hồ sơ đang chờ duyệt
+                          </div>
+                          <p className="text-xs text-amber-700 leading-relaxed">
+                            Yêu cầu nâng cấp tài khoản của bạn đang được Ban quản trị xem xét và đối chiếu thông tin doanh nghiệp.
+                          </p>
+                        </div>
+                      )}
+
+                      {ownerProfile?.approvedStatus === "REJECTED" && (
+                        <div className="p-4 bg-rose-50/80 border border-rose-200/60 rounded-xl space-y-2">
+                          <div className="flex items-center gap-2 text-rose-800 font-bold text-sm">
+                            <AlertTriangle className="h-4.5 w-4.5 text-rose-600" />
+                            Yêu cầu bị từ chối
+                          </div>
+                          <p className="text-xs text-rose-700 leading-relaxed">
+                            Lý do: <span className="font-semibold text-rose-800">{ownerProfile.rejectionReason}</span>. Bạn có thể sửa đổi thông tin bên dưới và gửi duyệt lại.
+                          </p>
+                        </div>
+                      )}
+
+                      {(!ownerProfile || ownerProfile.approvedStatus === "REJECTED") ? (
+                        <form onSubmit={handleUpgradeToOwner} className="space-y-4">
+                          {!ownerProfile && (
+                            <p className="text-xs text-slate-500 leading-relaxed">
+                              Đăng ký tài khoản đối tác để bắt đầu đăng tải và vận hành hệ thống sân bãi, theo dõi doanh thu chuyên nghiệp.
+                            </p>
+                          )}
+
+                          {upgradeError && (
+                            <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg">{upgradeError}</div>
+                          )}
+                          {upgradeSuccess && (
+                            <div className="p-3 bg-emerald-50 text-emerald-700 text-xs rounded-lg">{upgradeSuccess}</div>
+                          )}
+
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-700">Tên thương hiệu / Sân bãi</Label>
+                            <div className="relative">
+                              <Building className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                              <Input
+                                placeholder="Sân bóng mini ABC"
+                                className="pl-10"
+                                value={upgradeBusinessName}
+                                onChange={(e) => setUpgradeBusinessName(e.target.value)}
+                                disabled={upgradeLoading}
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-700">Mã số thuế</Label>
+                            <div className="relative">
+                              <FileText className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                              <Input
+                                placeholder="0312456789"
+                                className="pl-10"
+                                value={upgradeTaxCode}
+                                onChange={(e) => setUpgradeTaxCode(e.target.value)}
+                                disabled={upgradeLoading}
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-700">Địa chỉ kinh doanh</Label>
+                            <div className="relative">
+                              <MapPin className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                              <Input
+                                placeholder="Đường số 7, Quận 7, HCM"
+                                className="pl-10"
+                                value={upgradeBusinessAddress}
+                                onChange={(e) => setUpgradeBusinessAddress(e.target.value)}
+                                disabled={upgradeLoading}
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          <Button type="submit" disabled={upgradeLoading} className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold">
+                            {upgradeLoading ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Đang xử lý...
+                              </>
+                            ) : (
+                              ownerProfile?.approvedStatus === "REJECTED" ? "Gửi lại yêu cầu duyệt" : "Yêu cầu nâng cấp"
+                            )}
+                          </Button>
+                        </form>
+                      ) : (
+                        // If PENDING and not editable
+                        <div className="space-y-3 pt-2 text-sm text-slate-600">
+                          <div className="flex justify-between py-1.5 border-b border-slate-100">
+                            <span className="text-slate-400 text-xs">Tên thương hiệu:</span>
+                            <span className="font-semibold text-xs text-slate-800">{ownerProfile.businessName}</span>
+                          </div>
+                          <div className="flex justify-between py-1.5 border-b border-slate-100">
+                            <span className="text-slate-400 text-xs">Mã số thuế:</span>
+                            <span className="font-semibold text-xs text-slate-800">{ownerProfile.taxCode}</span>
+                          </div>
+                          <div className="flex justify-between py-1.5">
+                            <span className="text-slate-400 text-xs">Địa chỉ:</span>
+                            <span className="font-semibold text-xs text-slate-800 text-right max-w-[180px] truncate">{ownerProfile.businessAddress}</span>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </div>
           </TabsContent>
