@@ -17,10 +17,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import java.util.List;
 
 /**
  * Controller quản trị users — chỉ dành cho Admin.
@@ -30,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/admin")
 @RequiredArgsConstructor
+@org.springframework.validation.annotation.Validated
 @Tag(name = "Admin User Management", description = "Quản lý danh sách người dùng — chỉ dành cho Admin")
 @SecurityRequirement(name = "bearerAuth")
 @PreAuthorize("hasRole('Admin')")
@@ -62,9 +63,11 @@ public class AdminUserController {
     })
     public ResponseEntity<ApiResponse<PageResponse<AdminCustomerResponse>>> getCustomers(
             @Parameter(description = "Số trang (0-indexed)", example = "0")
+            @jakarta.validation.constraints.Min(value = 0, message = "Số trang (page) không được nhỏ hơn 0")
             @RequestParam(defaultValue = "0") int page,
 
             @Parameter(description = "Số bản ghi mỗi trang", example = "10")
+            @jakarta.validation.constraints.Min(value = 1, message = "Số bản ghi mỗi trang (pageSize) phải lớn hơn 0")
             @RequestParam(defaultValue = "10") int pageSize,
 
             @Parameter(description = "Tìm kiếm theo tên, email hoặc SĐT")
@@ -79,6 +82,14 @@ public class AdminUserController {
             @Parameter(description = "Hướng sắp xếp: asc hoặc desc", example = "desc")
             @RequestParam(defaultValue = "desc") String sortDir
     ) {
+        List<String> allowedSortBy = List.of(
+                "userId", "firstName", "lastName", "email",
+                "phoneNumber", "accountStatus", "createdAt"
+        );
+        if (!allowedSortBy.contains(sortBy)) {
+            sortBy = "createdAt"; // fallback an toàn
+        }
+
         Sort sort = sortDir.equalsIgnoreCase("asc")
                 ? Sort.by(sortBy).ascending()
                 : Sort.by(sortBy).descending();
@@ -93,19 +104,22 @@ public class AdminUserController {
                 .build());
     }
 
-    @PatchMapping("/customers/{id}/lock")
-    @Operation(summary = "Khoá/Mở khoá tài khoản khách hàng", description = "Thay đổi trạng thái enabled của Customer")
+    /**
+     * UC-ADM-03: Khóa/Mở khóa tài khoản khách hàng.
+     */
+    @org.springframework.web.bind.annotation.PatchMapping("/customers/{id}/lock")
+    @Operation(summary = "Khóa/Mở khóa khách hàng", description = "Thay đổi trạng thái ACTIVE/BLOCKED của khách hàng")
     public ResponseEntity<ApiResponse<Void>> lockUnlockCustomer(
-            @Parameter(description = "ID khách hàng") @org.springframework.web.bind.annotation.PathVariable Integer id,
-            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody com.sportvenue.dto.request.LockUserRequest request,
-            @org.springframework.security.core.annotation.AuthenticationPrincipal com.sportvenue.security.UserPrincipal userPrincipal
-    ) {
-        adminUserService.lockUnlockCustomer(id, request.getEnabled(), userPrincipal.getUser().getUserId());
-        String actionMsg = request.getEnabled() ? "Mở khóa" : "Khóa";
-        
+            @Parameter(description = "ID của khách hàng") @org.springframework.web.bind.annotation.PathVariable Integer id,
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody com.sportvenue.dto.request.LockCustomerRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.sportvenue.security.UserPrincipal currentUser) {
+
+        adminUserService.lockUnlockCustomer(id, request.getEnabled(), currentUser.getUser().getUserId());
+
+        String statusMessage = Boolean.TRUE.equals(request.getEnabled()) ? "mở khóa" : "khóa";
         return ResponseEntity.ok(ApiResponse.<Void>builder()
                 .code(200)
-                .message(actionMsg + " tài khoản thành công")
+                .message("Đã " + statusMessage + " tài khoản thành công")
                 .build());
     }
 }

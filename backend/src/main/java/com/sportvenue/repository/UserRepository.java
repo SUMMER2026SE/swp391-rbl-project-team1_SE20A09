@@ -4,6 +4,7 @@ import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.AccountStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -32,6 +33,8 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     /**
      * Tìm danh sách user theo role, hỗ trợ search (tên/email) và lọc theo accountStatus.
      * Dùng FETCH JOIN để tránh N+1 query trên bảng roles.
+     * Note: Hibernate will not log warning HHH90003004 because role is @ManyToOne, 
+     * but always verify integration tests logs to ensure it's not applied in memory.
      */
     @Query("""
         SELECT u FROM User u JOIN FETCH u.role r

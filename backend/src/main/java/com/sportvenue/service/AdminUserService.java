@@ -8,9 +8,9 @@ import org.springframework.data.domain.Pageable;
 /**
  * Service interface cho các chức năng quản trị user của Admin.
  * UC-ADM-02: View List Customer
- * UC-ADM-03: Lock/Unlock Customer (sẽ bổ sung sau)
- * UC-ADM-04: View List Owner (sẽ bổ sung sau)
- * UC-ADM-05: Lock/Unlock Owner (sẽ bổ sung sau)
+ * UC-ADM-03: Lock/Unlock Customer
+ * UC-ADM-04: View List Owner
+ * UC-ADM-05: Lock/Unlock Owner
  */
 public interface AdminUserService {
 
@@ -26,9 +26,9 @@ public interface AdminUserService {
 
     /**
      * UC-ADM-03: Khoá hoặc mở khoá tài khoản khách hàng.
-     * @param userId ID của khách hàng
+     * @param id ID của khách hàng
      * @param enabled true = ACTIVE, false = BLOCKED
      * @param currentAdminId ID của admin đang thao tác
      */
-    void lockUnlockCustomer(Integer userId, boolean enabled, Integer currentAdminId);
+    void lockUnlockCustomer(Integer id, Boolean enabled, Integer currentAdminId);
 }

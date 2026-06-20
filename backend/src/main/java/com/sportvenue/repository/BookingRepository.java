@@ -26,6 +26,10 @@ import com.sportvenue.entity.enums.BookingStatus;
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Integer> {
 
+    @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "slot"})
+    @Query("SELECT b FROM Booking b WHERE b.bookingId = :id")
+    Optional<Booking> findDetailById(@Param("id") Integer id);
+
     /** Tìm kiếm đơn đặt sân kèm theo Pessimistic Write Lock để tránh Race Condition (Double Refund) */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT b FROM Booking b WHERE b.bookingId = :id")
@@ -33,7 +37,10 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
 
     /** Lấy lịch sử đặt sân của khách hàng — dùng cho trang "Lịch sử đặt sân". */
     @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "slot"})
-    Page<Booking> findByUserUserIdOrderByBookingDateDesc(Integer userId, Pageable pageable);
+    Page<Booking> findByUserUserIdOrderByReservationDateDesc(Integer userId, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "slot"})
+    Page<Booking> findByUserUserIdAndBookingStatusInOrderByReservationDateDesc(Integer userId, List<BookingStatus> statuses, Pageable pageable);
 
     /** Lịch sắp tới — slot chưa kết thúc, đơn Pending hoặc Confirmed. */
     @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "slot"})

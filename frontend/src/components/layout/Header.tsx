@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from "next-auth/react";
 import type { Session } from "next-auth";
-import { Menu, LogOut, User as UserIcon, Settings, BarChart2 } from "lucide-react";
+import { Menu, LogOut, User as UserIcon, Settings, BarChart2, Clock } from "lucide-react";
 import { Button } from "../ui/button";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -71,7 +71,7 @@ function UserAccountMenu({ user }: { user: NonNullable<Session["user"]> }) {
 
         {user.roleName === "Admin" && (
           <DropdownMenuItem asChild>
-            <Link href="/admin" className="cursor-pointer">
+            <Link href="/admin/dashboard" className="cursor-pointer">
               <Settings className="mr-2 h-4 w-4" />
               <span>Trang Admin</span>
             </Link>
@@ -90,6 +90,13 @@ function UserAccountMenu({ user }: { user: NonNullable<Session["user"]> }) {
           <Link href="/profile" className="cursor-pointer">
             <UserIcon className="mr-2 h-4 w-4" />
             <span>Hồ sơ cá nhân</span>
+          </Link>
+        </DropdownMenuItem>
+
+        <DropdownMenuItem asChild>
+          <Link href="/profile?tab=bookings" className="cursor-pointer">
+            <Clock className="mr-2 h-4 w-4" />
+            <span>Lịch sử đặt sân</span>
           </Link>
         </DropdownMenuItem>
 
@@ -159,7 +166,7 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
               </div>
                {user.roleName === "Admin" && (
                 <SheetClose asChild>
-                  <Link href="/admin" className={getNavLinkClass("/admin")}>
+                  <Link href="/admin/dashboard" className={getNavLinkClass("/admin/dashboard")}>
                     <Settings className="mr-2 h-4 w-4" />
                     Trang Admin
                   </Link>
@@ -177,6 +184,12 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
                 <Link href="/profile" className={getNavLinkClass("/profile")}>
                   <UserIcon className="mr-2 h-4 w-4" />
                   Hồ sơ cá nhân
+                </Link>
+              </SheetClose>
+              <SheetClose asChild>
+                <Link href="/profile?tab=bookings" className={getNavLinkClass("/profile?tab=bookings")}>
+                  <Clock className="mr-2 h-4 w-4" />
+                  Lịch sử đặt sân
                 </Link>
               </SheetClose>
               <button

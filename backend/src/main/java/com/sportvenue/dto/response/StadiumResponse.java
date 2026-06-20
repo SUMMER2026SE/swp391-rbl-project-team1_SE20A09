@@ -33,7 +33,6 @@ public class StadiumResponse {
     private LocalTime openTime; 
     private LocalTime closeTime; 
     private BigDecimal pricePerHour;
-    private Integer capacity;
     private String stadiumStatus; 
     private String approvedStatus;
     

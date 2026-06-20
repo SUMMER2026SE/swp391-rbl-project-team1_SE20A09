@@ -62,30 +62,18 @@ export default function VenueDetailPage({ params }: { params: { id: string } }) 
   }
 
   // Map backend response data structure to VenueDetail props structure
-  const fallbackImages = [
-    'https://images.unsplash.com/photo-1575361204480-aadea25e6e68?w=800&auto=format&fit=crop', // Soccer Ball (valid)
-    'https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&auto=format&fit=crop', // Basketball (valid)
-    'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800&auto=format&fit=crop', // Tennis (valid)
-    'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?w=800&auto=format&fit=crop', // Badminton (valid)
-    'https://images.unsplash.com/photo-1592709823855-d152f523155a?w=800&auto=format&fit=crop'  // Volleyball (valid)
-  ]
-
-  const rawImages = venue.imageUrls || []
-  const images = rawImages.length >= 5 
-    ? rawImages 
-    : [...rawImages, ...fallbackImages.slice(0, Math.max(0, 5 - rawImages.length))]
+  const images = venue.imageUrls || []
 
   const mappedVenue = {
     id: venue.stadiumId,
     name: venue.stadiumName,
     sport: venue.sportName,
     address: venue.address,
-    rating: venue.averageRating || 4.5,
+    rating: venue.averageRating || 0,
     reviewCount: venue.totalReviews || 0,
     pricePerHour: venue.pricePerHour,
     openTime: formatTimeNum(venue.openTime),
     closeTime: formatTimeNum(venue.closeTime),
-    capacity: venue.capacity,
     status: venue.stadiumStatus,
     description: venue.description,
     images: images,
@@ -106,15 +94,15 @@ export default function VenueDetailPage({ params }: { params: { id: string } }) 
       price: a.pricePerUnit,
     })) || [],
     owner: {
-      name: venue.owner?.ownerName || 'Chủ sân',
+      name: venue.owner?.ownerName || 'N/A',
       initials: venue.owner?.ownerName
         ? venue.owner.ownerName.split(' ').slice(-2).map((w: string) => w[0]).join('')
-        : 'HH',
-      phone: venue.owner?.phoneNumber || '0900 000 002',
+        : '??',
+      phone: venue.owner?.phoneNumber || 'N/A',
     },
     coordinates: {
-      lat: venue.latitude || 10.8537,
-      lng: venue.longitude || 106.7540,
+      lat: venue.latitude || 0,
+      lng: venue.longitude || 0,
     },
     recentReviews: venue.recentReviews?.map((r) => ({
       reviewId: r.reviewId,

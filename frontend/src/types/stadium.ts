@@ -38,9 +38,9 @@ export interface StadiumResponse {
   closeTime: string;
   stadiumStatus: string;
   averageRating: number;
+  totalReviews?: number;
   imageUrls: string[];
   approvedStatus: string;
-  capacity?: number;
 }
 
 export interface SportType {

@@ -8,6 +8,9 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
+import com.sportvenue.entity.enums.AccountStatus;
+import com.sportvenue.entity.enums.UserRank;
+
 /**
  * DTO trả về thông tin khách hàng cho Admin — UC-ADM-02.
  */
@@ -24,8 +27,8 @@ public class AdminCustomerResponse {
     private String email;
     private String phoneNumber;
     private String avatarUrl;
-    private String accountStatus;
-    private String userRank;
+    private AccountStatus accountStatus;
+    private UserRank userRank;
     private Integer userPoint;
     private Boolean isVerified;
     private LocalDateTime createdAt;

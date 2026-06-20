@@ -214,14 +214,8 @@ function SearchPageContent() {
       <Header />
 
       {/* 1. Hero Banner */}
-      <div className="relative h-[300px] md:h-[400px] w-full bg-gray-900 overflow-hidden">
-        <Image
-          src="https://images.unsplash.com/photo-1579952363873-27f3bade9f55?q=80&w=2000&auto=format&fit=crop"
-          alt="Sport Banner"
-          fill
-          priority
-          className="object-cover opacity-60"
-        />
+      <div className="relative h-[300px] md:h-[400px] w-full bg-emerald-900 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-900 via-emerald-950 to-black" />
         <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent"></div>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white tracking-tight mb-4 drop-shadow-lg">

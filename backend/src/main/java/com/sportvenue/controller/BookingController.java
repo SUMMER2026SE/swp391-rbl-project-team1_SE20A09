@@ -2,6 +2,7 @@ package com.sportvenue.controller;
 
 import com.sportvenue.dto.request.CreateBookingRequest;
 import com.sportvenue.dto.response.MessageResponse;
+import com.sportvenue.repository.BookingRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -21,6 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 public class BookingController {
 
+    private final BookingRepository bookingRepository;
+
     @PostMapping
     @Operation(summary = "Create booking", description = "Create a new stadium booking with address and location")
     public ResponseEntity<MessageResponse> createBooking(@Valid @RequestBody CreateBookingRequest request) {
@@ -29,4 +32,6 @@ public class BookingController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new MessageResponse("Đặt sân thành công"));
     }
+
+
 }

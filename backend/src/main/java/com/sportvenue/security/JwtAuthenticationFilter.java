@@ -38,15 +38,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 UserDetails userDetails = customUserDetailsService.loadUserByUsername(email);
 
-                if (userDetails.isEnabled() && userDetails.isAccountNonLocked()) {
-                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                            userDetails, null, userDetails.getAuthorities());
-                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                } else {
-                    log.warn("Access denied for disabled/locked user: {}", email);
+                if (!userDetails.isAccountNonLocked() || !userDetails.isEnabled()) {
+                    log.warn("Blocked user {} attempted to authenticate", email);
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write("{\"message\": \"Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin.\"}");
+                    return;
                 }
+
+                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                        userDetails, null, userDetails.getAuthorities());
+                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                SecurityContextHolder.getContext().setAuthentication(authentication);
             }
         } catch (Exception ex) {
             log.error("Could not set user authentication in security context: {}", ex.getMessage());

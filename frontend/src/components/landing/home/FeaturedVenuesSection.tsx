@@ -74,7 +74,7 @@ export function FeaturedVenuesSection() {
               >
                 <VenueCard
                   id={venue.stadiumId}
-                  image={venue.firstImageUrl ?? "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800"}
+                  image={venue.firstImageUrl ?? ""}
                   name={venue.stadiumName}
                   sportType={venue.sportName}
                   price={venue.pricePerHour}

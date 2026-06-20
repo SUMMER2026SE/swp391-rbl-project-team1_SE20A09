@@ -7,7 +7,6 @@ import {
   IconBallFootball,
   IconClock,
   IconClockOff,
-  IconUsers,
   IconCategory,
   IconCircleCheck,
   IconCircleX,
@@ -56,7 +55,6 @@ export interface VenueDetailProps {
     pricePerHour: number
     openTime: string        // "06:00"
     closeTime: string       // "22:00"
-    capacity: number
     status: string
     description: string
     images: string[]        // array of image URLs, length >= 5
@@ -563,13 +561,6 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                     </div>
                   </div>
                   <div className="bg-gray-50 rounded-[8px] p-[11px_12px] flex items-center gap-3 border-[0.5px] border-gray-100">
-                    <IconUsers className="w-5 h-5 text-[#1a8a4a] shrink-0" />
-                    <div className="leading-tight">
-                      <span className="block text-[11px] text-gray-400 font-normal">Sức chứa</span>
-                      <span className="text-[13px] font-medium text-gray-700">{venue.capacity} người</span>
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 rounded-[8px] p-[11px_12px] flex items-center gap-3 border-[0.5px] border-gray-100">
                     <IconCategory className="w-5 h-5 text-[#1a8a4a] shrink-0" />
                     <div className="leading-tight">
                       <span className="block text-[11px] text-gray-400 font-normal">Loại sân</span>
@@ -588,7 +579,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                 {/* Description Box */}
                 <div className="bg-gray-50 rounded-[8px] p-[11px_13px] border-[0.5px] border-gray-100">
                   <p className="text-[13px] text-gray-500 leading-[1.6] font-normal">
-                    {venue.description || 'Sân bóng đá mini 5vs5 chất lượng cao, cỏ nhân tạo thế hệ 3. Mặt cỏ êm, thoáng rộng, đèn chiếu sáng đầy đủ.'}
+                    {venue.description || 'Chưa có mô tả cho sân này.'}
                   </p>
                 </div>
 
@@ -609,15 +600,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                         </div>
                       ))
                     ) : (
-                      ['Bãi đỗ xe', 'Phòng thay đồ', 'Nước miễn phí', 'Căng tin', 'Wifi'].map((amenity, i) => (
-                        <div 
-                          key={i} 
-                          className="inline-flex items-center bg-gray-50 border-[0.5px] border-gray-200 rounded-[20px] px-3 py-1.5 text-[12px] font-normal text-gray-600"
-                        >
-                          {getAmenityIcon(amenity)}
-                          <span>{amenity}</span>
-                        </div>
-                      ))
+                      <div className="text-[12px] text-gray-400 py-1 italic">Chưa có thông tin tiện ích.</div>
                     )}
                   </div>
                 </div>

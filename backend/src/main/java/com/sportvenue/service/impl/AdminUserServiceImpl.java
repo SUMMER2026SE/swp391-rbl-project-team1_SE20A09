@@ -57,8 +57,8 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .email(user.getEmail())
                 .phoneNumber(user.getPhoneNumber())
                 .avatarUrl(user.getAvatarUrl())
-                .accountStatus(user.getAccountStatus() != null ? user.getAccountStatus().name() : null)
-                .userRank(user.getUserRank() != null ? user.getUserRank().name() : null)
+                .accountStatus(user.getAccountStatus())
+                .userRank(user.getUserRank())
                 .userPoint(user.getUserPoint())
                 .isVerified(user.getIsVerified())
                 .createdAt(user.getCreatedAt())
@@ -67,22 +67,24 @@ public class AdminUserServiceImpl implements AdminUserService {
 
     @Override
     @Transactional
-    public void lockUnlockCustomer(Integer userId, boolean enabled, Integer currentAdminId) {
-        if (userId.equals(currentAdminId)) {
-            throw new IllegalArgumentException("Admin không thể tự khóa tài khoản của chính mình");
+    public void lockUnlockCustomer(Integer id, Boolean enabled, Integer currentAdminId) {
+        log.info("Admin {} requesting to lock/unlock customer id={}, enabled={}", currentAdminId, id, enabled);
+
+        if (id.equals(currentAdminId)) {
+            throw new com.sportvenue.exception.BadRequestException("Bạn không thể tự khóa tài khoản của chính mình.");
         }
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new com.sportvenue.exception.ResourceNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+        User customer = userRepository.findById(id)
+                .orElseThrow(() -> new com.sportvenue.exception.AppException(com.sportvenue.exception.ErrorCode.USER_NOT_FOUND));
 
-        if (!ROLE_CUSTOMER.equalsIgnoreCase(user.getRole().getRoleName())) {
-            throw new com.sportvenue.exception.ResourceNotFoundException("Người dùng không phải là Customer");
+        if (!ROLE_CUSTOMER.equalsIgnoreCase(customer.getRole().getRoleName())) {
+            throw new com.sportvenue.exception.ResourceNotFoundException("Người dùng không phải là khách hàng (Customer).");
         }
 
-        AccountStatus newStatus = enabled ? AccountStatus.ACTIVE : AccountStatus.BLOCKED;
+        AccountStatus newStatus = Boolean.TRUE.equals(enabled) ? AccountStatus.ACTIVE : AccountStatus.BLOCKED;
+        customer.setAccountStatus(newStatus);
+        userRepository.save(customer);
         
-        log.info("Admin {} changing status of customer {} to {}", currentAdminId, userId, newStatus);
-        user.setAccountStatus(newStatus);
-        userRepository.save(user);
+        log.info("Successfully updated account status to {} for customer id={}", newStatus, id);
     }
 }
