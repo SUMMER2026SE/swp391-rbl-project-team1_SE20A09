@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from "react";
-import { Header } from "@/components/layout/Header";
+
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -241,10 +241,8 @@ function OwnerApprovalPage() {
   );
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-
-      <div className="container mx-auto px-4 py-8">
+    <div className="p-8">
+      <div className="container mx-auto">
         <h1 className="text-3xl mb-8">Duyệt chủ sân</h1>
 
         <Tabs defaultValue="pending">

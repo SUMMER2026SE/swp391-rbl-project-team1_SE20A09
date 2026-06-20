@@ -146,7 +146,7 @@ export default function AdminCustomersPage() {
   };
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50/50 min-h-screen">
+    <div className="p-8 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Quản lý Khách hàng</h1>
         

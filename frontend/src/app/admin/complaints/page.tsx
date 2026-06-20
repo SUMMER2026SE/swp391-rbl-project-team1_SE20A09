@@ -1,7 +1,7 @@
-﻿'use client'
+'use client'
 
 import { useState } from "react";
-import { Header } from "@/components/layout/Header";
+
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -104,10 +104,8 @@ function ComplaintsManagementPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-
-      <div className="container mx-auto px-4 py-8">
+    <div className="p-8">
+      <div className="container mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl">Quản lý khiếu nại</h1>
 
