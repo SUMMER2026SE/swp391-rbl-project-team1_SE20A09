@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { CreditCard, Building2, Smartphone, Shield, Clock } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
+import { createBooking } from "@/lib/bookings-api";
 
 interface BookingSummary {
   venueId: number;
@@ -25,6 +26,7 @@ interface BookingSummary {
   accessories: { name: string; quantity: number; price: number }[];
   accessoryTotal: number;
   total: number;
+  slotId: number;
 }
 
 function PaymentContent() {
@@ -32,6 +34,7 @@ function PaymentContent() {
   const [paymentMethod, setPaymentMethod] = useState("bank");
   const [countdown, setCountdown] = useState(300);
   const [summary, setSummary] = useState<BookingSummary | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const data = sessionStorage.getItem("booking_summary");
@@ -62,12 +65,41 @@ function PaymentContent() {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handlePaymentSubmit = () => {
-    toast.success("Thanh toán thành công! Sân của bạn đã được đặt.");
-    // Clear session storage
-    sessionStorage.removeItem("booking_summary");
-    // Redirect to profile bookings tab
-    router.push("/profile?tab=bookings");
+  const handlePaymentSubmit = async () => {
+    if (!activeSummary) return;
+
+    if (!activeSummary.slotId) {
+      toast.error("Không tìm thấy thông tin khung giờ đã chọn. Vui lòng thử lại.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await createBooking({
+        stadiumId: activeSummary.venueId,
+        slotId: activeSummary.slotId,
+        reservationDate: activeSummary.date,
+        note: `Đặt qua web - PTTT: ${
+          paymentMethod === "bank"
+            ? "Chuyển khoản"
+            : paymentMethod === "vnpay"
+            ? "VNPay"
+            : "MoMo"
+        }`,
+      });
+
+      toast.success("Thanh toán thành công! Sân của bạn đã được đặt.");
+      // Clear session storage
+      sessionStorage.removeItem("booking_summary");
+      // Redirect to profile bookings tab
+      router.push("/profile?tab=bookings");
+    } catch (err: any) {
+      console.error("Booking failed:", err);
+      const serverMsg = err?.message ?? "Đặt sân thất bại. Vui lòng thử lại.";
+      toast.error(serverMsg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Default fallback if session data is missing
@@ -236,8 +268,9 @@ function PaymentContent() {
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-6 rounded-lg text-lg shadow-sm transition-all" 
             size="lg"
             onClick={handlePaymentSubmit}
+            disabled={isSubmitting}
           >
-            Thanh toán ngay
+            {isSubmitting ? "Đang xử lý thanh toán..." : "Thanh toán ngay"}
           </Button>
 
           {/* Security Notice */}

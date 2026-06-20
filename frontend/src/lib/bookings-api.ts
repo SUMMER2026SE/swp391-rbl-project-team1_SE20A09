@@ -152,59 +152,65 @@ export async function fetchBookingDetail(id: string | number): Promise<BookingDe
   };
 }
 
-// ── UC-CUS-01: Recurring booking ─────────────────────────────────────────────
+// ── UC-CUS-01: Single booking ───────────────────────────────────────────────
 
-/** Thứ trong tuần theo chuẩn ISO (Monday = 1). Gửi tên tiếng Anh để khớp DayOfWeek enum của Java. */
-export type RecurringDayOfWeek =
-  | "MONDAY"
-  | "TUESDAY"
-  | "WEDNESDAY"
-  | "THURSDAY"
-  | "FRIDAY"
-  | "SATURDAY"
-  | "SUNDAY";
-
-export type CreateCustomerRecurringBookingPayload = {
+/** Một khung giờ của sân kèm cờ availability cho một ngày cụ thể. */
+export type SlotAvailability = {
+  slotId: number;
   stadiumId: number;
+  /** HH:mm hoặc HH:mm:ss */
+  startTime: string;
+  /** HH:mm hoặc HH:mm:ss */
+  endTime: string;
+  pricePerSlot: number;
+  slotStatus: "AVAILABLE" | "MAINTENANCE" | "BOOKED" | string;
+  /** true = còn trống và chưa qua giờ. */
+  available: boolean;
+};
+
+/** Payload tạo đơn đặt sân đơn lẻ (UC-CUS-01). */
+export type CreateBookingPayload = {
+  stadiumId: number;
+  slotId: number;
   /** ISO yyyy-MM-dd */
-  startDate: string;
-  /** ISO yyyy-MM-dd */
-  endDate: string;
-  daysOfWeek: RecurringDayOfWeek[];
-  slotIds: number[];
+  reservationDate: string;
   note?: string;
 };
 
-export type RecurringBookingCreatedItem = {
-  id: number;
-  playDate: string;
-  slotStart: string;
-  slotEnd: string;
+/** Response trả về sau khi tạo booking thành công (BookingDetailResponse). */
+export type CreateBookingResponse = {
+  bookingId: number;
+  displayId: string;
+  reservationDate: string;
+  slot: { slotId: number; startTime: string; endTime: string };
+  stadium: { stadiumId: number; stadiumName: string; address: string };
   totalPrice: number;
-};
-
-export type RecurringBookingSkippedItem = {
-  playDate: string;
-  slotId: number;
-  slotStart: string;
-  slotEnd: string;
-  reason: string;
-};
-
-export type RecurringBookingResult = {
-  recurringGroupId: string;
-  totalCreated: number;
-  totalSkipped: number;
-  createdBookings: RecurringBookingCreatedItem[];
-  skippedDates: RecurringBookingSkippedItem[];
+  status: string;
+  paymentStatus: string;
+  note: string | null;
 };
 
 /**
- * UC-CUS-01: Tạo chuỗi đặt sân định kỳ.
- * Backend xử lý all-or-nothing: nếu có slot bị trùng sẽ trả 400 và KHÔNG tạo đơn nào.
+ * Lấy slot của sân kèm cờ availability cho ngày cụ thể — FE dùng để render UI.
+ * `get()` đã tự động thêm prefix `/api/v1`, nên path chỉ là `/stadiums/{id}/slots`.
  */
-export async function createCustomerRecurringBooking(
-  payload: CreateCustomerRecurringBookingPayload
-): Promise<RecurringBookingResult> {
-  return post<RecurringBookingResult>("/api/v1/bookings/recurring", payload);
+export async function getSlotsByDate(
+  stadiumId: number,
+  date: string
+): Promise<SlotAvailability[]> {
+  const data = await get<SlotAvailability[]>(
+    `/stadiums/${stadiumId}/slots?date=${encodeURIComponent(date)}`
+  );
+  return data ?? [];
 }
+
+/**
+ * Tạo đơn đặt sân đơn lẻ — POST /api/v1/bookings.
+ * Trả 409 nếu slot đã bị đặt active trên cùng ngày; 400 nếu đã qua giờ.
+ */
+export async function createBooking(
+  payload: CreateBookingPayload
+): Promise<CreateBookingResponse> {
+  return post<CreateBookingResponse>("/bookings", payload);
+}
+
