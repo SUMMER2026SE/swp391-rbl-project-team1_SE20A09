@@ -3,6 +3,8 @@ package com.sportvenue.controller;
 import com.sportvenue.dto.FileUploadResponse;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.security.UserPrincipal;
+import com.sportvenue.security.JwtTokenProvider;
+import com.sportvenue.security.CustomUserDetailsService;
 import com.sportvenue.service.FileStorageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -35,7 +37,9 @@ import java.util.Optional;
 public class FileController {
 
     private final FileStorageService fileStorageService;
-    private final com.sportvenue.repository.OwnerRepository ownerRepository;
+    private final OwnerRepository ownerRepository;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final CustomUserDetailsService customUserDetailsService;
 
     @PostMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Tải ảnh đại diện", description = "Upload ảnh từ máy tính hoặc Google Drive (tải về rồi gửi lên)")
@@ -91,9 +95,10 @@ public class FileController {
     }
 
     @GetMapping("/documents/{fileName}")
-    @Operation(summary = "Xem tài liệu đăng ký", description = "Kiểm tra phân quyền động: chỉ Admin hoặc chính chủ sở hữu tài liệu mới được xem sau khi hồ sơ đã lưu.")
+    @Operation(summary = "Xem tài liệu đăng ký", description = "Kiểm tra phân quyền động: chỉ Admin hoặc chính chủ sở hữu tài liệu mới được xem sau khi hồ sơ đã duyệt.")
     public ResponseEntity<Resource> getDocument(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestParam(value = "token", required = false) String token,
             @PathVariable("fileName") String fileName) {
         
         Optional<Owner> ownerOpt = ownerRepository
@@ -101,16 +106,33 @@ public class FileController {
 
         if (ownerOpt.isPresent()) {
             Owner owner = ownerOpt.get();
-            if (userPrincipal == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-            }
+            
+            // Chỉ yêu cầu phân quyền gắt gao khi hồ sơ chủ sân đã ở trạng thái APPROVED
+            if (owner.getApprovedStatus() == com.sportvenue.entity.enums.ApprovedStatus.APPROVED) {
+                
+                // Nếu userPrincipal null, thử giải mã token từ query param
+                if (userPrincipal == null && org.springframework.util.StringUtils.hasText(token)) {
+                    try {
+                        if (jwtTokenProvider.validateToken(token)) {
+                            String email = jwtTokenProvider.getEmailFromJWT(token);
+                            userPrincipal = (UserPrincipal) customUserDetailsService.loadUserByUsername(email);
+                        }
+                    } catch (Exception e) {
+                        // ignore
+                    }
+                }
 
-            boolean isAdmin = userPrincipal.getAuthorities().stream()
-                    .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()) || "ADMIN".equals(a.getAuthority()));
-            boolean isOwnerSelf = owner.getUser().getUserId().equals(userPrincipal.getUser().getUserId());
+                if (userPrincipal == null) {
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+                }
 
-            if (!isAdmin && !isOwnerSelf) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+                boolean isAdmin = userPrincipal.getAuthorities().stream()
+                        .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()) || "ADMIN".equals(a.getAuthority()));
+                boolean isOwnerSelf = owner.getUser().getUserId().equals(userPrincipal.getUser().getUserId());
+
+                if (!isAdmin && !isOwnerSelf) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+                }
             }
         }
 
