@@ -42,6 +42,9 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new AppException(ErrorCode.DUPLICATE_RESOURCE); // Ném lỗi nếu trùng email
         }
+        if (userRepository.existsByPhoneNumber(request.getPhone())) {
+            throw new AppException(ErrorCode.DUPLICATE_RESOURCE); // Ném lỗi nếu trùng số điện thoại
+        }
         if (!request.getPassword().equals(request.getConfirmPassword())) {
             throw new IllegalArgumentException("Mật khẩu xác nhận không khớp");
         }
@@ -118,6 +121,42 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         }
 
         Owner savedOwner = ownerRepository.save(owner);
+
+        return OwnerDetailResponse.builder()
+                .ownerId(savedOwner.getOwnerId())
+                .userId(currentUser.getUserId())
+                .fullName(currentUser.getFullName())
+                .email(currentUser.getEmail())
+                .phoneNumber(currentUser.getPhoneNumber())
+                .businessName(savedOwner.getBusinessName())
+                .taxCode(savedOwner.getTaxCode())
+                .businessAddress(savedOwner.getBusinessAddress())
+                .approvedStatus(savedOwner.getApprovedStatus())
+                .createdAt(savedOwner.getCreatedAt())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public OwnerDetailResponse resubmitOwnerProfile(User currentUser, UpgradeToOwnerRequest request) {
+        log.info("Processing resubmit profile for rejected Owner: {}", currentUser.getEmail());
+
+        Owner existingOwner = ownerRepository.findByUserUserId(currentUser.getUserId())
+                .orElseThrow(() -> new AppException(ErrorCode.OWNER_PROFILE_NOT_FOUND));
+
+        if (existingOwner.getApprovedStatus() != ApprovedStatus.REJECTED) {
+            // Chỉ cho phép nộp lại nếu hồ sơ đang ở trạng thái REJECTED
+            throw new AppException(ErrorCode.DUPLICATE_RESOURCE);
+        }
+
+        existingOwner.setBusinessName(request.getBusinessName());
+        existingOwner.setTaxCode(request.getTaxCode());
+        existingOwner.setBusinessAddress(request.getBusinessAddress());
+        existingOwner.setApprovedStatus(ApprovedStatus.PENDING);
+        existingOwner.setRejectionReason(null); // Xóa lý do từ chối cũ
+        Owner savedOwner = ownerRepository.save(existingOwner);
+
+        log.info("Owner {} resubmitted profile successfully, status reset to PENDING", currentUser.getEmail());
 
         return OwnerDetailResponse.builder()
                 .ownerId(savedOwner.getOwnerId())

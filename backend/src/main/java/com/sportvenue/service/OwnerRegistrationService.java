@@ -11,5 +11,7 @@ public interface OwnerRegistrationService {
 
     OwnerDetailResponse upgradeCurrentCustomer(User currentUser, UpgradeToOwnerRequest request);
 
+    OwnerDetailResponse resubmitOwnerProfile(User currentUser, UpgradeToOwnerRequest request);
+
     OwnerDetailResponse getOwnerProfileOfUser(User currentUser);
 }
