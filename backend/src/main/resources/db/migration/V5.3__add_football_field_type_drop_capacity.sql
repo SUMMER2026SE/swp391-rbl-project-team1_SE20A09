@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════
--- V6__add_football_field_type_drop_capacity.sql
+-- V5.3__add_football_field_type_drop_capacity.sql
 -- Author  : Team SportVenue
 -- Scope   : 
 --   (1) Thêm cột football_field_type vào stadiums
