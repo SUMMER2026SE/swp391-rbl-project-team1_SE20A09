@@ -68,10 +68,13 @@ public class BookingServiceImpl implements BookingService {
 
     /** Trạng thái booking chiếm chỗ slot — dùng cho conflict detection. */
     private static final List<BookingStatus> ACTIVE_STATUSES =
-            List.of(BookingStatus.PENDING, BookingStatus.CONFIRMED);
+            List.of(BookingStatus.PENDING_PAYMENT, BookingStatus.PENDING, BookingStatus.CONFIRMED);
 
     /** Phí dịch vụ cố định (VNĐ) — server-side only, KHÔNG nhận từ client. */
     private static final BigDecimal SERVICE_FEE = new BigDecimal("20000");
+
+    /** UC-CUS-01: Booking mới tạo được giữ 5 phút chờ thanh toán. */
+    private static final long PAYMENT_HOLD_MINUTES = 5L;
 
     private final UserRepository userRepository;
     private final StadiumRepository stadiumRepository;
@@ -97,23 +100,7 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy khung giờ với ID " + request.getSlotId()));
 
-        // Slot phải thuộc đúng sân
-        if (!slot.getStadium().getStadiumId().equals(stadium.getStadiumId())) {
-            throw new BadRequestException(
-                    "Khung giờ #" + slot.getSlotId() + " không thuộc sân #" + stadium.getStadiumId());
-        }
-
-        // Không đặt slot MAINTENANCE
-        if (slot.getSlotStatus() == SlotStatus.MAINTENANCE) {
-            throw new BadRequestException(
-                    "Khung giờ #" + slot.getSlotId() + " đang bảo trì, không thể đặt");
-        }
-
-        LocalDateTime slotStart = LocalDateTime.of(request.getReservationDate(), slot.getStartTime());
-        if (!slotStart.isAfter(LocalDateTime.now())) {
-            throw new BadRequestException(
-                    "Khung giờ đã qua — không thể đặt sân cho thời điểm trong quá khứ");
-        }
+        validateSlotForBooking(slot, stadium, request.getReservationDate());
 
         // Conflict check: 1 slot chỉ có 1 booking active tại một ngày
         if (bookingRepository.existsByStadium_StadiumIdAndSlot_SlotIdAndReservationDateAndBookingStatusIn(
@@ -126,66 +113,140 @@ public class BookingServiceImpl implements BookingService {
                             + ". Vui lòng chọn khung giờ hoặc ngày khác.");
         }
 
-        // UC-CUS-01: Tính tổng tiền server-side từ (slot price + accessories + service fee).
-        // KHÔNG BAO GIỜ tin unitPrice từ client — luôn lookup giá từ DB để snapshot.
-        BigDecimal accessoriesTotal = BigDecimal.ZERO;
-        List<BookingAccessory> persistedAccessories = new ArrayList<>();
-
-        if (request.getAccessories() != null && !request.getAccessories().isEmpty()) {
-            for (AccessoryItem item : request.getAccessories()) {
-                Accessory acc = accessoryRepository.findById(item.getAccessoryId())
-                        .orElseThrow(() -> new ResourceNotFoundException(
-                                "Không tìm thấy phụ kiện với ID " + item.getAccessoryId()));
-
-                if (!Boolean.TRUE.equals(acc.getIsAvailable())) {
-                    throw new BadRequestException(
-                            "Phụ kiện #" + acc.getAccessoryId() + " hiện không khả dụng");
-                }
-
-                BigDecimal lineTotal = acc.getPricePerUnit()
-                        .multiply(BigDecimal.valueOf(item.getQuantity()));
-                accessoriesTotal = accessoriesTotal.add(lineTotal);
-
-                persistedAccessories.add(BookingAccessory.builder()
-                        .accessoryId(acc.getAccessoryId())
-                        .quantity(item.getQuantity())
-                        .unitPrice(acc.getPricePerUnit())
-                        .build());
-            }
-        }
-
+        AccessoryComputation accessoryComp = computeAccessories(request.getAccessories());
         BigDecimal totalPrice = slot.getPricePerSlot()
-                .add(accessoriesTotal)
+                .add(accessoryComp.total)
                 .add(SERVICE_FEE);
 
-        Booking booking = Booking.builder()
-                .user(customer)
-                .stadium(stadium)
-                .slot(slot)
-                .totalPrice(totalPrice)
-                .bookingStatus(BookingStatus.PENDING)
-                .paymentStatus(PaymentStatus.UNPAID)
-                .reservationDate(request.getReservationDate())
-                .note(request.getNote())
-                .build();
-
-        Booking saved = bookingRepository.save(booking);
-
-        // Persist accessories (gắn bookingId sau khi save để có ID).
-        if (!persistedAccessories.isEmpty()) {
-            for (BookingAccessory ba : persistedAccessories) {
-                ba.setBooking(saved);
-            }
-            bookingAccessoryRepository.saveAll(persistedAccessories);
-            log.info("🎾 UC-CUS-01: Booking #{} kèm {} phụ kiện, accessoriesTotal={}, totalPrice={}",
-                    saved.getBookingId(), persistedAccessories.size(), accessoriesTotal, totalPrice);
-        }
+        Booking saved = persistBooking(customer, stadium, slot, request, totalPrice,
+                accessoryComp.entities);
 
         log.info("✅ UC-CUS-01: Customer {} đặt sân {} slot {} ngày {} — bookingId={}, totalPrice={}",
                 customer.getEmail(), stadium.getStadiumId(), slot.getSlotId(),
                 request.getReservationDate(), saved.getBookingId(), totalPrice);
 
         return toBookingDetailResponse(saved, stadium, slot);
+    }
+
+    /**
+     * Validate slot thuộc đúng sân, không MAINTENANCE, và chưa qua giờ.
+     * Tách riêng để giữ createBooking dưới 80 dòng (checkstyle MethodLength).
+     */
+    private void validateSlotForBooking(TimeSlot slot, Stadium stadium, java.time.LocalDate reservationDate) {
+        if (!slot.getStadium().getStadiumId().equals(stadium.getStadiumId())) {
+            throw new BadRequestException(
+                    "Khung giờ #" + slot.getSlotId() + " không thuộc sân #" + stadium.getStadiumId());
+        }
+        if (slot.getSlotStatus() == SlotStatus.MAINTENANCE) {
+            throw new BadRequestException(
+                    "Khung giờ #" + slot.getSlotId() + " đang bảo trì, không thể đặt");
+        }
+        LocalDateTime slotStart = LocalDateTime.of(reservationDate, slot.getStartTime());
+        if (!slotStart.isAfter(LocalDateTime.now())) {
+            throw new BadRequestException(
+                    "Khung giờ đã qua — không thể đặt sân cho thời điểm trong quá khứ");
+        }
+    }
+
+    /**
+     * Tính tổng phụ kiện + build danh sách entity sẽ persist sau khi booking có ID.
+     * Server TỰ lookup giá từ DB — KHÔNG tin unitPrice client.
+     */
+    private AccessoryComputation computeAccessories(List<AccessoryItem> items) {
+        AccessoryComputation result = new AccessoryComputation();
+        if (items == null || items.isEmpty()) {
+            return result;
+        }
+        for (AccessoryItem item : items) {
+            Accessory acc = accessoryRepository.findById(item.getAccessoryId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Không tìm thấy phụ kiện với ID " + item.getAccessoryId()));
+
+            if (!Boolean.TRUE.equals(acc.getIsAvailable())) {
+                throw new BadRequestException(
+                        "Phụ kiện #" + acc.getAccessoryId() + " hiện không khả dụng");
+            }
+
+            BigDecimal lineTotal = acc.getPricePerUnit()
+                    .multiply(BigDecimal.valueOf(item.getQuantity()));
+            result.total = result.total.add(lineTotal);
+            result.entities.add(BookingAccessory.builder()
+                    .accessoryId(acc.getAccessoryId())
+                    .quantity(item.getQuantity())
+                    .unitPrice(acc.getPricePerUnit())
+                    .build());
+        }
+        return result;
+    }
+
+    /** Persist booking + accessories trong cùng transaction. */
+    private Booking persistBooking(User customer, Stadium stadium, TimeSlot slot,
+                                   CreateBookingRequest request, BigDecimal totalPrice,
+                                   List<BookingAccessory> accessories) {
+        LocalDateTime now = LocalDateTime.now();
+        Booking booking = Booking.builder()
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(totalPrice)
+                .bookingStatus(BookingStatus.PENDING_PAYMENT)
+                .paymentStatus(PaymentStatus.UNPAID)
+                .reservationDate(request.getReservationDate())
+                .note(request.getNote())
+                .expiredAt(now.plusMinutes(PAYMENT_HOLD_MINUTES))
+                .build();
+
+        Booking saved = bookingRepository.save(booking);
+
+        if (!accessories.isEmpty()) {
+            for (BookingAccessory ba : accessories) {
+                ba.setBooking(saved);
+            }
+            bookingAccessoryRepository.saveAll(accessories);
+            log.info("🎾 UC-CUS-01: Booking #{} kèm {} phụ kiện",
+                    saved.getBookingId(), accessories.size());
+        }
+        return saved;
+    }
+
+    /** Kết quả tính phụ kiện: tổng tiền + danh sách entity chờ persist. */
+    private static final class AccessoryComputation {
+        BigDecimal total = BigDecimal.ZERO;
+        final List<BookingAccessory> entities = new ArrayList<>();
+    }
+
+    @Override
+    @Transactional
+    public BookingDetailResponse confirmPayment(UserPrincipal principal, Integer bookingId) {
+        Booking booking = bookingRepository.findDetailById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy booking với ID " + bookingId));
+
+        // Chỉ chủ booking mới được xác nhận.
+        Integer currentUserId = principal.getUser().getUserId();
+        if (booking.getUser() == null || !booking.getUser().getUserId().equals(currentUserId)) {
+            throw new BadRequestException("Bạn không có quyền xác nhận thanh toán booking này");
+        }
+
+        if (booking.getBookingStatus() == BookingStatus.CANCELLED) {
+            throw new BadRequestException(
+                    "Booking #" + bookingId + " đã bị huỷ (quá hạn thanh toán)");
+        }
+        if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT) {
+            throw new BadRequestException(
+                    "Booking #" + bookingId + " không ở trạng thái chờ thanh toán. "
+                            + "Hiện tại: " + booking.getBookingStatus());
+        }
+
+        booking.setBookingStatus(BookingStatus.CONFIRMED);
+        booking.setPaymentStatus(PaymentStatus.PAID);
+        booking.setExpiredAt(null);
+        Booking saved = bookingRepository.save(booking);
+
+        log.info("💳 UC-CUS-01: Booking #{} thanh toán thành công — CONFIRMED, expiredAt cleared",
+                saved.getBookingId());
+
+        return toBookingDetailResponse(saved, saved.getStadium(), saved.getSlot());
     }
 
     @Override
@@ -414,6 +475,7 @@ public class BookingServiceImpl implements BookingService {
                 .status(booking.getBookingStatus().name().toLowerCase())
                 .paymentStatus(booking.getPaymentStatus().name().toLowerCase())
                 .note(booking.getNote())
+                .expiredAt(booking.getExpiredAt())
                 .build();
     }
 

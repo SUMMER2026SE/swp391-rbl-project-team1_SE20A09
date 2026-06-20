@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 /**
@@ -49,6 +50,14 @@ public class BookingDetailResponse {
 
     @Schema(description = "Ghi chú của khách (nếu có)")
     private String note;
+
+    /**
+     * UC-CUS-01: Thời điểm hết hạn giữ sân (ISO-8601) — FE dùng để chạy countdown.
+     * NULL khi booking đã CONFIRMED / CANCELLED.
+     */
+    @Schema(description = "Thời điểm hết hạn giữ sân (ISO-8601). FE dùng để countdown.", example = "2026-06-25T10:35:00")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private LocalDateTime expiredAt;
 
     @Data
     @Builder

@@ -52,13 +52,31 @@ public class BookingController {
     @Operation(
             summary = "Tạo đơn đặt sân đơn lẻ",
             description = "Customer chọn (stadium, slot, reservationDate) và tạo 1 đơn. "
-                    + "Server trả về 409 nếu slot đã được đặt active (PENDING/CONFIRMED) "
-                    + "trên cùng ngày; 400 nếu slot datetime đã qua hoặc slot không thuộc sân.")
+                    + "Server trả về 409 nếu slot đã được đặt active (PENDING_PAYMENT/PENDING/CONFIRMED) "
+                    + "trên cùng ngày; 400 nếu slot datetime đã qua hoặc slot không thuộc sân. "
+                    + "Booking mới có status=PENDING_PAYMENT, expiredAt = now+5 phút — scheduler sẽ tự huỷ nếu quá hạn.")
     public ResponseEntity<BookingDetailResponse> createBooking(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @Valid @RequestBody CreateBookingRequest request) {
         BookingDetailResponse response = bookingService.createBooking(userPrincipal, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * UC-CUS-01: Xác nhận thanh toán — flip {@code PENDING_PAYMENT} → {@code CONFIRMED},
+     * clear {@code expiredAt}, set {@code paymentStatus = PAID}.
+     */
+    @PostMapping("/api/v1/bookings/{id}/confirm-payment")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Xác nhận thanh toán booking",
+            description = "Đổi booking từ PENDING_PAYMENT sang CONFIRMED. Chỉ chủ booking mới được xác nhận. "
+                    + "Trả 400 nếu booking đã bị huỷ hoặc đã xác nhận trước đó.")
+    public ResponseEntity<BookingDetailResponse> confirmPayment(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable("id") Integer bookingId) {
+        BookingDetailResponse response = bookingService.confirmPayment(userPrincipal, bookingId);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/api/v1/stadiums/{id}/slots")

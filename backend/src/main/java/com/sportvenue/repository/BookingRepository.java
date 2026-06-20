@@ -328,6 +328,18 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("start") LocalDate start,
             @Param("end") LocalDate end,
             @Param("statuses") List<BookingStatus> statuses);
+
+    /**
+     * UC-CUS-01: Booking {@code PENDING_PAYMENT} đã quá hạn thanh toán.
+     * Scheduler dùng để tự huỷ — giải phóng slot cho khách khác đặt.
+     */
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.PENDING_PAYMENT
+            AND b.expiredAt IS NOT NULL
+            AND b.expiredAt < :now
+            """)
+    List<Booking> findExpiredPendingPayments(@Param("now") LocalDateTime now);
 }
 
 

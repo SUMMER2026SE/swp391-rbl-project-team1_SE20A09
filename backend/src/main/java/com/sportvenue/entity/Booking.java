@@ -108,4 +108,12 @@ public class Booking implements Serializable {
      */
     @Column(name = "recurring_group_id", length = 36)
     private String recurringGroupId;
+
+    /**
+     * UC-CUS-01: Thời điểm hết hạn giữ sân (chỉ áp dụng cho {@code PENDING_PAYMENT}).
+     * Scheduler sẽ tự huỷ booking khi {@code expiredAt < now()}. NULL khi đã thanh toán
+     * (CONFIRMED) hoặc huỷ (CANCELLED).
+     */
+    @Column(name = "expired_at")
+    private LocalDateTime expiredAt;
 }

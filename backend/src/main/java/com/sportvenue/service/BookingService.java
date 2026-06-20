@@ -89,4 +89,17 @@ public interface BookingService {
      * <p>KHÔNG trả về {@code customerName} hay thông tin khách hàng.</p>
      */
     WeeklySlotResponse getWeeklySlots(Integer stadiumId, LocalDate weekStart);
+
+    /**
+     * UC-CUS-01: Xác nhận thanh toán cho một booking đang ở {@code PENDING_PAYMENT}.
+     *
+     * <p>Chỉ chủ booking (user.customer) mới được xác nhận. Đổi status sang
+     * {@code CONFIRMED}, set {@code paymentStatus = PAID}, clear {@code expiredAt}.</p>
+     *
+     * @throws com.sportvenue.exception.ResourceNotFoundException
+     *         nếu booking không tồn tại.
+     * @throws com.sportvenue.exception.BadRequestException
+     *         nếu booking đã bị huỷ hoặc đã được xác nhận trước đó.
+     */
+    BookingDetailResponse confirmPayment(UserPrincipal principal, Integer bookingId);
 }
