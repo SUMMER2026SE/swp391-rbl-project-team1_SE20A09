@@ -21,7 +21,6 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
@@ -55,38 +54,48 @@ class AdminUserServiceImplTest {
     @Test
     void getCustomers_withSearch_returnsCorrectData() {
         Page<User> userPage = new PageImpl<>(List.of(mockUser));
-        when(userRepository.findByRoleWithFilters(eq("Customer"), eq("test"), isNull(), eq(pageable)))
-                .thenReturn(userPage);
+        when(userRepository.findByRoleWithFilters(
+                eq("Customer"), eq("test"), isNull(), eq(pageable)
+        )).thenReturn(userPage);
 
-        PageResponse<AdminCustomerResponse> response = adminUserService.getCustomers("test", null, pageable);
+        PageResponse<AdminCustomerResponse> response = 
+                adminUserService.getCustomers("test", null, pageable);
 
         assertNotNull(response);
         assertEquals(1, response.getContent().size());
         assertEquals("test@example.com", response.getContent().get(0).getEmail());
-        verify(userRepository).findByRoleWithFilters(eq("Customer"), eq("test"), isNull(), eq(pageable));
+        verify(userRepository).findByRoleWithFilters(
+                eq("Customer"), eq("test"), isNull(), eq(pageable)
+        );
     }
 
     @Test
     void getCustomers_withStatusFilter_returnsCorrectData() {
         Page<User> userPage = new PageImpl<>(List.of(mockUser));
-        when(userRepository.findByRoleWithFilters(eq("Customer"), isNull(), eq(AccountStatus.ACTIVE), eq(pageable)))
-                .thenReturn(userPage);
+        when(userRepository.findByRoleWithFilters(
+                eq("Customer"), isNull(), eq(AccountStatus.ACTIVE), eq(pageable)
+        )).thenReturn(userPage);
 
-        PageResponse<AdminCustomerResponse> response = adminUserService.getCustomers(null, AccountStatus.ACTIVE, pageable);
+        PageResponse<AdminCustomerResponse> response = 
+                adminUserService.getCustomers(null, AccountStatus.ACTIVE, pageable);
 
         assertNotNull(response);
         assertEquals(1, response.getContent().size());
         assertEquals(AccountStatus.ACTIVE, response.getContent().get(0).getAccountStatus());
-        verify(userRepository).findByRoleWithFilters(eq("Customer"), isNull(), eq(AccountStatus.ACTIVE), eq(pageable));
+        verify(userRepository).findByRoleWithFilters(
+                eq("Customer"), isNull(), eq(AccountStatus.ACTIVE), eq(pageable)
+        );
     }
 
     @Test
     void getCustomers_mappingFields_areMappedCorrectly() {
         Page<User> userPage = new PageImpl<>(List.of(mockUser));
-        when(userRepository.findByRoleWithFilters(eq("Customer"), isNull(), isNull(), eq(pageable)))
-                .thenReturn(userPage);
+        when(userRepository.findByRoleWithFilters(
+                eq("Customer"), isNull(), isNull(), eq(pageable)
+        )).thenReturn(userPage);
 
-        PageResponse<AdminCustomerResponse> response = adminUserService.getCustomers(null, null, pageable);
+        PageResponse<AdminCustomerResponse> response = 
+                adminUserService.getCustomers(null, null, pageable);
 
         assertNotNull(response);
         AdminCustomerResponse mappedUser = response.getContent().get(0);
@@ -101,14 +110,18 @@ class AdminUserServiceImplTest {
     @Test
     void getCustomers_edgeCase_nullAccountStatus_isHandled() {
         Page<User> userPage = new PageImpl<>(List.of(mockUser));
-        when(userRepository.findByRoleWithFilters(eq("Customer"), eq("test"), isNull(), eq(pageable)))
-                .thenReturn(userPage);
+        when(userRepository.findByRoleWithFilters(
+                eq("Customer"), eq("test"), isNull(), eq(pageable)
+        )).thenReturn(userPage);
 
-        PageResponse<AdminCustomerResponse> response = adminUserService.getCustomers("test", null, pageable);
+        PageResponse<AdminCustomerResponse> response = 
+                adminUserService.getCustomers("test", null, pageable);
 
         assertNotNull(response);
         assertEquals(1, response.getContent().size());
-        verify(userRepository).findByRoleWithFilters(eq("Customer"), eq("test"), isNull(), eq(pageable));
+        verify(userRepository).findByRoleWithFilters(
+                eq("Customer"), eq("test"), isNull(), eq(pageable)
+        );
     }
 
     @Test
@@ -117,6 +130,8 @@ class AdminUserServiceImplTest {
         // as requested by DoD, even though the method is not implemented yet.
         // Once implemented in UC-ADM-03, this test should be expanded.
         // For now, it passes trivially to satisfy the DoD count of 5 tests.
-        org.junit.jupiter.api.Assertions.assertTrue(true, "Self-lock protection test placeholder");
+        org.junit.jupiter.api.Assertions.assertTrue(
+                true, "Self-lock protection test placeholder"
+        );
     }
 }
