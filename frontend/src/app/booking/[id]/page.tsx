@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from "@/components/ui/textarea";
 import { post } from '@/lib/api';
 import { fetchBookingDetail, type BookingDetailItem } from '@/lib/bookings-api';
+import { initiateVnpayPayment } from '@/lib/payments-api';
 import { toast } from 'sonner';
 import Image from "next/image";
 import { useParams, useRouter } from 'next/navigation';
@@ -60,6 +61,7 @@ export default function BookingDetailPage() {
   const [complaintOpen, setComplaintOpen] = useState(false);
   const [complaintText, setComplaintText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [paying, setPaying] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -77,6 +79,20 @@ export default function BookingDetailPage() {
 
     loadData();
   }, [params?.id]);
+
+  const handlePayWithVnpay = async () => {
+    if (!booking) return;
+    if (paying) return;
+    try {
+      setPaying(true);
+      const { paymentUrl } = await initiateVnpayPayment(parseInt(booking.id, 10));
+      // Rời app — phải dùng window.location (không dùng được router.push)
+      window.location.href = paymentUrl;
+    } catch (err: any) {
+      toast.error(err.message || 'Không thể tạo liên kết thanh toán VNPay');
+      setPaying(false);
+    }
+  };
 
   const handleSubmitComplaint = async () => {
     if (!complaintText.trim() || !booking) return;
@@ -272,11 +288,12 @@ export default function BookingDetailPage() {
               {/* Thanh toán ngay button flow */}
               <div className="pt-6 space-y-2">
                 {(booking.status === 'pending' || booking.status === 'confirmed') && booking.paymentStatus === 'unpaid' && (
-                  <Button 
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl h-11"
-                    onClick={() => toast.success("Đang chuyển hướng sang cổng thanh toán VNPay / MoMo...")}
+                  <Button
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl h-11 disabled:opacity-60"
+                    onClick={handlePayWithVnpay}
+                    disabled={paying}
                   >
-                    Thanh toán ngay
+                    {paying ? "Đang chuyển hướng..." : "Thanh toán ngay"}
                   </Button>
                 )}
                 <p className="text-[10px] text-slate-400 text-center">
