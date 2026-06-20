@@ -21,9 +21,9 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -101,14 +101,14 @@ class AdminUserServiceImplTest {
     @Test
     void getCustomers_edgeCase_nullAccountStatus_isHandled() {
         Page<User> userPage = new PageImpl<>(List.of(mockUser));
-        when(userRepository.findByRoleWithFilters(eq("Customer"), eq("test"), eq(null), eq(pageable)))
+        when(userRepository.findByRoleWithFilters(eq("Customer"), eq("test"), isNull(), eq(pageable)))
                 .thenReturn(userPage);
 
         PageResponse<AdminCustomerResponse> response = adminUserService.getCustomers("test", null, pageable);
 
         assertNotNull(response);
         assertEquals(1, response.getContent().size());
-        verify(userRepository).findByRoleWithFilters(eq("Customer"), eq("test"), eq(null), eq(pageable));
+        verify(userRepository).findByRoleWithFilters(eq("Customer"), eq("test"), isNull(), eq(pageable));
     }
 
     @Test
