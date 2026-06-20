@@ -1,0 +1,73 @@
+package com.sportvenue.service;
+
+import com.sportvenue.dto.booking.BookingDetailResponse;
+import com.sportvenue.dto.booking.BookingHistoryItemDto;
+import com.sportvenue.dto.request.CreateBookingRequest;
+import com.sportvenue.dto.response.PageResponse;
+import com.sportvenue.dto.response.TimeSlotResponse;
+import com.sportvenue.security.UserPrincipal;
+
+import java.time.LocalDate;
+import java.util.List;
+
+/**
+ * UC-CUS-01: Single booking service cho Customer.
+ *
+ * <ul>
+ *   <li>{@link #createBooking} — tạo một đơn đặt sân đơn lẻ.</li>
+ *   <li>{@link #getSlotsByDate} — liệt kê khung giờ của sân kèm cờ
+ *       {@code available} cho một ngày cụ thể (FE dùng để render UI).</li>
+ *   <li>{@link #getMyBookings} — lịch sử đặt sân của customer hiện tại
+ *       (có phân trang + lọc trạng thái), phục vụ {@code GET /api/v1/bookings/me}.</li>
+ * </ul>
+ */
+public interface BookingService {
+
+    /**
+     * Tạo booking đơn lẻ cho customer hiện tại.
+     *
+     * @throws com.sportvenue.exception.BadRequestException
+     *         nếu sân / slot không tồn tại, slot không thuộc sân, hoặc
+     *         slot datetime đã qua.
+     * @throws com.sportvenue.exception.DuplicateResourceException
+     *         (→ 409) nếu đã có booking PENDING/CONFIRMED cho cùng
+     *         (stadiumId, slotId, reservationDate).
+     */
+    BookingDetailResponse createBooking(UserPrincipal principal, CreateBookingRequest request);
+
+    /**
+     * Liệt kê slot của sân kèm availability cho {@code date}.
+     * Một slot được coi là unavailable nếu:
+     * <ul>
+     *   <li>Đã có booking PENDING/CONFIRMED cho ngày đó; hoặc</li>
+     *   <li>Datetime bắt đầu (date + slot.startTime) đã qua so với hiện tại.</li>
+     * </ul>
+     */
+    List<TimeSlotResponse> getSlotsByDate(Integer stadiumId, LocalDate date);
+
+    /**
+     * Lấy lịch sử đặt sân của customer hiện tại — có phân trang, lọc theo trạng thái.
+     * Phục vụ {@code GET /api/v1/bookings/me}.
+     *
+     * <p>Mapping {@code statusFilter} (FE → BE):</p>
+     * <ul>
+     *   <li>{@code null} / rỗng / {@code "all"} → trả tất cả trạng thái.</li>
+     *   <li>{@code "upcoming"}  → PENDING, CONFIRMED.</li>
+     *   <li>{@code "completed"} → COMPLETED.</li>
+     *   <li>{@code "cancelled"} → CANCELLED.</li>
+     *   <li>{@code "pending"}   → PENDING.</li>
+     *   <li>{@code "confirmed"} → CONFIRMED.</li>
+     *   <li>Giá trị khác → fallback về tất cả trạng thái (không throw).</li>
+     * </ul>
+     *
+     * @param principal    customer đang đăng nhập (lấy từ SecurityContext / JWT).
+     * @param page         trang (0-based), số âm sẽ được clamp về 0.
+     * @param size         kích thước trang (tối thiểu 1).
+     * @param statusFilter bộ lọc trạng thái (xem mapping ở trên).
+     */
+    PageResponse<BookingHistoryItemDto> getMyBookings(
+            UserPrincipal principal,
+            int page,
+            int size,
+            String statusFilter);
+}
