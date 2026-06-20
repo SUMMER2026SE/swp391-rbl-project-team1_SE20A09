@@ -309,6 +309,25 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("stadiumId") Integer stadiumId,
             @Param("reservationDate") LocalDate reservationDate,
             @Param("statuses") List<BookingStatus> statuses);
+
+    /**
+     * UC-CUS-01: Trả về toàn bộ booking active (PENDING/CONFIRMED) của một sân
+     * trong khoảng ngày {@code [start, end]} — dùng cho weekly schedule để
+     * service map (date → tập slotId đã đặt) khi render lịch tuần.
+     *
+     * <p>CANCELLED / COMPLETED KHÔNG được tính — slot coi như còn trống.</p>
+     */
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.stadium.stadiumId = :stadiumId
+            AND b.reservationDate BETWEEN :start AND :end
+            AND b.bookingStatus IN :statuses
+            """)
+    List<Booking> findWeeklyBookings(
+            @Param("stadiumId") Integer stadiumId,
+            @Param("start") LocalDate start,
+            @Param("end") LocalDate end,
+            @Param("statuses") List<BookingStatus> statuses);
 }
 
 
