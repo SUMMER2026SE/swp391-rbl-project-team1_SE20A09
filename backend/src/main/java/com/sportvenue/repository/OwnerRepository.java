@@ -28,4 +28,27 @@ public interface OwnerRepository extends JpaRepository<Owner, Integer> {
 
     /** Đếm số owner theo trạng thái phê duyệt — dùng cho Admin dashboard. */
     long countByApprovedStatus(ApprovedStatus approvedStatus);
+
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT new com.sportvenue.dto.response.AdminOwnerResponse(
+            o.ownerId, u.userId, CONCAT(u.firstName, ' ', u.lastName),
+            u.email, u.phoneNumber, o.businessName, o.taxCode,
+            o.businessAddress, CAST(o.approvedStatus AS string), CAST(u.accountStatus AS string), o.createdAt
+        )
+        FROM Owner o
+        JOIN o.user u
+        WHERE (:search IS NULL OR 
+               LOWER(u.email) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR 
+               LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR
+               LOWER(o.businessName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR
+               LOWER(CONCAT(u.firstName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))
+          AND (:accountStatus IS NULL OR u.accountStatus = :accountStatus)
+          AND (:approvedStatus IS NULL OR o.approvedStatus = :approvedStatus)
+    """)
+    org.springframework.data.domain.Page<com.sportvenue.dto.response.AdminOwnerResponse> findOwnersForAdmin(
+            @org.springframework.data.repository.query.Param("search") String search,
+            @org.springframework.data.repository.query.Param("accountStatus") com.sportvenue.entity.enums.AccountStatus accountStatus,
+            @org.springframework.data.repository.query.Param("approvedStatus") ApprovedStatus approvedStatus,
+            org.springframework.data.domain.Pageable pageable
+    );
 }
