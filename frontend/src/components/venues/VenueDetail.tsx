@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -9,15 +9,12 @@ import { toast } from 'sonner'
 import {
   IconBallFootball,
   IconClock,
-  IconClockOff,
   IconCategory,
   IconCircleCheck,
-  IconCircleX,
   IconMapPin,
   IconMap2,
   IconStar,
   IconStarHalf,
-  IconCalendar,
   IconCalendarPlus,
   IconPackage,
   IconMessageCircle,
@@ -36,11 +33,8 @@ import {
   IconChevronLeft,
   IconChevronRight
 } from '@tabler/icons-react'
-import {
-  getSlotsByDate,
-  createBooking,
-  type SlotAvailability,
-} from '@/lib/bookings-api'
+import { createBooking } from '@/lib/bookings-api'
+import WeeklySchedule from './WeeklySchedule'
 
 // Lazy load the Leaflet Map to avoid SSR issues and reduce bundle size
 const VenueMap = dynamic(() => import('./VenueMap'), {
@@ -115,23 +109,21 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const [mapLoaded, setMapLoaded] = useState(false)
 
-  // Date picker state
+  // UC-CUS-01: booking state — selected slot + date được WeeklySchedule set
+  // khi user click một ô AVAILABLE.
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const d = new Date()
     d.setHours(0, 0, 0, 0)
     return d
   })
-  const [popoverOpen, setPopoverOpen] = useState(false)
-  const [viewMonth, setViewMonth] = useState<number>(selectedDate.getMonth())
-  const [viewYear, setViewYear] = useState<number>(selectedDate.getFullYear())
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null)
-
-  // UC-CUS-01: slot availability state (fetched from BE)
-  const [slots, setSlots] = useState<SlotAvailability[]>([])
-  const [slotsLoading, setSlotsLoading] = useState(false)
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
 
-  const datePickerRef = useRef<HTMLDivElement>(null)
+  /**
+   * Bump để remount WeeklySchedule — dùng sau khi đặt sân / 409 conflict
+   * để grid refetch dữ liệu mới nhất từ BE.
+   */
+  const [weeklyKey, setWeeklyKey] = useState(0)
 
   // Lazy load map when map tab becomes active
   useEffect(() => {
@@ -139,52 +131,6 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
       setMapLoaded(true)
     }
   }, [activeTab])
-
-  // Reset selected slot when date changes
-  useEffect(() => {
-    setSelectedSlot(null)
-  }, [selectedDate])
-
-  // UC-CUS-01: Fetch slots khi date hoặc venue thay đổi
-  useEffect(() => {
-    let cancelled = false
-    async function fetchSlots() {
-      if (activeTab !== 'slots' && !selectedSlot) {
-        // Only fetch when needed (slots tab open or a slot is selected)
-        return
-      }
-      try {
-        setSlotsLoading(true)
-        const data = await getSlotsByDate(venue.id, getSelectedDateString())
-        if (!cancelled) setSlots(data)
-      } catch (err) {
-        if (!cancelled) {
-          console.error('Failed to fetch slots:', err)
-          setSlots([])
-          toast.error('Không thể tải khung giờ. Vui lòng thử lại.')
-        }
-      } finally {
-        if (!cancelled) setSlotsLoading(false)
-      }
-    }
-    fetchSlots()
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, venue.id, activeTab])
-
-  // Click outside listener for date picker popover
-  useEffect(() => {
-    if (!popoverOpen) return
-    const handleClickOutside = (e: MouseEvent) => {
-      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
-        setPopoverOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [popoverOpen])
 
   // Lightbox keyboard navigation
   useEffect(() => {
@@ -217,103 +163,15 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
     return `${year}-${month}-${day}`
   }
 
-  // UC-CUS-01: Slots giờ lấy từ API theo selectedDate (xem useEffect ở trên).
-  // Helper: format HH:mm:ss → HH:mm cho hiển thị
-  const formatSlotTime = (t: string) => (t && t.length >= 5 ? t.slice(0, 5) : t)
-  const dateSlots = slots
-  const availableSlotsCount = slots.filter((s) => s.available).length
+  // UC-CUS-01: WeeklySchedule component tự quản lý fetch + tuần hiện tại.
+  // VenueDetail chỉ giữ selectedDate/selectedSlot để truyền vào booking CTA.
 
-  // Date picker date check helpers
-  const todayDateObj = new Date()
-  todayDateObj.setHours(0, 0, 0, 0)
-
-  const isPastDay = (date: Date) => {
-    const check = new Date(date)
-    check.setHours(0, 0, 0, 0)
-    return check.getTime() < todayDateObj.getTime()
-  }
-
-  const isTodayDay = (date: Date) => {
-    const check = new Date(date)
-    check.setHours(0, 0, 0, 0)
-    return check.getTime() === todayDateObj.getTime()
-  }
-
-  const isSelectedDay = (date: Date) => {
-    const check = new Date(date)
-    check.setHours(0, 0, 0, 0)
-    const sel = new Date(selectedDate)
-    sel.setHours(0, 0, 0, 0)
-    return check.getTime() === sel.getTime()
-  }
-
-  /** Slot đã qua giờ so với hiện tại (chỉ áp dụng cho ngày hôm nay). */
-  const isPastHour = (timeStr: string) => {
-    if (!isTodayDay(selectedDate)) return false
-    const parts = (timeStr || '').split(':')
-    if (parts.length < 1) return false
-    const slotHour = parseInt(parts[0], 10)
-    const slotMinute = parts.length > 1 ? parseInt(parts[1], 10) : 0
-    const now = new Date()
-    if (now.getHours() > slotHour) return true
-    if (now.getHours() === slotHour && now.getMinutes() >= slotMinute) return true
-    return false
-  }
-
-  const formatDatePickerLabel = (date: Date) => {
-    const days = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
-    const dayName = days[date.getDay()]
-    const dd = String(date.getDate()).padStart(2, '0')
-    const mm = String(date.getMonth() + 1).padStart(2, '0')
-    const yyyy = date.getFullYear()
-    return `${dayName}, ${dd}/${mm}/${yyyy}`
-  }
-
-  const getMonthYearLabel = (month: number, year: number) => {
-    const monthStr = String(month + 1).padStart(2, '0')
-    return `Tháng ${monthStr}, ${year}`
-  }
-
-  const handlePrevMonth = () => {
-    if (viewYear > todayDateObj.getFullYear() || (viewYear === todayDateObj.getFullYear() && viewMonth > todayDateObj.getMonth())) {
-      if (viewMonth === 0) {
-        setViewMonth(11)
-        setViewYear(prev => prev - 1)
-      } else {
-        setViewMonth(prev => prev - 1)
-      }
-    }
-  }
-
-  const handleNextMonth = () => {
-    if (viewMonth === 11) {
-      setViewMonth(0)
-      setViewYear(prev => prev + 1)
-    } else {
-      setViewMonth(prev => prev + 1)
-    }
-  }
-
-  const handleSelectToday = () => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    setSelectedDate(today)
-    setViewMonth(today.getMonth())
-    setViewYear(today.getFullYear())
-    setPopoverOpen(false)
-  }
-
-  const generateCalendarDays = (year: number, month: number) => {
-    const startOfMonth = new Date(year, month, 1)
-    const startDayOfWeek = startOfMonth.getDay() // 0 = Sunday
-    const startDate = new Date(year, month, 1 - startDayOfWeek)
-    const days: Date[] = []
-    for (let i = 0; i < 42; i++) {
-      const d = new Date(startDate)
-      d.setDate(startDate.getDate() + i)
-      days.push(d)
-    }
-    return days
+  /** Handler khi user click một slot AVAILABLE trong weekly grid. */
+  const handleSlotPicked = (slotId: number, date: string) => {
+    setSelectedSlot(slotId)
+    // date là "YYYY-MM-DD" — convert về local Date (00:00) cho booking CTA.
+    const [y, m, d] = date.split('-').map(Number)
+    setSelectedDate(new Date(y, m - 1, d))
   }
 
   // Back button helper
@@ -350,8 +208,9 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
         reservationDate: getSelectedDateString(),
       })
       toast.success(`Đặt sân thành công! Đang chuyển đến lịch sử đặt sân...`)
-      // Reset selection & redirect to profile bookings tab (per UC-CUS-01)
+      // Reset selection, refresh grid, redirect to profile bookings tab (per UC-CUS-01)
       setSelectedSlot(null)
+      setWeeklyKey((k) => k + 1)
       router.push('/profile?tab=bookings')
     } catch (err: any) {
       const status = err?.response?.status
@@ -361,14 +220,9 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
         toast.error(serverMsg, {
           description: 'Khung giờ này vừa có người đặt. Vui lòng chọn khung giờ khác.',
         })
-        // Re-fetch slots to refresh availability
-        try {
-          const data = await getSlotsByDate(venue.id, getSelectedDateString())
-          setSlots(data)
-          setSelectedSlot(null)
-        } catch {
-          /* ignore */
-        }
+        // Remount WeeklySchedule để refetch availability từ BE.
+        setWeeklyKey((k) => k + 1)
+        setSelectedSlot(null)
       } else if (status === 401) {
         const redirect = `/venues/${venue.id}`
         router.push(`/login?redirect=${encodeURIComponent(redirect)}`)
@@ -417,8 +271,6 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
         return <IconCircleCheck className="w-[13px] h-[13px] text-[#1a8a4a] mr-[6px] shrink-0" />
     }
   }
-
-  const isCurrentMonth = viewYear === todayDateObj.getFullYear() && viewMonth === todayDateObj.getMonth()
 
   // Reusable Contact Card
   const ContactCard = () => (
@@ -671,212 +523,14 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
               </div>
             )}
 
-            {/* TAB 2: Khung giờ */}
+            {/* TAB 2: Khung giờ — UC-CUS-01 weekly grid */}
             {activeTab === 'slots' && (
               <div className="space-y-3">
-                {/* Header Row */}
-                <div className="flex justify-between items-center px-0.5">
-                  {/* Date picker trigger */}
-                  <div className="relative" ref={datePickerRef}>
-                    <button
-                      onClick={() => setPopoverOpen(prev => !prev)}
-                      className="bg-gray-50 border-[0.5px] border-gray-200 rounded-[8px] py-1.5 px-3 flex items-center gap-1.5 text-gray-700 hover:bg-gray-100 transition-colors"
-                      type="button"
-                    >
-                      <IconCalendar className="w-[15px] h-[15px] text-[#1a8a4a] shrink-0" />
-                      <span className="text-[13px] font-medium">
-                        {formatDatePickerLabel(selectedDate)}
-                      </span>
-                      <span className="text-[9px] text-gray-400">
-                        {popoverOpen ? '▲' : '▼'}
-                      </span>
-                    </button>
-
-                    {popoverOpen && (
-                      <div className="absolute top-[calc(100%+6px)] left-0 bg-white border-[0.5px] border-gray-200 rounded-[12px] p-3 w-[248px] z-50 shadow-none">
-                        {/* Month selection header */}
-                        <div className="flex justify-between items-center mb-2.5">
-                          <span className="text-[13px] font-medium text-gray-700 select-none">
-                            {getMonthYearLabel(viewMonth, viewYear)}
-                          </span>
-                          <div className="flex gap-1">
-                            <button
-                              onClick={handlePrevMonth}
-                              disabled={isCurrentMonth}
-                              type="button"
-                              className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:pointer-events-none"
-                            >
-                              <IconChevronLeft className="w-3.5 h-3.5 text-gray-600" />
-                            </button>
-                            <button
-                              onClick={handleNextMonth}
-                              type="button"
-                              className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors"
-                            >
-                              <IconChevronRight className="w-3.5 h-3.5 text-gray-600" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Day of Week Row */}
-                        <div className="grid grid-cols-7 gap-[2px] text-center mb-1">
-                          {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map((day, idx) => (
-                            <span key={idx} className="text-[10px] text-gray-400 font-medium select-none">
-                              {day}
-                            </span>
-                          ))}
-                        </div>
-
-                        {/* Day Grid */}
-                        <div className="grid grid-cols-7 gap-[2px]">
-                          {generateCalendarDays(viewYear, viewMonth).map((day, i) => {
-                            const isPast = isPastDay(day)
-                            const isOtherMonth = day.getMonth() !== viewMonth
-                            const isToday = isTodayDay(day)
-                            const isSelected = isSelectedDay(day)
-                            
-                            let cellClass = "w-full text-center text-[12px] rounded-[5px] py-[5px] px-[2px] transition-colors select-none "
-                            let clickHandler = () => {
-                              setSelectedDate(day)
-                              setPopoverOpen(false)
-                            }
-
-                            if (isPast) {
-                              cellClass += "text-gray-300 cursor-not-allowed pointer-events-none font-normal"
-                              clickHandler = () => {}
-                            } else if (isSelected) {
-                              cellClass += "bg-[#1a8a4a] text-white font-medium"
-                            } else if (isToday) {
-                              cellClass += "border border-[#1a8a4a] text-[#1a8a4a] font-medium"
-                            } else if (isOtherMonth) {
-                              cellClass += "text-gray-350 hover:bg-gray-100 cursor-pointer font-normal"
-                            } else {
-                              cellClass += "text-gray-700 hover:bg-gray-100 cursor-pointer font-normal"
-                            }
-
-                            return (
-                              <button
-                                key={i}
-                                onClick={clickHandler}
-                                disabled={isPast}
-                                className={cellClass}
-                                type="button"
-                              >
-                                {day.getDate()}
-                              </button>
-                            )
-                          })}
-                        </div>
-
-                        {/* Footer "Hôm nay" button */}
-                        <div className="border-t border-gray-100 mt-2.5 pt-2 flex justify-center">
-                          <button
-                            onClick={handleSelectToday}
-                            className="text-[12px] font-medium text-[#1a8a4a] hover:bg-[#e8f7ee] py-1 px-3 rounded-[8px] transition-colors"
-                            type="button"
-                          >
-                            Hôm nay
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Available count label */}
-                  <span className="text-[12px] font-medium text-[#1a8a4a]">
-                    {availableSlotsCount} / {dateSlots.length || 0} khung trống
-                  </span>
-                </div>
-
-                {/* Today Notice Bar */}
-                {isTodayDay(selectedDate) && (
-                  <div className="bg-[#fffbeb] border-[0.5px] border-[#f5d87a] rounded-[8px] p-[7px_11px] flex items-start gap-2">
-                    <IconInfoCircle className="w-4 h-4 text-[#7a5800] shrink-0 mt-0.5" />
-                    <span className="text-[12px] text-[#7a5800] font-normal leading-normal">
-                      Hôm nay — các khung giờ đã qua bị khóa tự động.
-                    </span>
-                  </div>
-                )}
-
-                {/* UC-CUS-01: Slots Grid — fetched từ GET /api/v1/stadiums/{id}/slots?date=... */}
-                {slotsLoading ? (
-                  <div className="py-6 text-center text-[12px] text-gray-400">Đang tải khung giờ…</div>
-                ) : dateSlots.length === 0 ? (
-                  <div className="py-6 text-center text-[12px] text-gray-400">
-                    Sân chưa có khung giờ nào khả dụng cho ngày này.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-[7px]">
-                    {dateSlots.map((slot) => {
-                      const isPast = !slot.available && isTodayDay(selectedDate) && isPastHour(slot.startTime)
-                      const isUnavailable = !slot.available && !isPast
-                      let cardClass = "flex items-center justify-between px-[11px] py-[9px] rounded-[8px] border-[0.5px] "
-                      let clickHandler = () => setSelectedSlot(slot.slotId)
-
-                      if (isPast) {
-                        cardClass += "bg-gray-50 border-gray-150 text-gray-400 cursor-not-allowed pointer-events-none"
-                        clickHandler = () => {}
-                      } else if (isUnavailable) {
-                        cardClass += "bg-[#fdf0f0] border-[#f5b7b7] text-[#8a1c1c] cursor-not-allowed pointer-events-none"
-                        clickHandler = () => {}
-                      } else {
-                        const isSelected = selectedSlot === slot.slotId
-                        if (isSelected) {
-                          cardClass += "bg-[#e8f7ee] border-[#1a8a4a] border-[1.5px] text-[#0d5c2e] cursor-pointer"
-                        } else {
-                          cardClass += "bg-[#e8f7ee] border-[#9edbb6] text-[#0d5c2e] hover:bg-[#d4f0e2] cursor-pointer transition-colors"
-                        }
-                      }
-
-                      const timeLabel = `${formatSlotTime(slot.startTime)} – ${formatSlotTime(slot.endTime)}`
-
-                      return (
-                        <div
-                          key={slot.slotId}
-                          onClick={clickHandler}
-                          className={cardClass}
-                        >
-                          <span className="text-[12px] font-medium">{timeLabel}</span>
-                          <div className="flex items-center gap-1 text-[11px] font-medium shrink-0">
-                            {isPast ? (
-                              <>
-                                <IconClockOff className="w-3.5 h-3.5 text-gray-400" />
-                                <span>Đã qua</span>
-                              </>
-                            ) : isUnavailable ? (
-                              <>
-                                <IconCircleX className="w-3.5 h-3.5 text-[#8a1c1c]" />
-                                <span>Đã đặt</span>
-                              </>
-                            ) : (
-                              <>
-                                <IconCircleCheck className="w-3.5 h-3.5 text-[#0d5c2e]" />
-                                <span>Còn trống</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-
-                {/* Legend */}
-                <div className="flex items-center gap-4 mt-[11px] text-[11px] text-gray-400 font-medium pt-1 select-none">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-[#1a8a4a]" />
-                    <span>Còn trống</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-[#8a1c1c]" />
-                    <span>Đã đặt</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-gray-300" />
-                    <span>Đã qua</span>
-                  </div>
-                </div>
-
+                <WeeklySchedule
+                  key={weeklyKey}
+                  stadiumId={venue.id}
+                  onSlotSelect={handleSlotPicked}
+                />
               </div>
             )}
 
@@ -1076,10 +730,6 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                   <span className="bg-[#e8f7ee] text-[#0d5c2e] text-[12px] font-medium px-2.5 py-0.5 rounded-[20px] select-none">
                     Hoạt động
                   </span>
-                </div>
-                <div className="flex items-center justify-between text-[13px]">
-                  <span className="text-gray-400">Khung giờ trống</span>
-                  <span className="text-[#1a8a4a] font-medium">{availableSlotsCount} / 16</span>
                 </div>
               </div>
 
