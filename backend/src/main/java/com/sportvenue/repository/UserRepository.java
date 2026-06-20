@@ -20,7 +20,6 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     @Modifying
     void deleteAllByIsVerifiedFalseAndCreatedAtBefore(LocalDateTime threshold);
 
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"role"})
     Optional<User> findByEmail(String email);
 
     boolean existsByEmail(String email);
