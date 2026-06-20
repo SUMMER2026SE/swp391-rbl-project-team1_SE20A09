@@ -36,12 +36,52 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     @Query("SELECT b FROM Booking b WHERE b.bookingId = :id")
     Optional<Booking> findByIdForUpdate(@Param("id") Integer id);
 
-    /** Lấy lịch sử đặt sân của khách hàng — dùng cho trang "Lịch sử đặt sân". */
+    /**
+     * Lấy lịch sử đặt sân của khách hàng — dùng cho trang "Lịch sử đặt sân".
+     * Sort theo {@code bookingDate DESC} (mới tạo trước) rồi {@code reservationDate DESC}.
+     * UC-CUS-01: Sau khi đặt sân xong, đơn mới phải xuất hiện ở đầu danh sách.
+     */
     @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "slot"})
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.user.userId = :userId
+            ORDER BY b.bookingDate DESC, b.reservationDate DESC
+            """)
     Page<Booking> findByUserUserIdOrderByReservationDateDesc(Integer userId, Pageable pageable);
 
     @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "slot"})
-    Page<Booking> findByUserUserIdAndBookingStatusInOrderByReservationDateDesc(Integer userId, List<BookingStatus> statuses, Pageable pageable);
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.user.userId = :userId
+            AND b.bookingStatus IN :statuses
+            ORDER BY b.bookingDate DESC, b.reservationDate DESC
+            """)
+    Page<Booking> findByUserUserIdAndBookingStatusInOrderByReservationDateDesc(
+            Integer userId, List<BookingStatus> statuses, Pageable pageable);
+
+    /**
+     * UC-CUS-01: Lịch sử đặt sân của customer hiện tại — hỗ trợ filter status tùy chọn.
+     * Dùng cho {@code GET /api/v1/bookings/me}.
+     *
+     * <p>Mapping status FE → BE:</p>
+     * <ul>
+     *   <li>{@code upcoming} → PENDING, CONFIRMED</li>
+     *   <li>{@code completed} → COMPLETED</li>
+     *   <li>{@code cancelled} → CANCELLED</li>
+     *   <li>Không truyền / "all" → tất cả trạng thái</li>
+     * </ul>
+     */
+    @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "slot"})
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.user.userId = :userId
+            AND (:status IS NULL OR b.bookingStatus = :status)
+            ORDER BY b.bookingDate DESC, b.reservationDate DESC
+            """)
+    Page<Booking> findMyBookings(
+            @Param("userId") Integer userId,
+            @Param("status") BookingStatus status,
+            Pageable pageable);
 
     /** Lịch sắp tới — slot chưa kết thúc, đơn Pending hoặc Confirmed. */
     @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "slot"})
@@ -245,28 +285,30 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("endTime") java.time.LocalTime endTime);
 
     /**
-     * UC-CUS-01: Kiểm tra xem (stadium, slot, reservationDate) đã có đơn active (PENDING/CONFIRMED) nào chưa.
-     * Dùng cho recurring booking — phát hiện conflict per-(sân, khung giờ, ngày chơi) bất kể user nào.
+     * UC-CUS-01: True nếu đã có đơn active (bookingStatus IN :statuses)
+     * cho cùng (stadiumId, slotId, reservationDate). CANCELLED / COMPLETED
+     * KHÔNG chặn — slot coi như còn trống.
+     */
+    boolean existsByStadium_StadiumIdAndSlot_SlotIdAndReservationDateAndBookingStatusIn(
+            Integer stadiumId,
+            Integer slotId,
+            LocalDate reservationDate,
+            List<BookingStatus> statuses);
+
+    /**
+     * UC-CUS-01: Trả về tập slotId đã có đơn active (PENDING/CONFIRMED) cho
+     * sân vào một ngày cụ thể — dùng để render availability FE.
      */
     @Query("""
-            SELECT COUNT(b) > 0 FROM Booking b
+            SELECT DISTINCT b.slot.slotId FROM Booking b
             WHERE b.stadium.stadiumId = :stadiumId
-            AND b.slot.slotId = :slotId
             AND b.reservationDate = :reservationDate
             AND b.bookingStatus IN :statuses
             """)
-    boolean existsByStadiumSlotAndDate(
+    List<Integer> findBookedSlotIds(
             @Param("stadiumId") Integer stadiumId,
-            @Param("slotId") Integer slotId,
             @Param("reservationDate") LocalDate reservationDate,
             @Param("statuses") List<BookingStatus> statuses);
-
-    /**
-     * UC-CUS-01: Lấy tất cả đơn thuộc cùng một chuỗi đặt sân định kỳ.
-     * Dùng cho "Hủy cả chuỗi" tương lai và cho Owner dashboard hiển thị nhóm đơn.
-     */
-    @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "slot"})
-    List<Booking> findAllByRecurringGroupId(String recurringGroupId);
 }
 
 
