@@ -267,8 +267,8 @@ function UserProfilePage() {
         const endpoint = profile.roleName === 'Owner' ? '/owner/reviews' : '/reviews/my';
         const data = await get<any[]>(endpoint);
         setReviews(data || []);
-      } catch (e) {
-        console.error("Failed to load reviews", e);
+      } catch {
+        // Silent fallback — review fetch failure should not block profile rendering
       }
     };
     
@@ -563,10 +563,11 @@ function UserProfilePage() {
                           )}
 
                           <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-slate-700">Tên thương hiệu / Sân bãi</Label>
+                            <Label htmlFor="upgrade-businessName" className="text-xs font-semibold text-slate-700">Tên thương hiệu / Sân bãi</Label>
                             <div className="relative">
                               <Building className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                               <Input
+                                id="upgrade-businessName"
                                 placeholder="Sân bóng mini ABC"
                                 className="pl-10"
                                 {...registerUpgrade("businessName")}
@@ -579,10 +580,11 @@ function UserProfilePage() {
                           </div>
 
                           <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-slate-700">Mã số thuế</Label>
+                            <Label htmlFor="upgrade-taxCode" className="text-xs font-semibold text-slate-700">Mã số thuế</Label>
                             <div className="relative">
                               <FileText className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                               <Input
+                                id="upgrade-taxCode"
                                 placeholder="0312456789"
                                 className="pl-10"
                                 {...registerUpgrade("taxCode")}
@@ -595,10 +597,11 @@ function UserProfilePage() {
                           </div>
 
                           <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-slate-700">Địa chỉ kinh doanh</Label>
+                            <Label htmlFor="upgrade-businessAddress" className="text-xs font-semibold text-slate-700">Địa chỉ kinh doanh</Label>
                             <div className="relative">
                               <MapPin className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                               <Input
+                                id="upgrade-businessAddress"
                                 placeholder="Đường số 7, Quận 7, HCM"
                                 className="pl-10"
                                 {...registerUpgrade("businessAddress")}
