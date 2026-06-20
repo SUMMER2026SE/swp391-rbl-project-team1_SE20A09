@@ -84,7 +84,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-import { useDebounce } from "usehooks-ts";
+import { useDebounceValue } from "usehooks-ts";
 
 export default function AdminCustomersPage() {
   const queryClient = useQueryClient();
@@ -95,7 +95,7 @@ export default function AdminCustomersPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ fullName: "", email: "", phoneNumber: "", password: "", confirmPassword: "" });
 
-  const debouncedSearch = useDebounce(search, 500);
+  const [debouncedSearch] = useDebounceValue(search, 500);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["admin-customers", page, debouncedSearch, statusFilter],
