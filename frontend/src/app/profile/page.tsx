@@ -19,9 +19,10 @@ import { BookingHistoryList } from "@/components/bookings/BookingHistoryList";
 import { ReviewHistoryList } from "@/components/reviews/ReviewHistoryList";
 import { OwnerReviewHistoryList } from "@/components/reviews/OwnerReviewHistoryList";
 import { ComplaintList } from "@/components/complaints/ComplaintList";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { upgradeToOwnerSchema, type UpgradeToOwnerFormValues } from "@/lib/validations/auth.schema";
+import { DocumentUploader } from "@/components/shared/DocumentUploader";
 import { toast } from "sonner";
 
 import {
@@ -80,6 +81,8 @@ interface OwnerDetailResponse {
   businessName: string;
   taxCode: string;
   businessAddress: string;
+  businessLicenseUrl?: string;
+  identityCardUrl?: string;
   approvedStatus: "PENDING" | "APPROVED" | "REJECTED";
   rejectionReason?: string;
   createdAt: string;
@@ -117,10 +120,20 @@ function UserProfilePage() {
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [upgradeSuccess, setUpgradeSuccess] = useState<string | null>(null);
 
+  const getFileUrl = (url?: string) => {
+    if (!url) return "#";
+    if (session?.accessToken) {
+      const separator = url.includes("?") ? "&" : "?";
+      return `${url}${separator}token=${session.accessToken}`;
+    }
+    return url;
+  };
+
   const {
     register: registerUpgrade,
     handleSubmit: handleSubmitUpgrade,
     setValue: setUpgradeValue,
+    control: upgradeControl,
     formState: { errors: upgradeFormErrors },
   } = useForm<UpgradeToOwnerFormValues>({
     resolver: zodResolver(upgradeToOwnerSchema),
@@ -128,6 +141,8 @@ function UserProfilePage() {
       businessName: "",
       taxCode: "",
       businessAddress: "",
+      businessLicenseUrl: "",
+      identityCardUrl: "",
     },
   });
 
@@ -186,39 +201,37 @@ function UserProfilePage() {
   };
 
   const handleUpgradeToOwner = async (values: UpgradeToOwnerFormValues) => {
+    const isResubmit = profile?.roleName === "Owner" && ownerProfile?.approvedStatus === "REJECTED";
     try {
       setUpgradeLoading(true);
       setUpgradeError(null);
       setUpgradeSuccess(null);
-      
-      let res;
-      if (profile?.roleName === "Owner") {
-        res = await patch<ApiResponse<OwnerDetailResponse>>("/users/me/resubmit-owner", {
-          businessName: values.businessName,
-          taxCode: values.taxCode,
-          businessAddress: values.businessAddress,
-        });
+
+      const payload = {
+        businessName: values.businessName,
+        taxCode: values.taxCode,
+        businessAddress: values.businessAddress,
+        businessLicenseUrl: values.businessLicenseUrl,
+        identityCardUrl: values.identityCardUrl,
+      };
+
+      let res: ApiResponse<OwnerDetailResponse>;
+      if (isResubmit) {
+        res = await patch<ApiResponse<OwnerDetailResponse>>("/users/me/resubmit-owner", payload);
       } else {
-        res = await post<ApiResponse<OwnerDetailResponse>>("/users/me/upgrade-to-owner", {
-          businessName: values.businessName,
-          taxCode: values.taxCode,
-          businessAddress: values.businessAddress,
-        });
+        res = await post<ApiResponse<OwnerDetailResponse>>("/users/me/upgrade-to-owner", payload);
       }
-      
+
       setOwnerProfile(res.result);
       setUpgradeSuccess(
-        profile?.roleName === "Owner"
+        isResubmit
           ? "Nộp lại hồ sơ thành công! Vui lòng chờ Admin phê duyệt lại."
           : "Gửi yêu cầu nâng cấp đối tác chủ sân thành công! Vui lòng chờ Admin phê duyệt."
       );
-      toast.success(
-        profile?.roleName === "Owner"
-          ? "Nộp lại hồ sơ thành công!"
-          : "Gửi hồ sơ nâng cấp thành công!"
-      );
-    } catch (err: any) {
-      setUpgradeError(err.message || "Có lỗi xảy ra khi gửi yêu cầu.");
+      toast.success(isResubmit ? "Nộp lại hồ sơ thành công!" : "Gửi hồ sơ nâng cấp thành công!");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Có lỗi xảy ra khi gửi yêu cầu.";
+      setUpgradeError(message);
       toast.error("Gửi yêu cầu thất bại.");
     } finally {
       setUpgradeLoading(false);
@@ -240,6 +253,8 @@ function UserProfilePage() {
             setUpgradeValue("businessName", res.result.businessName);
             setUpgradeValue("taxCode", res.result.taxCode);
             setUpgradeValue("businessAddress", res.result.businessAddress);
+            setUpgradeValue("businessLicenseUrl", res.result.businessLicenseUrl || "");
+            setUpgradeValue("identityCardUrl", res.result.identityCardUrl || "");
           }
         } catch (err) {
           // Silent fallback for DoD compliance (no console.error in production code)
@@ -532,7 +547,7 @@ function UserProfilePage() {
                   </CardContent>
                 </Card>
 
-                {/* Upgrade to Owner section */}
+                {/* Upgrade to Owner section — hiển thị cho Customer, hoặc Owner chưa được duyệt (PENDING/REJECTED) */}
                 {(profile.roleName === "Customer" || (profile.roleName === "Owner" && ownerProfile && ownerProfile.approvedStatus !== "APPROVED")) && (
                   <Card className="border-none shadow-sm bg-white overflow-hidden">
                     <CardHeader className="pb-3 border-b border-slate-50 bg-gradient-to-r from-teal-50/50 to-cyan-50/50">
@@ -632,6 +647,44 @@ function UserProfilePage() {
                             )}
                           </div>
 
+                          <div className="flex flex-col gap-4 mt-4">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold text-slate-700">Giấy phép đăng ký kinh doanh (Ảnh)</Label>
+                              <Controller
+                                control={upgradeControl}
+                                name="businessLicenseUrl"
+                                render={({ field }) => (
+                                  <DocumentUploader
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    disabled={upgradeLoading}
+                                  />
+                                )}
+                              />
+                              {upgradeFormErrors.businessLicenseUrl && (
+                                <p className="text-red-500 text-[11px] font-medium">{upgradeFormErrors.businessLicenseUrl.message}</p>
+                              )}
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold text-slate-700">Ảnh CCCD/CMND người đại diện</Label>
+                              <Controller
+                                control={upgradeControl}
+                                name="identityCardUrl"
+                                render={({ field }) => (
+                                  <DocumentUploader
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    disabled={upgradeLoading}
+                                  />
+                                )}
+                              />
+                              {upgradeFormErrors.identityCardUrl && (
+                                <p className="text-red-500 text-[11px] font-medium">{upgradeFormErrors.identityCardUrl.message}</p>
+                              )}
+                            </div>
+                          </div>
+
                           <Button type="submit" disabled={upgradeLoading} className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold">
                             {upgradeLoading ? (
                               <>
@@ -654,9 +707,25 @@ function UserProfilePage() {
                             <span className="text-slate-400 text-xs">Mã số thuế:</span>
                             <span className="font-semibold text-xs text-slate-800">{ownerProfile.taxCode}</span>
                           </div>
-                          <div className="flex justify-between py-1.5">
+                          <div className="flex justify-between py-1.5 border-b border-slate-100">
                             <span className="text-slate-400 text-xs">Địa chỉ:</span>
                             <span className="font-semibold text-xs text-slate-800 text-right max-w-[180px] truncate">{ownerProfile.businessAddress}</span>
+                          </div>
+                          <div className="flex justify-between py-1.5 border-b border-slate-100">
+                            <span className="text-slate-400 text-xs">Giấy phép kinh doanh:</span>
+                            {ownerProfile.businessLicenseUrl ? (
+                              <a href={getFileUrl(ownerProfile.businessLicenseUrl)} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline font-semibold text-xs">Xem ảnh</a>
+                            ) : (
+                              <span className="text-slate-400 text-xs font-semibold">Chưa tải lên</span>
+                            )}
+                          </div>
+                          <div className="flex justify-between py-1.5">
+                            <span className="text-slate-400 text-xs">Ảnh CCCD/CMND:</span>
+                            {ownerProfile.identityCardUrl ? (
+                              <a href={getFileUrl(ownerProfile.identityCardUrl)} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline font-semibold text-xs">Xem ảnh</a>
+                            ) : (
+                              <span className="text-slate-400 text-xs font-semibold">Chưa tải lên</span>
+                            )}
                           </div>
                         </div>
                       )}

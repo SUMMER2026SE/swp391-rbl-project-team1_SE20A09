@@ -6,6 +6,10 @@ import com.sportvenue.entity.SportType;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.mapper.SportTypeMapper;
 import com.sportvenue.repository.SportTypeRepository;
+import com.sportvenue.repository.StadiumRepository;
+import com.sportvenue.repository.MatchRequestRepository;
+import com.sportvenue.exception.ResourceNotFoundException;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -24,6 +28,12 @@ class SportTypeServiceImplTest {
 
     @Mock
     private SportTypeMapper sportTypeMapper;
+
+    @Mock
+    private StadiumRepository stadiumRepository;
+
+    @Mock
+    private MatchRequestRepository matchRequestRepository;
 
     @InjectMocks
     private SportTypeServiceImpl sportTypeService;
@@ -98,6 +108,70 @@ class SportTypeServiceImplTest {
                 sportTypeService.createSportType(request));
 
         assertTrue(ex.getMessage().contains("Mã môn thể thao đã tồn tại"));
+        verify(sportTypeRepository, never()).save(any());
+    }
+
+    @Test
+    void deleteSportType_SportTypeNotFound_ThrowsException() {
+        when(sportTypeRepository.findById(1)).thenReturn(Optional.empty());
+
+        ResourceNotFoundException ex = assertThrows(ResourceNotFoundException.class, () ->
+                sportTypeService.deleteSportType(1));
+
+        assertTrue(ex.getMessage().contains("Không tìm thấy loại môn thể thao với ID: 1"));
+        verify(sportTypeRepository, never()).delete(any());
+        verify(sportTypeRepository, never()).save(any());
+    }
+
+    @Test
+    void deleteSportType_InUseInStadium_DeactivatesSportType() {
+        SportType sportType = SportType.builder()
+                .sportTypeId(1)
+                .isActive(true)
+                .build();
+
+        when(sportTypeRepository.findById(1)).thenReturn(Optional.of(sportType));
+        when(stadiumRepository.existsBySportTypeSportTypeId(1)).thenReturn(true);
+
+        sportTypeService.deleteSportType(1);
+
+        assertFalse(sportType.getIsActive());
+        verify(sportTypeRepository).save(sportType);
+        verify(sportTypeRepository, never()).delete(any());
+    }
+
+    @Test
+    void deleteSportType_InUseInMatchRequest_DeactivatesSportType() {
+        SportType sportType = SportType.builder()
+                .sportTypeId(1)
+                .isActive(true)
+                .build();
+
+        when(sportTypeRepository.findById(1)).thenReturn(Optional.of(sportType));
+        when(stadiumRepository.existsBySportTypeSportTypeId(1)).thenReturn(false);
+        when(matchRequestRepository.existsBySportTypeSportTypeId(1)).thenReturn(true);
+
+        sportTypeService.deleteSportType(1);
+
+        assertFalse(sportType.getIsActive());
+        verify(sportTypeRepository).save(sportType);
+        verify(sportTypeRepository, never()).delete(any());
+    }
+
+    @Test
+    void deleteSportType_NotInUse_HardDeletesSportType() {
+        SportType sportType = SportType.builder()
+                .sportTypeId(1)
+                .isActive(true)
+                .build();
+
+        when(sportTypeRepository.findById(1)).thenReturn(Optional.of(sportType));
+        when(stadiumRepository.existsBySportTypeSportTypeId(1)).thenReturn(false);
+        when(matchRequestRepository.existsBySportTypeSportTypeId(1)).thenReturn(false);
+
+        sportTypeService.deleteSportType(1);
+
+        verify(sportTypeRepository).delete(sportType);
         verify(sportTypeRepository, never()).save(any());
     }
 }

@@ -12,12 +12,14 @@ export interface OwnerDetail {
   businessAddress: string;
   approvedStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
   rejectionReason?: string;
+  businessLicenseUrl?: string;
+  identityCardUrl?: string;
   createdAt: string;
 }
 
 export const adminOwnerService = {
   getRegistrations: (status: 'PENDING' | 'APPROVED' | 'REJECTED', page = 0, pageSize = 10) => {
-    return get<ApiResponse<PageResponse<OwnerDetail>>>(`/admin/owners?status=${status}&page=${page}&pageSize=${pageSize}`);
+    return get<ApiResponse<PageResponse<OwnerDetail>>>(`/admin/owners/registrations?status=${status}&page=${page}&pageSize=${pageSize}`);
   },
 
   approveOrReject: (ownerId: number, data: { approvedStatus: 'APPROVED' | 'REJECTED'; rejectionReason?: string }) => {

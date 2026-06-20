@@ -24,6 +24,16 @@ export default function OwnerApprovalPage() {
   const router = useRouter();
   const { data: session, status: sessionStatus } = useSession();
 
+  const fileToken = session?.accessToken ? `?token=${session.accessToken}` : "";
+  const getFileUrl = (fileName?: string) => {
+    if (!fileName) return "#";
+    if (fileName.startsWith("http://") || fileName.startsWith("https://")) {
+      const separator = fileName.includes("?") ? "&" : "?";
+      return `${fileName}${session?.accessToken ? `${separator}token=${session.accessToken}` : ""}`;
+    }
+    return `${process.env.NEXT_PUBLIC_API_URL}/files/documents/${fileName}${fileToken}`;
+  };
+
   const [activeTab, setActiveTab] = useState<'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
   const [applications, setApplications] = useState<OwnerDetail[]>([]);
   const [page, setPage] = useState(0);
@@ -167,7 +177,7 @@ export default function OwnerApprovalPage() {
             <Building className="h-5 w-5 text-primary" />
             <h4 className="font-semibold text-slate-800">Thông tin doanh nghiệp / hộ kinh doanh</h4>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm mb-4">
             <div>
               <span className="text-muted-foreground block md:inline font-medium">Tên thương hiệu:</span>{" "}
               <span className="font-semibold text-slate-700">{application.businessName}</span>
@@ -184,12 +194,51 @@ export default function OwnerApprovalPage() {
               </span>
             </div>
           </div>
+
+          <div className="mt-4 pt-4 border-t border-slate-200">
+            <span className="text-muted-foreground font-semibold text-xs block mb-2">Tài liệu đính kèm:</span>
+            <div className="flex flex-wrap gap-3">
+              {application.businessLicenseUrl ? (
+                <a
+                  href={getFileUrl(application.businessLicenseUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-white border border-slate-200 hover:border-primary text-xs font-semibold text-slate-700 hover:text-primary transition-all shadow-sm"
+                >
+                  📄 Giấy phép kinh doanh
+                </a>
+              ) : (
+                <span className="text-xs text-red-500 font-semibold">⚠️ Thiếu Giấy phép kinh doanh</span>
+              )}
+              {application.identityCardUrl ? (
+                <a
+                  href={getFileUrl(application.identityCardUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-white border border-slate-200 hover:border-primary text-xs font-semibold text-slate-700 hover:text-primary transition-all shadow-sm"
+                >
+                  🪪 Ảnh CCCD / Hộ chiếu
+                </a>
+              ) : (
+                <span className="text-xs text-red-500 font-semibold">⚠️ Thiếu ảnh CCCD</span>
+              )}
+            </div>
+          </div>
         </div>
 
         {application.approvedStatus === "PENDING" && (
-          <div className="flex flex-wrap gap-3 mt-4">
+          <div className="flex justify-end gap-3 mt-4">
             <Button
-              className="flex-1 min-w-[120px]"
+              variant="destructive"
+              className="px-4 py-2"
+              disabled={actionLoadingId !== null}
+              onClick={() => handleRejectClick(application)}
+            >
+              <XCircle className="h-4 w-4 mr-2" />
+              Từ chối
+            </Button>
+            <Button
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white"
               disabled={actionLoadingId !== null}
               onClick={() => handleApprove(application.ownerId)}
             >
@@ -199,15 +248,6 @@ export default function OwnerApprovalPage() {
                 <CheckCircle className="h-4 w-4 mr-2" />
               )}
               Phê duyệt
-            </Button>
-            <Button
-              variant="destructive"
-              className="flex-1 min-w-[120px]"
-              disabled={actionLoadingId !== null}
-              onClick={() => handleRejectClick(application)}
-            >
-              <XCircle className="h-4 w-4 mr-2" />
-              Từ chối
             </Button>
           </div>
         )}
@@ -319,8 +359,32 @@ export default function OwnerApprovalPage() {
                   placeholder="Nhập lý do từ chối..."
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
+                  className="focus-visible:ring-rose-500"
                   rows={4}
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Lý do này sẽ được gửi trực tiếp qua Email để Chủ sân cập nhật lại hồ sơ.
+                </p>
+                <div className="mt-3">
+                  <span className="text-xs font-semibold text-slate-500 block mb-1.5">Gợi ý lý do nhanh:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      "Ảnh tài liệu bị mờ, không rõ thông tin",
+                      "Mã số thuế không hợp lệ hoặc không trùng khớp",
+                      "Địa chỉ kinh doanh thiếu chi tiết",
+                      "Tài liệu giấy tờ tùy thân không chính xác"
+                    ].map((tag) => (
+                      <Badge
+                        key={tag}
+                        variant="outline"
+                        className="cursor-pointer hover:bg-slate-100 hover:text-slate-900 transition-colors text-[11px] py-1 px-2.5 font-normal"
+                        onClick={() => setRejectReason(tag)}
+                      >
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
               </div>
               <div className="flex gap-2 justify-end">
                 <Button

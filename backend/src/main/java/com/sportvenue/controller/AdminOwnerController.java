@@ -1,10 +1,12 @@
 package com.sportvenue.controller;
 
 import com.sportvenue.dto.request.ApproveOwnerRequest;
+import com.sportvenue.dto.response.AdminOwnerResponse;
 import com.sportvenue.dto.response.ApiResponse;
 import com.sportvenue.dto.response.OwnerDetailResponse;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.entity.enums.ApprovedStatus;
+import com.sportvenue.service.AdminOwnerService;
 import com.sportvenue.service.OwnerRegistrationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -39,14 +41,46 @@ import java.util.List;
 public class AdminOwnerController {
 
     private final OwnerRegistrationService ownerRegistrationService;
+    private final AdminOwnerService adminOwnerService;
 
     /**
-     * Lấy danh sách hồ sơ đối tác phân trang theo trạng thái phê duyệt.
+     * Lấy danh sách tất cả chủ sân (Owner) phục vụ quản lý tài khoản (Active/Locked).
      */
     @GetMapping
     @Operation(
-            summary = "Xem danh sách hồ sơ chủ sân",
-            description = "Admin xem danh sách các hồ sơ chủ sân phân trang theo trạng thái: PENDING, APPROVED, REJECTED."
+            summary = "Lấy danh sách chủ sân",
+            description = "Admin lấy danh sách chủ sân có lọc theo từ khóa tìm kiếm, trạng thái tài khoản, trạng thái duyệt."
+    )
+    public ResponseEntity<ApiResponse<PageResponse<AdminOwnerResponse>>> getOwners(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String accountStatus,
+            @RequestParam(required = false) String approvedStatus,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir
+    ) {
+        List<String> allowedSortBy = List.of("fullName", "email", "phoneNumber", "businessName", "createdAt");
+        if (!allowedSortBy.contains(sortBy)) {
+            sortBy = "createdAt";
+        }
+        
+        PageResponse<AdminOwnerResponse> result = adminOwnerService.getOwners(search, accountStatus, approvedStatus, page, size, sortBy, sortDir);
+        
+        return ResponseEntity.ok(ApiResponse.<PageResponse<AdminOwnerResponse>>builder()
+                .code(200)
+                .message("Lấy danh sách Owner thành công")
+                .result(result)
+                .build());
+    }
+
+    /**
+     * Lấy danh sách hồ sơ đối tác phân trang theo trạng thái phê duyệt (dành riêng cho luồng Duyệt hồ sơ).
+     */
+    @GetMapping("/registrations")
+    @Operation(
+            summary = "Xem danh sách hồ sơ đăng ký chủ sân",
+            description = "Admin xem danh sách các hồ sơ chủ sân phân trang theo trạng thái phê duyệt: PENDING, APPROVED, REJECTED."
     )
     public ResponseEntity<ApiResponse<PageResponse<OwnerDetailResponse>>> getOwnerRegistrations(
             @Parameter(description = "Trạng thái phê duyệt: PENDING, APPROVED, REJECTED", example = "PENDING")
@@ -66,7 +100,7 @@ public class AdminOwnerController {
     ) {
         List<String> allowedSortBy = List.of("ownerId", "businessName", "taxCode", "createdAt");
         if (!allowedSortBy.contains(sortBy)) {
-            sortBy = "createdAt"; // fallback
+            sortBy = "createdAt";
         }
 
         Sort sort = sortDir.equalsIgnoreCase("asc")

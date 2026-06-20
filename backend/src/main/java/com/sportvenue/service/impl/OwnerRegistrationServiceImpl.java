@@ -83,6 +83,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                 .businessName(request.getBusinessName())
                 .taxCode(request.getTaxCode())
                 .businessAddress(request.getBusinessAddress())
+                .businessLicenseUrl(request.getBusinessLicenseUrl())
+                .identityCardUrl(request.getIdentityCardUrl())
                 .approvedStatus(ApprovedStatus.PENDING)
                 .build();
         ownerRepository.save(owner);
@@ -106,6 +108,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                 existingOwner.setBusinessName(request.getBusinessName());
                 existingOwner.setTaxCode(request.getTaxCode());
                 existingOwner.setBusinessAddress(request.getBusinessAddress());
+                existingOwner.setBusinessLicenseUrl(request.getBusinessLicenseUrl());
+                existingOwner.setIdentityCardUrl(request.getIdentityCardUrl());
                 existingOwner.setApprovedStatus(ApprovedStatus.PENDING);
                 existingOwner.setRejectionReason(null);
                 existingOwner.setApprovedBy(null);
@@ -120,6 +124,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                     .businessName(request.getBusinessName())
                     .taxCode(request.getTaxCode())
                     .businessAddress(request.getBusinessAddress())
+                    .businessLicenseUrl(request.getBusinessLicenseUrl())
+                    .identityCardUrl(request.getIdentityCardUrl())
                     .approvedStatus(ApprovedStatus.PENDING)
                     .build();
         }
@@ -143,6 +149,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         existingOwner.setBusinessName(request.getBusinessName());
         existingOwner.setTaxCode(request.getTaxCode());
         existingOwner.setBusinessAddress(request.getBusinessAddress());
+        existingOwner.setBusinessLicenseUrl(request.getBusinessLicenseUrl());
+        existingOwner.setIdentityCardUrl(request.getIdentityCardUrl());
         existingOwner.setApprovedStatus(ApprovedStatus.PENDING);
         existingOwner.setRejectionReason(null);
         existingOwner.setApprovedBy(null);
@@ -251,6 +259,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                 .businessAddress(owner.getBusinessAddress())
                 .approvedStatus(owner.getApprovedStatus())
                 .rejectionReason(owner.getRejectionReason())
+                .businessLicenseUrl(owner.getBusinessLicenseUrl())
+                .identityCardUrl(owner.getIdentityCardUrl())
                 .createdAt(owner.getCreatedAt())
                 .approvedByEmail(owner.getApprovedBy() != null ? owner.getApprovedBy().getEmail() : null)
                 .approvedAt(owner.getApprovedAt())
