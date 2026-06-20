@@ -406,7 +406,6 @@ class StadiumServiceImplTest {
                 .address(" 456 New Street ")
                 .sportTypeId(2)
                 .pricePerHour(BigDecimal.valueOf(150000))
-                .capacity(20)
                 .latitude(BigDecimal.valueOf(10.762622))
                 .longitude(BigDecimal.valueOf(106.660172))
                 .description("Updated description")

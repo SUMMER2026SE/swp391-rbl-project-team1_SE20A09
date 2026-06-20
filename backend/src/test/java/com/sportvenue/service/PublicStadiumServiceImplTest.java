@@ -66,7 +66,6 @@ class PublicStadiumServiceImplTest {
                 .stadiumName("Test Stadium")
                 .address("123 Test St")
                 .pricePerHour(BigDecimal.valueOf(100_000))
-                .capacity(10)
                 .averageRating(BigDecimal.valueOf(4.5))
                 .openTime(LocalTime.of(6, 0))
                 .closeTime(LocalTime.of(22, 0))

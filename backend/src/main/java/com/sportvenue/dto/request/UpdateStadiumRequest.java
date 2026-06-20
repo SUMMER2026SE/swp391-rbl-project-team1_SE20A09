@@ -42,9 +42,6 @@ public class UpdateStadiumRequest {
     @Digits(integer = 10, fraction = 2, message = "Price per hour format invalid")
     private BigDecimal pricePerHour;
 
-    @Min(value = 1, message = "Capacity must be at least 1")
-    private Integer capacity;
-
     @Size(max = 2000, message = "Description cannot exceed 2000 characters")
     private String description;
 

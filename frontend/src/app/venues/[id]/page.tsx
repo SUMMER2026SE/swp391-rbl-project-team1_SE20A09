@@ -74,7 +74,6 @@ export default function VenueDetailPage({ params }: { params: { id: string } }) 
     pricePerHour: venue.pricePerHour,
     openTime: formatTimeNum(venue.openTime),
     closeTime: formatTimeNum(venue.closeTime),
-    capacity: venue.capacity,
     status: venue.stadiumStatus,
     description: venue.description,
     images: images,

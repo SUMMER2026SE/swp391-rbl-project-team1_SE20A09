@@ -20,7 +20,6 @@ public class StadiumDetailResponse {
     private String description;
     private String address;
     private BigDecimal pricePerHour;
-    private Integer capacity;
     private BigDecimal averageRating;
     private Long totalReviews;
     

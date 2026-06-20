@@ -255,6 +255,9 @@ function AddVenuePage() {
 
                   <div className="space-y-2">
                     <AddressPicker
+                      initialAddress={form.watch("address")}
+                      initialLat={form.watch("latitude")}
+                      initialLng={form.watch("longitude")}
                       onAddressChange={(data) => {
                         form.setValue("address", data.addressText, { shouldValidate: true });
                         form.setValue("latitude", data.lat, { shouldValidate: true });
