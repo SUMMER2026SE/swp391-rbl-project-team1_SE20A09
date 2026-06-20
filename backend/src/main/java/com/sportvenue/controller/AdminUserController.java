@@ -122,4 +122,89 @@ public class AdminUserController {
                 .message("Đã " + statusMessage + " tài khoản thành công")
                 .build());
     }
+
+    /**
+     * UC-ADM-04: Lấy danh sách chủ sân (role=Owner) có phân trang.
+     *
+     * @param page          số trang (0-indexed), mặc định 0
+     * @param pageSize      kích thước trang, mặc định 10
+     * @param search        từ khóa tìm kiếm theo tên, email, SĐT (tùy chọn)
+     * @param accountStatus lọc theo trạng thái: ACTIVE, BLOCKED, PENDING (tùy chọn)
+     * @param sortBy        trường sắp xếp, mặc định "createdAt"
+     * @param sortDir       hướng sắp xếp: asc hoặc desc, mặc định "desc"
+     * @return 200 OK với danh sách chủ sân phân trang
+     */
+    @GetMapping("/owners")
+    @Operation(
+        summary = "Xem danh sách chủ sân",
+        description = "Admin xem danh sách tất cả chủ sân (role=Owner). "
+                    + "Hỗ trợ phân trang, tìm kiếm theo tên/email/SĐT và lọc theo trạng thái tài khoản."
+    )
+    @ApiResponses(value = {
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "200", description = "Lấy danh sách chủ sân thành công"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "403", description = "Không có quyền — yêu cầu role Admin")
+    })
+    public ResponseEntity<ApiResponse<PageResponse<AdminCustomerResponse>>> getOwners(
+            @Parameter(description = "Số trang (0-indexed)", example = "0")
+            @jakarta.validation.constraints.Min(value = 0, message = "Số trang (page) không được nhỏ hơn 0")
+            @RequestParam(defaultValue = "0") int page,
+
+            @Parameter(description = "Số bản ghi mỗi trang", example = "10")
+            @jakarta.validation.constraints.Min(value = 1, message = "Số bản ghi mỗi trang (pageSize) phải lớn hơn 0")
+            @RequestParam(defaultValue = "10") int pageSize,
+
+            @Parameter(description = "Tìm kiếm theo tên, email hoặc SĐT")
+            @RequestParam(required = false) String search,
+
+            @Parameter(description = "Lọc theo trạng thái tài khoản: ACTIVE, BLOCKED, PENDING")
+            @RequestParam(required = false) AccountStatus accountStatus,
+
+            @Parameter(description = "Trường sắp xếp", example = "createdAt")
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+
+            @Parameter(description = "Hướng sắp xếp: asc hoặc desc", example = "desc")
+            @RequestParam(defaultValue = "desc") String sortDir
+    ) {
+        List<String> allowedSortBy = List.of(
+                "userId", "firstName", "lastName", "email",
+                "phoneNumber", "accountStatus", "createdAt"
+        );
+        if (!allowedSortBy.contains(sortBy)) {
+            sortBy = "createdAt"; // fallback an toàn
+        }
+
+        Sort sort = sortDir.equalsIgnoreCase("asc")
+                ? Sort.by(sortBy).ascending()
+                : Sort.by(sortBy).descending();
+        Pageable pageable = PageRequest.of(page, pageSize, sort);
+
+        PageResponse<AdminCustomerResponse> result = adminUserService.getOwners(search, accountStatus, pageable);
+
+        return ResponseEntity.ok(ApiResponse.<PageResponse<AdminCustomerResponse>>builder()
+                .code(200)
+                .message("Lấy danh sách chủ sân thành công")
+                .result(result)
+                .build());
+    }
+
+    /**
+     * UC-ADM-05: Khóa/Mở khóa tài khoản chủ sân.
+     */
+    @org.springframework.web.bind.annotation.PatchMapping("/owners/{id}/lock")
+    @Operation(summary = "Khóa/Mở khóa chủ sân", description = "Thay đổi trạng thái ACTIVE/BLOCKED của chủ sân")
+    public ResponseEntity<ApiResponse<Void>> lockUnlockOwner(
+            @Parameter(description = "ID của chủ sân") @org.springframework.web.bind.annotation.PathVariable Integer id,
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody com.sportvenue.dto.request.LockCustomerRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.sportvenue.security.UserPrincipal currentUser) {
+
+        adminUserService.lockUnlockOwner(id, request.getEnabled(), currentUser.getUser().getUserId());
+
+        String statusMessage = Boolean.TRUE.equals(request.getEnabled()) ? "mở khóa" : "khóa";
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .code(200)
+                .message("Đã " + statusMessage + " tài khoản chủ sân thành công")
+                .build());
+    }
 }

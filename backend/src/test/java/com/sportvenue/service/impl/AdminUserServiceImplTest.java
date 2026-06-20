@@ -209,4 +209,71 @@ public class AdminUserServiceImplTest {
         assertEquals(AccountStatus.BLOCKED, customerUser.getAccountStatus());
         org.mockito.Mockito.verify(userRepository).save(customerUser);
     }
+
+    // --- UC-ADM-04 / UC-ADM-05 TESTS ---
+
+    @Test
+    void getOwners_returnsPageResponse() {
+        // Arrange
+        Pageable pageable = PageRequest.of(0, 10);
+        User owner = User.builder()
+                .userId(1)
+                .firstName("Test")
+                .lastName("Owner")
+                .accountStatus(AccountStatus.ACTIVE)
+                .build();
+        Page<User> userPage = new PageImpl<>(List.of(owner));
+
+        when(userRepository.findByRoleWithFilters(eq("Owner"), any(), any(), any()))
+                .thenReturn(userPage);
+
+        // Act
+        PageResponse<AdminCustomerResponse> result = adminUserService.getOwners(null, null, pageable);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+        assertEquals("Test Owner", result.getContent().get(0).getFullName());
+        org.mockito.Mockito.verify(userRepository).findByRoleWithFilters(eq("Owner"), any(), any(), any());
+    }
+
+    @Test
+    void lockUnlockOwner_selfLockProtection_throwsException() {
+        com.sportvenue.exception.BadRequestException exception = assertThrows(com.sportvenue.exception.BadRequestException.class, () -> {
+            adminUserService.lockUnlockOwner(1, false, 1);
+        });
+        assertEquals("Bạn không thể tự khóa tài khoản của chính mình.", exception.getMessage());
+    }
+
+    @Test
+    void lockUnlockOwner_userNotFound_throwsException() {
+        when(userRepository.findById(2)).thenReturn(java.util.Optional.empty());
+        
+        com.sportvenue.exception.AppException exception = assertThrows(com.sportvenue.exception.AppException.class, () -> {
+            adminUserService.lockUnlockOwner(2, false, 1);
+        });
+        assertEquals(com.sportvenue.exception.ErrorCode.USER_NOT_FOUND, exception.getErrorCode());
+    }
+
+    @Test
+    void lockUnlockOwner_notOwner_throwsException() {
+        User customerUser = User.builder().userId(2).role(com.sportvenue.entity.Role.builder().roleName("Customer").build()).build();
+        when(userRepository.findById(2)).thenReturn(java.util.Optional.of(customerUser));
+        
+        com.sportvenue.exception.ResourceNotFoundException exception = assertThrows(com.sportvenue.exception.ResourceNotFoundException.class, () -> {
+            adminUserService.lockUnlockOwner(2, false, 1);
+        });
+        assertEquals("Người dùng không phải là chủ sân (Owner).", exception.getMessage());
+    }
+
+    @Test
+    void lockUnlockOwner_success() {
+        User ownerUser = User.builder().userId(2).accountStatus(AccountStatus.BLOCKED).role(com.sportvenue.entity.Role.builder().roleName("Owner").build()).build();
+        when(userRepository.findById(2)).thenReturn(java.util.Optional.of(ownerUser));
+        
+        adminUserService.lockUnlockOwner(2, true, 1);
+        
+        assertEquals(AccountStatus.ACTIVE, ownerUser.getAccountStatus());
+        org.mockito.Mockito.verify(userRepository).save(ownerUser);
+    }
 }

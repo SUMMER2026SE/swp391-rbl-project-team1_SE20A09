@@ -113,4 +113,57 @@ class AdminUserControllerTest {
         assertEquals("Đã khóa tài khoản thành công", result.getBody().getMessage());
         verify(adminUserService).lockUnlockCustomer(2, false, 1);
     }
+
+    // --- UC-ADM-04 / UC-ADM-05 TESTS ---
+
+    @Test
+    void getOwners_Success() {
+        // Arrange
+        int page = 0;
+        int pageSize = 10;
+        String search = "test owner";
+        AccountStatus status = AccountStatus.ACTIVE;
+        String sortBy = "createdAt";
+        String sortDir = "desc";
+
+        Pageable pageable = PageRequest.of(page, pageSize, Sort.by(sortBy).descending());
+        
+        AdminCustomerResponse owner = AdminCustomerResponse.builder()
+                .userId(3)
+                .email("owner@test.com")
+                .build();
+                
+        PageResponse<AdminCustomerResponse> pageResponse = new PageResponse<>();
+        pageResponse.setContent(List.of(owner));
+        pageResponse.setTotalElements(1);
+        
+        when(adminUserService.getOwners(eq(search), eq(status), eq(pageable))).thenReturn(pageResponse);
+
+        // Act
+        ResponseEntity<ApiResponse<PageResponse<AdminCustomerResponse>>> result = 
+                adminUserController.getOwners(page, pageSize, search, status, sortBy, sortDir);
+
+        // Assert
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertNotNull(result.getBody());
+        assertEquals(200, result.getBody().getCode());
+        assertEquals(1, result.getBody().getResult().getTotalElements());
+        verify(adminUserService).getOwners(eq(search), eq(status), eq(pageable));
+    }
+
+    @Test
+    void lockUnlockOwner_ReturnsOk() {
+        // Arrange
+        com.sportvenue.dto.request.LockCustomerRequest request = new com.sportvenue.dto.request.LockCustomerRequest(true);
+        com.sportvenue.entity.User adminUser = com.sportvenue.entity.User.builder().userId(1).build();
+        com.sportvenue.security.UserPrincipal principal = new com.sportvenue.security.UserPrincipal(adminUser);
+
+        // Act
+        ResponseEntity<ApiResponse<Void>> result = adminUserController.lockUnlockOwner(3, request, principal);
+
+        // Assert
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertEquals("Đã mở khóa tài khoản chủ sân thành công", result.getBody().getMessage());
+        verify(adminUserService).lockUnlockOwner(3, true, 1);
+    }
 }

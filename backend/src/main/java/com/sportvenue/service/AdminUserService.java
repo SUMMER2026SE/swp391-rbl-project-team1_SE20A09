@@ -31,4 +31,22 @@ public interface AdminUserService {
      * @param currentAdminId ID của admin đang thao tác
      */
     void lockUnlockCustomer(Integer id, Boolean enabled, Integer currentAdminId);
+
+    /**
+     * Lấy danh sách chủ sân (role=Owner) có phân trang, tìm kiếm và lọc trạng thái.
+     *
+     * @param search       từ khóa tìm kiếm theo tên, email, SĐT (nullable)
+     * @param accountStatus lọc theo trạng thái tài khoản: ACTIVE, BLOCKED, PENDING (nullable)
+     * @param pageable     thông tin phân trang (page, size, sort)
+     * @return PageResponse chứa danh sách AdminCustomerResponse
+     */
+    PageResponse<AdminCustomerResponse> getOwners(String search, AccountStatus accountStatus, Pageable pageable);
+
+    /**
+     * UC-ADM-05: Khoá hoặc mở khoá tài khoản chủ sân.
+     * @param id ID của chủ sân
+     * @param enabled true = ACTIVE, false = BLOCKED
+     * @param currentAdminId ID của admin đang thao tác
+     */
+    void lockUnlockOwner(Integer id, Boolean enabled, Integer currentAdminId);
 }

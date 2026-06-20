@@ -87,4 +87,47 @@ public class AdminUserServiceImpl implements AdminUserService {
         
         log.info("Successfully updated account status to {} for customer id={}", newStatus, id);
     }
+
+    private static final String ROLE_OWNER = "Owner";
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<AdminCustomerResponse> getOwners(String search, AccountStatus accountStatus, Pageable pageable) {
+        log.info("Admin fetching owner list — search='{}', status={}, page={}, size={}",
+                search, accountStatus, pageable.getPageNumber(), pageable.getPageSize());
+
+        Page<User> userPage = userRepository.findByRoleWithFilters(
+                ROLE_OWNER,
+                search,
+                accountStatus,
+                pageable
+        );
+
+        return PageResponse.of(userPage, userPage.getContent().stream()
+                .map(this::toAdminCustomerResponse)
+                .toList());
+    }
+
+    @Override
+    @Transactional
+    public void lockUnlockOwner(Integer id, Boolean enabled, Integer currentAdminId) {
+        log.info("Admin {} requesting to lock/unlock owner id={}, enabled={}", currentAdminId, id, enabled);
+
+        if (id.equals(currentAdminId)) {
+            throw new com.sportvenue.exception.BadRequestException("Bạn không thể tự khóa tài khoản của chính mình.");
+        }
+
+        User owner = userRepository.findById(id)
+                .orElseThrow(() -> new com.sportvenue.exception.AppException(com.sportvenue.exception.ErrorCode.USER_NOT_FOUND));
+
+        if (!ROLE_OWNER.equalsIgnoreCase(owner.getRole().getRoleName())) {
+            throw new com.sportvenue.exception.ResourceNotFoundException("Người dùng không phải là chủ sân (Owner).");
+        }
+
+        AccountStatus newStatus = Boolean.TRUE.equals(enabled) ? AccountStatus.ACTIVE : AccountStatus.BLOCKED;
+        owner.setAccountStatus(newStatus);
+        userRepository.save(owner);
+        
+        log.info("Successfully updated account status to {} for owner id={}", newStatus, id);
+    }
 }
