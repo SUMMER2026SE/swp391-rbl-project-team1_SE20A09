@@ -68,6 +68,12 @@ const STATUS_MAP: Record<string, { label: string, classes: string }> = {
   CANCELLED: { label: 'Đã hủy', classes: 'bg-rose-100 text-rose-800 border-rose-200' },
 };
 
+const formatLocalDate = (dateStr: string) => {
+  if (!dateStr) return "N/A";
+  const [year, month, day] = dateStr.split("-");
+  return `${day}/${month}/${year}`;
+};
+
 export default function AdminDashboardPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["admin-dashboard"],
@@ -91,10 +97,10 @@ export default function AdminDashboardPage() {
   }
 
   const KPI_DATA = [
-    { title: 'Tổng người dùng', value: data.totalUsers.toLocaleString("vi-VN"), trend: '+12% tháng trước', icon: Users, color: 'text-blue-600', bg: 'bg-blue-100' },
-    { title: 'Tổng chủ sân', value: data.totalOwners.toLocaleString("vi-VN"), trend: '+5% tháng trước', icon: Building2, color: 'text-indigo-600', bg: 'bg-indigo-100' },
-    { title: 'Tổng số sân', value: data.totalStadiums.toLocaleString("vi-VN"), trend: '+8% tháng trước', icon: MapPin, color: 'text-purple-600', bg: 'bg-purple-100' },
-    { title: 'Tổng lượt đặt', value: data.totalBookings.toLocaleString("vi-VN"), trend: '+24% tháng trước', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-100' },
+    { title: 'Tổng người dùng', value: data.totalUsers.toLocaleString("vi-VN"), trend: 'Số liệu thời gian thực', icon: Users, color: 'text-blue-600', bg: 'bg-blue-100' },
+    { title: 'Tổng chủ sân', value: data.totalOwners.toLocaleString("vi-VN"), trend: 'Số liệu thời gian thực', icon: Building2, color: 'text-indigo-600', bg: 'bg-indigo-100' },
+    { title: 'Tổng số sân', value: data.totalStadiums.toLocaleString("vi-VN"), trend: 'Số liệu thời gian thực', icon: MapPin, color: 'text-purple-600', bg: 'bg-purple-100' },
+    { title: 'Tổng lượt đặt', value: data.totalBookings.toLocaleString("vi-VN"), trend: 'Số liệu thời gian thực', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-100' },
   ];
 
   const BOOKING_STATUS = [
@@ -124,7 +130,7 @@ export default function AdminDashboardPage() {
               maximumFractionDigits: 0,
             }).format(data.totalRevenue)}
           </div>
-          <div className="text-xs text-emerald-200 font-medium relative z-10">+18% so với tháng trước</div>
+          <div className="text-xs text-emerald-200 font-medium relative z-10">Số liệu thời gian thực</div>
         </div>
 
         {/* Other KPI Cards */}
@@ -261,7 +267,7 @@ export default function AdminDashboardPage() {
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-sm text-slate-900 font-medium mb-0.5">{booking.timeSlot}</div>
-                          <div className="text-xs text-slate-500">{format(new Date(booking.reservationDate), "dd/MM/yyyy")}</div>
+                          <div className="text-xs text-slate-500">{formatLocalDate(booking.reservationDate)}</div>
                         </td>
                         <td className="px-6 py-4 text-sm font-semibold text-slate-900">
                           {new Intl.NumberFormat("vi-VN", {
