@@ -81,7 +81,10 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy sân với ID " + request.getStadiumId()));
 
-        TimeSlot slot = timeSlotRepository.findById(request.getSlotId())
+        // UC-CUS-01: Pessimistic Write lock trên slot row — 2 request đồng thời cho
+        // cùng (stadium, slot, date) sẽ serialize qua bước conflict-check + insert,
+        // kết hợp với partial unique index V5.5 để chặn double-booking ở tầng DB.
+        TimeSlot slot = timeSlotRepository.findByIdForUpdate(request.getSlotId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy khung giờ với ID " + request.getSlotId()));
 
