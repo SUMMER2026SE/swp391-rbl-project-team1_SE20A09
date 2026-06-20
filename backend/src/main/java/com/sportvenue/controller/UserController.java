@@ -2,13 +2,18 @@ package com.sportvenue.controller;
 
 import com.sportvenue.dto.ChangePasswordRequest;
 import com.sportvenue.dto.UserProfileResponse;
+import com.sportvenue.dto.request.UpgradeToOwnerRequest;
+import com.sportvenue.dto.response.ApiResponse;
+import com.sportvenue.dto.response.OwnerDetailResponse;
 import com.sportvenue.service.UserService;
+import com.sportvenue.service.OwnerRegistrationService;
+import com.sportvenue.security.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import com.sportvenue.security.UserPrincipal;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,6 +30,7 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
+    private final OwnerRegistrationService ownerRegistrationService;
 
     /**
      * Retrieves the profile of the current logged-in user.
@@ -53,5 +59,33 @@ public class UserController {
             @Valid @RequestBody ChangePasswordRequest request) {
         userService.changePassword(userPrincipal.getUsername(), request);
         return ResponseEntity.ok(Map.of("message", "Thay đổi mật khẩu thành công!"));
+    }
+
+    @PostMapping("/me/upgrade-to-owner")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(summary = "Customer gửi yêu cầu nâng cấp tài khoản thành Chủ sân", description = "Tạo hồ sơ chủ sân ở trạng thái PENDING. Yêu cầu role Customer và Bearer JWT Token ở Header")
+    public ResponseEntity<ApiResponse<OwnerDetailResponse>> upgradeAccount(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @Valid @RequestBody UpgradeToOwnerRequest request) {
+        OwnerDetailResponse response = ownerRegistrationService.upgradeCurrentCustomer(
+                userPrincipal.getUser(), request);
+        return ResponseEntity.ok(ApiResponse.<OwnerDetailResponse>builder()
+                .code(200)
+                .message("Gửi hồ sơ nâng cấp thành công. Đang chờ Admin phê duyệt.")
+                .result(response)
+                .build());
+    }
+
+    @GetMapping("/me/owner-profile")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Lấy hồ sơ chủ sân của tài khoản hiện tại", description = "Lấy thông tin và trạng thái phê duyệt của hồ sơ chủ sân gắn với tài khoản đang đăng nhập. Yêu cầu Bearer JWT Token ở Header")
+    public ResponseEntity<ApiResponse<OwnerDetailResponse>> getOwnerProfile(
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        OwnerDetailResponse response = ownerRegistrationService.getOwnerProfileOfUser(userPrincipal.getUser());
+        return ResponseEntity.ok(ApiResponse.<OwnerDetailResponse>builder()
+                .code(200)
+                .message(response != null ? "Lấy hồ sơ chủ sân thành công." : "Tài khoản chưa có hồ sơ chủ sân.")
+                .result(response)
+                .build());
     }
 }
