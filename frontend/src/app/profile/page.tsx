@@ -182,14 +182,18 @@ function UserProfilePage() {
     const fetchReviews = async () => {
       try {
         if (!profile) return;
-        const endpoint = profile.roleName === 'Owner' ? '/owner/reviews' : '/reviews/my';
-        const data = await get<any[]>(endpoint);
-        setReviews(data || []);
+        const endpoint = profile.roleName === 'Owner' ? '/owner/reviews' : '/reviews/me';
+        // Backend GET /api/v1/reviews/me trả về Page<ReviewResponse>,
+        // unwrap `.content`. Nếu response là mảng phẳng thì fallback raw data.
+        const data: any = await get<any>(endpoint);
+        const list = Array.isArray(data) ? data : (data?.content ?? []);
+        setReviews(list);
       } catch (e) {
+        // Không throw — chỉ log. Lỗi load reviews không được block phần còn lại.
         console.error("Failed to load reviews", e);
       }
     };
-    
+
     if (profile) {
       fetchReviews();
     }
