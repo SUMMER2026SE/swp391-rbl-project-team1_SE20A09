@@ -242,6 +242,12 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("endOfDay") LocalDateTime endOfDay,
             @Param("startTime") java.time.LocalTime startTime,
             @Param("endTime") java.time.LocalTime endTime);
+
+    long countByBookingStatus(BookingStatus status);
+
+    @EntityGraph(attributePaths = {"user", "stadium", "slot"})
+    List<Booking> findTop5ByOrderByBookingDateDesc();
 }
+
 
 

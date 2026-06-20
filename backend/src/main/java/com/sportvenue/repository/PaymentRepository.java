@@ -73,4 +73,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
 
     @Query("SELECT p FROM Payment p WHERE p.booking.bookingId IN :bookingIds AND p.amount < 0")
     List<Payment> findRefundPaymentsByBookingIds(@Param("bookingIds") List<Integer> bookingIds);
+
+    @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS")
+    java.math.BigDecimal sumTotalRevenue();
 }
+
