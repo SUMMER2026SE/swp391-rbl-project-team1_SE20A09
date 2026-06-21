@@ -99,7 +99,7 @@ function OwnerComplaintsPage() {
       const data = await get<Complaint[]>("/owner/complaints");
       if (data && Array.isArray(data)) {
         setComplaints(data);
-        localStorage.setItem('sport_venue_complaints', JSON.stringify(data));
+        localStorage.setItem('owner_complaints', JSON.stringify(data));
         setSelectedComplaint(prev => {
           if (prev) {
             return data.find(c => c.complaintId === prev.complaintId) || null;
@@ -111,11 +111,11 @@ function OwnerComplaintsPage() {
       }
     } catch (error) {
       console.warn("Backend offline or error, loading local fallback:", error);
-      const stored = localStorage.getItem('sport_venue_complaints');
+      const stored = localStorage.getItem('owner_complaints');
       if (stored) {
         setComplaints(JSON.parse(stored));
       } else {
-        localStorage.setItem('sport_venue_complaints', JSON.stringify(DEFAULT_COMPLAINTS));
+        localStorage.setItem('owner_complaints', JSON.stringify(DEFAULT_COMPLAINTS));
         setComplaints(DEFAULT_COMPLAINTS);
       }
     }
@@ -127,7 +127,7 @@ function OwnerComplaintsPage() {
 
   const saveComplaints = (updated: Complaint[]) => {
     setComplaints(updated);
-    localStorage.setItem('sport_venue_complaints', JSON.stringify(updated));
+    localStorage.setItem('owner_complaints', JSON.stringify(updated));
     setSelectedComplaint(prev => {
       if (prev) {
         return updated.find(c => c.complaintId === prev.complaintId) || null;
@@ -224,7 +224,7 @@ function OwnerComplaintsPage() {
 
   const getFilteredComplaints = () => {
     if (filterStatus === "all") return complaints;
-    return complaints.filter(c => c.status === filterStatus);
+    return complaints.filter(c => (c.status || "").toLowerCase() === filterStatus.toLowerCase());
   };
 
   const activeComplaint = selectedComplaint 
@@ -232,218 +232,161 @@ function OwnerComplaintsPage() {
     : null;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="flex">
-        {/* Sidebar */}
-        <aside className="w-64 min-h-[calc(100vh-64px)] bg-card border-r p-4 shrink-0">
-          <h2 className="text-xl font-bold mb-6 px-3 text-primary">Quản lý chủ sân</h2>
-          <nav className="space-y-1">
-            <Button
-              variant="ghost"
-              className="w-full justify-start"
-              size="sm"
-              onClick={() => router.push("/owner/dashboard")}
-            >
-              <Home className="mr-3 h-4 w-4" />
-              Dashboard
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start"
-              size="sm"
-              onClick={() => router.push("/owner/venues")}
-            >
-              <BarChart3 className="mr-3 h-4 w-4" />
-              Sân của tôi
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start"
-              size="sm"
-              onClick={() => router.push("/owner/bookings")}
-            >
-              <Calendar className="mr-3 h-4 w-4" />
-              Lịch đặt sân
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start"
-              size="sm"
-              onClick={() => router.push("/owner/reviews")}
-            >
-              <Star className="mr-3 h-4 w-4" />
-              Đánh giá của khách
-            </Button>
-            <Button
-              variant="default"
-              className="w-full justify-start"
-              size="sm"
-              onClick={() => router.push("/owner/complaints")}
-            >
-              <AlertCircle className="mr-3 h-4 w-4" />
-              Khiếu nại khách hàng
-            </Button>
-          </nav>
-        </aside>
+    <div className="p-8 bg-muted/10 min-h-[calc(100vh-64px)]">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">Quản lý khiếu nại</h1>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Tất cả trạng thái" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Tất cả khiếu nại</SelectItem>
+            <SelectItem value="open">Mới</SelectItem>
+            <SelectItem value="in_progress">Đang xử lý</SelectItem>
+            <SelectItem value="resolved">Đã giải quyết</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
-        {/* Main Content */}
-        <main className="flex-1 p-8 bg-muted/10">
-          <div className="flex justify-between items-center mb-8">
-            <h1 className="text-3xl font-bold">Quản lý khiếu nại</h1>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Tất cả trạng thái" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả khiếu nại</SelectItem>
-                <SelectItem value="open">Mới</SelectItem>
-                <SelectItem value="in_progress">Đang xử lý</SelectItem>
-                <SelectItem value="resolved">Đã giải quyết</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left list column */}
+        <div className="lg:col-span-1 space-y-4">
+          {getFilteredComplaints().map((c) => (
+            <Card
+              key={c.complaintId}
+              className={`cursor-pointer hover:shadow transition-shadow border-l-4 ${
+                selectedComplaint?.complaintId === c.complaintId
+                  ? "border-l-primary bg-primary/5"
+                  : c.status === "open"
+                  ? "border-l-yellow-500"
+                  : c.status === "in_progress"
+                  ? "border-l-blue-500"
+                  : "border-l-green-500"
+              }`}
+              onClick={() => setSelectedComplaint(c)}
+            >
+              <CardContent className="p-4 space-y-2 bg-white">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-mono text-muted-foreground">{c.id}</span>
+                  <div className="flex gap-1">
+                    {getStatusBadge(c.status)}
+                    {getPriorityBadge(c.priority)}
+                  </div>
+                </div>
+                <h3 className="font-semibold text-sm line-clamp-1">{c.subject}</h3>
+                <p className="text-xs text-muted-foreground">Đối tượng: {c.against}</p>
+                <p className="text-xs text-muted-foreground">{new Date(c.submittedDate).toLocaleDateString('vi-VN')}</p>
+              </CardContent>
+            </Card>
+          ))}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left list column */}
-            <div className="lg:col-span-1 space-y-4">
-              {getFilteredComplaints().map((c) => (
-                <Card
-                  key={c.complaintId}
-                  className={`cursor-pointer hover:shadow transition-shadow border-l-4 ${
-                    selectedComplaint?.complaintId === c.complaintId
-                      ? "border-l-primary bg-primary/5"
-                      : c.status === "open"
-                      ? "border-l-yellow-500"
-                      : c.status === "in_progress"
-                      ? "border-l-blue-500"
-                      : "border-l-green-500"
-                  }`}
-                  onClick={() => setSelectedComplaint(c)}
-                >
-                  <CardContent className="p-4 space-y-2 bg-white">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs font-mono text-muted-foreground">{c.id}</span>
-                      <div className="flex gap-1">
-                        {getStatusBadge(c.status)}
-                        {getPriorityBadge(c.priority)}
+          {getFilteredComplaints().length === 0 && (
+            <div className="text-center p-8 text-muted-foreground bg-white border rounded">
+              Không tìm thấy khiếu nại nào.
+            </div>
+          )}
+        </div>
+
+        {/* Right details column */}
+        <div className="lg:col-span-2">
+          {selectedComplaint ? (
+            <Card className="flex flex-col h-[calc(100vh-220px)] bg-white">
+              {/* Detail Header */}
+              <CardHeader className="border-b bg-card flex flex-row justify-between items-center py-4 px-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-mono text-xs text-muted-foreground">{selectedComplaint.id}</span>
+                    {getStatusBadge(selectedComplaint.status)}
+                    {getPriorityBadge(selectedComplaint.priority)}
+                  </div>
+                  <h2 className="text-lg font-bold text-foreground">{selectedComplaint.subject}</h2>
+                </div>
+
+                {selectedComplaint.status !== "resolved" && (
+                  <Button
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => setShowResolveDialog(true)}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Giải quyết
+                  </Button>
+                )}
+              </CardHeader>
+
+              {/* Detail Content & Message list */}
+              <CardContent className="flex-1 overflow-y-auto p-6 space-y-6 bg-muted/5">
+                {/* Customer description */}
+                <div className="bg-card border rounded-lg p-4 space-y-2 shadow-sm bg-white">
+                  <div className="flex justify-between items-center text-xs text-muted-foreground">
+                    <span className="font-bold flex items-center gap-1"><User className="h-3.5 w-3.5" /> Khách hàng</span>
+                    <span>{new Date(selectedComplaint.submittedDate).toLocaleDateString('vi-VN')}</span>
+                  </div>
+                  <p className="text-sm font-medium">{selectedComplaint.description}</p>
+                </div>
+
+                {/* Chat replies */}
+                {selectedComplaint.responses && selectedComplaint.responses.length > 0 && (
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold text-muted-foreground uppercase">Lịch sử phản hồi:</h4>
+                    {selectedComplaint.responses.map((res: ComplaintResponse, idx: number) => (
+                      <div
+                        key={idx}
+                        className={`flex flex-col max-w-[85%] rounded-lg p-3 ${
+                          res.from === "Chủ sân"
+                            ? "bg-primary text-primary-foreground ml-auto"
+                            : "bg-card border mr-auto bg-white"
+                        }`}
+                      >
+                        <span className="text-[10px] font-bold opacity-85 mb-1">{res.from}</span>
+                        <p className="text-sm font-medium leading-relaxed">{res.message}</p>
+                        <span className="text-[9px] opacity-75 self-end mt-1">{res.time}</span>
                       </div>
-                    </div>
-                    <h3 className="font-semibold text-sm line-clamp-1">{c.subject}</h3>
-                    <p className="text-xs text-muted-foreground">Đối tượng: {c.against}</p>
-                    <p className="text-xs text-muted-foreground">{new Date(c.submittedDate).toLocaleDateString('vi-VN')}</p>
-                  </CardContent>
-                </Card>
-              ))}
+                    ))}
+                  </div>
+                )}
 
-              {getFilteredComplaints().length === 0 && (
-                <div className="text-center p-8 text-muted-foreground bg-white border rounded">
-                  Không tìm thấy khiếu nại nào.
+                {/* Resolution Statement */}
+                {selectedComplaint.status === "resolved" && selectedComplaint.resolution && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-2">
+                    <h4 className="flex items-center gap-2 text-green-800 font-bold text-sm">
+                      <CheckCircle className="h-5 w-5 text-green-700" />
+                      Đã thống nhất giải quyết thành công
+                    </h4>
+                    <p className="text-sm text-green-700 font-semibold">{selectedComplaint.resolution}</p>
+                    <p className="text-[10px] text-green-600">Ngày giải quyết: {new Date(selectedComplaint.resolvedDate as string).toLocaleDateString('vi-VN')}</p>
+                  </div>
+                )}
+              </CardContent>
+
+              {/* Send panel */}
+              {selectedComplaint.status !== "resolved" && (
+                <div className="border-t bg-card p-4 flex gap-2">
+                  <Textarea
+                    placeholder="Viết tin nhắn phản hồi..."
+                    value={replyMessage}
+                    onChange={(e) => setReplyMessage(e.target.value)}
+                    rows={1}
+                    className="flex-1 min-h-[40px] resize-none"
+                  />
+                  <Button
+                    className="bg-primary hover:bg-primary/95 text-white h-10"
+                    disabled={!replyMessage.trim()}
+                    onClick={handleSendMessage}
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    Gửi
+                  </Button>
                 </div>
               )}
-            </div>
-
-            {/* Right details column */}
-            <div className="lg:col-span-2">
-              {selectedComplaint ? (
-                <Card className="flex flex-col h-[calc(100vh-220px)] bg-white">
-                  {/* Detail Header */}
-                  <CardHeader className="border-b bg-card flex flex-row justify-between items-center py-4 px-6">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono text-xs text-muted-foreground">{selectedComplaint.id}</span>
-                        {getStatusBadge(selectedComplaint.status)}
-                        {getPriorityBadge(selectedComplaint.priority)}
-                      </div>
-                      <h2 className="text-lg font-bold text-foreground">{selectedComplaint.subject}</h2>
-                    </div>
-
-                    {selectedComplaint.status !== "resolved" && (
-                      <Button
-                        size="sm"
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                        onClick={() => setShowResolveDialog(true)}
-                      >
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Giải quyết
-                      </Button>
-                    )}
-                  </CardHeader>
-
-                  {/* Detail Content & Message list */}
-                  <CardContent className="flex-1 overflow-y-auto p-6 space-y-6 bg-muted/5">
-                    {/* Customer description */}
-                    <div className="bg-card border rounded-lg p-4 space-y-2 shadow-sm bg-white">
-                      <div className="flex justify-between items-center text-xs text-muted-foreground">
-                        <span className="font-bold flex items-center gap-1"><User className="h-3.5 w-3.5" /> Khách hàng</span>
-                        <span>{new Date(selectedComplaint.submittedDate).toLocaleDateString('vi-VN')}</span>
-                      </div>
-                      <p className="text-sm font-medium">{selectedComplaint.description}</p>
-                    </div>
-
-                    {/* Chat replies */}
-                    {selectedComplaint.responses && selectedComplaint.responses.length > 0 && (
-                      <div className="space-y-4">
-                        <h4 className="text-xs font-bold text-muted-foreground uppercase">Lịch sử phản hồi:</h4>
-                        {selectedComplaint.responses.map((res: ComplaintResponse, idx: number) => (
-                          <div
-                            key={idx}
-                            className={`flex flex-col max-w-[85%] rounded-lg p-3 ${
-                              res.from === "Chủ sân"
-                                ? "bg-primary text-primary-foreground ml-auto"
-                                : "bg-card border mr-auto bg-white"
-                            }`}
-                          >
-                            <span className="text-[10px] font-bold opacity-85 mb-1">{res.from}</span>
-                            <p className="text-sm font-medium leading-relaxed">{res.message}</p>
-                            <span className="text-[9px] opacity-75 self-end mt-1">{res.time}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Resolution Statement */}
-                    {selectedComplaint.status === "resolved" && selectedComplaint.resolution && (
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-2">
-                        <h4 className="flex items-center gap-2 text-green-800 font-bold text-sm">
-                          <CheckCircle className="h-5 w-5 text-green-700" />
-                          Đã thống nhất giải quyết thành công
-                        </h4>
-                        <p className="text-sm text-green-700 font-semibold">{selectedComplaint.resolution}</p>
-                        <p className="text-[10px] text-green-600">Ngày giải quyết: {new Date(selectedComplaint.resolvedDate as string).toLocaleDateString('vi-VN')}</p>
-                      </div>
-                    )}
-                  </CardContent>
-
-                  {/* Send panel */}
-                  {selectedComplaint.status !== "resolved" && (
-                    <div className="border-t bg-card p-4 flex gap-2">
-                      <Textarea
-                        placeholder="Viết tin nhắn phản hồi..."
-                        value={replyMessage}
-                        onChange={(e) => setReplyMessage(e.target.value)}
-                        rows={1}
-                        className="flex-1 min-h-[40px] resize-none"
-                      />
-                      <Button
-                        className="bg-primary hover:bg-primary/95 text-white h-10"
-                        disabled={!replyMessage.trim()}
-                        onClick={handleSendMessage}
-                      >
-                        <Send className="h-4 w-4 mr-2" />
-                        Gửi
-                      </Button>
-                    </div>
-                  )}
-                </Card>
-              ) : (
-                <Card className="flex flex-col items-center justify-center p-12 text-muted-foreground h-[calc(100vh-220px)] bg-card border-dashed">
-                  <AlertCircle className="h-12 w-12 mb-3 opacity-30" />
-                  <p>Chọn một khiếu nại ở danh sách bên trái để bắt đầu xử lý</p>
-                </Card>
-              )}
-            </div>
-          </div>
-        </main>
+            </Card>
+          ) : (
+            <Card className="flex flex-col items-center justify-center p-12 text-muted-foreground h-[calc(100vh-220px)] bg-card border-dashed">
+              <AlertCircle className="h-12 w-12 mb-3 opacity-30" />
+              <p>Chọn một khiếu nại ở danh sách bên trái để bắt đầu xử lý</p>
+            </Card>
+          )}
+        </div>
       </div>
 
       {/* Resolve Dialog */}
