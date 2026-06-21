@@ -78,6 +78,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                 .businessName(request.getBusinessName())
                 .taxCode(request.getTaxCode())
                 .businessAddress(request.getBusinessAddress())
+                .businessLicenseUrl(request.getBusinessLicenseUrl())
+                .identityCardUrl(request.getIdentityCardUrl())
                 .approvedStatus(ApprovedStatus.PENDING)
                 .build();
         ownerRepository.save(owner);
@@ -103,6 +105,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                 existingOwner.setBusinessName(request.getBusinessName());
                 existingOwner.setTaxCode(request.getTaxCode());
                 existingOwner.setBusinessAddress(request.getBusinessAddress());
+                existingOwner.setBusinessLicenseUrl(request.getBusinessLicenseUrl());
+                existingOwner.setIdentityCardUrl(request.getIdentityCardUrl());
                 existingOwner.setApprovedStatus(ApprovedStatus.PENDING);
                 existingOwner.setRejectionReason(null);
                 owner = existingOwner;
@@ -116,6 +120,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                     .businessName(request.getBusinessName())
                     .taxCode(request.getTaxCode())
                     .businessAddress(request.getBusinessAddress())
+                    .businessLicenseUrl(request.getBusinessLicenseUrl())
+                    .identityCardUrl(request.getIdentityCardUrl())
                     .approvedStatus(ApprovedStatus.PENDING)
                     .build();
         }
@@ -131,6 +137,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                 .businessName(savedOwner.getBusinessName())
                 .taxCode(savedOwner.getTaxCode())
                 .businessAddress(savedOwner.getBusinessAddress())
+                .businessLicenseUrl(savedOwner.getBusinessLicenseUrl())
+                .identityCardUrl(savedOwner.getIdentityCardUrl())
                 .approvedStatus(savedOwner.getApprovedStatus())
                 .createdAt(savedOwner.getCreatedAt())
                 .build();
@@ -152,6 +160,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         existingOwner.setBusinessName(request.getBusinessName());
         existingOwner.setTaxCode(request.getTaxCode());
         existingOwner.setBusinessAddress(request.getBusinessAddress());
+        existingOwner.setBusinessLicenseUrl(request.getBusinessLicenseUrl());
+        existingOwner.setIdentityCardUrl(request.getIdentityCardUrl());
         existingOwner.setApprovedStatus(ApprovedStatus.PENDING);
         existingOwner.setRejectionReason(null); // Xóa lý do từ chối cũ
         Owner savedOwner = ownerRepository.save(existingOwner);
@@ -167,6 +177,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                 .businessName(savedOwner.getBusinessName())
                 .taxCode(savedOwner.getTaxCode())
                 .businessAddress(savedOwner.getBusinessAddress())
+                .businessLicenseUrl(savedOwner.getBusinessLicenseUrl())
+                .identityCardUrl(savedOwner.getIdentityCardUrl())
                 .approvedStatus(savedOwner.getApprovedStatus())
                 .createdAt(savedOwner.getCreatedAt())
                 .build();
@@ -185,6 +197,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                         .businessName(owner.getBusinessName())
                         .taxCode(owner.getTaxCode())
                         .businessAddress(owner.getBusinessAddress())
+                        .businessLicenseUrl(owner.getBusinessLicenseUrl())
+                        .identityCardUrl(owner.getIdentityCardUrl())
                         .approvedStatus(owner.getApprovedStatus())
                         .rejectionReason(owner.getRejectionReason())
                         .createdAt(owner.getCreatedAt())

@@ -72,6 +72,8 @@ class OwnerRegistrationServiceImplTest {
                 .businessName("San bong A")
                 .taxCode("0123456789")
                 .businessAddress("Hanoi")
+                .businessLicenseUrl("http://example.com/license.jpg")
+                .identityCardUrl("http://example.com/id.jpg")
                 .build();
 
         when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
@@ -107,6 +109,8 @@ class OwnerRegistrationServiceImplTest {
         assertEquals("San bong A", capturedOwner.getBusinessName());
         assertEquals("0123456789", capturedOwner.getTaxCode());
         assertEquals("Hanoi", capturedOwner.getBusinessAddress());
+        assertEquals("http://example.com/license.jpg", capturedOwner.getBusinessLicenseUrl());
+        assertEquals("http://example.com/id.jpg", capturedOwner.getIdentityCardUrl());
         assertEquals(ApprovedStatus.PENDING, capturedOwner.getApprovedStatus());
 
         // Verify OTP is triggered
@@ -124,6 +128,8 @@ class OwnerRegistrationServiceImplTest {
                 .businessName("San Huy")
                 .taxCode("0123456789")
                 .businessAddress("HCM")
+                .businessLicenseUrl("http://example.com/license.jpg")
+                .identityCardUrl("http://example.com/id.jpg")
                 .build();
 
         when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
@@ -180,6 +186,8 @@ class OwnerRegistrationServiceImplTest {
                 .businessName("My Venue")
                 .taxCode("0123456789")
                 .businessAddress("HCM City")
+                .businessLicenseUrl("http://example.com/license.jpg")
+                .identityCardUrl("http://example.com/id.jpg")
                 .build();
 
         User user = User.builder()
@@ -196,6 +204,8 @@ class OwnerRegistrationServiceImplTest {
                 .businessName(request.getBusinessName())
                 .taxCode(request.getTaxCode())
                 .businessAddress(request.getBusinessAddress())
+                .businessLicenseUrl(request.getBusinessLicenseUrl())
+                .identityCardUrl(request.getIdentityCardUrl())
                 .approvedStatus(ApprovedStatus.PENDING)
                 .build();
         when(ownerRepository.save(any(Owner.class))).thenReturn(savedOwner);
@@ -206,6 +216,8 @@ class OwnerRegistrationServiceImplTest {
         assertEquals("My Venue", result.getBusinessName());
         assertEquals("0123456789", result.getTaxCode());
         assertEquals("HCM City", result.getBusinessAddress());
+        assertEquals("http://example.com/license.jpg", result.getBusinessLicenseUrl());
+        assertEquals("http://example.com/id.jpg", result.getIdentityCardUrl());
         assertEquals(ApprovedStatus.PENDING, result.getApprovedStatus());
 
         verify(ownerRepository).save(any(Owner.class));
@@ -217,6 +229,8 @@ class OwnerRegistrationServiceImplTest {
                 .businessName("New Venue Name")
                 .taxCode("9876543210")
                 .businessAddress("New Address")
+                .businessLicenseUrl("http://example.com/license.jpg")
+                .identityCardUrl("http://example.com/id.jpg")
                 .build();
 
         User user = User.builder()
@@ -231,6 +245,8 @@ class OwnerRegistrationServiceImplTest {
                 .businessName("Old Name")
                 .taxCode("123")
                 .businessAddress("Old Address")
+                .businessLicenseUrl("http://example.com/old-license.jpg")
+                .identityCardUrl("http://example.com/old-id.jpg")
                 .approvedStatus(ApprovedStatus.REJECTED)
                 .rejectionReason("Inadequate document")
                 .build();
@@ -244,6 +260,8 @@ class OwnerRegistrationServiceImplTest {
         assertEquals("New Venue Name", result.getBusinessName());
         assertEquals("9876543210", result.getTaxCode());
         assertEquals("New Address", result.getBusinessAddress());
+        assertEquals("http://example.com/license.jpg", result.getBusinessLicenseUrl());
+        assertEquals("http://example.com/id.jpg", result.getIdentityCardUrl());
         assertEquals(ApprovedStatus.PENDING, result.getApprovedStatus());
         assertNull(result.getRejectionReason()); // Should clear rejectionReason
 
@@ -309,6 +327,8 @@ class OwnerRegistrationServiceImplTest {
                 .businessName("My Business")
                 .taxCode("111222333")
                 .businessAddress("Da Nang")
+                .businessLicenseUrl("http://example.com/license.jpg")
+                .identityCardUrl("http://example.com/id.jpg")
                 .approvedStatus(ApprovedStatus.APPROVED)
                 .build();
 
@@ -320,6 +340,8 @@ class OwnerRegistrationServiceImplTest {
         assertEquals("My Business", response.getBusinessName());
         assertEquals("111222333", response.getTaxCode());
         assertEquals("Da Nang", response.getBusinessAddress());
+        assertEquals("http://example.com/license.jpg", response.getBusinessLicenseUrl());
+        assertEquals("http://example.com/id.jpg", response.getIdentityCardUrl());
         assertEquals(ApprovedStatus.APPROVED, response.getApprovedStatus());
     }
 

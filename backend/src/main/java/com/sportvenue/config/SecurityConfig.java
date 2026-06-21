@@ -81,6 +81,8 @@ public class SecurityConfig {
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/avatars/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/stadiums/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/files/documents/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/files/document").permitAll()
                         .requestMatchers("/api/v1/files/**").authenticated()
                         .anyRequest().authenticated()
                 )

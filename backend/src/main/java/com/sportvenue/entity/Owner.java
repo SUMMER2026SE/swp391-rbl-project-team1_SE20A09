@@ -64,6 +64,12 @@ public class Owner implements Serializable {
     @Column(name = "rejection_reason", length = 255)
     private String rejectionReason;
 
+    @Column(name = "business_license_url", length = 255)
+    private String businessLicenseUrl;
+
+    @Column(name = "identity_card_url", length = 255)
+    private String identityCardUrl;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

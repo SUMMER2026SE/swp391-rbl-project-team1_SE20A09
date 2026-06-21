@@ -165,3 +165,12 @@ export async function uploadStadiumImage(file: File): Promise<FileUploadResult> 
   })
   return res.data
 }
+
+export async function uploadDocument(file: File): Promise<FileUploadResult> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await api.post<FileUploadResult>('/files/document', formData, {
+    timeout: 60_000,
+  })
+  return res.data
+}
