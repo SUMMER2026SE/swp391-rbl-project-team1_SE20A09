@@ -20,6 +20,7 @@ import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.NotificationService;
 import org.junit.jupiter.api.Test;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -52,6 +53,9 @@ class ComplaintServiceImplTest {
 
     @Mock
     private NotificationService notificationService;
+
+    @Mock
+    private SimpMessagingTemplate messagingTemplate;
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();

@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
@@ -30,22 +31,25 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
 
         String authHeader = accessor.getFirstNativeHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            log.warn("WebSocket CONNECT received without valid Authorization header");
-            return message;
+            throw new MessagingException("WebSocket CONNECT rejected: missing or invalid Authorization header");
         }
 
         String token = authHeader.substring(7);
         try {
-            if (jwtTokenProvider.validateToken(token)) {
-                String email = jwtTokenProvider.getEmailFromJWT(token);
-                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
-                UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                        userDetails, null, userDetails.getAuthorities());
-                accessor.setUser(auth);
-                log.info("WebSocket authenticated: {}", email);
+            if (!jwtTokenProvider.validateToken(token)) {
+                throw new MessagingException("WebSocket CONNECT rejected: invalid JWT token");
             }
+            String email = jwtTokenProvider.getEmailFromJWT(token);
+            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+            UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                    userDetails, null, userDetails.getAuthorities());
+            accessor.setUser(auth);
+            log.info("WebSocket authenticated: {}", email);
+        } catch (MessagingException e) {
+            throw e;
         } catch (Exception e) {
             log.warn("WebSocket JWT validation failed: {}", e.getMessage());
+            throw new MessagingException("WebSocket CONNECT rejected: " + e.getMessage());
         }
 
         return message;
