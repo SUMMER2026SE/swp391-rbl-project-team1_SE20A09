@@ -8,6 +8,7 @@ import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.exception.BadRequestException;
+import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.ReviewRepository;
@@ -126,11 +127,13 @@ public class ReviewServiceImpl implements ReviewService {
     @Override
     @Transactional
     public ReviewResponse updateReview(Integer reviewId, CreateReviewRequest request, String userEmail) {
+        log.info("Updating review {} by user {}", reviewId, userEmail);
+
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đánh giá với ID " + reviewId));
 
         if (!review.getUser().getEmail().equals(userEmail)) {
-            throw new BadRequestException("Bạn không có quyền sửa đánh giá này");
+            throw new ForbiddenException("Bạn không có quyền sửa đánh giá này");
         }
 
         review.setRatingScore(request.getRatingScore());

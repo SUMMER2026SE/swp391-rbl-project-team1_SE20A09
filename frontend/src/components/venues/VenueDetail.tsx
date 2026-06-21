@@ -622,7 +622,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                 {venue.recentReviews && venue.recentReviews.length > 0 ? (
                   <div className="flex flex-col gap-3">
                     {venue.recentReviews.map((review) => {
-                      const isOwnerOfReview = session?.user?.userId?.toString() === review.userId?.toString()
+                      const isMyReview = session?.user?.userId?.toString() === review.userId?.toString()
                       const isEditing = editingReviewId === review.reviewId
 
                       if (isEditing) {
@@ -644,7 +644,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
 
                       return (
                       <div key={review.reviewId} className="bg-gray-50 border-[0.5px] border-gray-200 rounded-[10px] p-4 flex flex-col gap-2 relative group">
-                        {isOwnerOfReview && (
+                        {isMyReview && (
                           <button
                             onClick={() => setEditingReviewId(review.reviewId)}
                             className="absolute top-4 right-4 text-[12px] font-medium text-gray-500 hover:text-[#1a8a4a] opacity-0 group-hover:opacity-100 transition-opacity bg-white border border-gray-200 rounded px-2 py-1"

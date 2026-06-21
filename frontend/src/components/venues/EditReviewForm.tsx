@@ -43,8 +43,9 @@ export default function EditReviewForm({ reviewId, initialRating, initialComment
       })
       toast.success('Cập nhật đánh giá thành công! 🎉')
       onSuccess()
-    } catch (err: any) {
-      toast.error(err?.message || 'Sửa đánh giá thất bại. Vui lòng thử lại.')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Sửa đánh giá thất bại. Vui lòng thử lại.'
+      toast.error(msg)
     } finally {
       setSubmitting(false)
     }
