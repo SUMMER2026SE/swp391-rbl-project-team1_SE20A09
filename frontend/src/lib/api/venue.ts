@@ -9,6 +9,7 @@ export interface TimeSlotItem {
 
 export interface ReviewDto {
   reviewId: number
+  userId: number
   userName: string
   userAvatar: string | null
   ratingScore: number
