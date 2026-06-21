@@ -22,8 +22,8 @@ import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.service.RefundCalculator;
 import com.sportvenue.service.RefundService;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -42,6 +42,8 @@ public class RefundServiceImpl implements RefundService {
     private final TimeSlotRepository timeSlotRepository;
     private final UserRepository userRepository;
     private final OwnerRepository ownerRepository;
+    /** UC-CUS-06: Bộ tính hoàn tiền dùng chung (Customer cancel + Owner refund). */
+    private final RefundCalculator refundCalculator;
 
     @Transactional
     @Override
@@ -66,8 +68,8 @@ public class RefundServiceImpl implements RefundService {
         Payment originalPayment = paymentRepository.findByBookingBookingId(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán ban đầu"));
 
-        // 5. Áp dụng chính sách hoàn tiền
-        RefundCalculation calculation = calculateRefund(booking);
+        // 5. Áp dụng chính sách hoàn tiền — dùng {@link RefundCalculator} dùng chung.
+        RefundCalculator.RefundResult calculation = refundCalculator.calculate(booking);
 
         // 6. Cập nhật dữ liệu
         updateBookingAndReleaseSlot(booking, request.getReason());
@@ -102,26 +104,8 @@ public class RefundServiceImpl implements RefundService {
         }
     }
 
-    private RefundCalculation calculateRefund(Booking booking) {
-        LocalDateTime playTime = LocalDateTime.of(booking.getBookingDate().toLocalDate(), booking.getSlot().getStartTime());
-        LocalDateTime now = LocalDateTime.now();
-        double hoursDiff = (double) java.time.Duration.between(now, playTime).toMinutes() / 60.0;
-
-        BigDecimal refundAmount;
-        int refundPercentage;
-
-        if (hoursDiff >= 24.0) {
-            refundPercentage = 100;
-            refundAmount = booking.getTotalPrice();
-        } else if (hoursDiff >= 12.0) {
-            refundPercentage = 50;
-            refundAmount = booking.getTotalPrice().multiply(new BigDecimal("0.5"));
-        } else {
-            refundPercentage = 0;
-            refundAmount = BigDecimal.ZERO;
-        }
-
-        return new RefundCalculation(refundPercentage, refundAmount);
+    private RefundCalculator.RefundResult calculateRefund(Booking booking) {
+        return refundCalculator.calculate(booking);
     }
 
     private void updateBookingAndReleaseSlot(Booking booking, String reason) {
@@ -152,12 +136,12 @@ public class RefundServiceImpl implements RefundService {
                 refundAmount.negate(), booking.getBookingId());
     }
 
-    private RefundResponse buildRefundResponse(Booking booking, RefundCalculation calc, String reason) {
+    private RefundResponse buildRefundResponse(Booking booking, RefundCalculator.RefundResult calc, String reason) {
         return RefundResponse.builder()
                 .bookingId(booking.getBookingId())
                 .stadiumName(booking.getStadium().getStadiumName())
                 .customerName(booking.getUser().getFirstName() + " " + booking.getUser().getLastName())
-                .playTime(LocalDateTime.of(booking.getBookingDate().toLocalDate(), booking.getSlot().getStartTime()))
+                .playTime(LocalDateTime.of(booking.getReservationDate(), booking.getSlot().getStartTime()))
                 .originalPrice(booking.getTotalPrice())
                 .refundAmount(calc.getAmount())
                 .refundPercentage(calc.getPercentage())
@@ -188,13 +172,13 @@ public class RefundServiceImpl implements RefundService {
         validateOwnershipAndStatus(booking, owner);
 
         // 4. Áp dụng chính sách hoàn tiền
-        RefundCalculation calculation = calculateRefund(booking);
+        RefundCalculator.RefundResult calculation = refundCalculator.calculate(booking);
 
         return RefundResponse.builder()
                 .bookingId(booking.getBookingId())
                 .stadiumName(booking.getStadium().getStadiumName())
                 .customerName(booking.getUser().getFirstName() + " " + booking.getUser().getLastName())
-                .playTime(LocalDateTime.of(booking.getBookingDate().toLocalDate(), booking.getSlot().getStartTime()))
+                .playTime(LocalDateTime.of(booking.getReservationDate(), booking.getSlot().getStartTime()))
                 .originalPrice(booking.getTotalPrice())
                 .refundAmount(calculation.getAmount())
                 .refundPercentage(calculation.getPercentage())
@@ -232,10 +216,10 @@ public class RefundServiceImpl implements RefundService {
                     .phone(b.getUser().getPhoneNumber())
                     .email(b.getUser().getEmail())
                     .build();
-            
+
             String startTimeStr = b.getSlot().getStartTime().toString();
             String endTimeStr = b.getSlot().getEndTime().toString();
-            
+
             BigDecimal refundAmt = refundMap.getOrDefault(b.getBookingId(), BigDecimal.ZERO);
 
             return OwnerBookingResponse.builder()
@@ -243,7 +227,7 @@ public class RefundServiceImpl implements RefundService {
                     .displayId("BK" + String.format("%06d", b.getBookingId()))
                     .customer(customerInfo)
                     .venue(b.getStadium().getStadiumName())
-                    .date(b.getBookingDate().toLocalDate().toString())
+                    .date(b.getReservationDate().toString())
                     .time(startTimeStr + " - " + endTimeStr)
                     .amount(b.getTotalPrice())
                     .refundAmount(refundAmt)
@@ -253,12 +237,5 @@ public class RefundServiceImpl implements RefundService {
                     .playTimeRaw(b.getSlot().getStartTime().toString())
                     .build();
         }).collect(java.util.stream.Collectors.toList());
-    }
-
-    @Getter
-    @RequiredArgsConstructor
-    private static class RefundCalculation {
-        private final int percentage;
-        private final BigDecimal amount;
     }
 }
