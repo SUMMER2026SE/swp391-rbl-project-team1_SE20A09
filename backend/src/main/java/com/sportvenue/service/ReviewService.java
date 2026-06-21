@@ -1,10 +1,13 @@
 package com.sportvenue.service;
 
 import com.sportvenue.dto.request.CreateReviewRequest;
+import com.sportvenue.dto.response.EligibleBookingResponse;
 import com.sportvenue.dto.response.ReviewResponse;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+
+import java.util.List;
 
 public interface ReviewService {
     ReviewResponse createReview(Integer bookingId, CreateReviewRequest request, String userEmail);
@@ -18,4 +21,7 @@ public interface ReviewService {
     ReviewResponse replyToReview(Integer reviewId, String replyMessage, String ownerEmail);
 
     ReviewResponse updateReview(Integer reviewId, CreateReviewRequest request, String userEmail);
+
+    List<EligibleBookingResponse> getEligibleBookingsForReview(
+            Integer stadiumId, String userEmail);
 }

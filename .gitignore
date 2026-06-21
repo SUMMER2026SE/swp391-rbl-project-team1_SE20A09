@@ -8,6 +8,7 @@ backend/uploads/
 uploads/
 backend/target/
 backend/.mvn/wrapper/maven-wrapper.jar
+*.patch
 !backend/.mvn/wrapper/maven-wrapper.properties
 *.class
 *.jar
@@ -51,6 +52,7 @@ Desktop.ini
 # ── Tooling configs (machine-local) ─────────────
 .mcp.json
 GEMINI.md
+CLAUDE.md
 .claude/CLAUDE.md
 .claude/settings.json
 .gemini/settings.json

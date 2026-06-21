@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   IconBallFootball,
@@ -36,6 +37,7 @@ import {
 import { createBooking } from '@/lib/bookings-api'
 import WeeklySchedule from './WeeklySchedule'
 import EditReviewForm from './EditReviewForm'
+import WriteReviewForm from './WriteReviewForm'
 
 // Lazy load the Leaflet Map to avoid SSR issues and reduce bundle size
 const VenueMap = dynamic(() => import('./VenueMap'), {
@@ -105,6 +107,7 @@ const IMAGE_LABELS = [
 export default function VenueDetail({ venue }: VenueDetailProps) {
   const router = useRouter()
   const { data: session } = useSession()
+  const queryClient = useQueryClient()
   const [activeIndex, setActiveIndex] = useState(0)
   const [activeTab, setActiveTab] = useState<string>('overview')
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -127,6 +130,9 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
    * để grid refetch dữ liệu mới nhất từ BE.
    */
   const [weeklyKey, setWeeklyKey] = useState(0)
+
+  // UC-CUS-07: Bump để remount reviews tab sau khi viết review mới.
+  const [reviewRefreshKey, setReviewRefreshKey] = useState(0)
 
   // Lazy load map when map tab becomes active
   useEffect(() => {
@@ -599,7 +605,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
               </div>
             )}
 
-            {/* TAB 5: Đánh giá */}
+            {/* TAB 5: Đánh giá — UC-CUS-07 */}
             {activeTab === 'reviews' && (
               <div className="space-y-6">
                 
@@ -617,6 +623,16 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                     </span>
                   </div>
                 </div>
+
+                {/* UC-CUS-07: Write Review Form — only visible when customer has eligible bookings */}
+                <WriteReviewForm
+                  key={reviewRefreshKey}
+                  stadiumId={venue.id}
+                  onReviewCreated={() => {
+                    setReviewRefreshKey(k => k + 1)
+                    queryClient.invalidateQueries({ queryKey: ['venue-detail', venue.id] })
+                  }}
+                />
 
                 {/* Reviews list or Empty State */}
                 {venue.recentReviews && venue.recentReviews.length > 0 ? (

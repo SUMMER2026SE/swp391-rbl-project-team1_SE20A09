@@ -110,4 +110,36 @@ public class ComplaintController {
         ComplaintResponse response = complaintService.closeComplaint(id, userPrincipal.getUsername());
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/admin/complaints")
+    @PreAuthorize("hasRole('Admin')")
+    @Operation(summary = "Admin lấy danh sách toàn bộ khiếu nại trong hệ thống")
+    public ResponseEntity<List<ComplaintResponse>> listAdminComplaints() {
+        log.info("REST request to get all complaints for Admin");
+        List<ComplaintResponse> response = complaintService.getAllComplaints();
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/admin/complaints/{id}/reply")
+    @PreAuthorize("hasRole('Admin')")
+    @Operation(summary = "Admin nhắn phản hồi trong khiếu nại")
+    public ResponseEntity<ComplaintResponse> adminReplyComplaint(
+            @PathVariable Integer id,
+            @Valid @RequestBody ReplyComplaintRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("REST request to reply to complaint {} by admin: {}", id, userPrincipal.getUsername());
+        ComplaintResponse response = complaintService.replyComplaint(id, request, userPrincipal.getUsername());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/admin/complaints/{id}/resolve")
+    @PreAuthorize("hasRole('Admin')")
+    @Operation(summary = "Admin đóng và giải quyết khiếu nại")
+    public ResponseEntity<ComplaintResponse> adminResolveComplaint(
+            @PathVariable Integer id,
+            @Valid @RequestBody ResolveComplaintRequest request) {
+        log.info("REST request to resolve complaint {} by admin", id);
+        ComplaintResponse response = complaintService.resolveComplaintByAdmin(id, request);
+        return ResponseEntity.ok(response);
+    }
 }

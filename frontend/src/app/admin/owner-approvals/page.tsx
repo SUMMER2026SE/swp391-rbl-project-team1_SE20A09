@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from "react";
-import { Header } from "@/components/layout/Header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -263,23 +262,17 @@ export default function OwnerApprovalPage() {
 
   if (sessionStatus === "loading") {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="flex justify-center items-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+      <div className="flex justify-center items-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Duyệt hồ sơ chủ sân</h1>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold">Duyệt hồ sơ chủ sân</h1>
             <p className="text-muted-foreground mt-1">Xem xét hồ sơ đăng ký kinh doanh và yêu cầu nâng cấp lên Chủ sân.</p>
           </div>
           <Button variant="outline" onClick={() => router.push("/admin/dashboard")}>
@@ -405,8 +398,7 @@ export default function OwnerApprovalPage() {
               </div>
             </div>
           </DialogContent>
-        </Dialog>
-      </div>
+      </Dialog>
     </div>
   );
 }

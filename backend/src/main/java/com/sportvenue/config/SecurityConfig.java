@@ -51,7 +51,9 @@ public class SecurityConfig {
             "/actuator/info",
             "/swagger-ui.html",
             "/swagger-ui/**",
-            "/v3/api-docs/**"
+            "/v3/api-docs/**",
+            // WebSocket STOMP endpoint — auth happens at STOMP CONNECT level via JWT header
+            "/ws/**"
     };
 
     @Bean

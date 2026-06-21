@@ -35,4 +35,8 @@ public interface ComplaintRepository extends JpaRepository<Complaint, Integer> {
 
     /** Kiểm tra xem đơn đặt sân đã được khiếu nại chưa. */
     boolean existsByBookingBookingId(Integer bookingId);
+
+    /** Lấy toàn bộ khiếu nại trên hệ thống cho Admin, sử dụng EntityGraph để tránh N+1. */
+    @EntityGraph(attributePaths = {"user", "booking", "booking.stadium", "booking.stadium.owner", "booking.stadium.owner.user"})
+    List<Complaint> findAllByOrderByCreatedAtDesc();
 }

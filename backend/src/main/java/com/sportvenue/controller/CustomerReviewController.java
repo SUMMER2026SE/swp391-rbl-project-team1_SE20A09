@@ -1,6 +1,8 @@
 package com.sportvenue.controller;
 
 import com.sportvenue.dto.request.CreateReviewRequest;
+import com.sportvenue.dto.response.ApiResponse;
+import com.sportvenue.dto.response.EligibleBookingResponse;
 import com.sportvenue.dto.response.ReviewResponse;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.ReviewService;
@@ -20,6 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.PathVariable;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/reviews")
@@ -60,4 +64,21 @@ public class CustomerReviewController {
         ReviewResponse response = reviewService.updateReview(reviewId, request, userPrincipal.getUsername());
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/eligible/{stadiumId}")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(summary = "Kiểm tra booking đủ điều kiện để viết đánh giá",
+               description = "Trả về danh sách booking COMPLETED chưa được review cho sân cụ thể. " +
+                             "Nếu danh sách rỗng, customer không được phép viết review.")
+    public ResponseEntity<ApiResponse<List<EligibleBookingResponse>>> getEligibleBookings(
+            @PathVariable Integer stadiumId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        var result = reviewService.getEligibleBookingsForReview(stadiumId, userPrincipal.getUsername());
+        return ResponseEntity.ok(ApiResponse.<List<EligibleBookingResponse>>builder()
+                .code(200)
+                .message("Success")
+                .result(result)
+                .build());
+    }
 }
+

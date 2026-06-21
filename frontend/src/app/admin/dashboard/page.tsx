@@ -1,6 +1,5 @@
 'use client'
 
-import { Header } from "@/components/layout/Header";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,9 +23,6 @@ import {
   MapPin,
   DollarSign,
   TrendingUp,
-  Home,
-  UserCog,
-  Settings,
   AlertCircle,
   CheckCircle,
 } from "lucide-react";
@@ -119,53 +115,7 @@ function AdminDashboardPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-
-      <div className="flex">
-        {/* Sidebar */}
-        <aside className="w-64 min-h-screen bg-sidebar border-r p-4">
-          <h2 className="mb-6 px-3">Quản trị hệ thống</h2>
-          <nav className="space-y-1">
-            <Button variant="default" className="w-full justify-start" size="sm">
-              <Home className="mr-3 h-4 w-4" />
-              Dashboard
-            </Button>
-            <Button variant="ghost" className="w-full justify-start" size="sm">
-              <Users className="mr-3 h-4 w-4" />
-              Người dùng
-            </Button>
-            <Link href="/admin/owner-approvals" className="block w-full">
-              <Button variant="ghost" className="w-full justify-start" size="sm">
-                <Building className="mr-3 h-4 w-4" />
-                Chủ sân
-              </Button>
-            </Link>
-            <Link href="/admin/stadium-approvals" className="block w-full">
-              <Button variant="ghost" className="w-full justify-start" size="sm">
-                <MapPin className="mr-3 h-4 w-4" />
-                Sân
-              </Button>
-            </Link>
-            <Link href="/admin/sport-categories" className="block w-full">
-              <Button variant="ghost" className="w-full justify-start" size="sm">
-                <UserCog className="mr-3 h-4 w-4" />
-                Danh mục
-              </Button>
-            </Link>
-            <Button variant="ghost" className="w-full justify-start" size="sm">
-              <AlertCircle className="mr-3 h-4 w-4" />
-              Khiếu nại
-            </Button>
-            <Button variant="ghost" className="w-full justify-start" size="sm">
-              <Settings className="mr-3 h-4 w-4" />
-              Cài đặt
-            </Button>
-          </nav>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 p-8">
+    <div className="p-8 min-h-[calc(100vh-64px)] bg-muted/10">
           <h1 className="text-3xl mb-8">Dashboard</h1>
 
           {/* KPIs */}
@@ -331,8 +281,6 @@ function AdminDashboardPage() {
               </CardContent>
             </Card>
           </div>
-        </main>
-      </div>
     </div>
   );
 }
