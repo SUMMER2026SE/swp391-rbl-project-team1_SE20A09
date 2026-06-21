@@ -32,6 +32,12 @@ class AdminOwnerServiceImplTest {
     @Mock
     private OwnerRepository ownerRepository;
 
+    @Mock
+    private com.sportvenue.repository.StadiumRepository stadiumRepository;
+
+    @Mock
+    private com.sportvenue.service.EmailService emailService;
+
     @InjectMocks
     private AdminOwnerServiceImpl adminOwnerService;
 

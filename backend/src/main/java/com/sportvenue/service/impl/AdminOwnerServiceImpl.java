@@ -2,10 +2,18 @@ package com.sportvenue.service.impl;
 
 import com.sportvenue.dto.response.AdminOwnerResponse;
 import com.sportvenue.dto.response.PageResponse;
+import com.sportvenue.entity.Owner;
+import com.sportvenue.entity.Stadium;
+import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.AccountStatus;
 import com.sportvenue.entity.enums.ApprovedStatus;
+import com.sportvenue.entity.enums.StadiumStatus;
+import com.sportvenue.exception.AppException;
+import com.sportvenue.exception.ErrorCode;
 import com.sportvenue.repository.OwnerRepository;
+import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.service.AdminOwnerService;
+import com.sportvenue.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -13,8 +21,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -22,8 +31,8 @@ import org.springframework.stereotype.Service;
 public class AdminOwnerServiceImpl implements AdminOwnerService {
 
     private final OwnerRepository ownerRepository;
-    private final com.sportvenue.repository.StadiumRepository stadiumRepository;
-    private final com.sportvenue.service.EmailService emailService;
+    private final StadiumRepository stadiumRepository;
+    private final EmailService emailService;
 
     @Override
     public PageResponse<AdminOwnerResponse> getOwners(String search, String accountStatusStr, String approvedStatusStr, int page, int size, String sortBy, String sortDir) {
@@ -82,27 +91,29 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public void lockUnlockOwner(Integer ownerId, boolean isEnabled, String reason) {
         log.info("Request to {} account for ownerId: {}", isEnabled ? "unlock" : "lock", ownerId);
-        com.sportvenue.entity.Owner owner = ownerRepository.findById(ownerId)
-                .orElseThrow(() -> new com.sportvenue.exception.AppException(com.sportvenue.exception.ErrorCode.USER_NOT_FOUND)); 
+        Owner owner = ownerRepository.findById(ownerId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
                 
         if (owner.getApprovedStatus() != ApprovedStatus.APPROVED) {
-            throw new com.sportvenue.exception.AppException(com.sportvenue.exception.ErrorCode.OWNER_PROFILE_NOT_APPROVED);
+            throw new AppException(ErrorCode.OWNER_PROFILE_NOT_APPROVED);
         }
 
-        com.sportvenue.entity.User user = owner.getUser();
+        User user = owner.getUser();
         user.setAccountStatus(isEnabled ? AccountStatus.ACTIVE : AccountStatus.BLOCKED);
         user.setLockReason(reason);
         
+        // Lock: chuyển tất cả sân về MAINTENANCE
+        // Unlock: khôi phục tất cả sân về AVAILABLE
+        List<Stadium> stadiums = stadiumRepository.findByOwnerOwnerId(ownerId);
         if (!isEnabled) {
-            java.util.List<com.sportvenue.entity.Stadium> stadiums = stadiumRepository.findByOwnerOwnerId(ownerId);
-            for (com.sportvenue.entity.Stadium stadium : stadiums) {
-                stadium.setStadiumStatus(com.sportvenue.entity.enums.StadiumStatus.MAINTENANCE);
-            }
-            stadiumRepository.saveAll(stadiums);
+            stadiums.forEach(s -> s.setStadiumStatus(StadiumStatus.MAINTENANCE));
+        } else {
+            stadiums.forEach(s -> s.setStadiumStatus(StadiumStatus.AVAILABLE));
         }
+        stadiumRepository.saveAll(stadiums);
 
         try {
             emailService.sendAccountStatusNotification(user.getEmail(), owner.getBusinessName(), isEnabled, reason);
