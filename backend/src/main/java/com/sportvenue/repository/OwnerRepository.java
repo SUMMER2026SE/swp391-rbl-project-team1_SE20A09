@@ -35,6 +35,10 @@ public interface OwnerRepository extends JpaRepository<Owner, Integer> {
     /** Đếm số owner theo trạng thái phê duyệt — dùng cho Admin dashboard. */
     long countByApprovedStatus(ApprovedStatus approvedStatus);
 
+    /** Lấy danh sách owner profile theo trạng thái phê duyệt — dùng cho Admin duyệt hồ sơ. */
+    @EntityGraph(attributePaths = {"user"})
+    Page<Owner> findByApprovedStatus(ApprovedStatus approvedStatus, Pageable pageable);
+
     /** Tìm owner theo đường dẫn ảnh đăng ký kinh doanh hoặc ảnh CCCD chứa chuỗi tìm kiếm (tên file). */
     Optional<Owner> findByBusinessLicenseUrlContainingOrIdentityCardUrlContaining(String licenseUrl, String identityUrl);
 

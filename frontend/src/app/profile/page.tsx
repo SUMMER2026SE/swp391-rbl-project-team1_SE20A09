@@ -120,6 +120,15 @@ function UserProfilePage() {
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const [upgradeSuccess, setUpgradeSuccess] = useState<string | null>(null);
 
+  const getFileUrl = (url?: string) => {
+    if (!url) return "#";
+    if (session?.accessToken) {
+      const separator = url.includes("?") ? "&" : "?";
+      return `${url}${separator}token=${session.accessToken}`;
+    }
+    return url;
+  };
+
   const {
     register: registerUpgrade,
     handleSubmit: handleSubmitUpgrade,
@@ -709,7 +718,7 @@ function UserProfilePage() {
                           <div className="flex justify-between py-1.5 border-b border-slate-100">
                             <span className="text-slate-400 text-xs">Giấy phép kinh doanh:</span>
                             {ownerProfile.businessLicenseUrl ? (
-                              <a href={ownerProfile.businessLicenseUrl} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline font-semibold text-xs">Xem ảnh</a>
+                              <a href={getFileUrl(ownerProfile.businessLicenseUrl)} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline font-semibold text-xs">Xem ảnh</a>
                             ) : (
                               <span className="text-slate-400 text-xs font-semibold">Chưa tải lên</span>
                             )}
@@ -717,7 +726,7 @@ function UserProfilePage() {
                           <div className="flex justify-between py-1.5">
                             <span className="text-slate-400 text-xs">Ảnh CCCD/CMND:</span>
                             {ownerProfile.identityCardUrl ? (
-                              <a href={ownerProfile.identityCardUrl} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline font-semibold text-xs">Xem ảnh</a>
+                              <a href={getFileUrl(ownerProfile.identityCardUrl)} target="_blank" rel="noreferrer" className="text-teal-600 hover:underline font-semibold text-xs">Xem ảnh</a>
                             ) : (
                               <span className="text-slate-400 text-xs font-semibold">Chưa tải lên</span>
                             )}
