@@ -125,6 +125,12 @@ function OwnerComplaintsPage() {
     fetchComplaints();
   }, [fetchComplaints]);
 
+  useEffect(() => {
+    if (!selectedComplaint || selectedComplaint.status === 'resolved') return;
+    const interval = setInterval(fetchComplaints, 5000);
+    return () => clearInterval(interval);
+  }, [selectedComplaint?.complaintId, selectedComplaint?.status, fetchComplaints]);
+
   const saveComplaints = (updated: Complaint[]) => {
     setComplaints(updated);
     localStorage.setItem('owner_complaints', JSON.stringify(updated));

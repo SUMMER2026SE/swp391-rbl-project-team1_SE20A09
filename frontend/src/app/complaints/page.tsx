@@ -123,6 +123,10 @@ function ComplaintsPage() {
       if (data && Array.isArray(data)) {
         setComplaints(data);
         localStorage.setItem('sport_venue_complaints', JSON.stringify(data));
+        setSelectedComplaint(prev => {
+          if (prev) return data.find(c => c.complaintId === prev.complaintId) || prev;
+          return null;
+        });
       } else {
         throw new Error("Không có dữ liệu khiếu nại");
       }
@@ -153,6 +157,12 @@ function ComplaintsPage() {
     fetchComplaints();
     fetchBookings();
   }, [fetchComplaints, fetchBookings]);
+
+  useEffect(() => {
+    if (!selectedComplaint || selectedComplaint.status === 'resolved') return;
+    const interval = setInterval(fetchComplaints, 5000);
+    return () => clearInterval(interval);
+  }, [selectedComplaint?.complaintId, selectedComplaint?.status, fetchComplaints]);
 
   const handleCreateComplaint = async () => {
     if (!subject.trim() || !description.trim() || !bookingId) return;

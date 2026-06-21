@@ -143,6 +143,12 @@ function AdminComplaintsPage() {
     fetchComplaints();
   }, [fetchComplaints]);
 
+  useEffect(() => {
+    if (!selectedComplaint || selectedComplaint.status === 'resolved') return;
+    const interval = setInterval(fetchComplaints, 5000);
+    return () => clearInterval(interval);
+  }, [selectedComplaint?.complaintId, selectedComplaint?.status, fetchComplaints]);
+
   const saveComplaintsLocal = (updatedList: Complaint[]) => {
     setComplaints(updatedList);
     localStorage.setItem("admin_complaints_data", JSON.stringify(updatedList));
