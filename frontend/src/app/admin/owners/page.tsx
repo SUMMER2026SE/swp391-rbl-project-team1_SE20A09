@@ -25,6 +25,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 export interface AdminOwnerResponse {
   ownerId: number;
@@ -70,6 +80,13 @@ export default function AdminOwnersPage() {
   const [accountStatusFilter, setAccountStatusFilter] = useState("ALL");
   const [approvedStatusFilter, setApprovedStatusFilter] = useState("ALL");
 
+  // Dialog state for lock/unlock confirmation
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogOwnerId, setDialogOwnerId] = useState<number | null>(null);
+  const [dialogIsEnabled, setDialogIsEnabled] = useState(false);
+  const [dialogOwnerName, setDialogOwnerName] = useState("");
+  const [dialogReason, setDialogReason] = useState("");
+
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearch(search);
@@ -85,6 +102,38 @@ export default function AdminOwnersPage() {
     queryKey: ["admin-owners", page, debouncedSearch, accountStatusFilter, approvedStatusFilter],
     queryFn: () => fetchOwners(page, 10, debouncedSearch, accountStatusFilter, approvedStatusFilter),
   });
+
+  const lockUnlockMutation = useMutation({
+    mutationFn: async ({ ownerId, isEnabled, reason }: { ownerId: number; isEnabled: boolean; reason: string }) => {
+      const response = await api.patch(`/admin/owners/${ownerId}/lock`, { enabled: isEnabled, reason });
+      return response.data;
+    },
+    onSuccess: (data, variables) => {
+      toast.success(data.message || (variables.isEnabled ? "Đã mở khóa tài khoản chủ sân!" : "Đã khóa tài khoản chủ sân!"));
+      queryClient.invalidateQueries({ queryKey: ["admin-owners"] });
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Có lỗi xảy ra khi cập nhật trạng thái!");
+    },
+  });
+
+  const handleLockUnlock = (ownerId: number, currentStatus: string, ownerName: string) => {
+    const isEnabled = currentStatus !== "ACTIVE"; // If ACTIVE -> pass false (to lock). Else pass true (to unlock)
+    setDialogOwnerId(ownerId);
+    setDialogIsEnabled(isEnabled);
+    setDialogOwnerName(ownerName);
+    setDialogReason("");
+    setDialogOpen(true);
+  };
+
+  const handleConfirmLockUnlock = () => {
+    if (dialogOwnerId === null) return;
+    lockUnlockMutation.mutate({ ownerId: dialogOwnerId, isEnabled: dialogIsEnabled, reason: dialogReason.trim() });
+    setDialogOpen(false);
+    setDialogReason("");
+  };
+
+  const actionText = dialogIsEnabled ? "mở khóa" : "khóa";
 
   return (
     <div className="p-6 space-y-6 bg-gray-50/50 min-h-screen">
@@ -151,24 +200,25 @@ export default function AdminOwnersPage() {
               <TableHead className="font-semibold text-gray-900">Hồ sơ</TableHead>
               <TableHead className="font-semibold text-gray-900">Tài khoản</TableHead>
               <TableHead className="font-semibold text-gray-900">Ngày đăng ký</TableHead>
+              <TableHead className="font-semibold text-gray-900 text-right">Thao tác</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center">
+                <TableCell colSpan={7} className="h-32 text-center">
                   <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
                 </TableCell>
               </TableRow>
             ) : isError ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-red-500 font-medium">
+                <TableCell colSpan={7} className="h-32 text-center text-red-500 font-medium">
                   Đã xảy ra lỗi khi tải dữ liệu! Vui lòng thử lại.
                 </TableCell>
               </TableRow>
             ) : data?.content?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-gray-500">
+                <TableCell colSpan={7} className="h-32 text-center text-gray-500">
                   Không tìm thấy chủ sân nào phù hợp với bộ lọc.
                 </TableCell>
               </TableRow>
@@ -207,6 +257,20 @@ export default function AdminOwnersPage() {
                       ? format(new Date(owner.createdAt), "dd/MM/yyyy")
                       : "N/A"}
                   </TableCell>
+                  <TableCell className="text-right">
+                    {owner.accountStatus !== "PENDING" && (
+                      <Button
+                        variant={owner.accountStatus === "ACTIVE" ? "destructive" : "default"}
+                        size="sm"
+                        onClick={() => handleLockUnlock(owner.ownerId, owner.accountStatus, owner.fullName)}
+                        disabled={lockUnlockMutation.isPending || owner.approvedStatus !== "APPROVED"}
+                        title={owner.approvedStatus !== "APPROVED" ? "Hồ sơ phải được phê duyệt trước khi thao tác" : ""}
+                        className={owner.accountStatus !== "ACTIVE" && owner.approvedStatus === "APPROVED" ? "bg-emerald-600 hover:bg-emerald-700 text-white" : ""}
+                      >
+                        {owner.accountStatus === "ACTIVE" ? "Khóa" : "Mở khóa"}
+                      </Button>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -239,6 +303,52 @@ export default function AdminOwnersPage() {
           </Button>
         </div>
       </div>
+
+      {/* Lock/Unlock Confirmation Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              {dialogIsEnabled ? "Mở khóa" : "Khóa"} tài khoản chủ sân
+            </DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn <strong>{actionText}</strong> tài khoản của{" "}
+              <strong>{dialogOwnerName}</strong> không?
+              {!dialogIsEnabled && " Tất cả các sân của chủ sân này sẽ bị chuyển sang trạng thái Bảo trì."}
+              {dialogIsEnabled && " Tất cả các sân của chủ sân này sẽ được khôi phục trạng thái Hoạt động."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="lock-reason">Lý do (tùy chọn)</Label>
+              <Textarea
+                id="lock-reason"
+                placeholder={dialogIsEnabled ? "Nhập lý do mở khóa..." : "Nhập lý do khóa tài khoản..."}
+                value={dialogReason}
+                onChange={(e) => setDialogReason(e.target.value)}
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Hủy
+            </Button>
+            <Button
+              variant={dialogIsEnabled ? "default" : "destructive"}
+              onClick={handleConfirmLockUnlock}
+              disabled={lockUnlockMutation.isPending}
+              className={dialogIsEnabled ? "bg-emerald-600 hover:bg-emerald-700" : ""}
+            >
+              {lockUnlockMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
+              Xác nhận {actionText}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
