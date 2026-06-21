@@ -1,14 +1,15 @@
 package com.sportvenue.repository;
 
-import com.sportvenue.entity.Complaint;
-import com.sportvenue.entity.enums.ComplaintStatus;
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
+import com.sportvenue.entity.Complaint;
+import com.sportvenue.entity.enums.ComplaintStatus;
 
 /**
  * Repository cho Complaint entity.
@@ -33,6 +34,8 @@ public interface ComplaintRepository extends JpaRepository<Complaint, Integer> {
     @EntityGraph(attributePaths = {"user", "booking", "booking.stadium"})
     List<Complaint> findByUserUserIdOrderByCreatedAtDesc(Integer userId);
 
+    long countByStatus(ComplaintStatus status);
+
     /** Kiểm tra xem đơn đặt sân đã được khiếu nại chưa. */
     boolean existsByBookingBookingId(Integer bookingId);
 
@@ -40,3 +43,4 @@ public interface ComplaintRepository extends JpaRepository<Complaint, Integer> {
     @EntityGraph(attributePaths = {"user", "booking", "booking.stadium", "booking.stadium.owner", "booking.stadium.owner.user"})
     List<Complaint> findAllByOrderByCreatedAtDesc();
 }
+

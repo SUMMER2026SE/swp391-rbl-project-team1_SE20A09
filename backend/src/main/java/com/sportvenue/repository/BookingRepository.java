@@ -6,8 +6,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-import jakarta.persistence.LockModeType;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -19,6 +17,8 @@ import org.springframework.stereotype.Repository;
 
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.enums.BookingStatus;
+
+import jakarta.persistence.LockModeType;
 
 /**
  * Repository cho Booking entity.
@@ -284,6 +284,11 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("startTime") java.time.LocalTime startTime,
             @Param("endTime") java.time.LocalTime endTime);
 
+    long countByBookingStatus(BookingStatus status);
+
+    @EntityGraph(attributePaths = {"user", "stadium", "slot"})
+    List<Booking> findTop5ByOrderByBookingDateDesc();
+
     /**
      * UC-CUS-01: True nếu đã có đơn active (bookingStatus IN :statuses)
      * cho cùng (stadiumId, slotId, reservationDate). CANCELLED / COMPLETED
@@ -349,6 +354,21 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     List<Booking> findExpiredPendingPayments(@Param("now") LocalDateTime now);
 
     /**
+     * UC-ADM-01: Đếm booking theo ngày — dùng cho biểu đồ trend trên Admin Dashboard.
+     * Trả về mảng [reservationDate, count] cho n ngày gần nhất.
+     */
+    @Query("""
+            SELECT b.reservationDate as date, COUNT(b) as count
+            FROM Booking b
+            WHERE b.reservationDate BETWEEN :startDate AND :endDate
+            GROUP BY b.reservationDate
+            ORDER BY b.reservationDate ASC
+            """)
+    List<Object[]> countBookingsByDateRange(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
+
+    /**
      * UC-CUS-07: Lấy booking COMPLETED của user tại sân cụ thể mà chưa được review.
      * FE dùng để xác định customer có đủ điều kiện viết đánh giá không.
      */
@@ -368,5 +388,6 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("userId") Integer userId,
             @Param("stadiumId") Integer stadiumId);
 }
+
 
 
