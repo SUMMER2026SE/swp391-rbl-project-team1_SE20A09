@@ -122,4 +122,28 @@ public class ReviewServiceImpl implements ReviewService {
                 .createdAt(review.getCreatedAt())
                 .build();
     }
+
+    @Override
+    @Transactional
+    public ReviewResponse updateReview(Integer reviewId, CreateReviewRequest request, String userEmail) {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đánh giá với ID " + reviewId));
+
+        if (!review.getUser().getEmail().equals(userEmail)) {
+            throw new BadRequestException("Bạn không có quyền sửa đánh giá này");
+        }
+
+        review.setRatingScore(request.getRatingScore());
+        review.setComment(request.getComment().trim());
+        review = reviewRepository.save(review);
+
+        // Recalculate and update stadium average rating
+        Optional<Double> avgRatingOpt = reviewRepository.calculateAverageRating(review.getStadium().getStadiumId());
+        if (avgRatingOpt.isPresent()) {
+            Stadium stadium = review.getStadium();
+            stadium.setAverageRating(java.math.BigDecimal.valueOf(avgRatingOpt.get()));
+        }
+
+        return mapToResponse(review);
+    }
 }

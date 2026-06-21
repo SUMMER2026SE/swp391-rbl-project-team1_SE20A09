@@ -48,4 +48,15 @@ public class CustomerReviewController {
         ReviewResponse response = reviewService.createReview(bookingId, request, userPrincipal.getUsername());
         return ResponseEntity.ok(response);
     }
+
+    @org.springframework.web.bind.annotation.PutMapping("/{reviewId}")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(summary = "UC-CUS-08: Sửa đánh giá")
+    public ResponseEntity<ReviewResponse> updateReview(
+            @PathVariable Integer reviewId,
+            @Valid @RequestBody CreateReviewRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        ReviewResponse response = reviewService.updateReview(reviewId, request, userPrincipal.getUsername());
+        return ResponseEntity.ok(response);
+    }
 }

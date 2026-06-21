@@ -16,4 +16,6 @@ public interface ReviewService {
     Page<ReviewResponse> getOwnerReviews(String ownerEmail, Pageable pageable);
 
     ReviewResponse replyToReview(Integer reviewId, String replyMessage, String ownerEmail);
+
+    ReviewResponse updateReview(Integer reviewId, CreateReviewRequest request, String userEmail);
 }
