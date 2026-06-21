@@ -352,6 +352,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
      * UC-CUS-07: Lấy booking COMPLETED của user tại sân cụ thể mà chưa được review.
      * FE dùng để xác định customer có đủ điều kiện viết đánh giá không.
      */
+    @EntityGraph(attributePaths = {"stadium", "slot"})
     @Query("""
             SELECT b FROM Booking b
             WHERE b.user.userId = :userId

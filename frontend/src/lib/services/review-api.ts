@@ -35,8 +35,8 @@ export interface CreateReviewPayload {
  * Trả về [] nếu không có → customer không đủ điều kiện review.
  */
 export async function getEligibleBookings(stadiumId: number): Promise<EligibleBooking[]> {
-  const { data } = await api.get<EligibleBooking[]>(`/reviews/eligible/${stadiumId}`)
-  return data
+  const { data } = await api.get<{ result: EligibleBooking[] }>(`/reviews/eligible/${stadiumId}`)
+  return data.result || []
 }
 
 /**

@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   IconBallFootball,
@@ -104,6 +105,7 @@ const IMAGE_LABELS = [
 export default function VenueDetail({ venue }: VenueDetailProps) {
   const router = useRouter()
   const { data: session } = useSession()
+  const queryClient = useQueryClient()
   const [activeIndex, setActiveIndex] = useState(0)
   const [activeTab, setActiveTab] = useState<string>('overview')
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -625,8 +627,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                   stadiumId={venue.id}
                   onReviewCreated={() => {
                     setReviewRefreshKey(k => k + 1)
-                    // Optionally refresh the page to update review list & average rating
-                    window.location.reload()
+                    queryClient.invalidateQueries({ queryKey: ['venue-detail', venue.id] })
                   }}
                 />
 

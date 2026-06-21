@@ -11,5 +11,3 @@ CREATE TABLE venue_reviews (
     CONSTRAINT uk_venue_customer_review UNIQUE (venue_id, customer_id)
 );
 
-ALTER TABLE stadiums
-ADD COLUMN review_count INT DEFAULT 0 NOT NULL;

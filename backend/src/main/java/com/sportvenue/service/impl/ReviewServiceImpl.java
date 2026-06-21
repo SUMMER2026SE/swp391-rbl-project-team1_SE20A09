@@ -1,6 +1,7 @@
 package com.sportvenue.service.impl;
 
 import com.sportvenue.dto.request.CreateReviewRequest;
+import com.sportvenue.dto.response.EligibleBookingResponse;
 import com.sportvenue.dto.response.ReviewResponse;
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.Review;
@@ -15,9 +16,13 @@ import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.ReviewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -62,36 +67,35 @@ public class ReviewServiceImpl implements ReviewService {
 
         review = reviewRepository.save(review);
 
-        // Calculate and update stadium average rating and review count
-        Optional<Double> avgRatingOpt = reviewRepository.calculateAverageRating(booking.getStadium().getStadiumId());
-        long reviewCount = reviewRepository.countByStadiumStadiumId(booking.getStadium().getStadiumId());
-        
+        // Calculate and update stadium average rating + review count
         Stadium stadium = booking.getStadium();
+        Optional<Double> avgRatingOpt = reviewRepository.calculateAverageRating(stadium.getStadiumId());
+        long reviewCount = reviewRepository.countByStadiumStadiumId(stadium.getStadiumId());
         if (avgRatingOpt.isPresent()) {
-            stadium.setAverageRating(java.math.BigDecimal.valueOf(avgRatingOpt.get()));
+            stadium.setAverageRating(BigDecimal.valueOf(avgRatingOpt.get()));
+            stadium.setReviewCount((int) reviewCount);
         }
-        stadium.setReviewCount((int) reviewCount);
 
         return mapToResponse(review);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public org.springframework.data.domain.Page<ReviewResponse> getStadiumReviews(Integer stadiumId, org.springframework.data.domain.Pageable pageable) {
+    public Page<ReviewResponse> getStadiumReviews(Integer stadiumId, Pageable pageable) {
         return reviewRepository.findByStadiumStadiumIdOrderByCreatedAtDesc(stadiumId, pageable)
                 .map(this::mapToResponse);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public org.springframework.data.domain.Page<ReviewResponse> getMyReviews(String email, org.springframework.data.domain.Pageable pageable) {
+    public Page<ReviewResponse> getMyReviews(String email, Pageable pageable) {
         return reviewRepository.findByUserEmailOrderByCreatedAtDesc(email, pageable)
                 .map(this::mapToResponse);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public org.springframework.data.domain.Page<ReviewResponse> getOwnerReviews(String ownerEmail, org.springframework.data.domain.Pageable pageable) {
+    public Page<ReviewResponse> getOwnerReviews(String ownerEmail, Pageable pageable) {
         return reviewRepository.findByStadiumOwnerUserEmailOrderByCreatedAtDesc(ownerEmail, pageable)
                 .map(this::mapToResponse);
     }
@@ -126,18 +130,18 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     @Transactional(readOnly = true)
-    public java.util.List<com.sportvenue.dto.response.EligibleBookingResponse> getEligibleBookingsForReview(
+    public List<EligibleBookingResponse> getEligibleBookingsForReview(
             Integer stadiumId, String userEmail) {
         log.info("Checking eligible bookings for review: stadiumId={}, user={}", stadiumId, userEmail);
 
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        java.util.List<Booking> eligibleBookings =
+        List<Booking> eligibleBookings =
                 bookingRepository.findCompletedUnreviewedBookings(user.getUserId(), stadiumId);
 
         return eligibleBookings.stream()
-                .map(b -> com.sportvenue.dto.response.EligibleBookingResponse.builder()
+                .map(b -> EligibleBookingResponse.builder()
                         .bookingId(b.getBookingId())
                         .stadiumId(b.getStadium().getStadiumId())
                         .stadiumName(b.getStadium().getStadiumName())
