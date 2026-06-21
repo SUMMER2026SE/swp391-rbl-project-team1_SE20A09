@@ -36,6 +36,7 @@ import {
 } from '@tabler/icons-react'
 import { createBooking } from '@/lib/bookings-api'
 import WeeklySchedule from './WeeklySchedule'
+import EditReviewForm from './EditReviewForm'
 import WriteReviewForm from './WriteReviewForm'
 
 // Lazy load the Leaflet Map to avoid SSR issues and reduce bundle size
@@ -84,6 +85,7 @@ export interface VenueDetailProps {
     }
     recentReviews?: {
       reviewId: number
+      userId?: number
       userName: string
       userAvatar: string | null
       ratingScore: number
@@ -111,6 +113,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const [mapLoaded, setMapLoaded] = useState(false)
+  const [editingReviewId, setEditingReviewId] = useState<number | null>(null)
 
   // UC-CUS-01: booking state — selected slot + date được WeeklySchedule set
   // khi user click một ô AVAILABLE.
@@ -634,8 +637,37 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                 {/* Reviews list or Empty State */}
                 {venue.recentReviews && venue.recentReviews.length > 0 ? (
                   <div className="flex flex-col gap-3">
-                    {venue.recentReviews.map((review) => (
-                      <div key={review.reviewId} className="bg-gray-50 border-[0.5px] border-gray-200 rounded-[10px] p-4 flex flex-col gap-2">
+                    {venue.recentReviews.map((review) => {
+                      const isMyReview = session?.user?.userId?.toString() === review.userId?.toString()
+                      const isEditing = editingReviewId === review.reviewId
+
+                      if (isEditing) {
+                        return (
+                          <div key={review.reviewId} className="bg-gray-50 border-[0.5px] border-gray-200 rounded-[10px] p-4 flex flex-col gap-2">
+                            <EditReviewForm
+                              reviewId={review.reviewId}
+                              initialRating={review.ratingScore}
+                              initialComment={review.comment}
+                              onSuccess={() => {
+                                setEditingReviewId(null)
+                                queryClient.invalidateQueries({ queryKey: ['venue-detail', venue.id] })
+                              }}
+                              onCancel={() => setEditingReviewId(null)}
+                            />
+                          </div>
+                        )
+                      }
+
+                      return (
+                      <div key={review.reviewId} className="bg-gray-50 border-[0.5px] border-gray-200 rounded-[10px] p-4 flex flex-col gap-2 relative group">
+                        {isMyReview && (
+                          <button
+                            onClick={() => setEditingReviewId(review.reviewId)}
+                            className="absolute top-4 right-4 text-[12px] font-medium text-gray-500 hover:text-[#1a8a4a] opacity-0 group-hover:opacity-100 transition-opacity bg-white border border-gray-200 rounded px-2 py-1"
+                          >
+                            Chỉnh sửa
+                          </button>
+                        )}
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
                             {review.userAvatar ? (
@@ -658,7 +690,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                             {renderStars(review.ratingScore, 13)}
                           </div>
                         </div>
-                        <p className="text-[13px] text-gray-600 leading-relaxed">{review.comment}</p>
+                        <p className="text-[13px] text-gray-600 leading-relaxed pr-16">{review.comment}</p>
                         {review.ownerResponse && (
                           <div className="bg-white border-[0.5px] border-[#9edbb6] rounded-[8px] px-3 py-2 mt-1">
                             <span className="block text-[11px] font-medium text-[#1a8a4a] mb-0.5">Phản hồi của chủ sân</span>
@@ -669,7 +701,8 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                           {new Date(review.createdAt).toLocaleDateString('vi-VN')}
                         </span>
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-[24px] px-4 text-center select-none">

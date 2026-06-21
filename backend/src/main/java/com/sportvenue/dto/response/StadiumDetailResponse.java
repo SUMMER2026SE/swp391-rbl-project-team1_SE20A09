@@ -57,6 +57,7 @@ public class StadiumDetailResponse {
     @AllArgsConstructor
     public static class ReviewDto {
         private Integer reviewId;
+        private Integer userId;
         private String userName;
         private String userAvatar;
         private Integer ratingScore;

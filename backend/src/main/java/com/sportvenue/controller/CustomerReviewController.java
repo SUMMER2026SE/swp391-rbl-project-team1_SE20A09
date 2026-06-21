@@ -15,6 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -50,6 +51,17 @@ public class CustomerReviewController {
             @Valid @RequestBody CreateReviewRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
         ReviewResponse response = reviewService.createReview(bookingId, request, userPrincipal.getUsername());
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{reviewId}")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(summary = "UC-CUS-08: Sửa đánh giá")
+    public ResponseEntity<ReviewResponse> updateReview(
+            @PathVariable Integer reviewId,
+            @Valid @RequestBody CreateReviewRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        ReviewResponse response = reviewService.updateReview(reviewId, request, userPrincipal.getUsername());
         return ResponseEntity.ok(response);
     }
 

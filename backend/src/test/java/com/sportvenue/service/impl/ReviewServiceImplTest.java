@@ -10,6 +10,7 @@ import com.sportvenue.entity.TimeSlot;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.exception.BadRequestException;
+import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.ReviewRepository;
@@ -206,5 +207,75 @@ class ReviewServiceImplTest {
 
         assertNotNull(result);
         assertTrue(result.isEmpty());
+    }
+
+    // ─── updateReview ─────────────────────────────────────────────────────────
+
+    @Test
+    void updateReview_Success_UpdatesRatingAndRecalculatesAverage() {
+        User user = buildUser(1, "customer@sportvenue.com");
+        Stadium stadium = buildStadium(1, "Sân Test");
+        Booking booking = buildBooking(1, user, stadium, BookingStatus.COMPLETED);
+
+        Review existingReview = Review.builder()
+                .reviewId(1).booking(booking).user(user).stadium(stadium)
+                .ratingScore(3).comment("Bình thường")
+                .build();
+
+        CreateReviewRequest request = new CreateReviewRequest();
+        request.setRatingScore(5);
+        request.setComment("  Tuyệt vời, sẽ quay lại!  ");
+
+        Review savedReview = Review.builder()
+                .reviewId(1).booking(booking).user(user).stadium(stadium)
+                .ratingScore(5).comment("Tuyệt vời, sẽ quay lại!")
+                .build();
+
+        when(reviewRepository.findById(1)).thenReturn(Optional.of(existingReview));
+        when(reviewRepository.save(any(Review.class))).thenReturn(savedReview);
+        when(reviewRepository.calculateAverageRating(1)).thenReturn(Optional.of(4.5));
+
+        ReviewResponse result = reviewService.updateReview(1, request, "customer@sportvenue.com");
+
+        assertNotNull(result);
+        assertEquals(5, result.getRatingScore());
+        assertEquals("Tuyệt vời, sẽ quay lại!", result.getComment());
+        assertEquals(BigDecimal.valueOf(4.5), stadium.getAverageRating());
+        verify(reviewRepository).save(any(Review.class));
+        verify(reviewRepository).calculateAverageRating(1);
+    }
+
+    @Test
+    void updateReview_NotFound_ThrowsException() {
+        when(reviewRepository.findById(999)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> reviewService.updateReview(999, new CreateReviewRequest(), "customer@sportvenue.com"));
+
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    void updateReview_Forbidden_ThrowsException() {
+        User owner = buildUser(1, "customer@sportvenue.com");
+        User otherUser = buildUser(2, "other@sportvenue.com");
+        Stadium stadium = buildStadium(1, "Sân Test");
+        Booking booking = buildBooking(1, owner, stadium, BookingStatus.COMPLETED);
+
+        Review review = Review.builder()
+                .reviewId(1).booking(booking).user(owner).stadium(stadium)
+                .ratingScore(4).comment("Tốt")
+                .build();
+
+        CreateReviewRequest request = new CreateReviewRequest();
+        request.setRatingScore(1);
+        request.setComment("Cố tình sửa của người khác");
+
+        when(reviewRepository.findById(1)).thenReturn(Optional.of(review));
+
+        assertThrows(ForbiddenException.class,
+                () -> reviewService.updateReview(1, request, otherUser.getEmail()));
+
+        verify(reviewRepository, never()).save(any());
     }
 }
