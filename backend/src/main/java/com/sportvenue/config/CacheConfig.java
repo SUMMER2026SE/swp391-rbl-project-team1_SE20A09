@@ -16,7 +16,6 @@ public class CacheConfig {
 
     /**
      * adminDashboard — TTL 5 phút.
-     * Dashboard read-heavy nhưng dữ liệu nên tương đối tươi.
      * Cache bị evict sớm hơn nếu có Owner được duyệt / Complaint mới
      * thông qua @CacheEvict trong AdminDashboardServiceImpl.evictDashboardCache().
      */
