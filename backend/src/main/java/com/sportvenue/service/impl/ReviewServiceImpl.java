@@ -9,6 +9,7 @@ import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.exception.BadRequestException;
+import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.ReviewRepository;
@@ -126,6 +127,31 @@ public class ReviewServiceImpl implements ReviewService {
                 .ownerResponse(review.getOwnerResponse())
                 .createdAt(review.getCreatedAt())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public ReviewResponse updateReview(Integer reviewId, CreateReviewRequest request, String userEmail) {
+        log.info("Updating review {} by user {}", reviewId, userEmail);
+
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đánh giá với ID " + reviewId));
+
+        if (!review.getUser().getEmail().equals(userEmail)) {
+            throw new ForbiddenException("Bạn không có quyền sửa đánh giá này");
+        }
+
+        review.setRatingScore(request.getRatingScore());
+        review.setComment(request.getComment().trim());
+        review = reviewRepository.save(review);
+
+        Optional<Double> avgRatingOpt = reviewRepository.calculateAverageRating(review.getStadium().getStadiumId());
+        if (avgRatingOpt.isPresent()) {
+            Stadium stadium = review.getStadium();
+            stadium.setAverageRating(BigDecimal.valueOf(avgRatingOpt.get()));
+        }
+
+        return mapToResponse(review);
     }
 
     @Override
