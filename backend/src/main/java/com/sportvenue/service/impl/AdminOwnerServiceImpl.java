@@ -122,5 +122,3 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
         }
     }
 }
-
-// Trigger CI

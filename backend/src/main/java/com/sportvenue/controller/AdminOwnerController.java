@@ -22,12 +22,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.sportvenue.dto.request.LockOwnerRequest;
 
 import java.util.List;
 
@@ -146,11 +149,11 @@ public class AdminOwnerController {
     /**
      * Khóa hoặc mở khóa tài khoản chủ sân.
      */
-    @org.springframework.web.bind.annotation.PatchMapping("/{ownerId}/lock")
+    @PatchMapping("/{ownerId}/lock")
     @Operation(summary = "Khóa hoặc mở khóa tài khoản chủ sân", description = "Admin có quyền khóa hoặc mở khóa tài khoản của chủ sân.")
     public ResponseEntity<ApiResponse<Void>> lockUnlockOwner(
             @Parameter(description = "ID của chủ sân", example = "1") @PathVariable Integer ownerId,
-            @Valid @RequestBody com.sportvenue.dto.request.LockOwnerRequest request) {
+            @Valid @RequestBody LockOwnerRequest request) {
         
         adminOwnerService.lockUnlockOwner(ownerId, request.getEnabled(), request.getReason());
         return ResponseEntity.ok(ApiResponse.<Void>builder()

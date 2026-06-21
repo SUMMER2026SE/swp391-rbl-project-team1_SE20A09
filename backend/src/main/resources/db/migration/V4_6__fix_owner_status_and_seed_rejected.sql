@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════
--- V4_5__fix_owner_status_and_seed_rejected.sql
+-- V4_6__fix_owner_status_and_seed_rejected.sql
 -- Cập nhật đa dạng trạng thái cho 3 tài khoản Pending để mô phỏng thực tế
 -- ══════════════════════════════════════════════════════════════════════════
 
