@@ -31,8 +31,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.sportvenue.dto.response.ComplaintChatEventDTO;
 import com.sportvenue.service.NotificationService;
 import com.sportvenue.entity.enums.NotificationType;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -45,6 +47,7 @@ public class ComplaintServiceImpl implements ComplaintService {
     private final OwnerRepository ownerRepository;
     private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
+    private final SimpMessagingTemplate messagingTemplate;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -166,6 +169,18 @@ public class ComplaintServiceImpl implements ComplaintService {
 
         Complaint saved = complaintRepository.save(complaint);
         sendReplyNotifications(complaint, saved, isAdmin, isCustomer, isOwner);
+
+        messagingTemplate.convertAndSend(
+                "/topic/complaint/" + saved.getComplaintId(),
+                ComplaintChatEventDTO.builder()
+                        .complaintId(saved.getComplaintId())
+                        .from(fromLabel)
+                        .message(request.getMessage().trim())
+                        .time(LocalDateTime.now().format(FORMATTER))
+                        .newStatus(saved.getStatus().name().toLowerCase())
+                        .build()
+        );
+
         return mapToResponse(saved);
     }
 
@@ -222,8 +237,7 @@ public class ComplaintServiceImpl implements ComplaintService {
         complaint.setStatus(ComplaintStatus.RESOLVED);
 
         Complaint saved = complaintRepository.save(complaint);
-        
-        // Notify customer
+
         notificationService.createNotification(
                 complaint.getUser().getUserId(),
                 "Khiếu nại đã được giải quyết",
@@ -231,7 +245,18 @@ public class ComplaintServiceImpl implements ComplaintService {
                 NotificationType.COMPLAINT,
                 String.valueOf(saved.getComplaintId())
         );
-        
+
+        messagingTemplate.convertAndSend(
+                "/topic/complaint/" + saved.getComplaintId(),
+                ComplaintChatEventDTO.builder()
+                        .complaintId(saved.getComplaintId())
+                        .from("Chủ sân")
+                        .message("Đã giải quyết: " + request.getResolution().trim())
+                        .time(LocalDateTime.now().format(FORMATTER))
+                        .newStatus("resolved")
+                        .build()
+        );
+
         return mapToResponse(saved);
     }
 
@@ -272,6 +297,17 @@ public class ComplaintServiceImpl implements ComplaintService {
                 "Khách hàng đã tự đóng khiếu nại #" + complaintId,
                 NotificationType.COMPLAINT,
                 String.valueOf(saved.getComplaintId())
+        );
+
+        messagingTemplate.convertAndSend(
+                "/topic/complaint/" + saved.getComplaintId(),
+                ComplaintChatEventDTO.builder()
+                        .complaintId(saved.getComplaintId())
+                        .from("Khách hàng")
+                        .message("Khách hàng đã đóng khiếu nại.")
+                        .time(LocalDateTime.now().format(FORMATTER))
+                        .newStatus("resolved")
+                        .build()
         );
 
         return mapToResponse(saved);
@@ -319,6 +355,17 @@ public class ComplaintServiceImpl implements ComplaintService {
                 "Admin đã đóng và giải quyết khiếu nại #" + complaintId,
                 NotificationType.COMPLAINT,
                 String.valueOf(saved.getComplaintId())
+        );
+
+        messagingTemplate.convertAndSend(
+                "/topic/complaint/" + saved.getComplaintId(),
+                ComplaintChatEventDTO.builder()
+                        .complaintId(saved.getComplaintId())
+                        .from("Admin")
+                        .message("Đã giải quyết: " + request.getResolution().trim())
+                        .time(LocalDateTime.now().format(FORMATTER))
+                        .newStatus("resolved")
+                        .build()
         );
 
         return mapToResponse(saved);

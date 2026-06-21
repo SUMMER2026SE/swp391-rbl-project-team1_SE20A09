@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from "react";
-import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,20 +17,15 @@ import {
 } from "@/components/ui/select";
 import {
   AlertCircle,
-  MessageSquare,
-  Home,
-  BarChart3,
-  Calendar,
-  Star,
   Clock,
   User,
   Send,
   CheckCircle,
   AlertTriangle
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { get, post } from "@/lib/api";
 import { toast } from "sonner";
+import { useComplaintWebSocket, type ComplaintChatEvent } from "@/hooks/useComplaintWebSocket";
 
 type ComplaintResponse = {
   from: string;
@@ -54,39 +48,7 @@ type Complaint = {
   bookingId?: number;
 };
 
-const DEFAULT_COMPLAINTS: Complaint[] = [
-  {
-    id: "CP001",
-    complaintId: 1,
-    subject: "Sân không đúng mô tả",
-    against: "Sân bóng Thành Công",
-    description: "Sân thực tế không giống hình ảnh trên web. Cỏ nhân tạo cũ, bề mặt không bằng phẳng.",
-    status: "open",
-    priority: "medium",
-    submittedDate: "2026-05-22",
-    responses: [],
-  },
-  {
-    id: "CP002",
-    complaintId: 2,
-    subject: "Chủ sân không phản hồi",
-    against: "Sân bóng Thành Công",
-    description: "Đã liên hệ nhiều lần nhưng chủ sân không phản hồi về việc hoàn tiền do hủy sân.",
-    status: "in_progress",
-    priority: "high",
-    submittedDate: "2026-05-20",
-    responses: [
-      {
-        from: "Admin",
-        message: "Chúng tôi đang xem xét khiếu nại của bạn. Sẽ phản hồi trong 24-48h.",
-        time: "2026-05-21 10:00",
-      },
-    ],
-  },
-];
-
 function OwnerComplaintsPage() {
-  const router = useRouter();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
   const [replyMessage, setReplyMessage] = useState("");
@@ -99,25 +61,12 @@ function OwnerComplaintsPage() {
       const data = await get<Complaint[]>("/owner/complaints");
       if (data && Array.isArray(data)) {
         setComplaints(data);
-        localStorage.setItem('owner_complaints', JSON.stringify(data));
-        setSelectedComplaint(prev => {
-          if (prev) {
-            return data.find(c => c.complaintId === prev.complaintId) || null;
-          }
-          return null;
-        });
-      } else {
-        throw new Error("Không có dữ liệu khiếu nại");
+        setSelectedComplaint(prev =>
+          prev ? (data.find(c => c.complaintId === prev.complaintId) ?? null) : null
+        );
       }
-    } catch (error) {
-      console.warn("Backend offline or error, loading local fallback:", error);
-      const stored = localStorage.getItem('owner_complaints');
-      if (stored) {
-        setComplaints(JSON.parse(stored));
-      } else {
-        localStorage.setItem('owner_complaints', JSON.stringify(DEFAULT_COMPLAINTS));
-        setComplaints(DEFAULT_COMPLAINTS);
-      }
+    } catch {
+      toast.error("Không thể tải dữ liệu khiếu nại. Vui lòng thử lại.");
     }
   }, []);
 
@@ -125,22 +74,24 @@ function OwnerComplaintsPage() {
     fetchComplaints();
   }, [fetchComplaints]);
 
-  useEffect(() => {
-    if (!selectedComplaint || selectedComplaint.status === 'resolved') return;
-    const interval = setInterval(fetchComplaints, 5000);
-    return () => clearInterval(interval);
-  }, [selectedComplaint?.complaintId, selectedComplaint?.status, fetchComplaints]);
+  const handleWsEvent = useCallback((event: ComplaintChatEvent) => {
+    const appendMessage = (c: Complaint): Complaint => {
+      if (c.complaintId !== event.complaintId) return c;
+      const alreadyExists = c.responses.some(
+        r => r.from === event.from && r.message === event.message && r.time === event.time
+      );
+      if (alreadyExists) return c;
+      return {
+        ...c,
+        status: event.newStatus || c.status,
+        responses: [...c.responses, { from: event.from, message: event.message, time: event.time }],
+      };
+    };
+    setComplaints(prev => prev.map(appendMessage));
+    setSelectedComplaint(prev => (prev ? appendMessage(prev) : null));
+  }, []);
 
-  const saveComplaints = (updated: Complaint[]) => {
-    setComplaints(updated);
-    localStorage.setItem('owner_complaints', JSON.stringify(updated));
-    setSelectedComplaint(prev => {
-      if (prev) {
-        return updated.find(c => c.complaintId === prev.complaintId) || null;
-      }
-      return null;
-    });
-  };
+  useComplaintWebSocket(selectedComplaint?.complaintId ?? null, handleWsEvent);
 
   const handleSendMessage = async () => {
     if (!replyMessage.trim() || !selectedComplaint) return;
@@ -149,30 +100,8 @@ function OwnerComplaintsPage() {
       await post<unknown>(`/owner/complaints/${selectedComplaint.complaintId}/reply`, { message: replyMessage.trim() });
       setReplyMessage("");
       toast.success("Gửi phản hồi thành công!");
-      fetchComplaints();
-    } catch (error) {
-      console.warn("Backend reply failed, using local update:", error);
-      const newResponse = {
-        from: "Chủ sân",
-        message: replyMessage.trim(),
-        time: new Date().toLocaleString('vi-VN')
-      };
-
-      const updated = complaints.map(c => {
-        if (c.complaintId === selectedComplaint.complaintId) {
-          const currentStatus = (c.status || "").toLowerCase();
-          return {
-            ...c,
-            status: currentStatus === "open" ? "in_progress" : c.status,
-            responses: [...(c.responses || []), newResponse]
-          };
-        }
-        return c;
-      });
-
-      saveComplaints(updated);
-      setReplyMessage("");
-      toast.success("Đã phản hồi (Offline Mode)");
+    } catch {
+      toast.error("Gửi phản hồi thất bại. Vui lòng thử lại.");
     }
   };
 
@@ -184,25 +113,8 @@ function OwnerComplaintsPage() {
       setResolutionText("");
       setShowResolveDialog(false);
       toast.success("Giải quyết khiếu nại thành công!");
-      fetchComplaints();
-    } catch (error) {
-      console.warn("Backend resolve failed, using local update:", error);
-      const updated = complaints.map(c => {
-        if (c.complaintId === selectedComplaint.complaintId) {
-          return {
-            ...c,
-            status: "resolved",
-            resolution: resolutionText.trim(),
-            resolvedDate: new Date().toISOString().split('T')[0]
-          };
-        }
-        return c;
-      });
-
-      saveComplaints(updated);
-      setResolutionText("");
-      setShowResolveDialog(false);
-      toast.success("Đã giải quyết khiếu nại (Offline Mode)");
+    } catch {
+      toast.error("Giải quyết khiếu nại thất bại. Vui lòng thử lại.");
     }
   };
 

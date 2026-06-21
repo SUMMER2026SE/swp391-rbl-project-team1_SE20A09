@@ -26,6 +26,7 @@ import { AlertCircle, Plus, MessageSquare, XCircle, SlidersHorizontal, ChevronDo
 import { get, post } from "@/lib/api";
 import { toast } from "sonner";
 import { fetchMyBookings } from "@/lib/bookings-api";
+import { useComplaintWebSocket, type ComplaintChatEvent } from "@/hooks/useComplaintWebSocket";
 
 type ComplaintResponse = {
   from: string;
@@ -48,36 +49,6 @@ type Complaint = {
   bookingId?: number;
 };
 
-const DEFAULT_COMPLAINTS: Complaint[] = [
-  {
-    id: "CP001",
-    complaintId: 1,
-    subject: "Sân không đúng mô tả",
-    against: "Sân bóng Thành Công",
-    description: "Sân thực tế không giống hình ảnh trên web. Cỏ nhân tạo cũ, bề mặt không bằng phẳng.",
-    status: "open",
-    priority: "medium",
-    submittedDate: "2026-05-22",
-    responses: [],
-  },
-  {
-    id: "CP002",
-    complaintId: 2,
-    subject: "Chủ sân không phản hồi",
-    against: "Sân bóng Thành Công",
-    description: "Đã liên hệ nhiều lần nhưng chủ sân không phản hồi về việc hoàn tiền do hủy sân.",
-    status: "in_progress",
-    priority: "high",
-    submittedDate: "2026-05-20",
-    responses: [
-      {
-        from: "Admin",
-        message: "Chúng tôi đang xem xét khiếu nại của bạn. Sẽ phản hồi trong 24-48h.",
-        time: "2026-05-21 10:00",
-      },
-    ],
-  },
-];
 
 function ComplaintsPage() {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
@@ -122,23 +93,12 @@ function ComplaintsPage() {
       const data = await get<Complaint[]>("/complaints");
       if (data && Array.isArray(data)) {
         setComplaints(data);
-        localStorage.setItem('sport_venue_complaints', JSON.stringify(data));
-        setSelectedComplaint(prev => {
-          if (prev) return data.find(c => c.complaintId === prev.complaintId) || prev;
-          return null;
-        });
-      } else {
-        throw new Error("Không có dữ liệu khiếu nại");
+        setSelectedComplaint(prev =>
+          prev ? (data.find(c => c.complaintId === prev.complaintId) ?? prev) : null
+        );
       }
-    } catch (error) {
-      console.warn("Backend offline or error, loading local fallback:", error);
-      const stored = localStorage.getItem('sport_venue_complaints');
-      if (stored) {
-        setComplaints(JSON.parse(stored));
-      } else {
-        localStorage.setItem('sport_venue_complaints', JSON.stringify(DEFAULT_COMPLAINTS));
-        setComplaints(DEFAULT_COMPLAINTS);
-      }
+    } catch {
+      toast.error("Không thể tải danh sách khiếu nại. Vui lòng thử lại.");
     }
   }, []);
 
@@ -158,11 +118,24 @@ function ComplaintsPage() {
     fetchBookings();
   }, [fetchComplaints, fetchBookings]);
 
-  useEffect(() => {
-    if (!selectedComplaint || selectedComplaint.status === 'resolved') return;
-    const interval = setInterval(fetchComplaints, 5000);
-    return () => clearInterval(interval);
-  }, [selectedComplaint?.complaintId, selectedComplaint?.status, fetchComplaints]);
+  const handleWsEvent = useCallback((event: ComplaintChatEvent) => {
+    const appendMessage = (c: Complaint): Complaint => {
+      if (c.complaintId !== event.complaintId) return c;
+      const alreadyExists = c.responses.some(
+        r => r.from === event.from && r.message === event.message && r.time === event.time
+      );
+      if (alreadyExists) return c;
+      return {
+        ...c,
+        status: event.newStatus || c.status,
+        responses: [...c.responses, { from: event.from, message: event.message, time: event.time }],
+      };
+    };
+    setComplaints(prev => prev.map(appendMessage));
+    setSelectedComplaint(prev => (prev ? appendMessage(prev) : null));
+  }, []);
+
+  useComplaintWebSocket(selectedComplaint?.complaintId ?? null, handleWsEvent);
 
   const handleCreateComplaint = async () => {
     if (!subject.trim() || !description.trim() || !bookingId) return;
