@@ -133,7 +133,7 @@ export type BookingDetailItem = {
   endTime: string;
   address: string;
   totalPrice: number;
-  status: "pending" | "confirmed" | "completed" | "cancelled";
+  status: "pending" | "pending_payment" | "confirmed" | "completed" | "cancelled";
   paymentStatus: string;
   createdAt: string;
   note: string | null;

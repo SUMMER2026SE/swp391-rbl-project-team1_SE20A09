@@ -21,6 +21,7 @@ import { Footer } from '@/components/landing/Footer';
 const STATUS_CONFIG = {
   confirmed: { label: "Đã xác nhận", className: "bg-green-50 text-green-700 border-green-200" },
   pending: { label: "Chờ xác nhận", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  pending_payment: { label: "Chờ thanh toán", className: "bg-orange-50 text-orange-700 border-orange-200" },
   completed: { label: "Hoàn thành", className: "bg-slate-50 text-slate-600 border-slate-200" },
   cancelled: { label: "Đã hủy", className: "bg-red-50 text-red-600 border-red-200" },
 } as const;
@@ -287,7 +288,7 @@ export default function BookingDetailPage() {
 
               {/* Thanh toán ngay button flow */}
               <div className="pt-6 space-y-2">
-                {(booking.status === 'pending' || booking.status === 'confirmed') && booking.paymentStatus === 'unpaid' && (
+                {(booking.status === 'pending' || booking.status === 'pending_payment' || booking.status === 'confirmed') && booking.paymentStatus === 'unpaid' && (
                   <Button
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl h-11 disabled:opacity-60"
                     onClick={handlePayWithVnpay}

@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { CreditCard, Building2, Smartphone, Shield, Clock } from "lucide-react";
+import { CreditCard, Banknote, Shield, Clock } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
 import { createBooking } from "@/lib/bookings-api";
@@ -45,7 +45,7 @@ function parseIsoDateAsLocal(iso: string): Date {
 
 function PaymentContent() {
   const router = useRouter();
-  const [paymentMethod, setPaymentMethod] = useState("bank");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
   const [summary, setSummary] = useState<BookingSummary | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingId, setBookingId] = useState<number | null>(null);
@@ -111,47 +111,49 @@ function PaymentContent() {
         slotId: activeSummary.slotId,
         reservationDate: activeSummary.date,
         note: `Đặt qua web - PTTT: ${
-          paymentMethod === "bank"
-            ? "Chuyển khoản"
+          paymentMethod === "cash"
+            ? "Tiền mặt tại sân"
             : paymentMethod === "vnpay"
-            ? "VNPay"
-            : "MoMo"
+            ? "VNPay (Toàn bộ)"
+            : paymentMethod === "vnpay_deposit"
+            ? "VNPay (Cọc 30%)"
+            : "Khác"
         }`,
         accessories: accessoriesPayload.length > 0 ? accessoriesPayload : undefined,
       });
 
-      // Lưu bookingId + expiredAt để chạy countdown từ API thay vì local timer.
-      setBookingId(created.bookingId);
+      const newBookingId = created.bookingId;
+      setBookingId(newBookingId);
+      
       const apiExpiredAt = (created as { expiredAt?: string }).expiredAt;
       if (apiExpiredAt) {
         setExpiredAt(apiExpiredAt);
       }
 
-      toast.success("Sân đã được giữ — vui lòng hoàn tất thanh toán trong 5 phút.");
-    } catch (err: any) {
-      console.error("Booking failed:", err);
-      const serverMsg = err?.message ?? "Đặt sân thất bại. Vui lòng thử lại.";
-      toast.error(serverMsg);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleFinalizePayment = async () => {
-    if (!bookingId) {
-      toast.error("Không tìm thấy booking. Vui lòng đặt lại.");
-      return;
-    }
-    try {
-      setIsSubmitting(true);
+      // Xử lý thanh toán ngay lập tức
       const { post } = await import("@/lib/api");
-      await post(`/bookings/${bookingId}/confirm-payment`, {});
-      toast.success("Thanh toán thành công! Sân của bạn đã được đặt.");
-      sessionStorage.removeItem("booking_summary");
-      router.push("/profile?tab=bookings");
+      if (paymentMethod === "vnpay" || paymentMethod === "vnpay_deposit") {
+        const option = paymentMethod === "vnpay_deposit" ? "DEPOSIT" : "FULL";
+        const response = await post<{ paymentUrl?: string }>(
+          `/bookings/${newBookingId}/pay?paymentOption=${option}`,
+          {}
+        );
+        if (response.paymentUrl) {
+          window.location.href = response.paymentUrl;
+          return;
+        } else {
+          toast.error("Không tạo được URL thanh toán VNPay.");
+        }
+      } else {
+        await post(`/bookings/${newBookingId}/confirm-payment`, {});
+        toast.success("Thanh toán thành công! Sân của bạn đã được đặt.");
+        sessionStorage.removeItem("booking_summary");
+        router.push("/profile?tab=bookings");
+      }
     } catch (err: any) {
-      console.error("Confirm payment failed:", err);
-      toast.error(err?.message ?? "Xác nhận thanh toán thất bại.");
+      console.error("Booking/Payment failed:", err);
+      const serverMsg = err?.message ?? "Có lỗi xảy ra. Vui lòng thử lại.";
+      toast.error(serverMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -260,18 +262,18 @@ function PaymentContent() {
               <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="space-y-3">
                 <div
                   className={`flex items-center space-x-4 p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                    paymentMethod === "bank"
+                    paymentMethod === "cash"
                       ? "border-emerald-600 bg-emerald-50/20"
                       : "border-border hover:border-gray-300"
                   }`}
-                  onClick={() => setPaymentMethod("bank")}
+                  onClick={() => setPaymentMethod("cash")}
                 >
-                  <RadioGroupItem value="bank" id="bank" />
-                  <Building2 className="h-6 w-6 text-emerald-600" />
-                  <Label htmlFor="bank" className="flex-1 cursor-pointer">
-                    <div className="font-semibold text-gray-800">Chuyển khoản ngân hàng</div>
+                  <RadioGroupItem value="cash" id="cash" />
+                  <Banknote className="h-6 w-6 text-emerald-600" />
+                  <Label htmlFor="cash" className="flex-1 cursor-pointer">
+                    <div className="font-semibold text-gray-800">Thanh toán bằng tiền mặt tại sân</div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      Chuyển khoản qua số tài khoản ngân hàng của hệ thống
+                      Thanh toán trực tiếp bằng tiền mặt khi đến sân
                     </div>
                   </Label>
                 </div>
@@ -287,9 +289,9 @@ function PaymentContent() {
                   <RadioGroupItem value="vnpay" id="vnpay" />
                   <CreditCard className="h-6 w-6 text-emerald-600" />
                   <Label htmlFor="vnpay" className="flex-1 cursor-pointer">
-                    <div className="font-semibold text-gray-800">Cổng thanh toán VNPay</div>
+                    <div className="font-semibold text-gray-800">VNPay (Thanh toán toàn bộ)</div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      Thanh toán nhanh chóng qua quét mã QR VNPay hoặc thẻ ngân hàng
+                      Thanh toán toàn bộ 100% giá trị đơn đặt sân qua mã QR hoặc thẻ ngân hàng
                     </div>
                   </Label>
                   <div className="relative w-16 h-6 flex-shrink-0 bg-blue-600 rounded border flex items-center justify-center p-1">
@@ -299,22 +301,22 @@ function PaymentContent() {
 
                 <div
                   className={`flex items-center space-x-4 p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                    paymentMethod === "momo"
+                    paymentMethod === "vnpay_deposit"
                       ? "border-emerald-600 bg-emerald-50/20"
                       : "border-border hover:border-gray-300"
                   }`}
-                  onClick={() => setPaymentMethod("momo")}
+                  onClick={() => setPaymentMethod("vnpay_deposit")}
                 >
-                  <RadioGroupItem value="momo" id="momo" />
-                  <Smartphone className="h-6 w-6 text-emerald-600" />
-                  <Label htmlFor="momo" className="flex-1 cursor-pointer">
-                    <div className="font-semibold text-gray-800">Ví điện tử MoMo</div>
+                  <RadioGroupItem value="vnpay_deposit" id="vnpay_deposit" />
+                  <CreditCard className="h-6 w-6 text-emerald-600" />
+                  <Label htmlFor="vnpay_deposit" className="flex-1 cursor-pointer">
+                    <div className="font-semibold text-gray-800">VNPay (Thanh toán cọc 30%)</div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      Thanh toán trực tuyến an toàn bằng ứng dụng ví MoMo
+                      Thanh toán trước 30% giá trị để giữ chỗ, phần còn lại thanh toán tại sân
                     </div>
                   </Label>
-                  <div className="relative w-10 h-10 flex-shrink-0 bg-[#a50064] rounded border flex items-center justify-center p-0.5">
-                    <span className="text-[10px] font-bold text-white">MOMO</span>
+                  <div className="relative w-16 h-6 flex-shrink-0 bg-blue-600 rounded border flex items-center justify-center p-1">
+                    <span className="text-[10px] font-bold text-white">VNPAY</span>
                   </div>
                 </div>
               </RadioGroup>
@@ -324,14 +326,14 @@ function PaymentContent() {
           <Button
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-6 rounded-lg text-lg shadow-sm transition-all"
             size="lg"
-            onClick={bookingId ? handleFinalizePayment : handlePaymentSubmit}
+            onClick={handlePaymentSubmit}
             disabled={isSubmitting}
           >
             {isSubmitting
               ? "Đang xử lý..."
-              : bookingId
-              ? "Xác nhận thanh toán"
-              : "Tạo đơn và giữ sân"}
+              : paymentMethod === "vnpay" || paymentMethod === "vnpay_deposit"
+              ? "Thanh toán qua VNPay"
+              : "Hoàn tất đặt sân"}
           </Button>
 
           {/* Security Notice */}
