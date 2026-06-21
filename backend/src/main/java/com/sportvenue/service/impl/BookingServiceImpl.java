@@ -499,7 +499,20 @@ public class BookingServiceImpl implements BookingService {
                     "Không thể huỷ đơn đặt sân ở trạng thái: " + currentStatus.name());
         }
 
+        // UC-CUS-06: Nếu booking đã thanh toán → tính số tiền hoàn.
+        // refundAmount > 0 → paymentStatus = REFUND_PENDING (chờ Owner duyệt).
+        // refundAmount == 0 → giữ paymentStatus = PAID (không có gì để hoàn).
+        // KHÔNG tạo bản ghi Payment âm ở đây — Owner duyệt mới tạo.
+        PaymentStatus resultingPaymentStatus = booking.getPaymentStatus();
+        if (booking.getPaymentStatus() == PaymentStatus.PAID) {
+            RefundCalculator.RefundResult calc = refundCalculator.calculate(booking);
+            if (calc.getAmount().compareTo(BigDecimal.ZERO) > 0) {
+                resultingPaymentStatus = PaymentStatus.REFUND_PENDING;
+            }
+        }
+
         booking.setBookingStatus(BookingStatus.CANCELLED);
+        booking.setPaymentStatus(resultingPaymentStatus);
         booking.setNote("Khách hàng huỷ: " + (reason != null ? reason : ""));
         booking.setExpiredAt(null);
         bookingRepository.save(booking);
@@ -510,8 +523,8 @@ public class BookingServiceImpl implements BookingService {
             timeSlotRepository.save(slot);
         }
 
-        log.info("❌ UC-CUS-05: Customer {} huỷ booking #{} — lý do: {}",
-                principal.getUser().getEmail(), bookingId, reason);
+        log.info("❌ UC-CUS-05: Customer {} huỷ booking #{} — lý do: {}, paymentStatus={}",
+                principal.getUser().getEmail(), bookingId, reason, resultingPaymentStatus);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
