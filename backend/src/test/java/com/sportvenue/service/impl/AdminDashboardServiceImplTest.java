@@ -1,5 +1,21 @@
 package com.sportvenue.service.impl;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import static org.mockito.Mockito.when;
+import org.mockito.junit.jupiter.MockitoExtension;
+
 import com.sportvenue.dto.response.AdminDashboardResponse;
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.Stadium;
@@ -14,22 +30,6 @@ import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.UserRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AdminDashboardServiceImplTest {
@@ -76,7 +76,7 @@ class AdminDashboardServiceImplTest {
         when(ownerRepository.countByApprovedStatus(ApprovedStatus.PENDING)).thenReturn(3L);
         when(complaintRepository.countByStatus(ComplaintStatus.OPEN)).thenReturn(2L);
 
-        User customer = User.builder().fullName("John Doe").build();
+        User customer = User.builder().firstName("John").lastName("Doe").build();
         Stadium stadium = Stadium.builder().stadiumName("Camp Nou").build();
         TimeSlot slot = TimeSlot.builder()
                 .startTime(LocalTime.of(8, 0))
@@ -95,6 +95,10 @@ class AdminDashboardServiceImplTest {
                 .build();
 
         when(bookingRepository.findTop5ByOrderByBookingDateDesc()).thenReturn(List.of(booking));
+        when(bookingRepository.countBookingsByDateRange(
+                org.mockito.ArgumentMatchers.any(LocalDate.class),
+                org.mockito.ArgumentMatchers.any(LocalDate.class)))
+                .thenReturn(List.of());
 
         // Act
         AdminDashboardResponse response = adminDashboardService.getDashboardData();
