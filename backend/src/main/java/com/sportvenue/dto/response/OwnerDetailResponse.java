@@ -25,5 +25,9 @@ public class OwnerDetailResponse {
     private String businessAddress;
     private ApprovedStatus approvedStatus;
     private String rejectionReason;
+    private String businessLicenseUrl;
+    private String identityCardUrl;
     private LocalDateTime createdAt;
+    private String approvedByEmail;
+    private LocalDateTime approvedAt;
 }

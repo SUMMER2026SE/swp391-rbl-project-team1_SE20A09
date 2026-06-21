@@ -32,5 +32,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
         registry.addResourceHandler("/api/v1/files/stadiums/**")
                 .addResourceLocations(uploadDir + "stadiums/");
+
+
     }
 }

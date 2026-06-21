@@ -1,46 +1,59 @@
 package com.sportvenue.dto.request;
 
-import jakarta.validation.constraints.DecimalMax;
-import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Digits;
-import jakarta.validation.constraints.NotBlank;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
 
+/**
+ * UC-CUS-01: Request tạo một đơn đặt sân đơn lẻ (single booking) cho Customer.
+ *
+ * Server lấy customer từ {@code UserPrincipal} — không cần customerId trong body.
+ *
+ * Quy tắc server-side (xem {@code BookingService.createBooking}):
+ * <ul>
+ *   <li>Slot phải thuộc đúng sân, slot.status phải AVAILABLE.</li>
+ *   <li>Slot datetime (reservationDate + slot.startTime) phải là tương lai.</li>
+ *   <li>Không có booking PENDING/CONFIRMED nào khác cho cùng
+ *       (stadiumId, slotId, reservationDate).</li>
+ *   <li>TotalPrice = slot.pricePerSlot + accessoriesTotal + serviceFee — server
+ *       TÍNH, không tin client.</li>
+ * </ul>
+ */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateBookingRequest {
 
-    @NotBlank(message = "Customer name is required")
-    @Size(max = 100, message = "Customer name cannot exceed 100 characters")
-    private String customerName;
+    @Schema(description = "ID sân khách muốn đặt", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "stadiumId is required")
+    private Integer stadiumId;
 
-    @NotBlank(message = "Phone number is required")
-    @Pattern(regexp = "^\\d{10}$", message = "Phone number must be 10 digits")
-    private String phoneNumber;
+    @Schema(description = "ID khung giờ (TimeSlot) thuộc sân trên", example = "5", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "slotId is required")
+    private Integer slotId;
 
-    @NotBlank(message = "Address is required")
-    @Size(max = 255, message = "Address cannot exceed 255 characters")
-    private String addressText;
+    @Schema(description = "Ngày khách ra sân chơi (ISO yyyy-MM-dd)", example = "2026-06-25", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "reservationDate is required")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private LocalDate reservationDate;
 
-    @NotNull(message = "Latitude is required")
-    @DecimalMin(value = "-90.0", message = "Latitude must be >= -90")
-    @DecimalMax(value = "90.0", message = "Latitude must be <= 90")
-    @Digits(integer = 3, fraction = 14, message = "Invalid latitude format")
-    private BigDecimal latitude;
+    @Schema(description = "Ghi chú tùy chọn của khách", example = "Vui lòng chuẩn bị sân trước 15 phút")
+    @Size(max = 500, message = "note cannot exceed 500 characters")
+    private String note;
 
-    @NotNull(message = "Longitude is required")
-    @DecimalMin(value = "-180.0", message = "Longitude must be >= -180")
-    @DecimalMax(value = "180.0", message = "Longitude must be <= 180")
-    @Digits(integer = 3, fraction = 14, message = "Invalid longitude format")
-    private BigDecimal longitude;
+    /** Phụ kiện kèm theo — optional. Server chỉ nhận ID + quantity, tự tính unitPrice. */
+    @Schema(description = "Phụ kiện kèm theo (optional). Server tự lookup giá từ DB.")
+    @Valid
+    @Size(max = 50, message = "Không được chọn quá 50 phụ kiện")
+    private List<AccessoryItem> accessories;
 }

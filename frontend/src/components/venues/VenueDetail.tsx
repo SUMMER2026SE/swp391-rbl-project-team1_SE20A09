@@ -1,20 +1,20 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
+import { toast } from 'sonner'
 import {
   IconBallFootball,
   IconClock,
-  IconClockOff,
   IconCategory,
   IconCircleCheck,
-  IconCircleX,
   IconMapPin,
   IconMap2,
   IconStar,
   IconStarHalf,
-  IconCalendar,
   IconCalendarPlus,
   IconPackage,
   IconMessageCircle,
@@ -33,6 +33,8 @@ import {
   IconChevronLeft,
   IconChevronRight
 } from '@tabler/icons-react'
+import { createBooking } from '@/lib/bookings-api'
+import WeeklySchedule from './WeeklySchedule'
 
 // Lazy load the Leaflet Map to avoid SSR issues and reduce bundle size
 const VenueMap = dynamic(() => import('./VenueMap'), {
@@ -99,24 +101,29 @@ const IMAGE_LABELS = [
 ]
 
 export default function VenueDetail({ venue }: VenueDetailProps) {
+  const router = useRouter()
+  const { data: session } = useSession()
   const [activeIndex, setActiveIndex] = useState(0)
   const [activeTab, setActiveTab] = useState<string>('overview')
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const [mapLoaded, setMapLoaded] = useState(false)
 
-  // Date picker state
+  // UC-CUS-01: booking state — selected slot + date được WeeklySchedule set
+  // khi user click một ô AVAILABLE.
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const d = new Date()
     d.setHours(0, 0, 0, 0)
     return d
   })
-  const [popoverOpen, setPopoverOpen] = useState(false)
-  const [viewMonth, setViewMonth] = useState<number>(selectedDate.getMonth())
-  const [viewYear, setViewYear] = useState<number>(selectedDate.getFullYear())
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null)
+  const [selectedSlot, setSelectedSlot] = useState<number | null>(null)
+  const [bookingSubmitting, setBookingSubmitting] = useState(false)
 
-  const datePickerRef = useRef<HTMLDivElement>(null)
+  /**
+   * Bump để remount WeeklySchedule — dùng sau khi đặt sân / 409 conflict
+   * để grid refetch dữ liệu mới nhất từ BE.
+   */
+  const [weeklyKey, setWeeklyKey] = useState(0)
 
   // Lazy load map when map tab becomes active
   useEffect(() => {
@@ -124,23 +131,6 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
       setMapLoaded(true)
     }
   }, [activeTab])
-
-  // Reset selected slot when date changes
-  useEffect(() => {
-    setSelectedSlot(null)
-  }, [selectedDate])
-
-  // Click outside listener for date picker popover
-  useEffect(() => {
-    if (!popoverOpen) return
-    const handleClickOutside = (e: MouseEvent) => {
-      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
-        setPopoverOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [popoverOpen])
 
   // Lightbox keyboard navigation
   useEffect(() => {
@@ -173,125 +163,15 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
     return `${year}-${month}-${day}`
   }
 
-  // Filter & construct slots for the selected date
-  const getSlotsForSelectedDate = () => {
-    const dateStr = getSelectedDateString()
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const isToday = selectedDate.getTime() === today.getTime()
-    const currentHour = new Date().getHours()
-    const currentMinutes = new Date().getMinutes()
+  // UC-CUS-01: WeeklySchedule component tự quản lý fetch + tuần hiện tại.
+  // VenueDetail chỉ giữ selectedDate/selectedSlot để truyền vào booking CTA.
 
-    // 16 slots from 06:00 to 22:00
-    return Array.from({ length: 16 }, (_, i) => {
-      const h = i + 6
-      const hourStr = `${String(h).padStart(2, '0')}:00`
-      const timeLabel = `${hourStr} – ${String(h + 1).padStart(2, '0')}:00`
-
-      let isPast = false
-      if (isToday) {
-        if (currentHour > h) {
-          isPast = true
-        } else if (currentHour === h && currentMinutes > 0) {
-          isPast = true
-        }
-      }
-
-      // Check slot status
-      const matched = venue.timeSlots.find(s => s.date === dateStr && s.hour === hourStr)
-      const available = matched ? matched.available : true
-
-      return {
-        hour: h,
-        hourStr,
-        timeLabel,
-        available,
-        isPast
-      }
-    })
-  }
-
-  const dateSlots = getSlotsForSelectedDate()
-  const availableSlotsCount = dateSlots.filter(s => s.available && !s.isPast).length
-
-  // Date picker date check helpers
-  const todayDateObj = new Date()
-  todayDateObj.setHours(0, 0, 0, 0)
-
-  const isPastDay = (date: Date) => {
-    const check = new Date(date)
-    check.setHours(0, 0, 0, 0)
-    return check.getTime() < todayDateObj.getTime()
-  }
-
-  const isTodayDay = (date: Date) => {
-    const check = new Date(date)
-    check.setHours(0, 0, 0, 0)
-    return check.getTime() === todayDateObj.getTime()
-  }
-
-  const isSelectedDay = (date: Date) => {
-    const check = new Date(date)
-    check.setHours(0, 0, 0, 0)
-    const sel = new Date(selectedDate)
-    sel.setHours(0, 0, 0, 0)
-    return check.getTime() === sel.getTime()
-  }
-
-  const formatDatePickerLabel = (date: Date) => {
-    const days = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7']
-    const dayName = days[date.getDay()]
-    const dd = String(date.getDate()).padStart(2, '0')
-    const mm = String(date.getMonth() + 1).padStart(2, '0')
-    const yyyy = date.getFullYear()
-    return `${dayName}, ${dd}/${mm}/${yyyy}`
-  }
-
-  const getMonthYearLabel = (month: number, year: number) => {
-    const monthStr = String(month + 1).padStart(2, '0')
-    return `Tháng ${monthStr}, ${year}`
-  }
-
-  const handlePrevMonth = () => {
-    if (viewYear > todayDateObj.getFullYear() || (viewYear === todayDateObj.getFullYear() && viewMonth > todayDateObj.getMonth())) {
-      if (viewMonth === 0) {
-        setViewMonth(11)
-        setViewYear(prev => prev - 1)
-      } else {
-        setViewMonth(prev => prev - 1)
-      }
-    }
-  }
-
-  const handleNextMonth = () => {
-    if (viewMonth === 11) {
-      setViewMonth(0)
-      setViewYear(prev => prev + 1)
-    } else {
-      setViewMonth(prev => prev + 1)
-    }
-  }
-
-  const handleSelectToday = () => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    setSelectedDate(today)
-    setViewMonth(today.getMonth())
-    setViewYear(today.getFullYear())
-    setPopoverOpen(false)
-  }
-
-  const generateCalendarDays = (year: number, month: number) => {
-    const startOfMonth = new Date(year, month, 1)
-    const startDayOfWeek = startOfMonth.getDay() // 0 = Sunday
-    const startDate = new Date(year, month, 1 - startDayOfWeek)
-    const days: Date[] = []
-    for (let i = 0; i < 42; i++) {
-      const d = new Date(startDate)
-      d.setDate(startDate.getDate() + i)
-      days.push(d)
-    }
-    return days
+  /** Handler khi user click một slot AVAILABLE trong weekly grid. */
+  const handleSlotPicked = (slotId: number, date: string) => {
+    setSelectedSlot(slotId)
+    // date là "YYYY-MM-DD" — convert về local Date (00:00) cho booking CTA.
+    const [y, m, d] = date.split('-').map(Number)
+    setSelectedDate(new Date(y, m - 1, d))
   }
 
   // Back button helper
@@ -306,14 +186,52 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
     }
   }
 
-  // Booking CTA helper
-  const handleBookingRedirect = () => {
-    const dateStr = getSelectedDateString()
-    let url = `/booking/new?venueId=${venue.id}&date=${dateStr}`
-    if (selectedSlot) {
-      url += `&slot=${selectedSlot}`
+  // UC-CUS-01: Single booking CTA — login gate + POST + redirect to profile tab
+  const handleBookSlot = async () => {
+    if (!selectedSlot) {
+      toast.error('Vui lòng chọn khung giờ trước khi đặt sân')
+      return
     }
-    window.location.href = url
+
+    // Guest → redirect to login with current path
+    if (!session?.user) {
+      const redirect = `/venues/${venue.id}`
+      router.push(`/login?redirect=${encodeURIComponent(redirect)}`)
+      return
+    }
+
+    try {
+      setBookingSubmitting(true)
+      await createBooking({
+        stadiumId: venue.id,
+        slotId: selectedSlot,
+        reservationDate: getSelectedDateString(),
+      })
+      toast.success(`Đặt sân thành công! Đang chuyển đến lịch sử đặt sân...`)
+      // Reset selection, refresh grid, redirect to profile bookings tab (per UC-CUS-01)
+      setSelectedSlot(null)
+      setWeeklyKey((k) => k + 1)
+      router.push('/profile?tab=bookings')
+    } catch (err: any) {
+      const status = err?.response?.status
+      const serverMsg =
+        err?.response?.data?.message ?? err?.message ?? 'Đặt sân thất bại. Vui lòng thử lại.'
+      if (status === 409) {
+        toast.error(serverMsg, {
+          description: 'Khung giờ này vừa có người đặt. Vui lòng chọn khung giờ khác.',
+        })
+        // Remount WeeklySchedule để refetch availability từ BE.
+        setWeeklyKey((k) => k + 1)
+        setSelectedSlot(null)
+      } else if (status === 401) {
+        const redirect = `/venues/${venue.id}`
+        router.push(`/login?redirect=${encodeURIComponent(redirect)}`)
+      } else {
+        toast.error(serverMsg)
+      }
+    } finally {
+      setBookingSubmitting(false)
+    }
   }
 
   // Star renderer helper
@@ -353,8 +271,6 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
         return <IconCircleCheck className="w-[13px] h-[13px] text-[#1a8a4a] mr-[6px] shrink-0" />
     }
   }
-
-  const isCurrentMonth = viewYear === todayDateObj.getFullYear() && viewMonth === todayDateObj.getMonth()
 
   // Reusable Contact Card
   const ContactCard = () => (
@@ -607,200 +523,14 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
               </div>
             )}
 
-            {/* TAB 2: Khung giờ */}
+            {/* TAB 2: Khung giờ — UC-CUS-01 weekly grid */}
             {activeTab === 'slots' && (
               <div className="space-y-3">
-                {/* Header Row */}
-                <div className="flex justify-between items-center px-0.5">
-                  {/* Date picker trigger */}
-                  <div className="relative" ref={datePickerRef}>
-                    <button
-                      onClick={() => setPopoverOpen(prev => !prev)}
-                      className="bg-gray-50 border-[0.5px] border-gray-200 rounded-[8px] py-1.5 px-3 flex items-center gap-1.5 text-gray-700 hover:bg-gray-100 transition-colors"
-                      type="button"
-                    >
-                      <IconCalendar className="w-[15px] h-[15px] text-[#1a8a4a] shrink-0" />
-                      <span className="text-[13px] font-medium">
-                        {formatDatePickerLabel(selectedDate)}
-                      </span>
-                      <span className="text-[9px] text-gray-400">
-                        {popoverOpen ? '▲' : '▼'}
-                      </span>
-                    </button>
-
-                    {popoverOpen && (
-                      <div className="absolute top-[calc(100%+6px)] left-0 bg-white border-[0.5px] border-gray-200 rounded-[12px] p-3 w-[248px] z-50 shadow-none">
-                        {/* Month selection header */}
-                        <div className="flex justify-between items-center mb-2.5">
-                          <span className="text-[13px] font-medium text-gray-700 select-none">
-                            {getMonthYearLabel(viewMonth, viewYear)}
-                          </span>
-                          <div className="flex gap-1">
-                            <button
-                              onClick={handlePrevMonth}
-                              disabled={isCurrentMonth}
-                              type="button"
-                              className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors disabled:opacity-30 disabled:pointer-events-none"
-                            >
-                              <IconChevronLeft className="w-3.5 h-3.5 text-gray-600" />
-                            </button>
-                            <button
-                              onClick={handleNextMonth}
-                              type="button"
-                              className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors"
-                            >
-                              <IconChevronRight className="w-3.5 h-3.5 text-gray-600" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Day of Week Row */}
-                        <div className="grid grid-cols-7 gap-[2px] text-center mb-1">
-                          {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map((day, idx) => (
-                            <span key={idx} className="text-[10px] text-gray-400 font-medium select-none">
-                              {day}
-                            </span>
-                          ))}
-                        </div>
-
-                        {/* Day Grid */}
-                        <div className="grid grid-cols-7 gap-[2px]">
-                          {generateCalendarDays(viewYear, viewMonth).map((day, i) => {
-                            const isPast = isPastDay(day)
-                            const isOtherMonth = day.getMonth() !== viewMonth
-                            const isToday = isTodayDay(day)
-                            const isSelected = isSelectedDay(day)
-                            
-                            let cellClass = "w-full text-center text-[12px] rounded-[5px] py-[5px] px-[2px] transition-colors select-none "
-                            let clickHandler = () => {
-                              setSelectedDate(day)
-                              setPopoverOpen(false)
-                            }
-
-                            if (isPast) {
-                              cellClass += "text-gray-300 cursor-not-allowed pointer-events-none font-normal"
-                              clickHandler = () => {}
-                            } else if (isSelected) {
-                              cellClass += "bg-[#1a8a4a] text-white font-medium"
-                            } else if (isToday) {
-                              cellClass += "border border-[#1a8a4a] text-[#1a8a4a] font-medium"
-                            } else if (isOtherMonth) {
-                              cellClass += "text-gray-350 hover:bg-gray-100 cursor-pointer font-normal"
-                            } else {
-                              cellClass += "text-gray-700 hover:bg-gray-100 cursor-pointer font-normal"
-                            }
-
-                            return (
-                              <button
-                                key={i}
-                                onClick={clickHandler}
-                                disabled={isPast}
-                                className={cellClass}
-                                type="button"
-                              >
-                                {day.getDate()}
-                              </button>
-                            )
-                          })}
-                        </div>
-
-                        {/* Footer "Hôm nay" button */}
-                        <div className="border-t border-gray-100 mt-2.5 pt-2 flex justify-center">
-                          <button
-                            onClick={handleSelectToday}
-                            className="text-[12px] font-medium text-[#1a8a4a] hover:bg-[#e8f7ee] py-1 px-3 rounded-[8px] transition-colors"
-                            type="button"
-                          >
-                            Hôm nay
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Available count label */}
-                  <span className="text-[12px] font-medium text-[#1a8a4a]">
-                    {availableSlotsCount} / 16 khung trống
-                  </span>
-                </div>
-
-                {/* Today Notice Bar */}
-                {isTodayDay(selectedDate) && (
-                  <div className="bg-[#fffbeb] border-[0.5px] border-[#f5d87a] rounded-[8px] p-[7px_11px] flex items-start gap-2">
-                    <IconInfoCircle className="w-4 h-4 text-[#7a5800] shrink-0 mt-0.5" />
-                    <span className="text-[12px] text-[#7a5800] font-normal leading-normal">
-                      Hôm nay — các khung giờ đã qua bị khóa tự động.
-                    </span>
-                  </div>
-                )}
-
-                {/* Slots Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-[7px]">
-                  {dateSlots.map((slot, i) => {
-                    let cardClass = "flex items-center justify-between px-[11px] py-[9px] rounded-[8px] border-[0.5px] "
-                    let clickHandler = () => setSelectedSlot(slot.hourStr)
-
-                    if (slot.isPast) {
-                      cardClass += "bg-gray-50 border-gray-150 text-gray-400 cursor-not-allowed pointer-events-none"
-                      clickHandler = () => {}
-                    } else if (!slot.available) {
-                      cardClass += "bg-[#fdf0f0] border-[#f5b7b7] text-[#8a1c1c] cursor-not-allowed pointer-events-none"
-                      clickHandler = () => {}
-                    } else {
-                      const isSelected = selectedSlot === slot.hourStr
-                      if (isSelected) {
-                        cardClass += "bg-[#e8f7ee] border-[#1a8a4a] border-[1.5px] text-[#0d5c2e] cursor-pointer"
-                      } else {
-                        cardClass += "bg-[#e8f7ee] border-[#9edbb6] text-[#0d5c2e] hover:bg-[#d4f0e2] cursor-pointer transition-colors"
-                      }
-                    }
-
-                    return (
-                      <div
-                        key={i}
-                        onClick={clickHandler}
-                        className={cardClass}
-                      >
-                        <span className="text-[12px] font-medium">{slot.timeLabel}</span>
-                        <div className="flex items-center gap-1 text-[11px] font-medium shrink-0">
-                          {slot.isPast ? (
-                            <>
-                              <IconClockOff className="w-3.5 h-3.5 text-gray-400" />
-                              <span>Đã qua</span>
-                            </>
-                          ) : !slot.available ? (
-                            <>
-                              <IconCircleX className="w-3.5 h-3.5 text-[#8a1c1c]" />
-                              <span>Đã đặt</span>
-                            </>
-                          ) : (
-                            <>
-                              <IconCircleCheck className="w-3.5 h-3.5 text-[#0d5c2e]" />
-                              <span>Còn trống</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {/* Legend */}
-                <div className="flex items-center gap-4 mt-[11px] text-[11px] text-gray-400 font-medium pt-1 select-none">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-[#1a8a4a]" />
-                    <span>Còn trống</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-[#8a1c1c]" />
-                    <span>Đã đặt</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-gray-300" />
-                    <span>Đã qua</span>
-                  </div>
-                </div>
-
+                <WeeklySchedule
+                  key={weeklyKey}
+                  stadiumId={venue.id}
+                  onSlotSelect={handleSlotPicked}
+                />
               </div>
             )}
 
@@ -970,14 +700,21 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                 </span>
               </div>
 
-              {/* CTA Booking Button */}
-              <button 
-                onClick={handleBookingRedirect}
-                className="w-full flex items-center justify-center gap-1.5 bg-[#1a8a4a] hover:bg-[#157a3e] text-white font-medium text-[14px] py-3 rounded-[8px] transition-colors border-none"
+              {/* CTA Booking Button — UC-CUS-01 single booking */}
+              <button
+                onClick={handleBookSlot}
+                disabled={!selectedSlot || bookingSubmitting}
+                className="w-full flex items-center justify-center gap-1.5 bg-[#1a8a4a] hover:bg-[#157a3e] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium text-[14px] py-3 rounded-[8px] transition-colors border-none"
                 type="button"
               >
                 <IconCalendarPlus className="w-[18px] h-[18px]" />
-                <span>Đặt sân ngay</span>
+                <span>
+                  {bookingSubmitting
+                    ? 'Đang đặt sân…'
+                    : selectedSlot
+                      ? 'Đặt sân ngay'
+                      : 'Chọn khung giờ để đặt'}
+                </span>
               </button>
 
               <div className="border-t-[0.5px] border-gray-200 pt-3 flex flex-col gap-2">
@@ -993,10 +730,6 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                   <span className="bg-[#e8f7ee] text-[#0d5c2e] text-[12px] font-medium px-2.5 py-0.5 rounded-[20px] select-none">
                     Hoạt động
                   </span>
-                </div>
-                <div className="flex items-center justify-between text-[13px]">
-                  <span className="text-gray-400">Khung giờ trống</span>
-                  <span className="text-[#1a8a4a] font-medium">{availableSlotsCount} / 16</span>
                 </div>
               </div>
 

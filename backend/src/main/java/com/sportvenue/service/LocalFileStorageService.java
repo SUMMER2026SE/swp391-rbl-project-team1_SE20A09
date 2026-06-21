@@ -3,6 +3,9 @@ package com.sportvenue.service;
 import com.sportvenue.config.FileStorageProperties;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.util.ImageContentValidator;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import java.net.MalformedURLException;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,6 +28,7 @@ public class LocalFileStorageService implements FileStorageService {
 
     private final Path avatarDir;
     private final Path stadiumDir;
+    private final Path documentDir;
     private final String publicBaseUrl;
     private final long maxBytes;
     private final Set<String> allowedContentTypes;
@@ -33,6 +37,7 @@ public class LocalFileStorageService implements FileStorageService {
     public LocalFileStorageService(FileStorageProperties properties) {
         this.avatarDir = Paths.get(properties.getUploadDir(), "avatars").toAbsolutePath().normalize();
         this.stadiumDir = Paths.get(properties.getUploadDir(), "stadiums").toAbsolutePath().normalize();
+        this.documentDir = Paths.get(properties.getUploadDir(), "documents").toAbsolutePath().normalize();
         String baseUrl = properties.getBaseUrl();
         this.publicBaseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.maxBytes = properties.getMaxSizeBytes();
@@ -49,6 +54,7 @@ public class LocalFileStorageService implements FileStorageService {
         try {
             Files.createDirectories(avatarDir);
             Files.createDirectories(stadiumDir);
+            Files.createDirectories(documentDir);
         } catch (IOException e) {
             throw new IllegalStateException("Không thể tạo thư mục lưu ảnh: " + e.getMessage(), e);
         }
@@ -62,6 +68,11 @@ public class LocalFileStorageService implements FileStorageService {
     @Override
     public String storeStadiumImage(MultipartFile file, Integer ownerId) {
         return storeFile(file, stadiumDir, "/api/v1/files/stadiums/", ownerId);
+    }
+
+    @Override
+    public String storeDocument(MultipartFile file, Integer userId) {
+        return storeFile(file, documentDir, "/api/v1/files/documents/", userId);
     }
 
     private String storeFile(MultipartFile file, Path directory, String apiPath, Integer id) {
@@ -147,5 +158,25 @@ public class LocalFileStorageService implements FileStorageService {
 
     public Path getAvatarDirectory() {
         return avatarDir;
+    }
+
+    @Override
+    public Resource loadDocumentAsResource(String fileName) {
+        try {
+            Path filePath = this.documentDir.resolve(fileName).normalize();
+            Resource resource = new UrlResource(filePath.toUri());
+            if (resource.exists() && resource.isReadable()) {
+                return resource;
+            } else {
+                throw new BadRequestException("Không tìm thấy tài liệu hoặc tài liệu không thể đọc.");
+            }
+        } catch (MalformedURLException e) {
+            throw new BadRequestException("Không thể đọc file tài liệu.");
+        }
+    }
+
+    @Override
+    public Path getDocumentDirectory() {
+        return this.documentDir;
     }
 }

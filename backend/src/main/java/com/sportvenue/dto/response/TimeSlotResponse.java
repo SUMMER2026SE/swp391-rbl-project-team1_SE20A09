@@ -19,4 +19,11 @@ public class TimeSlotResponse {
     private LocalTime endTime;
     private BigDecimal pricePerSlot;
     private String slotStatus;
+
+    /**
+     * UC-CUS-01: cờ availability cho ngày cụ thể. {@code null} khi response
+     * không gắn với một ngày (ví dụ endpoint {@code /time-slots} của Owner).
+     * Computed by {@code BookingService.getSlotsByDate}.
+     */
+    private Boolean available;
 }

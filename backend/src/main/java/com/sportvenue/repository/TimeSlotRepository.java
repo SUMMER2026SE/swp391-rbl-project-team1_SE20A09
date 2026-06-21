@@ -2,13 +2,16 @@ package com.sportvenue.repository;
 
 import com.sportvenue.entity.TimeSlot;
 import com.sportvenue.entity.enums.SlotStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Repository cho TimeSlot entity.
@@ -81,4 +84,13 @@ public interface TimeSlotRepository extends JpaRepository<TimeSlot, Integer> {
 
     /** Kiểm tra slot còn trống không — dùng trước khi tạo booking. */
     boolean existsBySlotIdAndSlotStatus(Integer slotId, SlotStatus status);
+
+    /**
+     * UC-CUS-01: Lấy slot kèm PESSIMISTIC_WRITE để tránh race condition khi tạo booking.
+     * Dùng trong BookingServiceImpl.createBooking — khoá row slot để 2 request đồng thời
+     * serialize qua bước conflict-check + insert.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT t FROM TimeSlot t WHERE t.slotId = :slotId")
+    Optional<TimeSlot> findByIdForUpdate(@Param("slotId") Integer slotId);
 }

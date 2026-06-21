@@ -44,6 +44,8 @@ export const registerOwnerSchema = z
       .string()
       .regex(/^(?:\d{10}|\d{13}|\d{10}-\d{3})$/, "Mã số thuế phải gồm 10 hoặc 13 chữ số (ví dụ: 0312456789 hoặc 0312456789-001)"),
     businessAddress: z.string().min(5, "Địa chỉ kinh doanh phải có ít nhất 5 ký tự"),
+    businessLicenseUrl: z.string().min(1, "Vui lòng tải lên ảnh Giấy phép kinh doanh"),
+    identityCardUrl: z.string().min(1, "Vui lòng tải lên ảnh CCCD/CMND"),
     terms: z.boolean().refine((val) => val === true, {
       message: "Vui lòng đồng ý với điều khoản sử dụng",
     }),
@@ -61,6 +63,8 @@ export const upgradeToOwnerSchema = z.object({
     .string()
     .regex(/^(?:\d{10}|\d{13}|\d{10}-\d{3})$/, "Mã số thuế phải gồm 10 hoặc 13 chữ số (ví dụ: 0312456789 hoặc 0312456789-001)"),
   businessAddress: z.string().min(5, "Địa chỉ kinh doanh phải có ít nhất 5 ký tự"),
+  businessLicenseUrl: z.string().min(1, "Vui lòng tải lên ảnh Giấy phép kinh doanh"),
+  identityCardUrl: z.string().min(1, "Vui lòng tải lên ảnh CCCD/CMND"),
 });
 
 export type UpgradeToOwnerFormValues = z.infer<typeof upgradeToOwnerSchema>;

@@ -1,9 +1,15 @@
 package com.sportvenue.repository;
 
+import com.sportvenue.dto.response.AdminOwnerResponse;
 import com.sportvenue.entity.Owner;
+import com.sportvenue.entity.enums.AccountStatus;
 import com.sportvenue.entity.enums.ApprovedStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -29,7 +35,17 @@ public interface OwnerRepository extends JpaRepository<Owner, Integer> {
     /** Đếm số owner theo trạng thái phê duyệt — dùng cho Admin dashboard. */
     long countByApprovedStatus(ApprovedStatus approvedStatus);
 
-    @org.springframework.data.jpa.repository.Query("""
+    /** Lấy danh sách owner profile theo trạng thái phê duyệt — dùng cho Admin duyệt hồ sơ. */
+    @EntityGraph(attributePaths = {"user"})
+    Page<Owner> findByApprovedStatus(ApprovedStatus approvedStatus, Pageable pageable);
+
+    /** Tìm owner theo đường dẫn ảnh đăng ký kinh doanh hoặc ảnh CCCD chứa chuỗi tìm kiếm (tên file). */
+    Optional<Owner> findByBusinessLicenseUrlContainingOrIdentityCardUrlContaining(String licenseUrl, String identityUrl);
+
+    /** Kiểm tra xem tên file tài liệu có tồn tại trong bất kỳ hồ sơ đối tác nào không. */
+    boolean existsByBusinessLicenseUrlContainingOrIdentityCardUrlContaining(String licenseUrl, String identityUrl);
+
+    @Query("""
         SELECT new com.sportvenue.dto.response.AdminOwnerResponse(
             o.ownerId, u.userId, CONCAT(u.firstName, ' ', u.lastName),
             u.email, u.phoneNumber, o.businessName, o.taxCode,
@@ -45,10 +61,10 @@ public interface OwnerRepository extends JpaRepository<Owner, Integer> {
           AND (:accountStatus IS NULL OR u.accountStatus = :accountStatus)
           AND (:approvedStatus IS NULL OR o.approvedStatus = :approvedStatus)
     """)
-    org.springframework.data.domain.Page<com.sportvenue.dto.response.AdminOwnerResponse> findOwnersForAdmin(
-            @org.springframework.data.repository.query.Param("search") String search,
-            @org.springframework.data.repository.query.Param("accountStatus") com.sportvenue.entity.enums.AccountStatus accountStatus,
-            @org.springframework.data.repository.query.Param("approvedStatus") ApprovedStatus approvedStatus,
-            org.springframework.data.domain.Pageable pageable
+    Page<AdminOwnerResponse> findOwnersForAdmin(
+            @Param("search") String search,
+            @Param("accountStatus") AccountStatus accountStatus,
+            @Param("approvedStatus") ApprovedStatus approvedStatus,
+            Pageable pageable
     );
 }
