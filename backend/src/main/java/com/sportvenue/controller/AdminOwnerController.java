@@ -142,6 +142,7 @@ public class AdminOwnerController {
                 .result(response)
                 .build());
     }
+<<<<<<< HEAD
 
     /**
      * Khóa hoặc mở khóa tài khoản chủ sân.
@@ -158,4 +159,6 @@ public class AdminOwnerController {
                 .message(Boolean.TRUE.equals(request.getEnabled()) ? "Mở khóa tài khoản chủ sân thành công" : "Khóa tài khoản chủ sân thành công")
                 .build());
     }
+=======
+>>>>>>> 11355feea15d9e6141d1ca6e33ad80ca0785a4dc
 }

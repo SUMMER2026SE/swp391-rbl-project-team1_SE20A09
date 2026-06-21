@@ -86,6 +86,7 @@ export default function AdminOwnersPage() {
     queryFn: () => fetchOwners(page, 10, debouncedSearch, accountStatusFilter, approvedStatusFilter),
   });
 
+<<<<<<< HEAD
   const lockUnlockMutation = useMutation({
     mutationFn: async ({ ownerId, isEnabled, reason }: { ownerId: number; isEnabled: boolean; reason: string }) => {
       const response = await api.patch(`/admin/owners/${ownerId}/lock`, { enabled: isEnabled, reason });
@@ -111,6 +112,8 @@ export default function AdminOwnersPage() {
     }
   };
 
+=======
+>>>>>>> 11355feea15d9e6141d1ca6e33ad80ca0785a4dc
   return (
     <div className="p-6 space-y-6 bg-gray-50/50 min-h-screen">
       <div className="flex justify-between items-center">
@@ -176,25 +179,40 @@ export default function AdminOwnersPage() {
               <TableHead className="font-semibold text-gray-900">Hồ sơ</TableHead>
               <TableHead className="font-semibold text-gray-900">Tài khoản</TableHead>
               <TableHead className="font-semibold text-gray-900">Ngày đăng ký</TableHead>
+<<<<<<< HEAD
               <TableHead className="font-semibold text-gray-900 text-right">Thao tác</TableHead>
+=======
+>>>>>>> 11355feea15d9e6141d1ca6e33ad80ca0785a4dc
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
+<<<<<<< HEAD
                 <TableCell colSpan={7} className="h-32 text-center">
+=======
+                <TableCell colSpan={6} className="h-32 text-center">
+>>>>>>> 11355feea15d9e6141d1ca6e33ad80ca0785a4dc
                   <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
                 </TableCell>
               </TableRow>
             ) : isError ? (
               <TableRow>
+<<<<<<< HEAD
                 <TableCell colSpan={7} className="h-32 text-center text-red-500 font-medium">
+=======
+                <TableCell colSpan={6} className="h-32 text-center text-red-500 font-medium">
+>>>>>>> 11355feea15d9e6141d1ca6e33ad80ca0785a4dc
                   Đã xảy ra lỗi khi tải dữ liệu! Vui lòng thử lại.
                 </TableCell>
               </TableRow>
             ) : data?.content?.length === 0 ? (
               <TableRow>
+<<<<<<< HEAD
                 <TableCell colSpan={7} className="h-32 text-center text-gray-500">
+=======
+                <TableCell colSpan={6} className="h-32 text-center text-gray-500">
+>>>>>>> 11355feea15d9e6141d1ca6e33ad80ca0785a4dc
                   Không tìm thấy chủ sân nào phù hợp với bộ lọc.
                 </TableCell>
               </TableRow>
@@ -233,6 +251,7 @@ export default function AdminOwnersPage() {
                       ? format(new Date(owner.createdAt), "dd/MM/yyyy")
                       : "N/A"}
                   </TableCell>
+<<<<<<< HEAD
                   <TableCell className="text-right">
                     {owner.accountStatus !== "PENDING" && (
                       <Button
@@ -247,6 +266,8 @@ export default function AdminOwnersPage() {
                       </Button>
                     )}
                   </TableCell>
+=======
+>>>>>>> 11355feea15d9e6141d1ca6e33ad80ca0785a4dc
                 </TableRow>
               ))
             )}
