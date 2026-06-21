@@ -1,0 +1,145 @@
+# ══════════════════════════════════════════════════════════════════════
+# application.yml cho test classpath — override hoàn toàn file main.
+# Đặt tại src/test/resources/ nên được ưu tiên cao nhất khi chạy test.
+#
+# KHÔNG có spring.config.import → dotenv KHÔNG được load,
+# các env vars CI (SPRING_DATASOURCE_URL, SPRING_DATA_REDIS_HOST, ...)
+# được đọc trực tiếp từ process environment, KHÔNG bị .env file ghi đè.
+# ══════════════════════════════════════════════════════════════════════
+spring:
+  application:
+    name: sport-venue-backend
+
+  profiles:
+    active: test
+
+  # ── Datasource ───────────────────────────────────────────────────────
+  # CI truyền: SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/sportvenue_test
+  # Fallback local: port 5432 (nhất quán với CI; dùng 5433 nếu local dev khác)
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/sportvenue_test}
+    username: ${SPRING_DATASOURCE_USERNAME:sportvenue_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:testpassword}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 10000
+
+  # ── JPA ──────────────────────────────────────────────────────────────
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        default_schema: public
+
+  # ── Flyway ───────────────────────────────────────────────────────────
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    out-of-order: true
+    clean-disabled: false
+    clean-on-validation-error: true
+
+  # ── Redis ────────────────────────────────────────────────────────────
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
+      timeout: 2000ms
+
+  # ── Cache ────────────────────────────────────────────────────────────
+  cache:
+    type: redis
+    redis:
+      time-to-live: 3600000
+      cache-null-values: false
+
+  # ── Mail (mock mode — không gửi email thật khi test) ─────────────────
+  mail:
+    host: localhost
+    port: 25
+    username: ""
+    password: ""
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+  # ── Multipart ────────────────────────────────────────────────────────
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
+
+# ── Server ──────────────────────────────────────────────────────────────
+server:
+  port: 8080
+  error:
+    include-message: never
+    include-binding-errors: never
+
+# ── App Config ──────────────────────────────────────────────────────────
+app:
+  jwt:
+    secret: ${JWT_SECRET:test_secret_key_for_ci_only_not_for_production_must_be_256bits}
+    access-token-expiry: 86400
+    refresh-token-expiry: 604800
+  otp:
+    expiry-minutes: 5
+  mail:
+    from: noreply@sportvenue.com
+    mock: true                    # luôn mock email khi chạy test
+  google:
+    client-id: ""
+  files:
+    upload-dir: uploads
+    base-url: http://localhost:8080
+    max-size-bytes: 5242880
+    allowed-extensions: [.jpg, .jpeg, .png, .webp, .gif, .bmp, .heic, .heif]
+    allowed-content-types:
+      - image/jpeg
+      - image/jpg
+      - image/png
+      - image/webp
+      - image/gif
+      - image/bmp
+      - image/heic
+      - image/heif
+
+# ── Goong ────────────────────────────────────────────────────────────────
+goong:
+  api:
+    key: ""
+
+# ── Swagger ──────────────────────────────────────────────────────────────
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  api-docs:
+    path: /v3/api-docs
+
+# ── Actuator ─────────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
+
+# ── Logging ──────────────────────────────────────────────────────────────
+logging:
+  level:
+    root: WARN
+    com.sportvenue: INFO

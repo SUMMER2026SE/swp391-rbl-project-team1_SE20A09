@@ -273,14 +273,14 @@ export default function OwnerApprovalPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold">Duyệt hồ sơ chủ sân</h1>
-            <p className="text-muted-foreground mt-1">Xem xét hồ sơ đăng ký kinh doanh và yêu cầu nâng cấp lên Chủ sân.</p>
-          </div>
-          <Button variant="outline" onClick={() => router.push("/admin/dashboard")}>
-            Quay lại Dashboard
-          </Button>
+          <p className="text-muted-foreground mt-1">Xem xét hồ sơ đăng ký kinh doanh và yêu cầu nâng cấp lên Chủ sân.</p>
         </div>
+        <Button variant="outline" onClick={() => router.push("/admin/dashboard")}>
+          Quay lại Dashboard
+        </Button>
+      </div>
 
-        <Tabs value={activeTab} onValueChange={handleTabChange}>
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList className="mb-6">
             <TabsTrigger value="PENDING">Chờ duyệt</TabsTrigger>
             <TabsTrigger value="APPROVED">Đã duyệt</TabsTrigger>

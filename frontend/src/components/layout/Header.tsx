@@ -31,7 +31,7 @@ function getInitials(user: NonNullable<Session["user"]>) {
   return (first + last).toUpperCase() || user.email.charAt(0).toUpperCase();
 }
 
-function UserAccountMenu({ user }: { user: NonNullable<Session["user"]> }) {
+export function UserAccountMenu({ user }: { user: NonNullable<Session["user"]> }) {
   const handleLogout = () => {
     signOut({ callbackUrl: "/" });
   };

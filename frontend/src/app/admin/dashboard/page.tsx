@@ -1,288 +1,322 @@
-'use client'
+"use client";
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
+import api from "@/lib/api";
+import { format } from "date-fns";
+import { vi } from "date-fns/locale";
 import Link from "next/link";
 import {
-  AreaChart,
-  Area,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
-import {
   Users,
-  Building,
+  Building2,
   MapPin,
   DollarSign,
   TrendingUp,
-  AlertCircle,
-  CheckCircle,
+  AlertOctagon,
+  Clock,
+  Loader2,
+  Calendar as CalendarIcon,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 
-function AdminDashboardPage() {
-  const kpiData = [
-    {
-      title: "Tổng người dùng",
-      value: "12,543",
-      change: "+245",
-      icon: <Users className="h-6 w-6" />,
-    },
-    {
-      title: "Tổng chủ sân",
-      value: "1,234",
-      change: "+48",
-      icon: <Building className="h-6 w-6" />,
-    },
-    {
-      title: "Tổng sân",
-      value: "3,567",
-      change: "+89",
-      icon: <MapPin className="h-6 w-6" />,
-    },
-    {
-      title: "Đặt sân hôm nay",
-      value: "542",
-      change: "+67",
-      icon: <TrendingUp className="h-6 w-6" />,
-    },
-    {
-      title: "Doanh thu nền tảng",
-      value: "245M",
-      change: "+15%",
-      icon: <DollarSign className="h-6 w-6" />,
-    },
+interface BookingTrendDto {
+  date: string;   // yyyy-MM-dd
+  count: number;
+}
+
+interface RecentBookingDto {
+  bookingId: number;
+  customerName: string;
+  stadiumName: string;
+  totalPrice: number;
+  bookingStatus: string;
+  bookingDate: string;
+  reservationDate: string;
+  timeSlot: string;
+}
+
+interface AdminDashboardResponse {
+  totalUsers: number;
+  totalOwners: number;
+  totalStadiums: number;
+  totalBookings: number;
+  totalRevenue: number;
+  pendingBookings: number;
+  confirmedBookings: number;
+  cancelledBookings: number;
+  completedBookings: number;
+  pendingOwnerApprovals: number;
+  openComplaints: number;
+  recentBookings: RecentBookingDto[];
+  bookingTrend: BookingTrendDto[];
+}
+
+interface ApiResponse<T> {
+  code: number;
+  message: string;
+  result: T;
+}
+
+const fetchDashboardData = async () => {
+  const { data } = await api.get<ApiResponse<AdminDashboardResponse>>("/admin/dashboard");
+  return data.result;
+};
+
+/** Nhãn ngày trong tuần tiếng Việt — dùng khi hiển thị trend 7 ngày */
+const getDayLabel = (dateStr: string): string => {
+  const date = new Date(dateStr + "T00:00:00");
+  return format(date, "EEE", { locale: vi });
+};
+
+const STATUS_MAP: Record<string, { label: string; classes: string }> = {
+  PENDING: { label: "Chờ duyệt", classes: "bg-yellow-100 text-yellow-800 border-yellow-200" },
+  CONFIRMED: { label: "Đã xác nhận", classes: "bg-blue-100 text-blue-800 border-blue-200" },
+  COMPLETED: { label: "Hoàn thành", classes: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+  CANCELLED: { label: "Đã hủy", classes: "bg-rose-100 text-rose-800 border-rose-200" },
+};
+
+const formatLocalDate = (dateStr: string) => {
+  if (!dateStr) return "N/A";
+  const [year, month, day] = dateStr.split("-");
+  return `${day}/${month}/${year}`;
+};
+
+export default function AdminDashboardPage() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["admin-dashboard"],
+    queryFn: fetchDashboardData,
+    staleTime: 5 * 60 * 1000, // 5 phút — khớp với TTL cache backend
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+      </div>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="py-20 text-center text-rose-500 font-medium">
+        Đã có lỗi xảy ra khi tải dữ liệu dashboard.
+      </div>
+    );
+  }
+
+  const KPI_DATA = [
+    { title: "Tổng người dùng", value: data.totalUsers.toLocaleString("vi-VN"), trend: "Số liệu thời gian thực", icon: Users, color: "text-blue-600", bg: "bg-blue-100" },
+    { title: "Tổng chủ sân", value: data.totalOwners.toLocaleString("vi-VN"), trend: "Số liệu thời gian thực", icon: Building2, color: "text-indigo-600", bg: "bg-indigo-100" },
+    { title: "Tổng số sân", value: data.totalStadiums.toLocaleString("vi-VN"), trend: "Số liệu thời gian thực", icon: MapPin, color: "text-purple-600", bg: "bg-purple-100" },
+    { title: "Tổng lượt đặt", value: data.totalBookings.toLocaleString("vi-VN"), trend: "Số liệu thời gian thực", icon: TrendingUp, color: "text-emerald-600", bg: "bg-emerald-100" },
   ];
 
-  const bookingTrend = [
-    { date: "01/05", bookings: 420 },
-    { date: "05/05", bookings: 480 },
-    { date: "10/05", bookings: 520 },
-    { date: "15/05", bookings: 580 },
-    { date: "20/05", bookings: 610 },
-    { date: "25/05", bookings: 650 },
-    { date: "30/05", bookings: 540 },
+  const BOOKING_STATUS = [
+    { label: "Chờ duyệt", count: data.pendingBookings, icon: Clock, color: "text-yellow-600", bg: "bg-yellow-50", border: "border-yellow-100" },
+    { label: "Đã xác nhận", count: data.confirmedBookings, icon: CalendarIcon, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-100" },
+    { label: "Hoàn thành", count: data.completedBookings, icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-100" },
+    { label: "Đã hủy", count: data.cancelledBookings, icon: XCircle, color: "text-rose-600", bg: "bg-rose-50", border: "border-rose-100" },
   ];
 
-  const revenueBySport = [
-    { name: "Bóng đá", value: 65, color: "#2563EB" },
-    { name: "Cầu lông", value: 20, color: "#10B981" },
-    { name: "Quần vợt", value: 10, color: "#F59E0B" },
-    { name: "Bóng rổ", value: 5, color: "#EF4444" },
-  ];
-
-  const pendingApprovals = [
-    {
-      id: 1,
-      owner: "Nguyễn Văn A",
-      email: "owner1@email.com",
-      venue: "Sân bóng Phú Nhuận",
-      date: "20/05/2024",
-    },
-    {
-      id: 2,
-      owner: "Trần Thị B",
-      email: "owner2@email.com",
-      venue: "Sân cầu lông Quận 3",
-      date: "21/05/2024",
-    },
-  ];
-
-  const recentComplaints = [
-    {
-      id: "CP001",
-      user: "Lê Văn C",
-      subject: "Sân không đúng mô tả",
-      priority: "high",
-      status: "open",
-      date: "22/05/2024",
-    },
-    {
-      id: "CP002",
-      user: "Phạm Thị D",
-      subject: "Chủ sân không phản hồi",
-      priority: "medium",
-      status: "in_progress",
-      date: "21/05/2024",
-    },
-  ];
+  // Tính max để scale bar chart đúng tỷ lệ
+  const trendData = data.bookingTrend ?? [];
+  const maxTrendCount = Math.max(...trendData.map((item) => item.count), 1);
 
   return (
-    <div className="p-8 min-h-[calc(100vh-64px)] bg-muted/10">
-          <h1 className="text-3xl mb-8">Dashboard</h1>
+    <div className="space-y-8 pb-8">
+      {/* KPI SECTION */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+        {/* Main Revenue Card */}
+        <div className="lg:col-span-1 bg-emerald-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-600/20 relative overflow-hidden group">
+          <div className="absolute -right-6 -top-6 bg-white/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-white/20 transition-all"></div>
+          <div className="flex justify-between items-start mb-4 relative z-10">
+            <div className="p-2 bg-white/20 rounded-xl">
+              <DollarSign className="h-6 w-6 text-white" />
+            </div>
+          </div>
+          <h3 className="text-emerald-100 text-sm font-medium mb-1 relative z-10">Doanh thu hệ thống</h3>
+          <div className="text-2xl font-bold tracking-tight mb-2 relative z-10">
+            {new Intl.NumberFormat("vi-VN", {
+              style: "currency",
+              currency: "VND",
+              maximumFractionDigits: 0,
+            }).format(data.totalRevenue)}
+          </div>
+          <div className="text-xs text-emerald-200 font-medium relative z-10">Số liệu thời gian thực</div>
+        </div>
 
-          {/* KPIs */}
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
-            {kpiData.map((kpi, idx) => (
-              <Card key={idx}>
-                <CardContent className="p-6">
-                  <div className="text-primary bg-primary/10 p-3 rounded-lg w-fit mb-4">
-                    {kpi.icon}
-                  </div>
-                  <div className="text-2xl mb-1">{kpi.value}</div>
-                  <div className="text-sm text-muted-foreground mb-2">
-                    {kpi.title}
-                  </div>
-                  <div className="text-sm text-green-600">{kpi.change}</div>
-                </CardContent>
-              </Card>
+        {/* Other KPI Cards */}
+        {KPI_DATA.map((kpi, idx) => (
+          <div key={idx} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-md transition-shadow group">
+            <div className="flex justify-between items-start mb-4">
+              <div className={`p-2.5 rounded-xl ${kpi.bg} ${kpi.color} group-hover:scale-110 transition-transform`}>
+                <kpi.icon className="h-5 w-5" />
+              </div>
+            </div>
+            <h3 className="text-slate-500 text-sm font-medium mb-1">{kpi.title}</h3>
+            <div className="text-2xl font-bold text-slate-900 tracking-tight mb-2">{kpi.value}</div>
+            <div className="text-xs text-emerald-600 font-medium">{kpi.trend}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* MIDDLE SECTION: Booking Status & Pending Actions */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Booking Status Overview */}
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
+            Trạng thái đặt sân
+            <span className="text-xs font-normal px-2 py-0.5 bg-slate-100 text-slate-500 rounded-full">Tổng quan</span>
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {BOOKING_STATUS.map((status, idx) => (
+              <div key={idx} className={`p-4 rounded-xl border ${status.bg} ${status.border} transition-all hover:-translate-y-1`}>
+                <status.icon className={`h-6 w-6 mb-3 ${status.color}`} />
+                <div className="text-2xl font-bold text-slate-900 mb-1">{status.count}</div>
+                <div className={`text-sm font-medium ${status.color}`}>{status.label}</div>
+              </div>
             ))}
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            {/* Booking Trend */}
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <h3>Lượt đặt sân 30 ngày qua</h3>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={bookingTrend}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
-                    <Area
-                      type="monotone"
-                      dataKey="bookings"
-                      stroke="#2563EB"
-                      fill="#2563EB"
-                      fillOpacity={0.3}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+        {/* Actionable Items */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col">
+          <h2 className="text-lg font-bold text-slate-900 mb-6">Yêu cầu xử lý</h2>
+          <div className="space-y-4 flex-1">
+            <Link
+              href="/admin/owner-approvals"
+              className="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-slate-50 hover:bg-slate-100 hover:border-slate-200 transition-colors cursor-pointer group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white rounded-lg border border-slate-200 text-slate-500 group-hover:text-emerald-600 transition-colors">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="font-semibold text-slate-900 text-sm mb-0.5">Phê duyệt chủ sân</div>
+                  <div className="text-xs text-slate-500">Các tài khoản chủ sân mới chờ duyệt</div>
+                </div>
+              </div>
+              <div className="bg-rose-100 text-rose-700 font-bold text-xs px-2.5 py-1 rounded-full">
+                {data.pendingOwnerApprovals}
+              </div>
+            </Link>
 
-            {/* Revenue by Sport */}
-            <Card>
-              <CardHeader>
-                <h3>Doanh thu theo thể loại</h3>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={revenueBySport}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={(entry) => `${entry.value}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {revenueBySport.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+            <Link
+              href="/admin/complaints"
+              className="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-slate-50 hover:bg-slate-100 hover:border-slate-200 transition-colors cursor-pointer group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white rounded-lg border border-slate-200 text-slate-500 group-hover:text-emerald-600 transition-colors">
+                  <AlertOctagon className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="font-semibold text-slate-900 text-sm mb-0.5">Khiếu nại chưa xử lý</div>
+                  <div className="text-xs text-slate-500">Khiếu nại từ khách hàng cần giải quyết</div>
+                </div>
+              </div>
+              <div className="bg-rose-100 text-rose-700 font-bold text-xs px-2.5 py-1 rounded-full">
+                {data.openComplaints}
+              </div>
+            </Link>
           </div>
+        </div>
+      </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Pending Approvals */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <h3>Chờ duyệt chủ sân</h3>
-                  <Badge variant="destructive">
-                    {pendingApprovals.length}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {pendingApprovals.map((approval) => (
-                    <div
-                      key={approval.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
-                    >
-                      <div className="flex-1">
-                        <div className="font-medium">{approval.owner}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {approval.venue}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {approval.date}
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="default">
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Duyệt
-                        </Button>
-                        <Button size="sm" variant="destructive">
-                          Từ chối
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+      {/* CHARTS & RECENT BOOKINGS */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
-            {/* Recent Complaints */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <h3>Khiếu nại gần đây</h3>
-                  <Badge variant="destructive">
-                    {recentComplaints.length}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {recentComplaints.map((complaint) => (
+        {/* Bar Chart — dữ liệu thực từ backend (bookingTrend) */}
+        <div className="xl:col-span-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col">
+          <h2 className="text-lg font-bold text-slate-900 mb-6">Biểu đồ đặt sân (7 ngày)</h2>
+          {trendData.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+              Chưa có dữ liệu
+            </div>
+          ) : (
+            <div className="flex-1 flex items-end justify-between gap-2 h-48 mt-auto pt-4">
+              {trendData.map((item, idx) => (
+                <div key={idx} className="flex flex-col items-center gap-2 group w-full">
+                  <span className="text-xs font-semibold text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity -translate-y-2 group-hover:translate-y-0">
+                    {item.count}
+                  </span>
+                  <div className="w-full relative flex justify-center bg-slate-100 rounded-t-md h-full">
                     <div
-                      key={complaint.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-mono text-sm">
-                            {complaint.id}
-                          </span>
-                          <Badge
-                            className={
-                              complaint.priority === "high"
-                                ? "bg-red-100 text-red-700"
-                                : "bg-yellow-100 text-yellow-700"
-                            }
+                      className="absolute bottom-0 w-full bg-emerald-500 rounded-t-md transition-all duration-500 group-hover:bg-emerald-400"
+                      style={{ height: `${(item.count / maxTrendCount) * 100}%` }}
+                    ></div>
+                  </div>
+                  <span className="text-xs font-medium text-slate-500">{getDayLabel(item.date)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Recent Bookings Table */}
+        <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-slate-900">Đơn đặt sân gần đây</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-100">
+                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Mã Đơn</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Khách hàng / Sân</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Thời gian chơi</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tổng tiền</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {data.recentBookings.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500 text-sm">
+                      Chưa có lịch sử đặt sân nào.
+                    </td>
+                  </tr>
+                ) : (
+                  data.recentBookings.map((booking) => {
+                    const statusInfo = STATUS_MAP[booking.bookingStatus] || {
+                      label: booking.bookingStatus,
+                      classes: "bg-slate-100 text-slate-800 border-slate-200",
+                    };
+                    return (
+                      <tr key={booking.bookingId} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-6 py-4">
+                          <span className="font-mono text-sm font-medium text-slate-900">#{booking.bookingId}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm font-semibold text-slate-900 mb-0.5">{booking.customerName}</div>
+                          <div className="text-xs text-slate-500">{booking.stadiumName}</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-slate-900 font-medium mb-0.5">{booking.timeSlot}</div>
+                          <div className="text-xs text-slate-500">{formatLocalDate(booking.reservationDate)}</div>
+                        </td>
+                        <td className="px-6 py-4 text-sm font-semibold text-slate-900">
+                          {new Intl.NumberFormat("vi-VN", {
+                            style: "currency",
+                            currency: "VND",
+                          }).format(booking.totalPrice)}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${statusInfo.classes}`}
                           >
-                            {complaint.priority === "high"
-                              ? "Cao"
-                              : "Trung bình"}
-                          </Badge>
-                        </div>
-                        <div className="font-medium">{complaint.subject}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {complaint.user} - {complaint.date}
-                        </div>
-                      </div>
-                      <Button size="sm" variant="outline">
-                        Xử lý
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                            {statusInfo.label}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
+        </div>
+      </div>
     </div>
   );
 }
-
-export default AdminDashboardPage;

@@ -1,15 +1,15 @@
 package com.sportvenue.repository;
 
-import com.sportvenue.entity.Payment;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
-import java.util.Optional;
-import java.util.List;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import com.sportvenue.entity.Payment;
 import com.sportvenue.repository.projection.DailyRevenueProjection;
 import com.sportvenue.repository.projection.VenueRevenueProjection;
 
@@ -73,4 +73,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
 
     @Query("SELECT p FROM Payment p WHERE p.booking.bookingId IN :bookingIds AND p.amount < 0")
     List<Payment> findRefundPaymentsByBookingIds(@Param("bookingIds") List<Integer> bookingIds);
+
+    /**
+     * Tính gross revenue: chỉ tính các payment thành công với amount > 0.
+     * Refund (amount < 0) bị loại trừ vì UC-ADM-01 yêu cầu gross revenue.
+     */
+    @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p " +
+           "WHERE p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
+           "AND p.amount > 0")
+    java.math.BigDecimal sumTotalRevenue();
 }
+

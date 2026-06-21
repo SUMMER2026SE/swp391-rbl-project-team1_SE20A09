@@ -1,9 +1,12 @@
 # ── Test profile — dùng cho unit/integration tests ──
+# Các giá trị datasource/redis được truyền qua env vars từ CI (ci-backend.yml).
+# @TestPropertySource trong SportVenueApplicationTests override trực tiếp
+# nên file này chỉ giữ vai trò fallback khi chạy test local.
 spring:
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/sportvenue_test?currentSchema=public&serverTimezone=Asia/Ho_Chi_Minh}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/sportvenue_test}
     username: ${SPRING_DATASOURCE_USERNAME:sportvenue_user}
-    password: ${SPRING_DATASOURCE_PASSWORD:changeme}
+    password: ${SPRING_DATASOURCE_PASSWORD:testpassword}
 
   jpa:
     hibernate:
@@ -15,7 +18,6 @@ spring:
     clean-disabled: false
     clean-on-validation-error: true
 
-  # Dùng embedded Redis nếu có, hoặc connect localhost khi CI
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
