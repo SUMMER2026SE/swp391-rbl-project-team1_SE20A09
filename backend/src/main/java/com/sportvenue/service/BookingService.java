@@ -102,4 +102,28 @@ public interface BookingService {
      *         nếu booking đã bị huỷ hoặc đã được xác nhận trước đó.
      */
     BookingDetailResponse confirmPayment(UserPrincipal principal, Integer bookingId);
+
+    /**
+     * UC-CUS-03: Hủy một đơn đặt sân — Customer (chủ booking) hoặc Owner (chủ sân) đều có thể gọi.
+     *
+     * <p>Quy tắc nghiệp vụ:</p>
+     * <ul>
+     *   <li>Chỉ hủy được booking đang ở trạng thái {@code PENDING_PAYMENT},
+     *       {@code PENDING} hoặc {@code CONFIRMED}. Booking {@code COMPLETED}
+     *       hoặc {@code CANCELLED} → ném {@link com.sportvenue.exception.BadRequestException}.</li>
+     *   <li>Set {@code bookingStatus = CANCELLED} và lưu {@code cancelReason} do FE gửi lên (nullable).</li>
+     *   <li>Nếu trước đó đã thanh toán (PAID) thì chuyển {@code paymentStatus = REFUNDED}
+     *       để báo hiệu đã hoàn tiền cho khách.</li>
+     * </ul>
+     *
+     * @param principal customer hoặc owner đang thao tác (lấy từ SecurityContext).
+     * @param bookingId id của booking cần hủy.
+     * @param reason    lý do hủy (nullable, do người dùng nhập ở UI).
+     * @return DTO {@link BookingDetailResponse} của booking sau khi hủy.
+     * @throws com.sportvenue.exception.ResourceNotFoundException nếu booking không tồn tại.
+     * @throws com.sportvenue.exception.BadRequestException      nếu trạng thái không cho phép hủy
+     *                                                            hoặc người gọi không phải
+     *                                                            customer/owner của booking.
+     */
+    BookingDetailResponse cancelBooking(UserPrincipal principal, Integer bookingId, String reason);
 }

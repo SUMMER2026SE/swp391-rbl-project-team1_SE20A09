@@ -116,4 +116,11 @@ public class Booking implements Serializable {
      */
     @Column(name = "expired_at")
     private LocalDateTime expiredAt;
+
+    /**
+     * UC-CUS-03: Lý do khách hàng hoặc chủ sân hủy đơn (nullable, tối đa 255 ký tự).
+     * Tương ứng cột {@code cancel_reason} trong bảng bookings — được thêm bởi migration V5.10.
+     */
+    @Column(name = "cancel_reason", length = 255)
+    private String cancelReason;
 }
