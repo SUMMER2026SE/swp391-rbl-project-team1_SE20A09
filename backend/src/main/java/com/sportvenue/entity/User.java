@@ -91,6 +91,9 @@ public class User implements Serializable {
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 
+    @Column(name = "lock_reason", columnDefinition = "TEXT")
+    private String lockReason;
+
     public String getFullName() {
         if (firstName == null && lastName == null) {
             return "";

@@ -26,6 +26,8 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
     @EntityGraph(attributePaths = {"sportType", "images"})
     List<Stadium> findByOwnerOwnerIdAndStadiumStatusNot(Integer ownerId, StadiumStatus status);
 
+    List<Stadium> findByOwnerOwnerId(Integer ownerId);
+
     /** Lấy tất cả sân đang hoạt động — dùng cho trang chủ Guest. */
     @EntityGraph(attributePaths = {"sportType", "images", "owner"})
     Page<Stadium> findByStadiumStatus(StadiumStatus status, Pageable pageable);
@@ -78,4 +80,6 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
             WHERE u.email = :ownerEmail
             """)
     long countStadiumsByOwnerEmail(@Param("ownerEmail") String ownerEmail);
+
+    boolean existsBySportTypeSportTypeId(Integer sportTypeId);
 }
