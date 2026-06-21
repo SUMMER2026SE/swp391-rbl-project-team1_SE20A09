@@ -650,7 +650,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                               initialComment={review.comment}
                               onSuccess={() => {
                                 setEditingReviewId(null)
-                                window.location.reload()
+                                queryClient.invalidateQueries({ queryKey: ['venue-detail', venue.id] })
                               }}
                               onCancel={() => setEditingReviewId(null)}
                             />
