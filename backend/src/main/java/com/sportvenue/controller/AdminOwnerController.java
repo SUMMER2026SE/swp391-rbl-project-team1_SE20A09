@@ -60,6 +60,7 @@ public class AdminOwnerController {
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir
     ) {
+        // Validate sorting column to prevent SQL injection
         List<String> allowedSortBy = List.of("fullName", "email", "phoneNumber", "businessName", "createdAt");
         if (!allowedSortBy.contains(sortBy)) {
             sortBy = "createdAt";

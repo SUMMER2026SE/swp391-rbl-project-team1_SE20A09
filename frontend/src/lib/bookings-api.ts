@@ -1,4 +1,4 @@
-import { get } from "@/lib/api";
+import { get, post } from "@/lib/api";
 
 export type BookingHistoryItem = {
   id: string;
@@ -145,9 +145,134 @@ export type BookingDetailItem = {
  */
 export async function fetchBookingDetail(id: string | number): Promise<BookingDetailItem> {
   const data = await get<any>(`/bookings/${id}`);
-  
+
   return {
     ...data,
     totalPrice: typeof data.totalPrice === "number" ? data.totalPrice : Number(data.totalPrice),
   };
 }
+
+// ── UC-CUS-01: Single booking ───────────────────────────────────────────────
+
+/** Một khung giờ của sân kèm cờ availability cho một ngày cụ thể. */
+export type SlotAvailability = {
+  slotId: number;
+  stadiumId: number;
+  /** HH:mm hoặc HH:mm:ss */
+  startTime: string;
+  /** HH:mm hoặc HH:mm:ss */
+  endTime: string;
+  pricePerSlot: number;
+  slotStatus: "AVAILABLE" | "MAINTENANCE" | "BOOKED" | string;
+  /** true = còn trống và chưa qua giờ. */
+  available: boolean;
+};
+
+/** Payload tạo đơn đặt sân đơn lẻ (UC-CUS-01). */
+export type AccessoryItemPayload = {
+  accessoryId: number;
+  quantity: number;
+};
+
+export type CreateBookingPayload = {
+  stadiumId: number;
+  slotId: number;
+  /** ISO yyyy-MM-dd */
+  reservationDate: string;
+  note?: string;
+  /** Optional: phụ kiện kèm theo. Server tự tính unitPrice — không gửi. */
+  accessories?: AccessoryItemPayload[];
+};
+
+/** Response trả về sau khi tạo booking thành công (BookingDetailResponse). */
+export type CreateBookingResponse = {
+  bookingId: number;
+  displayId: string;
+  reservationDate: string;
+  slot: { slotId: number; startTime: string; endTime: string };
+  stadium: { stadiumId: number; stadiumName: string; address: string };
+  totalPrice: number;
+  status: string;
+  paymentStatus: string;
+  note: string | null;
+};
+
+/**
+ * Lấy slot của sân kèm cờ availability cho ngày cụ thể — FE dùng để render UI.
+ * `get()` đã tự động thêm prefix `/api/v1`, nên path chỉ là `/stadiums/{id}/slots`.
+ */
+export async function getSlotsByDate(
+  stadiumId: number,
+  date: string
+): Promise<SlotAvailability[]> {
+  const data = await get<SlotAvailability[]>(
+    `/stadiums/${stadiumId}/slots?date=${encodeURIComponent(date)}`
+  );
+  return data ?? [];
+}
+
+// ── UC-CUS-01: Weekly schedule ──────────────────────────────────────────────
+
+/** Trạng thái của một slot trong weekly grid. */
+export type WeeklySlotStatus = "AVAILABLE" | "BOOKED" | "PAST";
+
+/** Một khung giờ của sân trong weekly grid — kèm trạng thái cho một ngày cụ thể. */
+export type WeeklySlotItem = {
+  slotId: number;
+  /** HH:mm */
+  startTime: string;
+  /** HH:mm */
+  endTime: string;
+  price: number;
+  status: WeeklySlotStatus;
+};
+
+/** Một ngày trong weekly grid — kèm tên thứ tiếng Việt. */
+export type WeeklySlotDay = {
+  /** ISO yyyy-MM-dd */
+  date: string;
+  /** "Thứ 2" / "Chủ nhật" / ... */
+  dayName: string;
+  slots: WeeklySlotItem[];
+};
+
+/**
+ * Response của `GET /api/v1/stadiums/{id}/weekly-slots?weekStart=YYYY-MM-DD`.
+ *
+ * Trả về 7 ngày (thứ 2 → chủ nhật) của tuần chứa {@link weekStart}.
+ * BE tự snap về thứ 2 nếu FE truyền ngày khác.
+ */
+export type WeeklySlotsResponse = {
+  /** ISO yyyy-MM-dd — luôn là thứ 2. */
+  weekStart: string;
+  /** ISO yyyy-MM-dd — luôn là chủ nhật (weekStart + 6). */
+  weekEnd: string;
+  days: WeeklySlotDay[];
+};
+
+/**
+ * Lấy lịch khung giờ theo tuần của một sân.
+ * Public endpoint — không yêu cầu auth.
+ *
+ * @param stadiumId ID sân
+ * @param weekStart một ngày bất kỳ trong tuần (ISO yyyy-MM-dd); BE sẽ snap về thứ 2.
+ */
+export async function getWeeklySlots(
+  stadiumId: number,
+  weekStart: string
+): Promise<WeeklySlotsResponse> {
+  return get<WeeklySlotsResponse>(
+    `/stadiums/${stadiumId}/weekly-slots?weekStart=${encodeURIComponent(weekStart)}`
+  );
+}
+
+/**
+ * Tạo đơn đặt sân đơn lẻ — POST /api/v1/bookings.
+ * Trả 409 nếu slot đã bị đặt active trên cùng ngày; 400 nếu đã qua giờ.
+ */
+export async function createBooking(
+  payload: CreateBookingPayload
+): Promise<CreateBookingResponse> {
+  return post<CreateBookingResponse>("/bookings", payload);
+}
+
