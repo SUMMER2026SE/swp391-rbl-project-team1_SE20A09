@@ -32,4 +32,7 @@ public interface ComplaintRepository extends JpaRepository<Complaint, Integer> {
     /** Lấy toàn bộ khiếu nại của một khách hàng (không phân trang). */
     @EntityGraph(attributePaths = {"user", "booking", "booking.stadium"})
     List<Complaint> findByUserUserIdOrderByCreatedAtDesc(Integer userId);
+
+    /** Kiểm tra xem đơn đặt sân đã được khiếu nại chưa. */
+    boolean existsByBookingBookingId(Integer bookingId);
 }

@@ -10,6 +10,8 @@ import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.Complaint;
 import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.User;
+import com.sportvenue.entity.enums.BookingStatus;
+import com.sportvenue.entity.enums.ComplaintPriority;
 import com.sportvenue.entity.enums.ComplaintStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
@@ -79,11 +81,20 @@ public class ComplaintServiceImpl implements ComplaintService {
             throw new BadRequestException("Bạn không có quyền khiếu nại đơn đặt sân này!");
         }
 
+        if (booking.getBookingStatus() != BookingStatus.COMPLETED) {
+            throw new BadRequestException("Bạn chỉ có thể khiếu nại đơn đặt sân đã hoàn thành!");
+        }
+
+        if (complaintRepository.existsByBookingBookingId(request.getBookingId())) {
+            throw new BadRequestException("Đơn đặt sân này đã được khiếu nại trước đó!");
+        }
+
         Complaint complaint = Complaint.builder()
                 .booking(booking)
                 .user(user)
                 .subject(request.getSubject().trim())
                 .content(request.getDescription())
+                .priority(ComplaintPriority.MEDIUM)
                 .status(ComplaintStatus.OPEN)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -240,6 +251,7 @@ public class ComplaintServiceImpl implements ComplaintService {
                 .against(c.getBooking().getStadium().getStadiumName())
                 .description(c.getContent())
                 .status(c.getStatus().name().toLowerCase())
+                .priority(c.getPriority() != null ? c.getPriority().name().toLowerCase() : "medium")
                 .submittedDate(c.getCreatedAt().toLocalDate().toString())
                 .resolvedDate(resolvedDate)
                 .resolution(resolution)
