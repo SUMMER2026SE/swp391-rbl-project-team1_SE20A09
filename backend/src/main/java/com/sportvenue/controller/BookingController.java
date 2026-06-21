@@ -190,7 +190,8 @@ public class BookingController {
     public ResponseEntity<VnpayPaymentUrlResponse> payBooking(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @PathVariable("id") Integer bookingId,
-            @RequestParam(name = "paymentOption", defaultValue = "FULL") String paymentOption) {
-        return ResponseEntity.ok(paymentService.createVnpayPaymentUrl(userPrincipal, bookingId, paymentOption));
+            @RequestParam(name = "paymentOption", defaultValue = "FULL") String paymentOption,
+            jakarta.servlet.http.HttpServletRequest request) {
+        return ResponseEntity.ok(paymentService.createVnpayPaymentUrl(userPrincipal, bookingId, paymentOption, request));
     }
 }

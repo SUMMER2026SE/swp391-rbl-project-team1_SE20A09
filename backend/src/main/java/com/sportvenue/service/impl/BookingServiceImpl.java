@@ -500,6 +500,12 @@ public class BookingServiceImpl implements BookingService {
         booking.setExpiredAt(null);
         bookingRepository.save(booking);
 
+        TimeSlot slot = booking.getSlot();
+        if (slot != null && slot.getSlotStatus() == SlotStatus.BOOKED) {
+            slot.setSlotStatus(SlotStatus.AVAILABLE);
+            timeSlotRepository.save(slot);
+        }
+
         log.info("❌ UC-CUS-05: Customer {} huỷ booking #{} — lý do: {}",
                 principal.getUser().getEmail(), bookingId, reason);
     }

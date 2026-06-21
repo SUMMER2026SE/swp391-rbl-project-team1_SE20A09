@@ -55,7 +55,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @Transactional
-    public VnpayPaymentUrlResponse createVnpayPaymentUrl(UserPrincipal principal, Integer bookingId, String paymentOption) {
+    public VnpayPaymentUrlResponse createVnpayPaymentUrl(UserPrincipal principal, Integer bookingId, String paymentOption, HttpServletRequest request) {
         if (principal == null || principal.getUser() == null || principal.getUser().getUserId() == null) {
             throw new AccessDeniedException("Không xác định được người dùng");
         }
@@ -116,7 +116,7 @@ public class PaymentServiceImpl implements PaymentService {
         String expireDate = fmt.format(expire);
 
         // 7. Build tham số VNPay — alphabet order tự động áp dụng trong buildSignedQuery
-        Map<String, String> params = buildVnpParams(txnRef, amountVnp, createDate, expireDate, bookingId);
+        Map<String, String> params = buildVnpParams(txnRef, amountVnp, createDate, expireDate, bookingId, request);
 
         // 8. Ký và ghép URL
         String signed = VNPayUtil.buildSignedQuery(params, vnPayConfig.getHashSecret());
@@ -134,7 +134,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private Map<String, String> buildVnpParams(String txnRef, long amountVnp, String createDate,
-                                               String expireDate, Integer bookingId) {
+                                               String expireDate, Integer bookingId, HttpServletRequest request) {
         Map<String, String> params = new LinkedHashMap<>();
         params.put("vnp_Version", vnPayConfig.getVersion());
         params.put("vnp_Command", vnPayConfig.getCommand());
@@ -142,11 +142,11 @@ public class PaymentServiceImpl implements PaymentService {
         params.put("vnp_Amount", String.valueOf(amountVnp));
         params.put("vnp_CurrCode", vnPayConfig.getCurrencyCode());
         params.put("vnp_TxnRef", txnRef);
-        params.put("vnp_OrderInfo", "Thanh toan don dat san so " + bookingId);
+        params.put("vnp_OrderInfo", "Thanh toan don dat san #" + bookingId);
         params.put("vnp_OrderType", vnPayConfig.getOrderType());
         params.put("vnp_Locale", vnPayConfig.getLocale());
         params.put("vnp_ReturnUrl", vnPayConfig.getReturnUrl());
-        params.put("vnp_IpAddr", resolveClientIp());
+        params.put("vnp_IpAddr", resolveClientIp(request));
         params.put("vnp_CreateDate", createDate);
         params.put("vnp_ExpireDate", expireDate);
         return params;
@@ -236,10 +236,13 @@ public class PaymentServiceImpl implements PaymentService {
      * Lấy IP client — thử X-Forwarded-For trước (khi qua proxy), fallback sang remoteAddr.
      * Giá trị gửi cho VNPay không bắt buộc chính xác trong sandbox nhưng vẫn cần có.
      */
-    private String resolveClientIp() {
+    private String resolveClientIp(HttpServletRequest request) {
         try {
-            // Cách tiếp cận đơn giản: dùng InetAddress.localhost — service không có request ở đây
-            return java.net.InetAddress.getLocalHost().getHostAddress();
+            String ipAddress = request.getHeader("X-Forwarded-For");
+            if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
+                ipAddress = request.getRemoteAddr();
+            }
+            return ipAddress;
         } catch (Exception ex) {
             return "127.0.0.1";
         }

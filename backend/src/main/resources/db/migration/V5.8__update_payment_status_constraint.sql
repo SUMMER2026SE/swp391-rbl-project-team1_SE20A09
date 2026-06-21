@@ -5,10 +5,11 @@ DECLARE
 BEGIN
     SELECT constraint_name INTO const_name
     FROM information_schema.constraint_column_usage
-    WHERE table_name = 'bookings' AND column_name = 'payment_status';
+    WHERE table_name = 'bookings' AND column_name = 'payment_status'
+    LIMIT 1;
 
     IF const_name IS NOT NULL THEN
-        EXECUTE 'ALTER TABLE bookings DROP CONSTRAINT ' || const_name;
+        EXECUTE format('ALTER TABLE bookings DROP CONSTRAINT %I', const_name);
     END IF;
 END $$;
 

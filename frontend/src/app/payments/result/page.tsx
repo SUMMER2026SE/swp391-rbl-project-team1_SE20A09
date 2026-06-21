@@ -37,10 +37,16 @@ function PaymentResultContent() {
     let cancelled = false;
     (async () => {
       try {
-        // Poll nhẹ — đôi khi DB chưa kịp update khi browser redirect về
-        await new Promise((r) => setTimeout(r, 500));
-        const data = await fetchBookingDetail(bookingId);
-        if (!cancelled) {
+        let data = null;
+        for (let i = 0; i < 3; i++) {
+          await new Promise((r) => setTimeout(r, 500 * Math.pow(2, i))); // 500ms, 1000ms, 2000ms
+          data = await fetchBookingDetail(bookingId);
+          if (cancelled) return;
+          if (data.status === 'confirmed' || data.paymentStatus === 'paid' || data.paymentStatus === 'deposited') {
+            break;
+          }
+        }
+        if (!cancelled && data) {
           setBooking(data);
           setLoading(false);
         }

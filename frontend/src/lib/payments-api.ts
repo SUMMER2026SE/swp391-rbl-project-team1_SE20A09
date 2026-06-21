@@ -6,7 +6,8 @@ import { post } from "@/lib/api";
  * Số tiền đọc từ DB phía backend, không nhận từ client.
  */
 export async function initiateVnpayPayment(
-  bookingId: number
+  bookingId: number,
+  paymentOption: string = "FULL"
 ): Promise<{ paymentUrl: string }> {
-  return post<{ paymentUrl: string }>(`/bookings/${bookingId}/pay`);
+  return post<{ paymentUrl: string }>(`/bookings/${bookingId}/pay?paymentOption=${paymentOption}`);
 }

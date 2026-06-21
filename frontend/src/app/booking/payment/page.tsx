@@ -151,7 +151,6 @@ function PaymentContent() {
         router.push("/profile?tab=bookings");
       }
     } catch (err: any) {
-      console.error("Booking/Payment failed:", err);
       const serverMsg = err?.message ?? "Có lỗi xảy ra. Vui lòng thử lại.";
       toast.error(serverMsg);
     } finally {

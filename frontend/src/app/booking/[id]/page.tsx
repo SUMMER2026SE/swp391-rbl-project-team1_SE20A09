@@ -81,12 +81,12 @@ export default function BookingDetailPage() {
     loadData();
   }, [params?.id]);
 
-  const handlePayWithVnpay = async () => {
+  const handlePayWithVnpay = async (option: string = "FULL") => {
     if (!booking) return;
     if (paying) return;
     try {
       setPaying(true);
-      const { paymentUrl } = await initiateVnpayPayment(parseInt(booking.id, 10));
+      const { paymentUrl } = await initiateVnpayPayment(parseInt(booking.id, 10), option);
       // Rời app — phải dùng window.location (không dùng được router.push)
       window.location.href = paymentUrl;
     } catch (err: any) {
@@ -289,13 +289,23 @@ export default function BookingDetailPage() {
               {/* Thanh toán ngay button flow */}
               <div className="pt-6 space-y-2">
                 {(booking.status === 'pending' || booking.status === 'pending_payment' || booking.status === 'confirmed') && booking.paymentStatus === 'unpaid' && (
-                  <Button
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl h-11 disabled:opacity-60"
-                    onClick={handlePayWithVnpay}
-                    disabled={paying}
-                  >
-                    {paying ? "Đang chuyển hướng..." : "Thanh toán ngay"}
-                  </Button>
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl h-11 disabled:opacity-60"
+                      onClick={() => handlePayWithVnpay("FULL")}
+                      disabled={paying}
+                    >
+                      {paying ? "Đang chuyển hướng..." : "Thanh toán toàn bộ"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full text-emerald-700 border-emerald-200 hover:bg-emerald-50 font-bold rounded-2xl h-11 disabled:opacity-60"
+                      onClick={() => handlePayWithVnpay("DEPOSIT")}
+                      disabled={paying}
+                    >
+                      Thanh toán cọc 30%
+                    </Button>
+                  </div>
                 )}
                 <p className="text-[10px] text-slate-400 text-center">
                   Đặt lúc: {booking.createdAt}

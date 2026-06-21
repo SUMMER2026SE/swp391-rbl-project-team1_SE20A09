@@ -20,7 +20,7 @@ public interface PaymentService {
      * @throws org.springframework.security.access.AccessDeniedException nếu booking không thuộc về customer
      * @throws com.sportvenue.exception.BadRequestException nếu booking không ở trạng thái cho phép
      */
-    VnpayPaymentUrlResponse createVnpayPaymentUrl(UserPrincipal principal, Integer bookingId, String paymentOption);
+    VnpayPaymentUrlResponse createVnpayPaymentUrl(UserPrincipal principal, Integer bookingId, String paymentOption, HttpServletRequest request);
 
     /**
      * Xử lý callback từ VNPay. Xác thực checksum, cập nhật trạng thái payment + booking.
