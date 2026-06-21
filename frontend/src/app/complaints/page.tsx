@@ -22,9 +22,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertCircle, Plus, MessageSquare, User } from "lucide-react";
+import { AlertCircle, Plus, MessageSquare, User, AlertTriangle } from "lucide-react";
 import { get, post } from "@/lib/api";
 import { toast } from "sonner";
+import { fetchMyBookings } from "@/lib/bookings-api";
 
 type ComplaintResponse = {
   from: string;
@@ -34,33 +35,39 @@ type ComplaintResponse = {
 
 type Complaint = {
   id: string;
+  complaintId: number;
   subject: string;
   against: string;
   description: string;
   status: string;
+  priority?: string;
   submittedDate: string;
   responses: ComplaintResponse[];
   resolvedDate?: string;
   resolution?: string;
-  bookingId?: string;
+  bookingId?: number;
 };
 
 const DEFAULT_COMPLAINTS: Complaint[] = [
   {
     id: "CP001",
+    complaintId: 1,
     subject: "Sân không đúng mô tả",
     against: "Sân bóng Thành Công",
     description: "Sân thực tế không giống hình ảnh trên web. Cỏ nhân tạo cũ, bề mặt không bằng phẳng.",
     status: "open",
+    priority: "medium",
     submittedDate: "2026-05-22",
     responses: [],
   },
   {
     id: "CP002",
+    complaintId: 2,
     subject: "Chủ sân không phản hồi",
     against: "Sân bóng Thành Công",
     description: "Đã liên hệ nhiều lần nhưng chủ sân không phản hồi về việc hoàn tiền do hủy sân.",
     status: "in_progress",
+    priority: "high",
     submittedDate: "2026-05-20",
     responses: [
       {
@@ -70,35 +77,23 @@ const DEFAULT_COMPLAINTS: Complaint[] = [
       },
     ],
   },
-  {
-    id: "CP003",
-    subject: "Yêu cầu hoàn tiền dịch vụ",
-    against: "Sân cầu lông Thành Công",
-    description: "Đã hủy sân trước 48h nhưng chưa nhận được tiền hoàn.",
-    status: "resolved",
-    submittedDate: "2026-05-15",
-    resolvedDate: "2026-05-18",
-    resolution: "Đã xử lý hoàn tiền 100% vào tài khoản. Vui lòng kiểm tra.",
-    responses: [
-      {
-        from: "Chủ sân",
-        message: "Xin lỗi vì sự chậm trễ. Chúng tôi đã xử lý hoàn tiền.",
-        time: "2026-05-18 14:00",
-      },
-    ],
-  },
 ];
 
 function ComplaintsPage() {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [completedBookings, setCompletedBookings] = useState<any[]>([]);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
 
   // Form states
-  const [against, setAgainst] = useState("1");
   const [bookingId, setBookingId] = useState("");
+  const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
+
+  // Reply states
+  const [replyText, setReplyText] = useState("");
+  const [submittingReply, setSubmittingReply] = useState(false);
 
   const fetchComplaints = useCallback(async () => {
     try {
@@ -121,73 +116,88 @@ function ComplaintsPage() {
     }
   }, []);
 
+  const fetchBookings = useCallback(async () => {
+    try {
+      const res = await fetchMyBookings(0, 100, "completed");
+      if (res && res.bookings) {
+        setCompletedBookings(res.bookings);
+      }
+    } catch (error) {
+      console.warn("Failed to fetch completed bookings", error);
+    }
+  }, []);
+
   useEffect(() => {
     fetchComplaints();
-  }, [fetchComplaints]);
+    fetchBookings();
+  }, [fetchComplaints, fetchBookings]);
 
   const handleCreateComplaint = async () => {
-    if (!subject.trim() || !description.trim()) return;
-
-    // Derive a booking ID number if provided
-    const numericBookingId = bookingId.trim() ? Number(bookingId.trim().replace(/\D/g, '')) : null;
+    if (!subject.trim() || !description.trim() || !bookingId) return;
 
     try {
-      if (!numericBookingId) {
-        throw new Error("Vui lòng nhập Mã đơn đặt sân hợp lệ (dạng số)");
-      }
       await post<unknown>("/complaints", {
-        bookingId: numericBookingId,
+        bookingId: Number(bookingId),
         subject: subject.trim(),
         description: description.trim()
       });
       toast.success("Gửi khiếu nại thành công!");
       fetchComplaints();
-    } catch (error: unknown) {
-      console.warn("Backend create complaint failed, using local update:", error);
-      let targetVenue = "Sân bóng Thành Công";
-      if (against === "2") targetVenue = "Arena Sports Center";
-      if (against === "3") targetVenue = "Sân Vận Động Quận 7";
-
-      const newId = `CP00${complaints.length + 1}`;
-      const newComplaint = {
-        id: newId,
-        subject: subject.trim(),
-        against: targetVenue,
-        description: description.trim(),
-        status: "open",
-        submittedDate: new Date().toISOString().split('T')[0],
-        responses: [],
-        bookingId: bookingId.trim() || undefined
-      };
-
-      const updated = [newComplaint, ...complaints];
-      setComplaints(updated);
-      localStorage.setItem('sport_venue_complaints', JSON.stringify(updated));
-      toast.success("Đã lưu khiếu nại (Offline Mode)");
+      
+      // Reset Form
+      setSubject("");
+      setDescription("");
+      setBookingId("");
+      setSelectedBooking(null);
+      setShowCreateDialog(false);
+    } catch (error: any) {
+      toast.error(error.message || "Gửi khiếu nại thất bại.");
     }
+  };
 
-    // Reset Form
-    setSubject("");
-    setDescription("");
-    setBookingId("");
-    setAgainst("1");
-    setShowCreateDialog(false);
+  const handleSendReply = async () => {
+    if (!replyText.trim() || !selectedComplaint) return;
+    setSubmittingReply(true);
+    try {
+      const endpoint = `/complaints/${selectedComplaint.complaintId}/reply`;
+      const data = await post<Complaint>(endpoint, { message: replyText.trim() });
+      
+      const updated = complaints.map(c => c.complaintId === data.complaintId ? data : c);
+      setComplaints(updated);
+      setSelectedComplaint(data);
+      setReplyText("");
+      toast.success("Đã gửi phản hồi!");
+    } catch (error: any) {
+      toast.error(error.message || "Lỗi khi gửi phản hồi");
+    } finally {
+      setSubmittingReply(false);
+    }
   };
 
   const getStatusBadge = (status: string) => {
     const s = (status || "").toLowerCase();
     const config = {
-      open: { label: "Mới", className: "bg-yellow-100 text-yellow-700" },
-      in_progress: { label: "Đang xử lý", className: "bg-blue-100 text-blue-700" },
-      resolved: { label: "Đã giải quyết", className: "bg-green-100 text-green-700" },
+      open: { label: "Mới", className: "bg-yellow-50 text-yellow-700 border-yellow-200" },
+      in_progress: { label: "Đang xử lý", className: "bg-blue-50 text-blue-700 border-blue-200" },
+      resolved: { label: "Đã giải quyết", className: "bg-green-50 text-green-700 border-green-200" },
     };
-    const item = config[s as keyof typeof config] || { label: status, className: "bg-gray-100 text-gray-700" };
-    return <Badge className={item.className}>{item.label}</Badge>;
+    const item = config[s as keyof typeof config] || { label: status, className: "bg-gray-50 text-gray-700 border-gray-200" };
+    return <Badge variant="outline" className={item.className}>{item.label}</Badge>;
   };
 
-  // Sync selected complaint details if it updates in the list
+  const getPriorityBadge = (priority?: string) => {
+    const p = (priority || "").toLowerCase();
+    const config = {
+      low: { label: "Thấp", className: "bg-gray-100 text-gray-700 border-gray-200" },
+      medium: { label: "Trung bình", className: "bg-orange-100 text-orange-700 border-orange-200" },
+      high: { label: "Cao", className: "bg-red-100 text-red-700 border-red-200" },
+    };
+    const item = config[p as keyof typeof config] || { label: "Trung bình", className: "bg-orange-100 text-orange-700 border-orange-200" };
+    return <Badge variant="outline" className={item.className}>{item.label}</Badge>;
+  };
+
   const activeComplaint = selectedComplaint 
-    ? complaints.find(c => c.id === selectedComplaint.id) || selectedComplaint
+    ? complaints.find(c => c.complaintId === selectedComplaint.complaintId) || selectedComplaint
     : null;
 
   return (
@@ -197,8 +207,8 @@ function ComplaintsPage() {
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-8">
-            <h1 className="text-3xl font-bold">Khiếu nại của tôi</h1>
-            <Button onClick={() => setShowCreateDialog(true)}>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-orange-500 bg-clip-text text-transparent">Khiếu nại của tôi</h1>
+            <Button onClick={() => setShowCreateDialog(true)} className="bg-primary hover:bg-primary/90 text-white shadow-md transition-all">
               <Plus className="mr-2 h-5 w-5" />
               Tạo khiếu nại
             </Button>
@@ -207,31 +217,32 @@ function ComplaintsPage() {
           <div className="space-y-4">
             {complaints.map((complaint) => (
               <Card
-                key={complaint.id}
-                className="cursor-pointer hover:shadow-lg transition-shadow"
+                key={complaint.complaintId}
+                className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary/30 duration-200"
                 onClick={() => setSelectedComplaint(complaint)}
               >
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="font-mono text-sm">{complaint.id}</span>
+                        <span className="font-mono text-sm text-muted-foreground">{complaint.id}</span>
                         {getStatusBadge(complaint.status)}
+                        {getPriorityBadge(complaint.priority)}
                       </div>
-                      <h3 className="mb-1 font-semibold text-lg">{complaint.subject}</h3>
+                      <h3 className="mb-1 font-semibold text-lg hover:text-primary transition-colors">{complaint.subject}</h3>
                       <p className="text-sm text-muted-foreground mb-2">
-                        Khiếu nại về: <strong>{complaint.against}</strong>
+                        Khiếu nại về: <strong className="text-foreground">{complaint.against}</strong>
                       </p>
-                      <p className="text-sm text-muted-foreground line-clamp-2">
+                      <p className="text-sm text-muted-foreground line-clamp-2 bg-muted/20 p-2 rounded">
                         {complaint.description}
                       </p>
                     </div>
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-sm text-muted-foreground pl-4">
                       {new Date(complaint.submittedDate).toLocaleDateString('vi-VN')}
                     </div>
                   </div>
 
-                  {complaint.responses.length > 0 && (
+                  {complaint.responses && complaint.responses.length > 0 && (
                     <div className="flex items-center gap-2 text-sm text-primary font-medium">
                       <MessageSquare className="h-4 w-4" />
                       <span>{complaint.responses.length} phản hồi từ chủ sân/admin</span>
@@ -242,10 +253,11 @@ function ComplaintsPage() {
             ))}
 
             {complaints.length === 0 && (
-              <Card>
+              <Card className="border-dashed">
                 <CardContent className="p-12 text-center text-muted-foreground">
-                  <AlertCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>Bạn chưa có khiếu nại nào</p>
+                  <AlertCircle className="h-12 w-12 mx-auto mb-3 opacity-30 text-primary" />
+                  <p className="font-medium text-lg mb-1">Bạn chưa có khiếu nại nào</p>
+                  <p className="text-sm opacity-80">Nếu bạn gặp bất kỳ sự cố nào với các đơn đặt sân đã hoàn thành, hãy tạo khiếu nại để được hỗ trợ.</p>
                 </CardContent>
               </Card>
             )}
@@ -257,39 +269,50 @@ function ComplaintsPage() {
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Tạo khiếu nại mới</DialogTitle>
+            <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-orange-500 bg-clip-text text-transparent">Tạo khiếu nại mới</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label htmlFor="venue">Sân/Chủ sân *</Label>
-              <Select value={against} onValueChange={setAgainst}>
-                <SelectTrigger id="venue">
-                  <SelectValue placeholder="Chọn sân hoặc chủ sân" />
+              <Label htmlFor="bookingSelect">Chọn đơn đặt sân đã hoàn thành *</Label>
+              <Select 
+                value={bookingId} 
+                onValueChange={(val) => {
+                  setBookingId(val);
+                  const b = completedBookings.find(x => String(x.id) === val);
+                  setSelectedBooking(b);
+                }}
+              >
+                <SelectTrigger id="bookingSelect">
+                  <SelectValue placeholder="Chọn đơn đặt sân của bạn" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">Sân bóng Thành Công</SelectItem>
-                  <SelectItem value="2">Arena Sports Center</SelectItem>
-                  <SelectItem value="3">Sân Vận Động Quận 7</SelectItem>
+                  {completedBookings.map((b) => (
+                    <SelectItem key={b.id} value={String(b.id)}>
+                      {`Đơn #${b.id} - ${b.venue} (${b.date} - ${b.time})`}
+                    </SelectItem>
+                  ))}
+                  {completedBookings.length === 0 && (
+                    <SelectItem value="none" disabled>Không có đơn đặt sân nào đã hoàn thành</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="booking">Mã đặt sân liên quan (nếu có)</Label>
-              <Input 
-                id="booking" 
-                placeholder="VD: BK001234" 
-                value={bookingId}
-                onChange={(e) => setBookingId(e.target.value)}
-              />
-            </div>
+            {selectedBooking && (
+              <div className="bg-muted/40 p-4 rounded-lg border border-dashed text-sm space-y-1">
+                <p><strong>Sân bóng:</strong> {selectedBooking.venue}</p>
+                <p><strong>Thể loại:</strong> {selectedBooking.sportType}</p>
+                <p><strong>Thời gian chơi:</strong> {selectedBooking.date} ({selectedBooking.time})</p>
+                <p><strong>Số tiền:</strong> {selectedBooking.price?.toLocaleString('vi-VN')}đ</p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="subject">Tiêu đề khiếu nại *</Label>
               <Input 
                 id="subject" 
-                placeholder="Vấn đề bạn gặp phải..." 
+                placeholder="Vấn đề bạn gặp phải (ví dụ: Sân không đúng mô tả, sai thông tin...)" 
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
               />
@@ -299,14 +322,14 @@ function ComplaintsPage() {
               <Label htmlFor="description">Mô tả chi tiết *</Label>
               <Textarea
                 id="description"
-                placeholder="Mô tả chi tiết vấn đề, điều bạn mong muốn..."
+                placeholder="Mô tả chi tiết vấn đề bạn gặp phải, bằng chứng (nếu có) và hướng giải quyết bạn mong muốn từ chủ sân..."
                 rows={6}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
             </div>
 
-            <div className="flex gap-2 pt-2">
+            <div className="flex gap-3 pt-4 border-t">
               <Button
                 variant="outline"
                 className="flex-1"
@@ -316,7 +339,7 @@ function ComplaintsPage() {
               </Button>
               <Button 
                 className="flex-1 bg-primary hover:bg-primary/95 text-white"
-                disabled={!subject.trim() || !description.trim()}
+                disabled={!subject.trim() || !description.trim() || !bookingId}
                 onClick={handleCreateComplaint}
               >
                 Gửi khiếu nại
@@ -329,11 +352,14 @@ function ComplaintsPage() {
       {/* Complaint Detail Dialog */}
       <Dialog
         open={!!selectedComplaint}
-        onOpenChange={() => setSelectedComplaint(null)}
+        onOpenChange={() => {
+          setSelectedComplaint(null);
+          setReplyText("");
+        }}
       >
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Chi tiết khiếu nại</DialogTitle>
+            <DialogTitle className="text-xl font-bold">Chi tiết khiếu nại</DialogTitle>
           </DialogHeader>
 
           {activeComplaint && (
@@ -342,7 +368,10 @@ function ComplaintsPage() {
                 <CardContent className="p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs text-muted-foreground">{activeComplaint.id}</span>
-                    {getStatusBadge(activeComplaint.status)}
+                    <div className="flex gap-1.5">
+                      {getStatusBadge(activeComplaint.status)}
+                      {getPriorityBadge(activeComplaint.priority)}
+                    </div>
                   </div>
                   <h3 className="text-lg font-bold">{activeComplaint.subject}</h3>
                   <p className="text-sm text-muted-foreground">
@@ -350,7 +379,7 @@ function ComplaintsPage() {
                   </p>
                   {activeComplaint.bookingId && (
                     <p className="text-xs text-muted-foreground">
-                      Mã đặt sân liên quan: <strong className="font-mono">{activeComplaint.bookingId}</strong>
+                      Mã đặt sân liên quan: <strong className="font-mono">#{activeComplaint.bookingId}</strong>
                     </p>
                   )}
                   <p className="text-sm bg-muted/40 p-3 rounded border text-foreground/80 mt-2">{activeComplaint.description}</p>
@@ -361,24 +390,27 @@ function ComplaintsPage() {
               </Card>
 
               {/* Responses */}
-              {activeComplaint.responses.length > 0 && (
+              {activeComplaint.responses && activeComplaint.responses.length > 0 && (
                 <div className="space-y-3">
                   <h4 className="font-bold text-xs text-muted-foreground uppercase">Hộp thư trao đổi:</h4>
                   <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
-                    {activeComplaint.responses.map((response: ComplaintResponse, idx: number) => (
-                      <div
-                        key={idx}
-                        className={`flex flex-col max-w-[85%] rounded-lg p-3 ${
-                          response.from === "Chủ sân" || response.from === "Admin"
-                            ? "bg-muted text-foreground mr-auto border"
-                            : "bg-primary text-primary-foreground ml-auto"
-                        }`}
-                      >
-                        <strong className="text-[10px] opacity-85 mb-1">{response.from}</strong>
-                        <p className="text-sm leading-relaxed">{response.message}</p>
-                        <span className="text-[9px] opacity-75 mt-1 self-end">{response.time}</span>
-                      </div>
-                    ))}
+                    {activeComplaint.responses.map((response, idx: number) => {
+                      const isMe = response.from === "Khách hàng";
+                      return (
+                        <div
+                          key={idx}
+                          className={`flex flex-col max-w-[85%] rounded-lg p-3 ${
+                            isMe
+                              ? "bg-primary text-primary-foreground ml-auto shadow-sm"
+                              : "bg-muted text-foreground mr-auto border"
+                          }`}
+                        >
+                          <strong className="text-[10px] opacity-85 mb-1">{response.from}</strong>
+                          <p className="text-sm leading-relaxed">{response.message}</p>
+                          <span className="text-[9px] opacity-75 mt-1 self-end">{response.time}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -395,10 +427,37 @@ function ComplaintsPage() {
                   <CardContent className="space-y-1">
                     <p className="text-sm font-semibold text-green-700">{activeComplaint.resolution}</p>
                     <p className="text-[10px] text-green-600">
-                      Ngày giải quyết: {new Date(activeComplaint.resolvedDate as string).toLocaleDateString('vi-VN')}
+                      Ngày giải quyết: {activeComplaint.resolvedDate ? new Date(activeComplaint.resolvedDate).toLocaleDateString('vi-VN') : ''}
                     </p>
                   </CardContent>
                 </Card>
+              )}
+
+              {/* Reply box */}
+              {activeComplaint.status !== "resolved" && (
+                <div className="space-y-2 border-t pt-4">
+                  <Label htmlFor="replyInput" className="font-semibold text-sm">Gửi phản hồi của bạn</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="replyInput"
+                      placeholder="Nhập nội dung phản hồi..."
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      disabled={submittingReply}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && replyText.trim() && !submittingReply) {
+                          handleSendReply();
+                        }
+                      }}
+                    />
+                    <Button 
+                      onClick={handleSendReply}
+                      disabled={!replyText.trim() || submittingReply}
+                    >
+                      Gửi
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
           )}

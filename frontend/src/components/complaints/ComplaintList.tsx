@@ -28,6 +28,7 @@ type Complaint = {
   against: string;
   description: string;
   status: string;
+  priority?: string;
   submittedDate: string;
   responses: ComplaintResponse[];
   resolvedDate?: string;
@@ -105,12 +106,23 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
   const getStatusBadge = (status: string) => {
     const s = (status || "").toLowerCase();
     const config = {
-      open: { label: "Mới", className: "bg-yellow-100 text-yellow-700" },
-      in_progress: { label: "Đang xử lý", className: "bg-blue-100 text-blue-700" },
-      resolved: { label: "Đã giải quyết", className: "bg-green-100 text-green-700" },
+      open: { label: "Mới", className: "bg-yellow-50 text-yellow-700 border-yellow-200" },
+      in_progress: { label: "Đang xử lý", className: "bg-blue-50 text-blue-700 border-blue-200" },
+      resolved: { label: "Đã giải quyết", className: "bg-green-50 text-green-700 border-green-200" },
     };
-    const item = config[s as keyof typeof config] || { label: status, className: "bg-gray-100 text-gray-700" };
-    return <Badge className={item.className}>{item.label}</Badge>;
+    const item = config[s as keyof typeof config] || { label: status, className: "bg-gray-50 text-gray-700 border-gray-200" };
+    return <Badge variant="outline" className={item.className}>{item.label}</Badge>;
+  };
+
+  const getPriorityBadge = (priority?: string) => {
+    const p = (priority || "").toLowerCase();
+    const config = {
+      low: { label: "Thấp", className: "bg-gray-100 text-gray-700 border-gray-200" },
+      medium: { label: "Trung bình", className: "bg-orange-100 text-orange-700 border-orange-200" },
+      high: { label: "Cao", className: "bg-red-100 text-red-700 border-red-200" },
+    };
+    const item = config[p as keyof typeof config] || { label: "Trung bình", className: "bg-orange-100 text-orange-700 border-orange-200" };
+    return <Badge variant="outline" className={item.className}>{item.label}</Badge>;
   };
 
   const activeComplaint = selectedComplaint 
@@ -121,7 +133,7 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
     <div className="space-y-4">
       {complaints.map((complaint) => (
         <Card
-          key={complaint.id}
+          key={complaint.complaintId}
           className="cursor-pointer hover:shadow-lg transition-shadow bg-white"
           onClick={() => setSelectedComplaint(complaint)}
         >
@@ -131,6 +143,7 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
                 <div className="flex items-center gap-2 mb-2">
                   <span className="font-mono text-sm">{complaint.id}</span>
                   {getStatusBadge(complaint.status)}
+                  {getPriorityBadge(complaint.priority)}
                 </div>
                 <h3 className="mb-1 font-semibold text-lg">{complaint.subject}</h3>
                 <p className="text-sm text-muted-foreground mb-2">
@@ -184,7 +197,10 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
                 <CardContent className="p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xs text-muted-foreground">{activeComplaint.id}</span>
-                    {getStatusBadge(activeComplaint.status)}
+                    <div className="flex gap-1.5">
+                      {getStatusBadge(activeComplaint.status)}
+                      {getPriorityBadge(activeComplaint.priority)}
+                    </div>
                   </div>
                   <h3 className="text-lg font-bold">{activeComplaint.subject}</h3>
                   <p className="text-sm text-muted-foreground">
@@ -192,7 +208,7 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
                   </p>
                   {activeComplaint.bookingId && (
                     <p className="text-xs text-muted-foreground">
-                      Mã đặt sân: <strong className="font-mono">BK{String(activeComplaint.bookingId).padStart(6, '0')}</strong>
+                      Mã đặt sân: <strong className="font-mono">#{activeComplaint.bookingId}</strong>
                     </p>
                   )}
                   <p className="text-sm bg-muted/40 p-3 rounded border text-foreground/80 mt-2">{activeComplaint.description}</p>
@@ -264,7 +280,7 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
 
                   {isOwner && (
                     <div className="space-y-2 pt-4 border-t">
-                      <Label className="text-green-700">Đóng & Giải quyết khiếu nại</Label>
+                      <Label className="text-green-700 font-semibold">Đóng & Giải quyết khiếu nại</Label>
                       <div className="flex gap-2">
                         <Input 
                           placeholder="Nhập hướng giải quyết (VD: Đã hoàn tiền)..." 
