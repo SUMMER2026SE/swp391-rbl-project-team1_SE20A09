@@ -19,8 +19,35 @@ const STATUS_CONFIG = {
   cancelled: { label: "Đã hủy", className: "bg-red-50 text-red-600 border-red-200" },
 } as const;
 
+// UC-CUS-06: Badge cho paymentStatus. refund_pending → cam, refunded → xanh lá.
+const PAYMENT_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  refund_pending: {
+    label: "Chờ hoàn tiền",
+    className: "bg-orange-50 text-orange-700 border-orange-200",
+  },
+  refunded: {
+    label: "Đã hoàn tiền",
+    className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  },
+};
+
 function getStatusBadge(status: BookingHistoryItem["status"]) {
   const config = STATUS_CONFIG[status] || { label: status, className: "bg-slate-50 text-slate-600" };
+  return (
+    <Badge variant="outline" className={`${config.className} font-medium px-2.5 py-0.5 rounded-full`}>
+      {config.label}
+    </Badge>
+  );
+}
+
+/**
+ * UC-CUS-06: Sinh badge paymentStatus khi booking đang chờ hoàn / đã hoàn tiền.
+ * Trả về `null` nếu paymentStatus không thuộc 2 trạng thái refund.
+ */
+function getRefundBadge(paymentStatus?: string) {
+  if (!paymentStatus) return null;
+  const config = PAYMENT_STATUS_CONFIG[paymentStatus.toLowerCase()];
+  if (!config) return null;
   return (
     <Badge variant="outline" className={`${config.className} font-medium px-2.5 py-0.5 rounded-full`}>
       {config.label}
@@ -97,7 +124,10 @@ function BookingCard({ booking, isOwner = false }: { booking: BookingHistoryItem
               <p className="text-sm font-medium text-slate-500">{booking.sportType}</p>
             </div>
           </div>
-          {getStatusBadge(booking.status)}
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            {getStatusBadge(booking.status)}
+            {getRefundBadge(booking.paymentStatus)}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm text-slate-600 sm:grid-cols-2">
