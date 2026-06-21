@@ -103,7 +103,7 @@ public class BookingServiceImpl implements BookingService {
         validateSlotForBooking(slot, stadium, request.getReservationDate());
 
         // Conflict check: 1 slot chỉ có 1 booking active tại một ngày
-        if (bookingRepository.existsByStadium_StadiumIdAndSlot_SlotIdAndReservationDateAndBookingStatusIn(
+        if (bookingRepository.existsActiveBooking(
                 stadium.getStadiumId(),
                 slot.getSlotId(),
                 request.getReservationDate(),

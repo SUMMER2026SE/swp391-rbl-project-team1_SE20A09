@@ -289,11 +289,18 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
      * cho cùng (stadiumId, slotId, reservationDate). CANCELLED / COMPLETED
      * KHÔNG chặn — slot coi như còn trống.
      */
-    boolean existsByStadium_StadiumIdAndSlot_SlotIdAndReservationDateAndBookingStatusIn(
-            Integer stadiumId,
-            Integer slotId,
-            LocalDate reservationDate,
-            List<BookingStatus> statuses);
+    @Query("""
+            SELECT COUNT(b) > 0 FROM Booking b
+            WHERE b.stadium.stadiumId = :stadiumId
+            AND b.slot.slotId = :slotId
+            AND b.reservationDate = :reservationDate
+            AND b.bookingStatus IN :statuses
+            """)
+    boolean existsActiveBooking(
+            @Param("stadiumId") Integer stadiumId,
+            @Param("slotId") Integer slotId,
+            @Param("reservationDate") LocalDate reservationDate,
+            @Param("statuses") List<BookingStatus> statuses);
 
     /**
      * UC-CUS-01: Trả về tập slotId đã có đơn active (PENDING/CONFIRMED) cho

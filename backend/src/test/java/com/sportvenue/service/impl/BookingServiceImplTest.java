@@ -145,7 +145,7 @@ class BookingServiceImplTest {
         when(userRepository.findById(1)).thenReturn(Optional.of(customer));
         when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
         when(timeSlotRepository.findByIdForUpdate(20)).thenReturn(Optional.of(slot));
-        when(bookingRepository.existsByStadium_StadiumIdAndSlot_SlotIdAndReservationDateAndBookingStatusIn(
+        when(bookingRepository.existsActiveBooking(
                 any(), any(), any(), anyList())).thenReturn(false);
         when(accessoryRepository.findById(30)).thenReturn(Optional.of(accessory));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> {
@@ -196,7 +196,7 @@ class BookingServiceImplTest {
         when(userRepository.findById(1)).thenReturn(Optional.of(customer));
         when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
         when(timeSlotRepository.findByIdForUpdate(20)).thenReturn(Optional.of(slot));
-        when(bookingRepository.existsByStadium_StadiumIdAndSlot_SlotIdAndReservationDateAndBookingStatusIn(
+        when(bookingRepository.existsActiveBooking(
                 any(), any(), any(), anyList())).thenReturn(false);
         when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> {
             Booking b = inv.getArgument(0);
@@ -224,7 +224,7 @@ class BookingServiceImplTest {
         when(userRepository.findById(1)).thenReturn(Optional.of(customer));
         when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
         when(timeSlotRepository.findByIdForUpdate(20)).thenReturn(Optional.of(slot));
-        when(bookingRepository.existsByStadium_StadiumIdAndSlot_SlotIdAndReservationDateAndBookingStatusIn(
+        when(bookingRepository.existsActiveBooking(
                 any(), any(), any(), anyList())).thenReturn(true);
 
         assertThrows(DuplicateResourceException.class,
@@ -293,7 +293,7 @@ class BookingServiceImplTest {
         when(userRepository.findById(1)).thenReturn(Optional.of(customer));
         when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
         when(timeSlotRepository.findByIdForUpdate(20)).thenReturn(Optional.of(slot));
-        when(bookingRepository.existsByStadium_StadiumIdAndSlot_SlotIdAndReservationDateAndBookingStatusIn(
+        when(bookingRepository.existsActiveBooking(
                 any(), any(), any(), anyList())).thenReturn(false);
         when(accessoryRepository.findById(999)).thenReturn(Optional.empty());
 
@@ -313,7 +313,7 @@ class BookingServiceImplTest {
         when(userRepository.findById(1)).thenReturn(Optional.of(customer));
         when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
         when(timeSlotRepository.findByIdForUpdate(20)).thenReturn(Optional.of(slot));
-        when(bookingRepository.existsByStadium_StadiumIdAndSlot_SlotIdAndReservationDateAndBookingStatusIn(
+        when(bookingRepository.existsActiveBooking(
                 any(), any(), any(), anyList())).thenReturn(false);
         when(accessoryRepository.findById(30)).thenReturn(Optional.of(accessory));
 
