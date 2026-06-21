@@ -23,4 +23,10 @@ public interface ComplaintService {
     
     /** Owner đóng giải quyết khiếu nại. */
     ComplaintResponse resolveComplaint(Integer complaintId, ResolveComplaintRequest request, String ownerEmail);
+
+    /** Admin lấy toàn bộ khiếu nại trong hệ thống. */
+    List<ComplaintResponse> getAllComplaints();
+
+    /** Admin đóng giải quyết khiếu nại. */
+    ComplaintResponse resolveComplaintByAdmin(Integer complaintId, ResolveComplaintRequest request);
 }
