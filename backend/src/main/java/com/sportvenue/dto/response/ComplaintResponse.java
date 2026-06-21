@@ -19,6 +19,7 @@ public class ComplaintResponse {
     private String against;
     private String description;
     private String status;
+    private String priority;
     private String submittedDate;
     private String resolvedDate;
     private String resolution;

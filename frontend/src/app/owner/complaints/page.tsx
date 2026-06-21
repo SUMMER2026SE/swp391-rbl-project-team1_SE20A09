@@ -41,56 +41,45 @@ type ComplaintResponse = {
 
 type Complaint = {
   id: string;
+  complaintId: number;
   subject: string;
   against: string;
   description: string;
   status: string;
+  priority?: string;
   submittedDate: string;
   responses: ComplaintResponse[];
   resolvedDate?: string;
   resolution?: string;
-  bookingId?: string;
+  bookingId?: number;
 };
 
 const DEFAULT_COMPLAINTS: Complaint[] = [
   {
     id: "CP001",
+    complaintId: 1,
     subject: "Sân không đúng mô tả",
     against: "Sân bóng Thành Công",
     description: "Sân thực tế không giống hình ảnh trên web. Cỏ nhân tạo cũ, bề mặt không bằng phẳng.",
     status: "open",
+    priority: "medium",
     submittedDate: "2026-05-22",
     responses: [],
   },
   {
     id: "CP002",
+    complaintId: 2,
     subject: "Chủ sân không phản hồi",
     against: "Sân bóng Thành Công",
     description: "Đã liên hệ nhiều lần nhưng chủ sân không phản hồi về việc hoàn tiền do hủy sân.",
     status: "in_progress",
+    priority: "high",
     submittedDate: "2026-05-20",
     responses: [
       {
         from: "Admin",
         message: "Chúng tôi đang xem xét khiếu nại của bạn. Sẽ phản hồi trong 24-48h.",
         time: "2026-05-21 10:00",
-      },
-    ],
-  },
-  {
-    id: "CP003",
-    subject: "Yêu cầu hoàn tiền dịch vụ",
-    against: "Sân cầu lông Thành Công",
-    description: "Đã hủy sân trước 48h nhưng chưa nhận được tiền hoàn.",
-    status: "resolved",
-    submittedDate: "2026-05-15",
-    resolvedDate: "2026-05-18",
-    resolution: "Đã xử lý hoàn tiền 100% vào tài khoản. Vui lòng kiểm tra.",
-    responses: [
-      {
-        from: "Chủ sân",
-        message: "Xin lỗi vì sự chậm trễ. Chúng tôi đã xử lý hoàn tiền.",
-        time: "2026-05-18 14:00",
       },
     ],
   },
@@ -113,7 +102,7 @@ function OwnerComplaintsPage() {
         localStorage.setItem('sport_venue_complaints', JSON.stringify(data));
         setSelectedComplaint(prev => {
           if (prev) {
-            return data.find(c => String(c.id) === String(prev.id)) || null;
+            return data.find(c => c.complaintId === prev.complaintId) || null;
           }
           return null;
         });
@@ -141,7 +130,7 @@ function OwnerComplaintsPage() {
     localStorage.setItem('sport_venue_complaints', JSON.stringify(updated));
     setSelectedComplaint(prev => {
       if (prev) {
-        return updated.find(c => String(c.id) === String(prev.id)) || null;
+        return updated.find(c => c.complaintId === prev.complaintId) || null;
       }
       return null;
     });
@@ -151,8 +140,7 @@ function OwnerComplaintsPage() {
     if (!replyMessage.trim() || !selectedComplaint) return;
 
     try {
-      const cleanId = String(selectedComplaint.id).replace("CP", "");
-      await post<unknown>(`/owner/complaints/${cleanId}/reply`, { message: replyMessage.trim() });
+      await post<unknown>(`/owner/complaints/${selectedComplaint.complaintId}/reply`, { message: replyMessage.trim() });
       setReplyMessage("");
       toast.success("Gửi phản hồi thành công!");
       fetchComplaints();
@@ -165,7 +153,7 @@ function OwnerComplaintsPage() {
       };
 
       const updated = complaints.map(c => {
-        if (String(c.id) === String(selectedComplaint.id)) {
+        if (c.complaintId === selectedComplaint.complaintId) {
           const currentStatus = (c.status || "").toLowerCase();
           return {
             ...c,
@@ -186,8 +174,7 @@ function OwnerComplaintsPage() {
     if (!resolutionText.trim() || !selectedComplaint) return;
 
     try {
-      const cleanId = String(selectedComplaint.id).replace("CP", "");
-      await post<unknown>(`/owner/complaints/${cleanId}/resolve`, { resolution: resolutionText.trim() });
+      await post<unknown>(`/owner/complaints/${selectedComplaint.complaintId}/resolve`, { resolution: resolutionText.trim() });
       setResolutionText("");
       setShowResolveDialog(false);
       toast.success("Giải quyết khiếu nại thành công!");
@@ -195,7 +182,7 @@ function OwnerComplaintsPage() {
     } catch (error) {
       console.warn("Backend resolve failed, using local update:", error);
       const updated = complaints.map(c => {
-        if (String(c.id) === String(selectedComplaint.id)) {
+        if (c.complaintId === selectedComplaint.complaintId) {
           return {
             ...c,
             status: "resolved",
@@ -216,18 +203,33 @@ function OwnerComplaintsPage() {
   const getStatusBadge = (status: string) => {
     const s = (status || "").toLowerCase();
     const config = {
-      open: { label: "Mới", className: "bg-yellow-100 text-yellow-700" },
-      in_progress: { label: "Đang xử lý", className: "bg-blue-100 text-blue-700" },
-      resolved: { label: "Đã giải quyết", className: "bg-green-100 text-green-700" },
+      open: { label: "Mới", className: "bg-yellow-50 text-yellow-700 border-yellow-200" },
+      in_progress: { label: "Đang xử lý", className: "bg-blue-50 text-blue-700 border-blue-200" },
+      resolved: { label: "Đã giải quyết", className: "bg-green-50 text-green-700 border-green-200" },
     };
-    const item = config[s as keyof typeof config] || { label: status, className: "bg-gray-100 text-gray-700" };
-    return <Badge className={item.className}>{item.label}</Badge>;
+    const item = config[s as keyof typeof config] || { label: status, className: "bg-gray-50 text-gray-700 border-gray-200" };
+    return <Badge variant="outline" className={item.className}>{item.label}</Badge>;
+  };
+
+  const getPriorityBadge = (priority?: string) => {
+    const p = (priority || "").toLowerCase();
+    const config = {
+      low: { label: "Thấp", className: "bg-gray-100 text-gray-700 border-gray-200" },
+      medium: { label: "Trung bình", className: "bg-orange-100 text-orange-700 border-orange-200" },
+      high: { label: "Cao", className: "bg-red-100 text-red-700 border-red-200" },
+    };
+    const item = config[p as keyof typeof config] || { label: "Trung bình", className: "bg-orange-100 text-orange-700 border-orange-200" };
+    return <Badge variant="outline" className={item.className}>{item.label}</Badge>;
   };
 
   const getFilteredComplaints = () => {
     if (filterStatus === "all") return complaints;
     return complaints.filter(c => c.status === filterStatus);
   };
+
+  const activeComplaint = selectedComplaint 
+    ? complaints.find(c => c.complaintId === selectedComplaint.complaintId) || selectedComplaint
+    : null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -306,9 +308,9 @@ function OwnerComplaintsPage() {
             <div className="lg:col-span-1 space-y-4">
               {getFilteredComplaints().map((c) => (
                 <Card
-                  key={c.id}
+                  key={c.complaintId}
                   className={`cursor-pointer hover:shadow transition-shadow border-l-4 ${
-                    selectedComplaint?.id === c.id
+                    selectedComplaint?.complaintId === c.complaintId
                       ? "border-l-primary bg-primary/5"
                       : c.status === "open"
                       ? "border-l-yellow-500"
@@ -318,10 +320,13 @@ function OwnerComplaintsPage() {
                   }`}
                   onClick={() => setSelectedComplaint(c)}
                 >
-                  <CardContent className="p-4 space-y-2">
+                  <CardContent className="p-4 space-y-2 bg-white">
                     <div className="flex justify-between items-center">
                       <span className="text-xs font-mono text-muted-foreground">{c.id}</span>
-                      {getStatusBadge(c.status)}
+                      <div className="flex gap-1">
+                        {getStatusBadge(c.status)}
+                        {getPriorityBadge(c.priority)}
+                      </div>
                     </div>
                     <h3 className="font-semibold text-sm line-clamp-1">{c.subject}</h3>
                     <p className="text-xs text-muted-foreground">Đối tượng: {c.against}</p>
@@ -331,7 +336,7 @@ function OwnerComplaintsPage() {
               ))}
 
               {getFilteredComplaints().length === 0 && (
-                <div className="text-center p-8 text-muted-foreground">
+                <div className="text-center p-8 text-muted-foreground bg-white border rounded">
                   Không tìm thấy khiếu nại nào.
                 </div>
               )}
@@ -340,13 +345,14 @@ function OwnerComplaintsPage() {
             {/* Right details column */}
             <div className="lg:col-span-2">
               {selectedComplaint ? (
-                <Card className="flex flex-col h-[calc(100vh-220px)]">
+                <Card className="flex flex-col h-[calc(100vh-220px)] bg-white">
                   {/* Detail Header */}
-                  <CardHeader className="border-b bg-card flex flex-row justify-between items-center py-4">
+                  <CardHeader className="border-b bg-card flex flex-row justify-between items-center py-4 px-6">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-mono text-xs text-muted-foreground">{selectedComplaint.id}</span>
                         {getStatusBadge(selectedComplaint.status)}
+                        {getPriorityBadge(selectedComplaint.priority)}
                       </div>
                       <h2 className="text-lg font-bold text-foreground">{selectedComplaint.subject}</h2>
                     </div>
@@ -366,7 +372,7 @@ function OwnerComplaintsPage() {
                   {/* Detail Content & Message list */}
                   <CardContent className="flex-1 overflow-y-auto p-6 space-y-6 bg-muted/5">
                     {/* Customer description */}
-                    <div className="bg-card border rounded-lg p-4 space-y-2 shadow-sm">
+                    <div className="bg-card border rounded-lg p-4 space-y-2 shadow-sm bg-white">
                       <div className="flex justify-between items-center text-xs text-muted-foreground">
                         <span className="font-bold flex items-center gap-1"><User className="h-3.5 w-3.5" /> Khách hàng</span>
                         <span>{new Date(selectedComplaint.submittedDate).toLocaleDateString('vi-VN')}</span>
@@ -375,7 +381,7 @@ function OwnerComplaintsPage() {
                     </div>
 
                     {/* Chat replies */}
-                    {selectedComplaint.responses.length > 0 && (
+                    {selectedComplaint.responses && selectedComplaint.responses.length > 0 && (
                       <div className="space-y-4">
                         <h4 className="text-xs font-bold text-muted-foreground uppercase">Lịch sử phản hồi:</h4>
                         {selectedComplaint.responses.map((res: ComplaintResponse, idx: number) => (
@@ -384,7 +390,7 @@ function OwnerComplaintsPage() {
                             className={`flex flex-col max-w-[85%] rounded-lg p-3 ${
                               res.from === "Chủ sân"
                                 ? "bg-primary text-primary-foreground ml-auto"
-                                : "bg-card border mr-auto"
+                                : "bg-card border mr-auto bg-white"
                             }`}
                           >
                             <span className="text-[10px] font-bold opacity-85 mb-1">{res.from}</span>

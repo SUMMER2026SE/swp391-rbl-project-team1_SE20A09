@@ -1,5 +1,6 @@
 package com.sportvenue.entity;
 
+import com.sportvenue.entity.enums.ComplaintPriority;
 import com.sportvenue.entity.enums.ComplaintStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -64,6 +65,12 @@ public class Complaint implements Serializable {
     /** Nội dung khiếu nại chi tiết. */
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
+
+    /** Mức độ ưu tiên của khiếu nại. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "priority", nullable = false, length = 20)
+    @Builder.Default
+    private ComplaintPriority priority = ComplaintPriority.MEDIUM;
 
     /** Trạng thái xử lý khiếu nại. */
     @Enumerated(EnumType.STRING)

@@ -10,6 +10,8 @@ import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.Complaint;
 import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.User;
+import com.sportvenue.entity.enums.BookingStatus;
+import com.sportvenue.entity.enums.ComplaintPriority;
 import com.sportvenue.entity.enums.ComplaintStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
@@ -79,11 +81,20 @@ public class ComplaintServiceImpl implements ComplaintService {
             throw new BadRequestException("Bạn không có quyền khiếu nại đơn đặt sân này!");
         }
 
+        if (booking.getBookingStatus() != BookingStatus.COMPLETED) {
+            throw new BadRequestException("Bạn chỉ có thể khiếu nại đơn đặt sân đã hoàn thành!");
+        }
+
+        if (complaintRepository.existsByBookingBookingId(request.getBookingId())) {
+            throw new BadRequestException("Đơn đặt sân này đã được khiếu nại trước đó!");
+        }
+
         Complaint complaint = Complaint.builder()
                 .booking(booking)
                 .user(user)
                 .subject(request.getSubject().trim())
                 .content(request.getDescription())
+                .priority(ComplaintPriority.MEDIUM)
                 .status(ComplaintStatus.OPEN)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -212,6 +223,48 @@ public class ComplaintServiceImpl implements ComplaintService {
         return mapToResponse(saved);
     }
 
+    @Transactional
+    @Override
+    public ComplaintResponse closeComplaint(Integer complaintId, String customerEmail) {
+        log.info("Customer {} closing complaintId: {}", customerEmail, complaintId);
+
+        Complaint complaint = complaintRepository.findById(complaintId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khiếu nại ID: " + complaintId));
+
+        User user = userRepository.findByEmail(customerEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng: " + customerEmail));
+
+        if (!complaint.getUser().getUserId().equals(user.getUserId())) {
+            throw new BadRequestException("Bạn không có quyền đóng khiếu nại này!");
+        }
+
+        if (complaint.getStatus() == ComplaintStatus.RESOLVED) {
+            throw new BadRequestException("Khiếu nại này đã được giải quyết trước đó!");
+        }
+
+        List<ComplaintResponse.ResponseItem> items = deserializeResponses(complaint.getResponse());
+        items.add(ComplaintResponse.ResponseItem.builder()
+                .from("Khách hàng")
+                .message("Khách hàng đã đóng khiếu nại.")
+                .time(LocalDateTime.now().format(FORMATTER))
+                .build());
+
+        complaint.setResponse(serializeResponses(items));
+        complaint.setStatus(ComplaintStatus.RESOLVED);
+
+        Complaint saved = complaintRepository.save(complaint);
+
+        notificationService.createNotification(
+                complaint.getBooking().getStadium().getOwner().getUser().getUserId(),
+                "Khiếu nại đã được đóng",
+                "Khách hàng đã tự đóng khiếu nại #" + complaintId,
+                NotificationType.COMPLAINT,
+                String.valueOf(saved.getComplaintId())
+        );
+
+        return mapToResponse(saved);
+    }
+
     private ComplaintResponse mapToResponse(Complaint c) {
         String subject = c.getSubject();
         if (subject == null) {
@@ -240,6 +293,7 @@ public class ComplaintServiceImpl implements ComplaintService {
                 .against(c.getBooking().getStadium().getStadiumName())
                 .description(c.getContent())
                 .status(c.getStatus().name().toLowerCase())
+                .priority(c.getPriority() != null ? c.getPriority().name().toLowerCase() : "medium")
                 .submittedDate(c.getCreatedAt().toLocalDate().toString())
                 .resolvedDate(resolvedDate)
                 .resolution(resolution)

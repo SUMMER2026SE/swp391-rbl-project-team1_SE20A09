@@ -10,6 +10,7 @@ import {
   Calendar,
   Wallet,
   Bell,
+  AlertTriangle,
 } from "lucide-react";
 
 export default function OwnerLayout({
@@ -24,6 +25,7 @@ export default function OwnerLayout({
     { href: "/owner/venues", label: "Sân của tôi", icon: BarChart3 },
     { href: "/owner/bookings", label: "Lịch đặt", icon: Calendar },
     { href: "/owner/revenue", label: "Doanh thu", icon: Wallet },
+    { href: "/owner/complaints", label: "Khiếu nại", icon: AlertTriangle },
     { href: "/owner/notifications", label: "Thông báo", icon: Bell },
   ];
 
