@@ -153,10 +153,12 @@ function AdminDashboardPage() {
                 Danh mục
               </Button>
             </Link>
-            <Button variant="ghost" className="w-full justify-start" size="sm">
-              <AlertCircle className="mr-3 h-4 w-4" />
-              Khiếu nại
-            </Button>
+            <Link href="/admin/complaints" className="block w-full">
+              <Button variant="ghost" className="w-full justify-start" size="sm">
+                <AlertCircle className="mr-3 h-4 w-4" />
+                Khiếu nại
+              </Button>
+            </Link>
             <Button variant="ghost" className="w-full justify-start" size="sm">
               <Settings className="mr-3 h-4 w-4" />
               Cài đặt
