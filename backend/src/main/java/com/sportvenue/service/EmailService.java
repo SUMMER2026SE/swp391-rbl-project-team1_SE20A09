@@ -113,6 +113,50 @@ public class EmailService {
             }
     }
 
+    /**
+     * Gửi email thông báo khóa/mở khóa tài khoản chủ sân.
+     */
+    @Async
+    public void sendAccountStatusNotification(String toEmail, String businessName, boolean isEnabled, String reason) {
+        if (mockMail) {
+            log.warn("=== DEV MAIL MOCK === Account Status Notification for {}: {} ===", toEmail, isEnabled ? "UNLOCKED" : "LOCKED");
+            return;
+        }
+
+        log.info("Preparing to send account status notification email to: {}", toEmail);
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(fromAddress);
+            message.setTo(toEmail);
+            message.setSubject("Thông báo trạng thái tài khoản đối tác — SportVenue");
+
+            String status = isEnabled ? "MỞ KHÓA" : "BỊ KHÓA";
+            String textContent = "Xin chào " + businessName + ",\n\n" +
+                    "Tài khoản đối tác của bạn trên hệ thống SportVenue vừa được " + status + ".\n";
+            
+            if (!isEnabled && StringUtils.hasText(reason)) {
+                textContent += "Lý do khóa: " + reason + "\n\n";
+            } else if (isEnabled && StringUtils.hasText(reason)) {
+                textContent += "Ghi chú: " + reason + "\n\n";
+            }
+
+            if (!isEnabled) {
+                textContent += "Khi tài khoản bị khóa, bạn sẽ không thể đăng nhập và toàn bộ sân thể thao của bạn sẽ tạm thời không nhận đặt lịch mới. Vui lòng liên hệ ban quản trị để biết thêm chi tiết.\n\n";
+            } else {
+                textContent += "Bạn đã có thể đăng nhập bình thường. Chúc bạn kinh doanh thuận lợi!\n\n";
+            }
+
+            textContent += "Trân trọng,\nBan quản trị SportVenue";
+
+            message.setText(textContent);
+
+            mailSender.send(message);
+            log.info("Account status notification email successfully sent to: {}", toEmail);
+        } catch (MailException e) {
+            log.error("Failed to send account status notification email to: {}, error: {}", toEmail, e.getMessage());
+        }
+    }
+
     private String buildOtpEmailBody(String otpCode, int expiryMinutes) {
         return """
                 <!DOCTYPE html>
