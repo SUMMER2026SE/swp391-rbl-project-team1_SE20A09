@@ -36,6 +36,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -450,6 +451,63 @@ public class BookingServiceImpl implements BookingService {
                         ? booking.getBookingStatus().name().toLowerCase()
                         : null)
                 .build();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // UC-CUS-04: Chi tiết đơn đặt sân
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public BookingDetailResponse getBookingDetail(UserPrincipal principal, Integer bookingId) {
+        Booking booking = bookingRepository.findDetailById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy đơn đặt sân với ID " + bookingId));
+
+        Integer currentUserId = principal.getUser().getUserId();
+        if (!booking.getUser().getUserId().equals(currentUserId)) {
+            throw new AccessDeniedException("Bạn không có quyền xem đơn đặt sân này");
+        }
+
+        log.info("🔍 UC-CUS-04: Customer {} xem chi tiết booking #{}", principal.getUser().getEmail(), bookingId);
+        return toBookingDetailResponse(booking, booking.getStadium(), booking.getSlot());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // UC-CUS-05: Huỷ đơn đặt sân
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public void cancelBooking(UserPrincipal principal, Integer bookingId, String reason) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy đơn đặt sân với ID " + bookingId));
+
+        Integer currentUserId = principal.getUser().getUserId();
+        if (!booking.getUser().getUserId().equals(currentUserId)) {
+            throw new AccessDeniedException("Bạn không có quyền huỷ đơn đặt sân này");
+        }
+
+        BookingStatus currentStatus = booking.getBookingStatus();
+        if (currentStatus == BookingStatus.COMPLETED || currentStatus == BookingStatus.CANCELLED) {
+            throw new BadRequestException(
+                    "Không thể huỷ đơn đặt sân ở trạng thái: " + currentStatus.name());
+        }
+
+        booking.setBookingStatus(BookingStatus.CANCELLED);
+        booking.setNote("Khách hàng huỷ: " + (reason != null ? reason : ""));
+        booking.setExpiredAt(null);
+        bookingRepository.save(booking);
+
+        TimeSlot slot = booking.getSlot();
+        if (slot != null && slot.getSlotStatus() == SlotStatus.BOOKED) {
+            slot.setSlotStatus(SlotStatus.AVAILABLE);
+            timeSlotRepository.save(slot);
+        }
+
+        log.info("❌ UC-CUS-05: Customer {} huỷ booking #{} — lý do: {}",
+                principal.getUser().getEmail(), bookingId, reason);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

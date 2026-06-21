@@ -102,4 +102,22 @@ public interface BookingService {
      *         nếu booking đã bị huỷ hoặc đã được xác nhận trước đó.
      */
     BookingDetailResponse confirmPayment(UserPrincipal principal, Integer bookingId);
+
+    /**
+     * UC-CUS-04: Xem chi tiết một đơn đặt sân theo ID.
+     * Chỉ chủ booking mới được xem — trả 403 nếu userId không khớp.
+     *
+     * @throws com.sportvenue.exception.ResourceNotFoundException nếu booking không tồn tại.
+     */
+    BookingDetailResponse getBookingDetail(UserPrincipal principal, Integer bookingId);
+
+    /**
+     * UC-CUS-05: Huỷ đơn đặt sân của customer.
+     * Chỉ huỷ được khi status là PENDING_PAYMENT, PENDING hoặc CONFIRMED.
+     * Không thể huỷ khi đã COMPLETED hoặc đã CANCELLED.
+     *
+     * @throws com.sportvenue.exception.ResourceNotFoundException nếu booking không tồn tại.
+     * @throws com.sportvenue.exception.BadRequestException       nếu không thể huỷ.
+     */
+    void cancelBooking(UserPrincipal principal, Integer bookingId, String reason);
 }
