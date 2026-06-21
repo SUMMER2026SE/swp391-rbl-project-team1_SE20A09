@@ -22,11 +22,8 @@ import org.springframework.stereotype.Service;
 public class AdminOwnerServiceImpl implements AdminOwnerService {
 
     private final OwnerRepository ownerRepository;
-<<<<<<< HEAD
     private final com.sportvenue.repository.StadiumRepository stadiumRepository;
     private final com.sportvenue.service.EmailService emailService;
-=======
->>>>>>> 11355feea15d9e6141d1ca6e33ad80ca0785a4dc
 
     @Override
     public PageResponse<AdminOwnerResponse> getOwners(String search, String accountStatusStr, String approvedStatusStr, int page, int size, String sortBy, String sortDir) {
@@ -83,7 +80,6 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
 
         return response;
     }
-<<<<<<< HEAD
 
     @Override
     @org.springframework.transaction.annotation.Transactional
@@ -114,6 +110,4 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
             log.error("Failed to send notification email", e);
         }
     }
-=======
->>>>>>> 11355feea15d9e6141d1ca6e33ad80ca0785a4dc
 }

@@ -23,10 +23,8 @@ public interface AdminUserService {
      * @return PageResponse chứa danh sách AdminCustomerResponse
      */
     PageResponse<AdminCustomerResponse> getCustomers(String search, AccountStatus accountStatus, Pageable pageable);
-<<<<<<< HEAD
-=======
 
->>>>>>> 11355feea15d9e6141d1ca6e33ad80ca0785a4dc
+
     /**
      * UC-ADM-03: Khoá hoặc mở khoá tài khoản khách hàng.
      * @param id ID của khách hàng

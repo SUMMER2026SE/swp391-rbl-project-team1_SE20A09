@@ -64,18 +64,11 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .createdAt(user.getCreatedAt())
                 .build();
     }
-    @Override
-    @Transactional
-    public void lockUnlockCustomer(Integer id, Boolean enabled, Integer currentAdminId) {
-        log.info("Admin {} requesting to lock/unlock customer id={}, enabled={}", currentAdminId, id, enabled);
 
-<<<<<<< HEAD
-=======
     @Override
     @Transactional
     public void lockUnlockCustomer(Integer id, Boolean enabled, Integer currentAdminId) {
         log.info("Admin {} requesting to lock/unlock customer id={}, enabled={}", currentAdminId, id, enabled);
->>>>>>> 11355feea15d9e6141d1ca6e33ad80ca0785a4dc
 
         if (id.equals(currentAdminId)) {
             throw new com.sportvenue.exception.BadRequestException("Bạn không thể tự khóa tài khoản của chính mình.");

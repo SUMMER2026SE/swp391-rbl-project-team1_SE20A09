@@ -15,10 +15,7 @@ public enum ErrorCode {
     // Resource Errors
     NOTIFICATION_NOT_FOUND(404, "Không tìm thấy thông báo"),
     OWNER_PROFILE_NOT_FOUND(404, "Không tìm thấy hồ sơ chủ sân"),
-<<<<<<< HEAD
     OWNER_PROFILE_NOT_APPROVED(400, "Hồ sơ chủ sân chưa được phê duyệt"),
-=======
->>>>>>> 11355feea15d9e6141d1ca6e33ad80ca0785a4dc
     UNAUTHORIZED(403, "Bạn không có quyền thực hiện hành động này"),
     DUPLICATE_RESOURCE(409, "Dữ liệu đã tồn tại trong hệ thống"),
     INTERNAL_SERVER_ERROR(500, "Lỗi hệ thống không mong muốn");
