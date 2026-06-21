@@ -56,8 +56,7 @@ public final class VNPayUtil {
      */
     private static String urlEncode(String value) {
         try {
-            return URLEncoder.encode(value, StandardCharsets.US_ASCII.name())
-                    .replace("+", "%20");
+            return URLEncoder.encode(value, StandardCharsets.US_ASCII.name());
         } catch (UnsupportedEncodingException ex) {
             throw new RuntimeException(ex);
         }
@@ -75,18 +74,19 @@ public final class VNPayUtil {
                 .collect(Collectors.toList());
 
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < sortedKeys.size(); i++) {
-            String key = sortedKeys.get(i);
+        boolean first = true;
+        for (String key : sortedKeys) {
             String value = params.get(key);
             if (value == null || value.isEmpty()) {
                 continue;
             }
+            if (!first) {
+                sb.append('&');
+            }
             sb.append(urlEncode(key))
               .append('=')
               .append(urlEncode(value));
-            if (i < sortedKeys.size() - 1) {
-                sb.append('&');
-            }
+            first = false;
         }
         return sb.toString();
     }

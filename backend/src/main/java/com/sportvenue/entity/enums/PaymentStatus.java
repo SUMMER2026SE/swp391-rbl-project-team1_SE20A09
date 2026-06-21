@@ -7,5 +7,6 @@ package com.sportvenue.entity.enums;
 public enum PaymentStatus {
     UNPAID,   // Chưa thanh toán
     PAID,     // Đã thanh toán
-    REFUNDED  // Đã hoàn tiền
+    REFUNDED, // Đã hoàn tiền
+    DEPOSITED // Đã đặt cọc
 }

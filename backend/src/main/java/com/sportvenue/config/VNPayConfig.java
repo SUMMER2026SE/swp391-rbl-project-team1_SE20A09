@@ -22,8 +22,26 @@ public class VNPayConfig {
     @Value("${vnpay.url}")
     private String url;
 
+    /**
+     * Return URL mà VNPay gọi về (BE endpoint nhận vnp_* params).
+     * VD: http://localhost:8080/api/v1/payments/vnpay-return.
+     */
     @Value("${vnpay.return-url}")
     private String returnUrl;
+
+    /**
+     * FE URL mà BE redirect browser sang sau khi xử lý callback thành công.
+     * VD: http://localhost:3000/payments/result.
+     */
+    @Value("${vnpay.frontend-return-url:http://localhost:3000/payments/result}")
+    private String frontendReturnUrl;
+
+    /**
+     * IPN URL — VNPay gọi server-to-server để xác nhận thanh toán.
+     * Dev local: cần ngrok tunnel. VD: https://xxxx.ngrok.io/api/v1/payments/vnpay-ipn.
+     */
+    @Value("${vnpay.ipn-url:http://localhost:8080/api/v1/payments/vnpay-ipn}")
+    private String ipnUrl;
 
     @Value("${vnpay.version:2.1.0}")
     private String version;

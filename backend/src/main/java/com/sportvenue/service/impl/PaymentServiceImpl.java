@@ -55,7 +55,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     @Transactional
-    public VnpayPaymentUrlResponse createVnpayPaymentUrl(UserPrincipal principal, Integer bookingId) {
+    public VnpayPaymentUrlResponse createVnpayPaymentUrl(UserPrincipal principal, Integer bookingId, String paymentOption) {
         if (principal == null || principal.getUser() == null || principal.getUser().getUserId() == null) {
             throw new AccessDeniedException("Không xác định được người dùng");
         }
@@ -73,10 +73,17 @@ public class PaymentServiceImpl implements PaymentService {
             throw new AccessDeniedException("Bạn không có quyền thanh toán đơn đặt sân này");
         }
 
-        // 2. Trạng thái booking phải PENDING
-        if (booking.getBookingStatus() != BookingStatus.PENDING) {
+        // 2. Trạng thái booking phải PENDING_PAYMENT — sau khi tạo đơn (UC-CUS-01) booking
+        // ở PENDING_PAYMENT, chờ khách thanh toán qua VNPay. Sau callback thành công sẽ
+        // chuyển sang CONFIRMED ở handleVnpayReturn().
+        if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT) {
             throw new BadRequestException("Đơn này không thể thanh toán (trạng thái hiện tại: "
                     + booking.getBookingStatus() + ")");
+        }
+
+        // 2a. Kiểm tra expiredAt — nếu quá hạn 5 phút thì không cho thanh toán
+        if (booking.getExpiredAt() != null && booking.getExpiredAt().isBefore(LocalDateTime.now())) {
+            throw new BadRequestException("Đơn đặt sân đã hết hạn giữ chỗ — vui lòng đặt lại");
         }
 
         // 3. Tránh double-pay — nếu PaymentStatus đã PAID thì chặn
@@ -92,7 +99,13 @@ public class PaymentServiceImpl implements PaymentService {
         if (totalPrice == null) {
             throw new BadRequestException("Đơn đặt sân chưa có tổng tiền — không thể thanh toán");
         }
-        long amountVnp = totalPrice.multiply(BigDecimal.valueOf(100)).longValueExact();
+        
+        BigDecimal amountToPay = totalPrice;
+        if ("DEPOSIT".equalsIgnoreCase(paymentOption)) {
+            amountToPay = totalPrice.multiply(new BigDecimal("0.3")).setScale(0, java.math.RoundingMode.CEILING);
+        }
+        
+        long amountVnp = amountToPay.multiply(BigDecimal.valueOf(100)).longValueExact();
 
         // 6. Sinh createDate / expireDate theo múi giờ VN
         SimpleDateFormat fmt = new SimpleDateFormat("yyyyMMddHHmmss");
@@ -110,10 +123,10 @@ public class PaymentServiceImpl implements PaymentService {
         String paymentUrl = vnPayConfig.getUrl() + signed;
 
         // 9. Lưu Payment row — transactionCode = txnRef để tra cứu khi return
-        savePayment(booking, totalPrice, txnRef);
+        savePayment(booking, amountToPay, txnRef);
 
         log.info("Đã tạo paymentUrl VNPay cho booking {} — txnRef={}, amount={}",
-                bookingId, txnRef, totalPrice);
+                bookingId, txnRef, amountToPay);
 
         return VnpayPaymentUrlResponse.builder()
                 .paymentUrl(paymentUrl)
@@ -129,7 +142,7 @@ public class PaymentServiceImpl implements PaymentService {
         params.put("vnp_Amount", String.valueOf(amountVnp));
         params.put("vnp_CurrCode", vnPayConfig.getCurrencyCode());
         params.put("vnp_TxnRef", txnRef);
-        params.put("vnp_OrderInfo", "Thanh toan don dat san #" + bookingId);
+        params.put("vnp_OrderInfo", "Thanh toan don dat san so " + bookingId);
         params.put("vnp_OrderType", vnPayConfig.getOrderType());
         params.put("vnp_Locale", vnPayConfig.getLocale());
         params.put("vnp_ReturnUrl", vnPayConfig.getReturnUrl());
@@ -195,7 +208,11 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setPaidAt(LocalDateTime.now());
             if (booking != null) {
                 booking.setBookingStatus(BookingStatus.CONFIRMED);
-                booking.setPaymentStatus(PaymentStatus.PAID);
+                if (payment.getAmount().compareTo(booking.getTotalPrice()) >= 0) {
+                    booking.setPaymentStatus(PaymentStatus.PAID);
+                } else {
+                    booking.setPaymentStatus(PaymentStatus.DEPOSITED);
+                }
                 bookingRepository.save(booking);
             }
             log.info("VNPay thanh toán THÀNH CÔNG — txnRef={}, booking={}",

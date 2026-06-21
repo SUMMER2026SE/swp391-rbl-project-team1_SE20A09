@@ -48,7 +48,8 @@ public class PaymentReturnController {
     }
 
     private RedirectView buildRedirect(boolean success, Integer bookingId, String reason) {
-        StringBuilder sb = new StringBuilder(vnPayConfig.getReturnUrl());
+        // Redirect về FE (frontend-return-url) — không phải BE return-url.
+        StringBuilder sb = new StringBuilder(vnPayConfig.getFrontendReturnUrl());
         sb.append(success ? "?success=true" : "?success=false");
         if (bookingId != null) {
             sb.append("&bookingId=").append(bookingId);

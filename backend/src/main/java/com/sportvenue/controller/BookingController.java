@@ -189,7 +189,8 @@ public class BookingController {
                     + "Số tiền lấy từ booking.totalPrice trong DB, không nhận từ request body.")
     public ResponseEntity<VnpayPaymentUrlResponse> payBooking(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
-            @PathVariable("id") Integer bookingId) {
-        return ResponseEntity.ok(paymentService.createVnpayPaymentUrl(userPrincipal, bookingId));
+            @PathVariable("id") Integer bookingId,
+            @RequestParam(name = "paymentOption", defaultValue = "FULL") String paymentOption) {
+        return ResponseEntity.ok(paymentService.createVnpayPaymentUrl(userPrincipal, bookingId, paymentOption));
     }
 }
