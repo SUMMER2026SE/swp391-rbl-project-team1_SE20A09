@@ -328,6 +328,7 @@ function UserManagementPage() {
             )}
           </SheetContent>
         </Sheet>
+      </div>
     </div>
   );
 }
