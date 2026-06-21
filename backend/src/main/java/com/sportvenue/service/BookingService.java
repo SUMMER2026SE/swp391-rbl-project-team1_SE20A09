@@ -4,6 +4,7 @@ import com.sportvenue.dto.booking.BookingDetailResponse;
 import com.sportvenue.dto.booking.BookingHistoryItemDto;
 import com.sportvenue.dto.request.CreateBookingRequest;
 import com.sportvenue.dto.response.PageResponse;
+import com.sportvenue.dto.response.RefundPreviewResponse;
 import com.sportvenue.dto.response.TimeSlotResponse;
 import com.sportvenue.dto.response.WeeklySlotResponse;
 import com.sportvenue.security.UserPrincipal;
@@ -120,4 +121,22 @@ public interface BookingService {
      * @throws com.sportvenue.exception.BadRequestException       nếu không thể huỷ.
      */
     void cancelBooking(UserPrincipal principal, Integer bookingId, String reason);
+
+    /**
+     * UC-CUS-06: Xem trước số tiền hoàn trước khi huỷ đơn đặt sân.
+     *
+     * <p>Chỉ áp dụng khi {@code bookingStatus == CONFIRMED} và
+     * {@code paymentStatus == PAID} — nếu không sẽ trả
+     * {@link com.sportvenue.exception.BadRequestException}.</p>
+     *
+     * @param principal customer hiện tại (chỉ chủ booking mới xem được).
+     * @param bookingId ID booking cần xem trước.
+     * @return thông tin hoàn tiền dự kiến.
+     * @throws com.sportvenue.exception.ResourceNotFoundException nếu booking không tồn tại.
+     * @throws com.sportvenue.exception.BadRequestException       nếu booking không ở
+     *         trạng thái cho phép xem trước hoàn tiền.
+     * @throws org.springframework.security.access.AccessDeniedException
+     *         nếu user không phải chủ booking.
+     */
+    RefundPreviewResponse previewRefund(UserPrincipal principal, Integer bookingId);
 }

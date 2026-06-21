@@ -5,6 +5,7 @@ import com.sportvenue.dto.booking.BookingHistoryItemDto;
 import com.sportvenue.dto.request.AccessoryItem;
 import com.sportvenue.dto.request.CreateBookingRequest;
 import com.sportvenue.dto.response.PageResponse;
+import com.sportvenue.dto.response.RefundPreviewResponse;
 import com.sportvenue.dto.response.TimeSlotResponse;
 import com.sportvenue.dto.response.WeeklySlotDayDto;
 import com.sportvenue.dto.response.WeeklySlotItemDto;
@@ -31,6 +32,7 @@ import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.BookingService;
+import com.sportvenue.service.RefundCalculator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -83,6 +85,8 @@ public class BookingServiceImpl implements BookingService {
     private final BookingRepository bookingRepository;
     private final AccessoryRepository accessoryRepository;
     private final BookingAccessoryRepository bookingAccessoryRepository;
+    /** UC-CUS-06: Bộ tính hoàn tiền dùng chung (Customer cancel + Owner refund). */
+    private final RefundCalculator refundCalculator;
 
     @Override
     @Transactional
@@ -508,6 +512,61 @@ public class BookingServiceImpl implements BookingService {
 
         log.info("❌ UC-CUS-05: Customer {} huỷ booking #{} — lý do: {}",
                 principal.getUser().getEmail(), bookingId, reason);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // UC-CUS-06: Xem trước hoàn tiền (Customer)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public RefundPreviewResponse previewRefund(UserPrincipal principal, Integer bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy đơn đặt sân với ID " + bookingId));
+
+        // Chỉ chủ booking mới được xem trước — 403 nếu sai.
+        Integer currentUserId = principal.getUser().getUserId();
+        if (booking.getUser() == null || !booking.getUser().getUserId().equals(currentUserId)) {
+            throw new AccessDeniedException("Bạn không có quyền xem đơn đặt sân này");
+        }
+
+        // Chỉ cho phép xem trước khi booking đang CONFIRMED + PAID.
+        if (booking.getBookingStatus() != BookingStatus.CONFIRMED
+                || booking.getPaymentStatus() != PaymentStatus.PAID) {
+            throw new BadRequestException(
+                    "Chỉ có thể xem trước hoàn tiền cho đơn đã xác nhận và đã thanh toán. "
+                            + "Hiện tại: bookingStatus="
+                            + booking.getBookingStatus()
+                            + ", paymentStatus=" + booking.getPaymentStatus());
+        }
+
+        RefundCalculator.RefundResult calc = refundCalculator.calculate(booking);
+        LocalDateTime playTime = LocalDateTime.of(
+                booking.getReservationDate(), booking.getSlot().getStartTime());
+
+        log.info("💸 UC-CUS-06: Customer {} xem trước hoàn tiền booking #{} — {}% = {}",
+                principal.getUser().getEmail(), bookingId,
+                calc.getPercentage(), calc.getAmount());
+
+        return RefundPreviewResponse.builder()
+                .bookingId(booking.getBookingId())
+                .originalAmount(booking.getTotalPrice())
+                .refundAmount(calc.getAmount())
+                .refundPercent(calc.getPercentage())
+                .playTime(playTime)
+                .previewedAt(LocalDateTime.now())
+                .reason(buildRefundReason(calc.getPercentage()))
+                .build();
+    }
+
+    /** Sinh câu giải thích tiếng Việt cho phần trăm hoàn — dùng trong dialog preview. */
+    private String buildRefundReason(int percent) {
+        return switch (percent) {
+            case 100 -> "Huỷ trước 24h: hoàn 100%";
+            case 50 -> "Huỷ trước 12h: hoàn 50%";
+            default -> "Huỷ dưới 12h: không hoàn tiền";
+        };
     }
 
     // ─────────────────────────────────────────────────────────────────────────

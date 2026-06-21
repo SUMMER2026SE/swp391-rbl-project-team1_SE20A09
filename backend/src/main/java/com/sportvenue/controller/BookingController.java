@@ -4,6 +4,7 @@ import com.sportvenue.dto.booking.BookingDetailResponse;
 import com.sportvenue.dto.booking.BookingHistoryItemDto;
 import com.sportvenue.dto.request.CreateBookingRequest;
 import com.sportvenue.dto.response.PageResponse;
+import com.sportvenue.dto.response.RefundPreviewResponse;
 import com.sportvenue.dto.response.TimeSlotResponse;
 import com.sportvenue.dto.response.WeeklySlotResponse;
 import com.sportvenue.security.UserPrincipal;
@@ -175,6 +176,24 @@ public class BookingController {
             @RequestBody Map<String, String> body) {
         bookingService.cancelBooking(userPrincipal, bookingId, body.get("reason"));
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * UC-CUS-06: Xem trước số tiền hoàn trước khi huỷ đơn đặt sân.
+     *
+     * <p>Chỉ áp dụng khi booking đang CONFIRMED + PAID. Trả 400 nếu sai trạng thái,
+     * 403 nếu user không phải chủ booking.</p>
+     */
+    @GetMapping("/api/v1/bookings/{id}/refund/preview")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Xem trước hoàn tiền trước khi huỷ đơn (Customer)",
+            description = "Trả về số tiền hoàn dự kiến dựa trên thời gian hiện tại của server. "
+                    + "Áp dụng quy tắc: huỷ trước 24h → hoàn 100%; trước 12h → 50%; dưới 12h → 0%.")
+    public ResponseEntity<RefundPreviewResponse> previewRefund(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable("id") Integer bookingId) {
+        return ResponseEntity.ok(bookingService.previewRefund(userPrincipal, bookingId));
     }
 
     /**
