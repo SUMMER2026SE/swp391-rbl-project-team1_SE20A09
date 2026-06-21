@@ -5,6 +5,16 @@ import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
 import { IconStar, IconSend, IconLoader2, IconCheck } from '@tabler/icons-react'
 import { getEligibleBookings, createReview, type EligibleBooking } from '@/lib/services/review-api'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface WriteReviewFormProps {
   stadiumId: number
@@ -129,28 +139,32 @@ export default function WriteReviewForm({ stadiumId, onReviewCreated }: WriteRev
       {/* Booking selector — only show if multiple eligible bookings */}
       {eligibleBookings.length > 1 && (
         <div>
-          <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">
+          <Label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">
             Chọn lần đặt sân
-          </label>
-          <select
-            value={selectedBookingId ?? ''}
-            onChange={(e) => setSelectedBookingId(Number(e.target.value))}
-            className="w-full border border-gray-200 rounded-[8px] px-3 py-2 text-[13px] text-gray-700 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#1a8a4a]/30 focus:border-[#1a8a4a]"
+          </Label>
+          <Select
+            value={String(selectedBookingId ?? '')}
+            onValueChange={(value) => setSelectedBookingId(Number(value))}
           >
-            {eligibleBookings.map((b) => (
-              <option key={b.bookingId} value={b.bookingId}>
-                Ngày {new Date(b.reservationDate).toLocaleDateString('vi-VN')} • {b.slotStartTime?.slice(0, 5)} - {b.slotEndTime?.slice(0, 5)}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="w-full text-[13px] bg-gray-50">
+              <SelectValue placeholder="Chọn lần đặt sân..." />
+            </SelectTrigger>
+            <SelectContent>
+              {eligibleBookings.map((b) => (
+                <SelectItem key={b.bookingId} value={String(b.bookingId)}>
+                  Ngày {new Date(b.reservationDate).toLocaleDateString('vi-VN')} • {b.slotStartTime?.slice(0, 5)} - {b.slotEndTime?.slice(0, 5)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       )}
 
       {/* Star rating */}
       <div>
-        <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-2">
+        <Label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-2">
           Đánh giá sao
-        </label>
+        </Label>
         <div className="flex items-center gap-1">
           {[1, 2, 3, 4, 5].map((star) => (
             <button
@@ -180,16 +194,16 @@ export default function WriteReviewForm({ stadiumId, onReviewCreated }: WriteRev
 
       {/* Comment */}
       <div>
-        <label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">
+        <Label className="block text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-1.5">
           Nhận xét
-        </label>
-        <textarea
+        </Label>
+        <Textarea
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           placeholder="Sân sạch sẽ, mặt cỏ tốt, nhân viên phục vụ nhiệt tình..."
           rows={3}
           maxLength={500}
-          className="w-full border border-gray-200 rounded-[8px] px-3 py-2.5 text-[13px] text-gray-700 bg-gray-50 resize-none focus:outline-none focus:ring-2 focus:ring-[#1a8a4a]/30 focus:border-[#1a8a4a] placeholder:text-gray-300"
+          className="text-[13px] bg-gray-50 resize-none placeholder:text-gray-300"
         />
         <div className="flex justify-end mt-1">
           <span className="text-[11px] text-gray-300">{comment.length}/500</span>
@@ -197,23 +211,23 @@ export default function WriteReviewForm({ stadiumId, onReviewCreated }: WriteRev
       </div>
 
       {/* Submit */}
-      <button
+      <Button
         type="submit"
         disabled={submitting || rating === 0 || !comment.trim()}
-        className="w-full flex items-center justify-center gap-2 bg-[#1a8a4a] hover:bg-[#157a3e] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium text-[14px] py-2.5 rounded-[8px] transition-colors"
+        className="w-full bg-[#1a8a4a] hover:bg-[#157a3e] text-white"
       >
         {submitting ? (
           <>
-            <IconLoader2 className="w-4 h-4 animate-spin" />
-            <span>Đang gửi...</span>
+            <IconLoader2 className="w-4 h-4 animate-spin mr-2" />
+            Đang gửi...
           </>
         ) : (
           <>
-            <IconSend className="w-4 h-4" />
-            <span>Gửi đánh giá</span>
+            <IconSend className="w-4 h-4 mr-2" />
+            Gửi đánh giá
           </>
         )}
-      </button>
+      </Button>
     </form>
   )
 }
