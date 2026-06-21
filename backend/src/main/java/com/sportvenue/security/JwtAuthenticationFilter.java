@@ -37,7 +37,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String email = tokenProvider.getEmailFromJWT(jwt);
 
                 UserDetails userDetails = customUserDetailsService.loadUserByUsername(email);
-                
+
                 if (!userDetails.isAccountNonLocked() || !userDetails.isEnabled()) {
                     log.warn("Blocked user {} attempted to authenticate", email);
                     response.setStatus(HttpServletResponse.SC_FORBIDDEN);

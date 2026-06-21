@@ -44,7 +44,6 @@ public class AdminUserServiceImpl implements AdminUserService {
                 .toList());
     }
 
-
     /**
      * Map từ User entity sang AdminCustomerResponse DTO.
      * Không expose password_hash, role_id hay các field nhạy cảm khác.
@@ -69,6 +68,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Transactional
     public void lockUnlockCustomer(Integer id, Boolean enabled, Integer currentAdminId) {
         log.info("Admin {} requesting to lock/unlock customer id={}, enabled={}", currentAdminId, id, enabled);
+
 
         if (id.equals(currentAdminId)) {
             throw new com.sportvenue.exception.BadRequestException("Bạn không thể tự khóa tài khoản của chính mình.");
