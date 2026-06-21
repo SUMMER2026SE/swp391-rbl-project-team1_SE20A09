@@ -31,7 +31,7 @@ export function UpcomingBookingsSection({ bookings }: UpcomingBookingsSectionPro
           subtitle="Theo dõi các buổi chơi sắp diễn ra — đừng bỏ lỡ nhé"
           action={
             <Link
-              href="/bookings"
+              href="/profile?tab=bookings"
               className="inline-flex items-center rounded-full border border-emerald-200 bg-white/80 px-4 py-2 text-sm font-medium text-green-800 shadow-sm backdrop-blur-sm transition-all hover:border-green-400 hover:shadow-md"
             >
               Xem tất cả lịch

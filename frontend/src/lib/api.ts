@@ -59,7 +59,9 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean }
 
-    if ((error.response?.status === 401 || error.response?.status === 403) && !originalRequest._retry) {
+    // Chỉ 401 (Unauthorized) mới đăng xuất — 403 (Forbidden) là lỗi phân quyền,
+    // không phải session expired, KHÔNG được signOut người dùng.
+    if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
       if (typeof window !== 'undefined') {
         localStorage.removeItem('access_token')
@@ -103,7 +105,9 @@ api.interceptors.response.use(
     }
 
     if (error.response?.status === 403) {
-      message = 'Bạn không có quyền truy cập hoặc phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+      // Lỗi phân quyền — KHÔNG signOut, KHÔNG xoá token.
+      // Hiển thị message từ backend (nếu có) hoặc thông báo mặc định.
+      message = data?.message || 'Bạn không có quyền thực hiện hành động này.'
     }
 
     const customError = new Error(message) as Error & { status?: number }
@@ -157,6 +161,15 @@ export async function uploadStadiumImage(file: File): Promise<FileUploadResult> 
   const formData = new FormData()
   formData.append('file', file)
   const res = await api.post<FileUploadResult>('/files/stadium', formData, {
+    timeout: 60_000,
+  })
+  return res.data
+}
+
+export async function uploadDocument(file: File): Promise<FileUploadResult> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await api.post<FileUploadResult>('/files/document', formData, {
     timeout: 60_000,
   })
   return res.data

@@ -47,3 +47,10 @@ docker-data/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# ── Tooling configs (machine-local) ─────────────
+.mcp.json
+GEMINI.md
+.claude/CLAUDE.md
+.claude/settings.json
+.gemini/settings.json

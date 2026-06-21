@@ -8,4 +8,6 @@ public interface SportTypeService {
     List<SportTypeResponse> getAllSportTypes();
 
     SportTypeResponse createSportType(CreateSportTypeRequest request);
+
+    void deleteSportType(Integer id);
 }

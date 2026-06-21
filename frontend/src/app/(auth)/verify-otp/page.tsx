@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
@@ -21,6 +21,10 @@ function VerifyOTPForm() {
   const [isResending, setIsResending] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [countdown, setCountdown] = useState(60);
+  // Detect whether this OTP flow originated from an Owner registration
+  const isOwnerRegistration = typeof window !== "undefined"
+    && sessionStorage.getItem("is_owner_registration") === "true";
+
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -37,10 +41,16 @@ function VerifyOTPForm() {
     try {
       await api.post("/auth/verify-otp", { email, otpCode: otp });
       setIsSuccess(true);
-      toast.success("Xác thực thành công! Đang đăng nhập...");
 
       const savedPassword = sessionStorage.getItem("pending_login_password");
       const savedEmail = sessionStorage.getItem("pending_login_email");
+      const isOwnerRegistration = sessionStorage.getItem("is_owner_registration") === "true";
+
+      if (isOwnerRegistration) {
+        toast.success("Email xác thực thành công! Hồ sơ đang chờ Admin phê duyệt.");
+      } else {
+        toast.success("Xác thực thành công! Đang đăng nhập...");
+      }
 
       if (savedPassword && savedEmail) {
         const result = await signIn("credentials", {
@@ -51,9 +61,14 @@ function VerifyOTPForm() {
 
         sessionStorage.removeItem("pending_login_email");
         sessionStorage.removeItem("pending_login_password");
+        sessionStorage.removeItem("is_owner_registration");
 
         if (result?.error) {
           router.push("/login");
+        } else if (isOwnerRegistration) {
+          // Owner vừa xác thực email → đến profile để xem trạng thái chờ duyệt
+          router.push("/profile?tab=owner&status=pending");
+          router.refresh();
         } else {
           router.push("/");
           router.refresh();
@@ -120,7 +135,9 @@ function VerifyOTPForm() {
           </h1>
           <p className="text-muted-foreground">
             {isSuccess ? (
-              "Tài khoản đã được kích hoạt. Đang đăng nhập..."
+              isOwnerRegistration
+                ? "Email đã xác thực! Đang đưa bạn đến trang hồ sơ..."
+                : "Tài khoản đã được kích hoạt. Đang đăng nhập..."
             ) : (
               <>
                 Chúng tôi đã gửi mã xác thực đến
