@@ -57,4 +57,9 @@ public class BookingHistoryItemDto {
     @Schema(description = "Trạng thái đơn (lowercase)", example = "pending",
             allowableValues = {"pending", "confirmed", "completed", "cancelled"})
     private String status;
+
+    @Schema(description = "UC-CUS-06: Trạng thái thanh toán (lowercase)",
+            example = "paid",
+            allowableValues = {"unpaid", "paid", "refund_pending", "refunded", "deposited", "failed"})
+    private String paymentStatus;
 }

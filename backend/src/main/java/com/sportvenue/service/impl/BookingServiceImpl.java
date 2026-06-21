@@ -454,6 +454,10 @@ public class BookingServiceImpl implements BookingService {
                 .status(booking.getBookingStatus() != null
                         ? booking.getBookingStatus().name().toLowerCase()
                         : null)
+                // UC-CUS-06: trả thêm paymentStatus để FE render badge "Chờ hoàn tiền / Đã hoàn tiền".
+                .paymentStatus(booking.getPaymentStatus() != null
+                        ? booking.getPaymentStatus().name().toLowerCase()
+                        : null)
                 .build();
     }
 

@@ -11,6 +11,8 @@ export type BookingHistoryItem = {
   location: string;
   price: number;
   status: "pending" | "confirmed" | "completed" | "cancelled";
+  /** UC-CUS-06: lowercase enum từ backend (unpaid/paid/refund_pending/refunded/deposited/failed). */
+  paymentStatus?: string;
 };
 
 /** Cấu trúc PageResponse trả về từ backend */
@@ -274,5 +276,26 @@ export async function createBooking(
   payload: CreateBookingPayload
 ): Promise<CreateBookingResponse> {
   return post<CreateBookingResponse>("/bookings", payload);
+}
+
+// ── UC-CUS-06: Customer xem trước hoàn tiền trước khi huỷ đơn ───────────────
+
+/** Kết quả trả về từ {@code GET /api/v1/bookings/{id}/refund/preview}. */
+export type RefundPreview = {
+  bookingId: number;
+  originalAmount: number;
+  refundAmount: number;
+  refundPercent: number;
+  playTime: string;
+  previewedAt: string;
+  reason: string;
+};
+
+/**
+ * Lấy số tiền hoàn dự kiến trước khi huỷ đơn đặt sân.
+ * Trả 400 nếu booking không ở trạng thái CONFIRMED + PAID.
+ */
+export async function fetchRefundPreview(bookingId: string | number): Promise<RefundPreview> {
+  return get<RefundPreview>(`/bookings/${bookingId}/refund/preview`);
 }
 
