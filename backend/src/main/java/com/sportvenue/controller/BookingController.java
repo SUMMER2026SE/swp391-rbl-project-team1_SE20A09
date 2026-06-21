@@ -2,6 +2,7 @@ package com.sportvenue.controller;
 
 import com.sportvenue.dto.booking.BookingDetailResponse;
 import com.sportvenue.dto.booking.BookingHistoryItemDto;
+import com.sportvenue.dto.request.CancelBookingRequest;
 import com.sportvenue.dto.request.CreateBookingRequest;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.dto.response.TimeSlotResponse;
@@ -21,6 +22,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -137,5 +139,32 @@ public class BookingController {
             @RequestParam(required = false) String status) {
         return ResponseEntity.ok(
                 bookingService.getMyBookings(userPrincipal, page, size, status));
+    }
+
+    /**
+     * UC-CUS-03: Hủy một đơn đặt sân — Customer (chủ booking) hoặc Owner (chủ sân) đều có thể gọi.
+     *
+     * <p>Body {@link CancelBookingRequest} mang {@code reason} (lý do hủy, không bắt buộc,
+     * tối đa 255 ký tự). Server kiểm tra quyền ở tầng service — nếu user không phải
+     * customer/owner của booking sẽ trả 400.</p>
+     *
+     * <p>Trả về {@link BookingDetailResponse} của booking sau khi hủy để FE đồng bộ UI.</p>
+     */
+    @PutMapping("/api/v1/bookings/{id}/cancel")
+    @PreAuthorize("hasAnyRole('Customer', 'Owner')")
+    @Operation(
+            summary = "Hủy đơn đặt sân (Customer hoặc Owner)",
+            description = "Đổi booking sang CANCELLED và lưu lý do (nếu có). "
+                    + "Customer chỉ được hủy booking của mình; Owner chỉ được hủy booking của sân mình quản lý. "
+                    + "Trả 400 nếu booking đã COMPLETED hoặc CANCELLED, "
+                    + "hoặc người gọi không có quyền với booking này.")
+    public ResponseEntity<BookingDetailResponse> cancelBooking(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable("id") Integer bookingId,
+            @Valid @RequestBody(required = false) CancelBookingRequest request) {
+        String reason = request != null ? request.getReason() : null;
+        BookingDetailResponse response = bookingService.cancelBooking(
+                userPrincipal, bookingId, reason);
+        return ResponseEntity.ok(response);
     }
 }
