@@ -45,6 +45,8 @@ public class SecurityConfig {
             "/api/v1/public/stadiums/**",
             "/api/v1/public/amenities/**",
             "/api/v1/sport-types/**",
+            // UC-CUS-01: weekly grid endpoint — guest xem trước lịch tuần khi chưa login.
+            "/api/v1/stadiums/*/weekly-slots",
             "/actuator/health",
             "/actuator/info",
             "/swagger-ui.html",

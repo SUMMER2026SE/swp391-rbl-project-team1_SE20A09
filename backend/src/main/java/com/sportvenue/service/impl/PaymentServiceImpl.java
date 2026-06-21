@@ -24,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
@@ -104,6 +103,25 @@ public class PaymentServiceImpl implements PaymentService {
         String expireDate = fmt.format(expire);
 
         // 7. Build tham số VNPay — alphabet order tự động áp dụng trong buildSignedQuery
+        Map<String, String> params = buildVnpParams(txnRef, amountVnp, createDate, expireDate, bookingId);
+
+        // 8. Ký và ghép URL
+        String signed = VNPayUtil.buildSignedQuery(params, vnPayConfig.getHashSecret());
+        String paymentUrl = vnPayConfig.getUrl() + signed;
+
+        // 9. Lưu Payment row — transactionCode = txnRef để tra cứu khi return
+        savePayment(booking, totalPrice, txnRef);
+
+        log.info("Đã tạo paymentUrl VNPay cho booking {} — txnRef={}, amount={}",
+                bookingId, txnRef, totalPrice);
+
+        return VnpayPaymentUrlResponse.builder()
+                .paymentUrl(paymentUrl)
+                .build();
+    }
+
+    private Map<String, String> buildVnpParams(String txnRef, long amountVnp, String createDate,
+                                               String expireDate, Integer bookingId) {
         Map<String, String> params = new LinkedHashMap<>();
         params.put("vnp_Version", vnPayConfig.getVersion());
         params.put("vnp_Command", vnPayConfig.getCommand());
@@ -118,12 +136,10 @@ public class PaymentServiceImpl implements PaymentService {
         params.put("vnp_IpAddr", resolveClientIp());
         params.put("vnp_CreateDate", createDate);
         params.put("vnp_ExpireDate", expireDate);
+        return params;
+    }
 
-        // 8. Ký và ghép URL
-        String signed = VNPayUtil.buildSignedQuery(params, vnPayConfig.getHashSecret());
-        String paymentUrl = vnPayConfig.getUrl() + signed;
-
-        // 9. Lưu Payment row — transactionCode = txnRef để tra cứu khi return
+    private void savePayment(Booking booking, BigDecimal totalPrice, String txnRef) {
         Payment payment = Payment.builder()
                 .booking(booking)
                 .paymentMethod(PaymentMethod.VNPAY)
@@ -133,13 +149,6 @@ public class PaymentServiceImpl implements PaymentService {
                 .paidAt(null)
                 .build();
         paymentRepository.save(payment);
-
-        log.info("Đã tạo paymentUrl VNPay cho booking {} — txnRef={}, amount={}",
-                bookingId, txnRef, totalPrice);
-
-        return VnpayPaymentUrlResponse.builder()
-                .paymentUrl(paymentUrl)
-                .build();
     }
 
     @Override

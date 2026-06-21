@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { CreditCard, Building2, Smartphone, Shield, Clock } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
+import { createBooking } from "@/lib/bookings-api";
 
 interface BookingSummary {
   venueId: number;
@@ -22,16 +23,34 @@ interface BookingSummary {
   date: string;
   time: string;
   venuePrice: number;
-  accessories: { name: string; quantity: number; price: number }[];
+  accessories: { accessoryId?: number; name: string; quantity: number; price: number }[];
   accessoryTotal: number;
   total: number;
+  slotId: number;
+}
+
+/**
+ * UC-CUS-01: Parse ngày ISO yyyy-MM-dd theo LOCAL time thay vì UTC.
+ *
+ * <p>{@code new Date("2026-06-25")} bị JS hiểu là UTC midnight, nên ở GMT-7 hiển thị
+ * ngày 24 tháng 6. Dùng {@code new Date(y, m-1, d)} để hiển thị đúng ngày local.</p>
+ */
+function parseIsoDateAsLocal(iso: string): Date {
+  const parts = iso.split("-").map(Number);
+  const y = parts[0];
+  const m = parts[1];
+  const d = parts[2];
+  return new Date(y, m - 1, d);
 }
 
 function PaymentContent() {
   const router = useRouter();
   const [paymentMethod, setPaymentMethod] = useState("bank");
-  const [countdown, setCountdown] = useState(300);
   const [summary, setSummary] = useState<BookingSummary | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [bookingId, setBookingId] = useState<number | null>(null);
+  const [expiredAt, setExpiredAt] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   useEffect(() => {
     const data = sessionStorage.getItem("booking_summary");
@@ -44,17 +63,25 @@ function PaymentContent() {
     }
   }, []);
 
+  // Countdown driven by expiredAt từ backend — KHÔNG dùng local timer cứng.
   useEffect(() => {
-    if (countdown <= 0) {
-      toast.error("Hết thời gian giữ sân! Vui lòng chọn lại.");
-      router.push("/search");
+    if (!expiredAt) {
       return;
     }
-    const timer = setInterval(() => {
-      setCountdown((prev) => prev - 1);
-    }, 1000);
+    const updateCountdown = () => {
+      const ms = new Date(expiredAt).getTime() - Date.now();
+      const secs = Math.max(0, Math.floor(ms / 1000));
+      setCountdown(secs);
+      if (secs <= 0) {
+        toast.error("Hết thời gian giữ sân! Vui lòng chọn lại.");
+        sessionStorage.removeItem("booking_summary");
+        router.push("/search");
+      }
+    };
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
     return () => clearInterval(timer);
-  }, [countdown, router]);
+  }, [expiredAt, router]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -62,12 +89,72 @@ function PaymentContent() {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handlePaymentSubmit = () => {
-    toast.success("Thanh toán thành công! Sân của bạn đã được đặt.");
-    // Clear session storage
-    sessionStorage.removeItem("booking_summary");
-    // Redirect to profile bookings tab
-    router.push("/profile?tab=bookings");
+  const handlePaymentSubmit = async () => {
+    if (!activeSummary) return;
+
+    if (!activeSummary.slotId) {
+      toast.error("Không tìm thấy thông tin khung giờ đã chọn. Vui lòng thử lại.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const accessoriesPayload = activeSummary.accessories
+        .filter((a) => typeof a.accessoryId === "number")
+        .map((a) => ({
+          accessoryId: a.accessoryId as number,
+          quantity: a.quantity,
+        }));
+
+      const created = await createBooking({
+        stadiumId: activeSummary.venueId,
+        slotId: activeSummary.slotId,
+        reservationDate: activeSummary.date,
+        note: `Đặt qua web - PTTT: ${
+          paymentMethod === "bank"
+            ? "Chuyển khoản"
+            : paymentMethod === "vnpay"
+            ? "VNPay"
+            : "MoMo"
+        }`,
+        accessories: accessoriesPayload.length > 0 ? accessoriesPayload : undefined,
+      });
+
+      // Lưu bookingId + expiredAt để chạy countdown từ API thay vì local timer.
+      setBookingId(created.bookingId);
+      const apiExpiredAt = (created as { expiredAt?: string }).expiredAt;
+      if (apiExpiredAt) {
+        setExpiredAt(apiExpiredAt);
+      }
+
+      toast.success("Sân đã được giữ — vui lòng hoàn tất thanh toán trong 5 phút.");
+    } catch (err: any) {
+      console.error("Booking failed:", err);
+      const serverMsg = err?.message ?? "Đặt sân thất bại. Vui lòng thử lại.";
+      toast.error(serverMsg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleFinalizePayment = async () => {
+    if (!bookingId) {
+      toast.error("Không tìm thấy booking. Vui lòng đặt lại.");
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      const { post } = await import("@/lib/api");
+      await post(`/bookings/${bookingId}/confirm-payment`, {});
+      toast.success("Thanh toán thành công! Sân của bạn đã được đặt.");
+      sessionStorage.removeItem("booking_summary");
+      router.push("/profile?tab=bookings");
+    } catch (err: any) {
+      console.error("Confirm payment failed:", err);
+      toast.error(err?.message ?? "Xác nhận thanh toán thất bại.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Default fallback if session data is missing
@@ -95,18 +182,20 @@ function PaymentContent() {
         <div className="max-w-3xl mx-auto">
           <h1 className="text-3xl font-bold mb-8">Thanh toán</h1>
 
-          {/* Timer Notice */}
-          <Card className="mb-6 border-emerald-200 bg-emerald-50/50 shadow-none">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3 text-emerald-800">
-                <Clock className="h-5 w-5 text-emerald-600 animate-pulse" />
-                <span className="text-sm md:text-base font-medium">
-                  Sân sẽ được giữ trong{" "}
-                  <strong className="text-lg text-emerald-600 font-bold">{formatTime(countdown)}</strong> phút
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Timer Notice — driven by expiredAt from API */}
+          {countdown !== null && (
+            <Card className="mb-6 border-emerald-200 bg-emerald-50/50 shadow-none">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3 text-emerald-800">
+                  <Clock className="h-5 w-5 text-emerald-600 animate-pulse" />
+                  <span className="text-sm md:text-base font-medium">
+                    Sân sẽ được giữ trong{" "}
+                    <strong className="text-lg text-emerald-600 font-bold">{formatTime(countdown)}</strong>
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Order Summary */}
           <Card className="mb-6 shadow-sm border-gray-150">
@@ -124,7 +213,7 @@ function PaymentContent() {
               <div className="flex flex-col gap-1 text-sm bg-gray-50 p-3 rounded-lg border border-gray-100">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Ngày đặt:</span>
-                  <span className="font-medium">{new Date(activeSummary.date).toLocaleDateString("vi-VN", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                  <span className="font-medium">{parseIsoDateAsLocal(activeSummary.date).toLocaleDateString("vi-VN", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Khung giờ:</span>
@@ -232,12 +321,17 @@ function PaymentContent() {
             </CardContent>
           </Card>
 
-          <Button 
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-6 rounded-lg text-lg shadow-sm transition-all" 
+          <Button
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-6 rounded-lg text-lg shadow-sm transition-all"
             size="lg"
-            onClick={handlePaymentSubmit}
+            onClick={bookingId ? handleFinalizePayment : handlePaymentSubmit}
+            disabled={isSubmitting}
           >
-            Thanh toán ngay
+            {isSubmitting
+              ? "Đang xử lý..."
+              : bookingId
+              ? "Xác nhận thanh toán"
+              : "Tạo đơn và giữ sân"}
           </Button>
 
           {/* Security Notice */}

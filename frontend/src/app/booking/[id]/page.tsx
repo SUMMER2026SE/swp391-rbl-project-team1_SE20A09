@@ -140,7 +140,7 @@ export default function BookingDetailPage() {
             <h2 className="text-2xl font-bold text-slate-900 mb-2">Lỗi tải dữ liệu</h2>
             <p className="text-slate-500 font-medium max-w-xs">{error || 'Không tìm thấy đơn đặt sân'}</p>
           </div>
-          <Button onClick={() => router.push('/bookings')} variant="outline" className="rounded-xl px-8 border-slate-200">
+          <Button onClick={() => router.push('/profile?tab=bookings')} variant="outline" className="rounded-xl px-8 border-slate-200">
             Quay lại danh sách
           </Button>
         </div>
@@ -157,7 +157,7 @@ export default function BookingDetailPage() {
         {/* Breadcrumb & Navigation */}
         <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2 text-sm text-slate-500 font-semibold">
-            <Link href="/bookings" className="hover:text-primary transition-colors">Lịch sử đặt sân</Link>
+            <Link href="/profile?tab=bookings" className="hover:text-primary transition-colors">Lịch sử đặt sân</Link>
             <span className="text-slate-300">/</span>
             <span className="text-slate-800">{booking.displayId}</span>
           </div>
