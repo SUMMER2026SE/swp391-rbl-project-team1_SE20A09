@@ -53,4 +53,8 @@ public interface UserRepository extends JpaRepository<User, Integer> {
             @Param("accountStatus") AccountStatus accountStatus,
             Pageable pageable
     );
+
+    @Query("SELECT COUNT(u) FROM User u WHERE u.role.roleName = :roleName")
+    long countByRoleName(@Param("roleName") String roleName);
 }
+

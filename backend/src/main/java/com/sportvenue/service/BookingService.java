@@ -104,6 +104,15 @@ public interface BookingService {
     BookingDetailResponse confirmPayment(UserPrincipal principal, Integer bookingId);
 
     /**
+    /**
+     * UC-CUS-04: Xem chi tiết một đơn đặt sân theo ID.
+     * Chỉ chủ booking mới được xem — trả 403 nếu userId không khớp.
+     *
+     * @throws com.sportvenue.exception.ResourceNotFoundException nếu booking không tồn tại.
+     */
+    BookingDetailResponse getBookingDetail(UserPrincipal principal, Integer bookingId);
+
+    /**
      * UC-CUS-03: Hủy một đơn đặt sân — Customer (chủ booking) hoặc Owner (chủ sân) đều có thể gọi.
      *
      * <p>Quy tắc nghiệp vụ:</p>

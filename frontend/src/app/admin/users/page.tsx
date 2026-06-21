@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -156,8 +157,9 @@ function UserManagementPage() {
   );
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl mb-8">Quản lý người dùng</h1>
+    <div className="p-8">
+      <div className="container mx-auto">
+        <h1 className="text-3xl mb-8">Quản lý người dùng</h1>
 
         <Tabs defaultValue="customers">
           <div className="flex items-center justify-between mb-6">
@@ -326,6 +328,7 @@ function UserManagementPage() {
             )}
           </SheetContent>
         </Sheet>
+      </div>
     </div>
   );
 }

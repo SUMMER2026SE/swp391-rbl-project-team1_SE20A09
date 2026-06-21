@@ -10,27 +10,14 @@ import { stadiumService } from "@/lib/services/stadium";
 import { StadiumResponse } from "@/types/stadium";
 import { toast } from "sonner";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+
 import Image from "next/image";
 
 export default function StadiumApprovalPage() {
-  const router = useRouter();
-  const { data: session, status: sessionStatus } = useSession();
   const [stadiums, setStadiums] = useState<StadiumResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("PENDING");
-
-  // Authentication guard
-  useEffect(() => {
-    if (sessionStatus === "unauthenticated") {
-      router.replace("/login");
-    } else if (sessionStatus === "authenticated" && session?.user?.roleName !== "Admin") {
-      toast.error("Bạn không có quyền truy cập trang này");
-      router.replace("/");
-    }
-  }, [sessionStatus, session, router]);
 
   const fetchStadiums = (status: string) => {
     setLoading(true);
@@ -41,10 +28,8 @@ export default function StadiumApprovalPage() {
   };
 
   useEffect(() => {
-    if (sessionStatus === "authenticated" && session?.user?.roleName === "Admin") {
-      fetchStadiums(activeTab);
-    }
-  }, [sessionStatus, session, activeTab]);
+    fetchStadiums(activeTab);
+  }, [activeTab]);
 
   const handleApprove = async (stadiumId: number) => {
     setActionLoadingId(stadiumId);
@@ -166,7 +151,7 @@ export default function StadiumApprovalPage() {
     </Card>
   );
 
-  if (sessionStatus === "loading" || loading) {
+  if (loading) {
     return (
       <div className="flex justify-center items-center py-20">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -181,9 +166,6 @@ export default function StadiumApprovalPage() {
             <h1 className="text-3xl font-bold">Duyệt sân thể thao</h1>
             <p className="text-muted-foreground mt-1">Review and approve new sport venues or changes.</p>
           </div>
-          <Button variant="outline" onClick={() => router.push("/admin/dashboard")}>
-            Quay lại Dashboard
-          </Button>
         </div>
 
         <Tabs value={activeTab.toLowerCase()} onValueChange={(val) => setActiveTab(val.toUpperCase())}>

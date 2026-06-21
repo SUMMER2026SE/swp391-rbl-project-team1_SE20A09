@@ -121,17 +121,17 @@ export default function WeeklySchedule({ stadiumId, onSlotSelect }: WeeklySchedu
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-[11px] text-gray-400 font-medium px-0.5">
-        <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-[#1a8a4a]" />
+      <div className="flex items-center gap-6 text-sm text-gray-500 font-medium px-1 py-1">
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#1a8a4a]" />
           <span>Còn trống</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-[#8a1c1c]" />
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-[#8a1c1c]" />
           <span>Đã đặt</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-gray-300" />
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-gray-300" />
           <span>Đã qua</span>
         </div>
       </div>
@@ -147,21 +147,21 @@ export default function WeeklySchedule({ stadiumId, onSlotSelect }: WeeklySchedu
         </div>
       ) : (
         <div className="overflow-x-auto -mx-1 px-1">
-          <table className="w-full border-separate border-spacing-1 min-w-[640px]">
+          <table className="w-full border-separate border-spacing-1 min-w-[860px]">
             <thead>
               <tr>
-                <th className="w-[80px] text-[10px] text-gray-400 font-medium text-left pl-1 pr-1 pb-1">
+                <th className="w-[90px] min-w-[90px] text-sm text-gray-500 font-semibold text-left pl-2 pr-2 pb-3 pt-2 align-bottom">
                   Giờ
                 </th>
                 {days.map((day) => (
                   <th
                     key={day.date}
-                    className="text-center align-bottom pb-1.5 px-0.5 min-w-[78px]"
+                    className="text-center align-bottom pb-3 pt-2 px-3 min-w-[100px]"
                   >
-                    <div className="text-[11px] font-medium text-gray-700 leading-tight">
+                    <div className="text-sm font-semibold text-gray-700 leading-tight">
                       {day.dayName}
                     </div>
-                    <div className="text-[10px] text-gray-400 font-normal leading-tight mt-0.5">
+                    <div className="text-[13px] text-gray-500 font-medium leading-tight mt-1">
                       {formatDayShort(day.date)}
                     </div>
                   </th>
@@ -171,7 +171,7 @@ export default function WeeklySchedule({ stadiumId, onSlotSelect }: WeeklySchedu
             <tbody>
               {uniqueTimeRows.map((time) => (
                 <tr key={time.startTime}>
-                  <td className="text-[11px] text-gray-500 font-medium align-middle pl-1 pr-1 py-0.5 whitespace-nowrap">
+                  <td className="text-[13px] text-gray-600 font-semibold align-middle pl-3 pr-3 py-2 whitespace-nowrap">
                     {time.startTime}–{time.endTime}
                   </td>
                   {days.map((day) => {
@@ -207,7 +207,7 @@ interface SlotCellProps {
 function SlotCell({ slot, date, onPick }: SlotCellProps) {
   if (!slot) {
     return (
-      <div className="h-[44px] rounded-[6px] bg-gray-50 border-[0.5px] border-gray-100 flex items-center justify-center text-[10px] text-gray-300">
+      <div className="min-h-[48px] h-[48px] rounded-[6px] bg-gray-50 border-[0.5px] border-gray-100 flex items-center justify-center text-[13px] text-gray-300">
         —
       </div>
     )
@@ -217,7 +217,7 @@ function SlotCell({ slot, date, onPick }: SlotCellProps) {
     return (
       <div
         aria-disabled
-        className="h-[44px] rounded-[6px] bg-[#fdf0f0] border-[0.5px] border-[#f5b7b7] flex items-center justify-center text-[11px] font-medium text-[#8a1c1c] select-none cursor-not-allowed"
+        className="min-h-[48px] h-[48px] rounded-[6px] bg-[#fdf0f0] border-[0.5px] border-[#f5b7b7] flex items-center justify-center px-3 text-[13px] font-medium text-[#8a1c1c] select-none cursor-not-allowed"
       >
         Đã đặt
       </div>
@@ -228,7 +228,7 @@ function SlotCell({ slot, date, onPick }: SlotCellProps) {
     return (
       <div
         aria-disabled
-        className="h-[44px] rounded-[6px] bg-gray-50 border-[0.5px] border-gray-200 flex items-center justify-center text-[11px] font-medium text-gray-400 select-none cursor-not-allowed"
+        className="min-h-[48px] h-[48px] rounded-[6px] bg-gray-50 border-[0.5px] border-gray-200 flex items-center justify-center px-3 text-[13px] font-medium text-gray-400 select-none cursor-not-allowed"
       >
         Đã qua
       </div>
@@ -240,13 +240,13 @@ function SlotCell({ slot, date, onPick }: SlotCellProps) {
     <button
       type="button"
       onClick={() => onPick(slot.slotId, date)}
-      className="h-[44px] w-full rounded-[6px] bg-[#e8f7ee] border-[0.5px] border-[#9eddb6] flex flex-col items-center justify-center cursor-pointer hover:bg-[#d4f0e2] active:bg-[#c0e8d2] transition-colors group"
+      className="min-h-[48px] h-[48px] w-full rounded-[6px] bg-[#e8f7ee] border-[0.5px] border-[#9eddb6] flex flex-col items-center justify-center px-3 cursor-pointer hover:bg-[#d4f0e2] active:bg-[#c0e8d2] transition-colors group"
       aria-label={`Đặt slot ${slot.startTime}-${slot.endTime} ngày ${date}`}
     >
-      <span className="text-[11px] font-medium text-[#0d5c2e] leading-none">
+      <span className="text-[13px] font-semibold text-[#0d5c2e] leading-none">
         {slot.price.toLocaleString('vi-VN')}đ
       </span>
-      <span className="text-[9px] text-[#1a8a4a] font-normal mt-0.5 leading-none opacity-0 group-hover:opacity-100 transition-opacity">
+      <span className="text-[11px] text-[#1a8a4a] font-medium mt-1 leading-none opacity-0 group-hover:opacity-100 transition-opacity">
         Đặt ngay
       </span>
     </button>

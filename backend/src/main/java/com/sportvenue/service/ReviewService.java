@@ -20,10 +20,8 @@ public interface ReviewService {
 
     ReviewResponse replyToReview(Integer reviewId, String replyMessage, String ownerEmail);
 
-    /**
-     * UC-CUS-07: Lấy danh sách booking COMPLETED mà chưa được review cho một sân cụ thể.
-     * Dùng để FE xác định user có đủ điều kiện viết review hay không.
-     */
+    ReviewResponse updateReview(Integer reviewId, CreateReviewRequest request, String userEmail);
+
     List<EligibleBookingResponse> getEligibleBookingsForReview(
             Integer stadiumId, String userEmail);
 }

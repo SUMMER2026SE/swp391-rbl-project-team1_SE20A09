@@ -36,9 +36,21 @@ function getActionButtons(
 ) {
   if (isOwner) {
     return (
-      <Button asChild className="rounded-xl w-full sm:w-auto" variant="outline">
-        <Link href={`/owner/bookings/${booking.id}`}>Xem chi tiết</Link>
-      </Button>
+      <>
+        <Button asChild className="rounded-xl w-full sm:w-auto" variant="outline">
+          <Link href={`/owner/bookings/${booking.id}`}>Xem chi tiết</Link>
+        </Button>
+        {(booking.status === "pending" || booking.status === "confirmed") && (
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-xl px-6 w-full sm:w-auto font-medium border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+            onClick={() => onRequestCancel(booking.id)}
+          >
+            Hủy đơn
+          </Button>
+        )}
+      </>
     );
   }
 

@@ -133,7 +133,7 @@ export type BookingDetailItem = {
   endTime: string;
   address: string;
   totalPrice: number;
-  status: "pending" | "confirmed" | "completed" | "cancelled";
+  status: "pending" | "pending_payment" | "confirmed" | "completed" | "cancelled";
   paymentStatus: string;
   createdAt: string;
   note: string | null;
@@ -290,11 +290,11 @@ export async function createBooking(
  */
 export async function cancelBooking(
   bookingId: number,
-  reason: string
+  reason: string | undefined
 ): Promise<CreateBookingResponse> {
-  return put<CreateBookingResponse>(
+  return post<CreateBookingResponse>(
     `/bookings/${bookingId}/cancel`,
-    { reason: reason ?? null }
+    { reason: reason || null }
   );
 }
 

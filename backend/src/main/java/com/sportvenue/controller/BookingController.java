@@ -19,13 +19,17 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.sportvenue.dto.response.VnpayPaymentUrlResponse;
+import com.sportvenue.service.PaymentService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
+
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+
 
 import java.time.LocalDate;
 import java.util.List;
@@ -48,6 +52,7 @@ import java.util.List;
 public class BookingController {
 
     private final BookingService bookingService;
+    private final PaymentService paymentService;
 
     @PostMapping("/api/v1/bookings")
     @PreAuthorize("hasRole('Customer')")
@@ -142,6 +147,22 @@ public class BookingController {
     }
 
     /**
+    /**
+     * UC-CUS-04: Xem chi tiết một đơn đặt sân theo ID.
+     * Chỉ chủ booking mới được xem — 403 nếu không phải.
+     */
+    @GetMapping("/api/v1/bookings/{id}")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Chi tiết đơn đặt sân",
+            description = "Xem chi tiết một đơn đặt sân theo ID. Chỉ chủ booking mới được truy cập.")
+    public ResponseEntity<BookingDetailResponse> getBookingDetail(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable("id") Integer bookingId) {
+        return ResponseEntity.ok(bookingService.getBookingDetail(userPrincipal, bookingId));
+    }
+
+    /**
      * UC-CUS-03: Hủy một đơn đặt sân — Customer (chủ booking) hoặc Owner (chủ sân) đều có thể gọi.
      *
      * <p>Body {@link CancelBookingRequest} mang {@code reason} (lý do hủy, không bắt buộc,
@@ -150,7 +171,7 @@ public class BookingController {
      *
      * <p>Trả về {@link BookingDetailResponse} của booking sau khi hủy để FE đồng bộ UI.</p>
      */
-    @PutMapping("/api/v1/bookings/{id}/cancel")
+    @PostMapping("/api/v1/bookings/{id}/cancel")
     @PreAuthorize("hasAnyRole('Customer', 'Owner')")
     @Operation(
             summary = "Hủy đơn đặt sân (Customer hoặc Owner)",
@@ -166,5 +187,23 @@ public class BookingController {
         BookingDetailResponse response = bookingService.cancelBooking(
                 userPrincipal, bookingId, reason);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * UC-CUS-02: Sinh URL thanh toán VNPay cho đơn đặt sân PENDING_PAYMENT.
+     * Số tiền lấy từ booking.totalPrice trong DB — không nhận từ client.
+     */
+    @PostMapping("/api/v1/bookings/{id}/pay")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Tạo URL thanh toán VNPay",
+            description = "Sinh paymentUrl VNPay cho đơn đặt sân PENDING_PAYMENT. "
+                    + "Số tiền lấy từ booking.totalPrice trong DB, không nhận từ request body.")
+    public ResponseEntity<VnpayPaymentUrlResponse> payBooking(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable("id") Integer bookingId,
+            @RequestParam(name = "paymentOption", defaultValue = "FULL") String paymentOption,
+            jakarta.servlet.http.HttpServletRequest request) {
+        return ResponseEntity.ok(paymentService.createVnpayPaymentUrl(userPrincipal, bookingId, paymentOption, request));
     }
 }

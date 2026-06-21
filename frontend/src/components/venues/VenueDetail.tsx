@@ -36,6 +36,7 @@ import {
 } from '@tabler/icons-react'
 import { createBooking } from '@/lib/bookings-api'
 import WeeklySchedule from './WeeklySchedule'
+import EditReviewForm from './EditReviewForm'
 import WriteReviewForm from './WriteReviewForm'
 
 // Lazy load the Leaflet Map to avoid SSR issues and reduce bundle size
@@ -84,6 +85,7 @@ export interface VenueDetailProps {
     }
     recentReviews?: {
       reviewId: number
+      userId?: number
       userName: string
       userAvatar: string | null
       ratingScore: number
@@ -111,6 +113,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const [mapLoaded, setMapLoaded] = useState(false)
+  const [editingReviewId, setEditingReviewId] = useState<number | null>(null)
 
   // UC-CUS-01: booking state — selected slot + date được WeeklySchedule set
   // khi user click một ô AVAILABLE.
@@ -192,7 +195,6 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
     }
   }
 
-  // UC-CUS-01: Single booking CTA — login gate + POST + redirect to profile tab
   const handleBookSlot = async () => {
     if (!selectedSlot) {
       toast.error('Vui lòng chọn khung giờ trước khi đặt sân')
@@ -206,38 +208,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
       return
     }
 
-    try {
-      setBookingSubmitting(true)
-      await createBooking({
-        stadiumId: venue.id,
-        slotId: selectedSlot,
-        reservationDate: getSelectedDateString(),
-      })
-      toast.success(`Đặt sân thành công! Đang chuyển đến lịch sử đặt sân...`)
-      // Reset selection, refresh grid, redirect to profile bookings tab (per UC-CUS-01)
-      setSelectedSlot(null)
-      setWeeklyKey((k) => k + 1)
-      router.push('/profile?tab=bookings')
-    } catch (err: any) {
-      const status = err?.response?.status
-      const serverMsg =
-        err?.response?.data?.message ?? err?.message ?? 'Đặt sân thất bại. Vui lòng thử lại.'
-      if (status === 409) {
-        toast.error(serverMsg, {
-          description: 'Khung giờ này vừa có người đặt. Vui lòng chọn khung giờ khác.',
-        })
-        // Remount WeeklySchedule để refetch availability từ BE.
-        setWeeklyKey((k) => k + 1)
-        setSelectedSlot(null)
-      } else if (status === 401) {
-        const redirect = `/venues/${venue.id}`
-        router.push(`/login?redirect=${encodeURIComponent(redirect)}`)
-      } else {
-        toast.error(serverMsg)
-      }
-    } finally {
-      setBookingSubmitting(false)
-    }
+    router.push(`/booking/new?venueId=${venue.id}&date=${getSelectedDateString()}`)
   }
 
   // Star renderer helper
@@ -315,7 +286,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
 
   return (
     <div className="w-full min-h-screen bg-gray-50/50 select-none relative flex flex-col font-sans pb-12">
-      <div className="w-full max-w-5xl mx-auto bg-white shadow-sm md:rounded-2xl md:my-6 overflow-hidden border border-gray-200">
+      <div className="w-full max-w-[1440px] mx-auto bg-white shadow-sm md:rounded-2xl md:my-6 overflow-hidden border border-gray-200">
         
         {/* [A] HERO IMAGE SECTION — full width within container */}
         <div 
@@ -432,7 +403,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
       </div>
 
       {/* [C] BODY — stretches to fill screen */}
-      <div className="w-full px-6 py-5 grid grid-cols-1 md:grid-cols-[1fr_300px] gap-5">
+      <div className="w-full px-4 md:px-6 py-5 grid grid-cols-1 lg:grid-cols-[minmax(900px,1fr)_320px] gap-5">
         
         {/* Left column (flex:1) — Tabs + Tab panel content */}
         <div className="flex flex-col min-w-0">
@@ -634,8 +605,37 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                 {/* Reviews list or Empty State */}
                 {venue.recentReviews && venue.recentReviews.length > 0 ? (
                   <div className="flex flex-col gap-3">
-                    {venue.recentReviews.map((review) => (
-                      <div key={review.reviewId} className="bg-gray-50 border-[0.5px] border-gray-200 rounded-[10px] p-4 flex flex-col gap-2">
+                    {venue.recentReviews.map((review) => {
+                      const isMyReview = session?.user?.userId?.toString() === review.userId?.toString()
+                      const isEditing = editingReviewId === review.reviewId
+
+                      if (isEditing) {
+                        return (
+                          <div key={review.reviewId} className="bg-gray-50 border-[0.5px] border-gray-200 rounded-[10px] p-4 flex flex-col gap-2">
+                            <EditReviewForm
+                              reviewId={review.reviewId}
+                              initialRating={review.ratingScore}
+                              initialComment={review.comment}
+                              onSuccess={() => {
+                                setEditingReviewId(null)
+                                queryClient.invalidateQueries({ queryKey: ['venue-detail', venue.id] })
+                              }}
+                              onCancel={() => setEditingReviewId(null)}
+                            />
+                          </div>
+                        )
+                      }
+
+                      return (
+                      <div key={review.reviewId} className="bg-gray-50 border-[0.5px] border-gray-200 rounded-[10px] p-4 flex flex-col gap-2 relative group">
+                        {isMyReview && (
+                          <button
+                            onClick={() => setEditingReviewId(review.reviewId)}
+                            className="absolute top-4 right-4 text-[12px] font-medium text-gray-500 hover:text-[#1a8a4a] opacity-0 group-hover:opacity-100 transition-opacity bg-white border border-gray-200 rounded px-2 py-1"
+                          >
+                            Chỉnh sửa
+                          </button>
+                        )}
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
                             {review.userAvatar ? (
@@ -658,7 +658,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                             {renderStars(review.ratingScore, 13)}
                           </div>
                         </div>
-                        <p className="text-[13px] text-gray-600 leading-relaxed">{review.comment}</p>
+                        <p className="text-[13px] text-gray-600 leading-relaxed pr-16">{review.comment}</p>
                         {review.ownerResponse && (
                           <div className="bg-white border-[0.5px] border-[#9edbb6] rounded-[8px] px-3 py-2 mt-1">
                             <span className="block text-[11px] font-medium text-[#1a8a4a] mb-0.5">Phản hồi của chủ sân</span>
@@ -669,7 +669,8 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                           {new Date(review.createdAt).toLocaleDateString('vi-VN')}
                         </span>
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-[24px] px-4 text-center select-none">
@@ -687,9 +688,9 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
           </div>
         </div>
 
-        {/* Right column (300px) — Sticky sidebar */}
-        <div className="w-full md:w-[300px] flex flex-col gap-[14px] shrink-0">
-          
+        {/* Right column (320px) — Sticky sidebar */}
+        <div className="w-full lg:w-[320px] flex flex-col gap-[14px] shrink-0">
+
           <div className="sticky top-5 flex flex-col gap-[14px]">
             
             {/* CARD 1: Booking card */}

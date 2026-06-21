@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from "@/components/ui/textarea";
 import { post } from '@/lib/api';
 import { fetchBookingDetail, type BookingDetailItem } from '@/lib/bookings-api';
+import { initiateVnpayPayment } from '@/lib/payments-api';
 import { toast } from 'sonner';
 import Image from "next/image";
 import { useParams, useRouter } from 'next/navigation';
@@ -20,6 +21,7 @@ import { Footer } from '@/components/landing/Footer';
 const STATUS_CONFIG = {
   confirmed: { label: "Đã xác nhận", className: "bg-green-50 text-green-700 border-green-200" },
   pending: { label: "Chờ xác nhận", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  pending_payment: { label: "Chờ thanh toán", className: "bg-orange-50 text-orange-700 border-orange-200" },
   completed: { label: "Hoàn thành", className: "bg-slate-50 text-slate-600 border-slate-200" },
   cancelled: { label: "Đã hủy", className: "bg-red-50 text-red-600 border-red-200" },
 } as const;
@@ -60,6 +62,7 @@ export default function BookingDetailPage() {
   const [complaintOpen, setComplaintOpen] = useState(false);
   const [complaintText, setComplaintText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [paying, setPaying] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -77,6 +80,20 @@ export default function BookingDetailPage() {
 
     loadData();
   }, [params?.id]);
+
+  const handlePayWithVnpay = async (option: string = "FULL") => {
+    if (!booking) return;
+    if (paying) return;
+    try {
+      setPaying(true);
+      const { paymentUrl } = await initiateVnpayPayment(parseInt(booking.id, 10), option);
+      // Rời app — phải dùng window.location (không dùng được router.push)
+      window.location.href = paymentUrl;
+    } catch (err: any) {
+      toast.error(err.message || 'Không thể tạo liên kết thanh toán VNPay');
+      setPaying(false);
+    }
+  };
 
   const handleSubmitComplaint = async () => {
     if (!complaintText.trim() || !booking) return;
@@ -271,13 +288,24 @@ export default function BookingDetailPage() {
 
               {/* Thanh toán ngay button flow */}
               <div className="pt-6 space-y-2">
-                {(booking.status === 'pending' || booking.status === 'confirmed') && booking.paymentStatus === 'unpaid' && (
-                  <Button 
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl h-11"
-                    onClick={() => toast.success("Đang chuyển hướng sang cổng thanh toán VNPay / MoMo...")}
-                  >
-                    Thanh toán ngay
-                  </Button>
+                {(booking.status === 'pending' || booking.status === 'pending_payment' || booking.status === 'confirmed') && booking.paymentStatus === 'unpaid' && (
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl h-11 disabled:opacity-60"
+                      onClick={() => handlePayWithVnpay("FULL")}
+                      disabled={paying}
+                    >
+                      {paying ? "Đang chuyển hướng..." : "Thanh toán toàn bộ"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full text-emerald-700 border-emerald-200 hover:bg-emerald-50 font-bold rounded-2xl h-11 disabled:opacity-60"
+                      onClick={() => handlePayWithVnpay("DEPOSIT")}
+                      disabled={paying}
+                    >
+                      Thanh toán cọc 30%
+                    </Button>
+                  </div>
                 )}
                 <p className="text-[10px] text-slate-400 text-center">
                   Đặt lúc: {booking.createdAt}

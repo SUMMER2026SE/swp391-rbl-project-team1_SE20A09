@@ -106,6 +106,7 @@ export default function VenueDetailPage({ params }: { params: { id: string } }) 
     },
     recentReviews: venue.recentReviews?.map((r) => ({
       reviewId: r.reviewId,
+      userId: r.userId,
       userName: r.userName,
       userAvatar: r.userAvatar ?? null,
       ratingScore: r.ratingScore,

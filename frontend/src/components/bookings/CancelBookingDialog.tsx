@@ -58,7 +58,7 @@ export function CancelBookingDialog({
     if (bookingId === null) return;
     setSubmitting(true);
     try {
-      await cancelBooking(bookingId, reason.trim() || "");
+      await cancelBooking(bookingId, reason.trim() || undefined);
       toast.success("Đã hủy đơn thành công");
       onCancelled?.();
       handleOpenChange(false);
