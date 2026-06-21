@@ -1,15 +1,15 @@
 package com.sportvenue.dto.response;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.time.LocalDate;
-import java.util.List;
 
 @Getter
 @Setter
@@ -33,6 +33,9 @@ public class AdminDashboardResponse {
 
     private List<RecentBookingDto> recentBookings;
 
+    /** Trend lượt đặt sân theo ngày — dùng cho biểu đồ 7/30 ngày trên dashboard. */
+    private List<BookingTrendDto> bookingTrend;
+
     @Getter
     @Setter
     @NoArgsConstructor
@@ -47,5 +50,17 @@ public class AdminDashboardResponse {
         private LocalDateTime bookingDate;
         private LocalDate reservationDate;
         private String timeSlot;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class BookingTrendDto {
+        /** Ngày theo định dạng yyyy-MM-dd */
+        private LocalDate date;
+        /** Số lượt đặt sân trong ngày đó */
+        private long count;
     }
 }

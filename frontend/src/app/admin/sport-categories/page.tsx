@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from "react";
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,7 +17,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
-import { fetchSportTypes, createSportType, type SportType, type CreateSportTypeRequest } from "@/lib/api/sport-category";
+import { fetchSportTypes, createSportType, deleteSportType, type SportType, type CreateSportTypeRequest } from "@/lib/api/sport-category";
 
 const categorySchema = z.object({
   sportName: z.string()
@@ -71,6 +70,10 @@ function SportCategoriesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [tagInput, setTagInput] = useState("");
 
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<SportType | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const loadCategories = async () => {
     try {
       setLoading(true);
@@ -86,6 +89,22 @@ function SportCategoriesPage() {
   useEffect(() => {
     loadCategories();
   }, []);
+
+  const handleDelete = async () => {
+    if (!categoryToDelete || deleting) return;
+    try {
+      setDeleting(true);
+      await deleteSportType(categoryToDelete.sportTypeId);
+      toast.success("Xóa/Vô hiệu hóa loại môn thể thao thành công");
+      setShowDeleteDialog(false);
+      setCategoryToDelete(null);
+      await loadCategories();
+    } catch (error: any) {
+      toast.error(error.message || "Có lỗi xảy ra khi xóa môn thể thao");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const {
     register,
@@ -151,10 +170,9 @@ function SportCategoriesPage() {
   };
 
   return (
-    <div className="p-8">
-      <div className="container mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold">Quản lý danh mục thể thao</h1>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold">Quản lý danh mục thể thao</h1>
           <Button onClick={() => {
             reset();
             setTagInput("");
@@ -188,14 +206,22 @@ function SportCategoriesPage() {
                       </div>
                     </div>
                     <div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        title="Xóa"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {!category.isActive ? (
+                        <span className="text-xs text-muted-foreground italic px-2 py-1 bg-muted rounded">Đã tạm ngưng</span>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          title="Xóa"
+                          onClick={() => {
+                            setCategoryToDelete(category);
+                            setShowDeleteDialog(true);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -230,7 +256,6 @@ function SportCategoriesPage() {
             )}
           </div>
         )}
-      </div>
 
       {/* Create Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
@@ -316,6 +341,51 @@ function SportCategoriesPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Xác nhận xóa môn thể thao</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <p className="text-sm text-muted-foreground">
+              Bạn có chắc chắn muốn xóa môn thể thao <strong className="text-foreground">{categoryToDelete?.sportName}</strong>?
+            </p>
+            <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 p-3 rounded-lg border border-amber-200/50">
+              Lưu ý: Nếu môn thể thao này đã có sân đăng ký hoặc có kèo ghép, hệ thống sẽ tự động chuyển trạng thái sang <strong>Tạm ngưng</strong> (Vô hiệu hóa) thay vì xóa hoàn toàn để tránh hỏng dữ liệu.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowDeleteDialog(false);
+                  setCategoryToDelete(null);
+                }}
+                disabled={deleting}
+              >
+                Hủy
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Đang xử lý...
+                  </>
+                ) : (
+                  "Xác nhận"
+                )}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -10,6 +10,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -61,7 +62,23 @@ public class Owner implements Serializable {
     @Builder.Default
     private ApprovedStatus approvedStatus = ApprovedStatus.PENDING;
 
+    @Column(name = "rejection_reason", length = 255)
+    private String rejectionReason;
+
+    @Column(name = "business_license_url", length = 255)
+    private String businessLicenseUrl;
+
+    @Column(name = "identity_card_url", length = 255)
+    private String identityCardUrl;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "approved_by")
+    private User approvedBy;
+
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
 }

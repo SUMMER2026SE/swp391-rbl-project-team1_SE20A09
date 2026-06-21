@@ -46,6 +46,7 @@ public interface UserRepository extends JpaRepository<User, Integer> {
                OR LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :search, '%')))
           AND (:accountStatus IS NULL OR u.accountStatus = :accountStatus)
     """)
+    @EntityGraph(attributePaths = {"role"})
     Page<User> findByRoleWithFilters(
             @Param("roleName") String roleName,
             @Param("search") String search,

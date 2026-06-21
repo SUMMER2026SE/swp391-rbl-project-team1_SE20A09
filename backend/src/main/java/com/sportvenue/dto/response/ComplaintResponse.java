@@ -19,10 +19,18 @@ public class ComplaintResponse {
     private String against;
     private String description;
     private String status;
+    private String priority;
     private String submittedDate;
     private String resolvedDate;
     private String resolution;
     private Integer bookingId;
+    private String customerName;
+    private String customerEmail;
+    private String stadiumName;
+    private Integer stadiumId;
+    private String ownerName;
+    private String ownerEmail;
+    private String bookingStatus;
     private List<ResponseItem> responses;
 
     @Data

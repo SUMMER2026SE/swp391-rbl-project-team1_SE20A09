@@ -164,7 +164,7 @@ function MobileNavSheet({ user }: { user?: Session["user"] }) {
                 </p>
                 <p className="text-xs text-muted-foreground truncate">{user.email}</p>
               </div>
-               {user.roleName === "Admin" && (
+              {user.roleName === "Admin" && (
                 <SheetClose asChild>
                   <Link href="/admin/dashboard" className={getNavLinkClass("/admin/dashboard")}>
                     <Settings className="mr-2 h-4 w-4" />
@@ -241,23 +241,21 @@ export function Header() {
 
           <div className="flex items-center gap-2 md:gap-6">
             <nav className="hidden md:flex items-center space-x-6">
-              <Link 
-                href="/search" 
-                className={`text-sm transition-colors ${
-                  pathname === "/search" 
-                    ? "text-primary font-bold" 
+              <Link
+                href="/search"
+                className={`text-sm transition-colors ${pathname === "/search"
+                    ? "text-primary font-bold"
                     : "text-muted-foreground hover:text-primary"
-                }`}
+                  }`}
               >
                 Tìm sân
               </Link>
-              <Link 
-                href="/community" 
-                className={`text-sm transition-colors ${
-                  pathname === "/community" 
-                    ? "text-primary font-bold" 
+              <Link
+                href="/community"
+                className={`text-sm transition-colors ${pathname === "/community"
+                    ? "text-primary font-bold"
                     : "text-muted-foreground hover:text-primary"
-                }`}
+                  }`}
               >
                 Cộng đồng
               </Link>

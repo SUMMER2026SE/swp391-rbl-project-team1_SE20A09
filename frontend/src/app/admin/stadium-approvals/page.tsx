@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from "react";
-
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -161,8 +160,7 @@ export default function StadiumApprovalPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="container mx-auto">
+    <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold">Duyệt sân thể thao</h1>
@@ -219,7 +217,6 @@ export default function StadiumApprovalPage() {
             )}
           </TabsContent>
         </Tabs>
-      </div>
     </div>
   );
 }

@@ -65,7 +65,11 @@ public class OtpService {
         // Success
         otpToken.setUsed(true);
         user.setIsVerified(true);
-        user.setAccountStatus(com.sportvenue.entity.enums.AccountStatus.ACTIVE);
+        
+        // Owner accounts must remain PENDING until approved by admin
+        if (!"Owner".equals(user.getRole().getRoleName())) {
+            user.setAccountStatus(com.sportvenue.entity.enums.AccountStatus.ACTIVE);
+        }
         
         otpTokenRepository.save(otpToken);
         userRepository.save(user);

@@ -59,7 +59,13 @@ function LoginPage() {
         setError(getLoginErrorMessage(result.error));
       } else {
         setError(null);
-        router.push("/");
+        // UC-CUS-01: Hỗ trợ ?redirect= query param để quay lại trang đã định sau khi đăng nhập.
+        // Same-origin guard: chỉ chấp nhận path bắt đầu bằng "/" và KHÔNG bắt đầu bằng "//" (tránh open-redirect).
+        const params = new URLSearchParams(window.location.search);
+        const rawRedirect = params.get("redirect");
+        const safeRedirect =
+          rawRedirect && /^\/[^/\\]/.test(rawRedirect) ? rawRedirect : "/";
+        router.push(safeRedirect);
         router.refresh();
       }
     } catch (err: any) {
@@ -73,7 +79,11 @@ function LoginPage() {
     setError(null);
     setIsGoogleLoading(true);
     try {
-      await signIn("google", { callbackUrl: "/" });
+      const params = new URLSearchParams(window.location.search);
+      const rawRedirect = params.get("redirect");
+      const safeRedirect =
+        rawRedirect && /^\/[^/\\]/.test(rawRedirect) ? rawRedirect : "/";
+      await signIn("google", { callbackUrl: safeRedirect });
     } catch (err) {
       setError("Đã xảy ra lỗi khi đăng nhập bằng Google.");
       setIsGoogleLoading(false);

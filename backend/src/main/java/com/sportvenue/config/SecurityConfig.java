@@ -45,11 +45,15 @@ public class SecurityConfig {
             "/api/v1/public/stadiums/**",
             "/api/v1/public/amenities/**",
             "/api/v1/sport-types/**",
+            // UC-CUS-01: weekly grid endpoint — guest xem trước lịch tuần khi chưa login.
+            "/api/v1/stadiums/*/weekly-slots",
             "/actuator/health",
             "/actuator/info",
             "/swagger-ui.html",
             "/swagger-ui/**",
-            "/v3/api-docs/**"
+            "/v3/api-docs/**",
+            // WebSocket STOMP endpoint — auth happens at STOMP CONNECT level via JWT header
+            "/ws/**"
     };
 
     @Bean
@@ -79,6 +83,8 @@ public class SecurityConfig {
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/avatars/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/stadiums/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/files/documents/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/files/document").permitAll()
                         .requestMatchers("/api/v1/files/**").authenticated()
                         .anyRequest().authenticated()
                 )

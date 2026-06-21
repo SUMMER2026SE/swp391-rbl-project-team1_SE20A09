@@ -145,6 +145,29 @@ export default function AdminCustomersPage() {
     });
   };
 
+  const lockUnlockMutation = useMutation({
+    mutationFn: async ({ id, enabled }: { id: number; enabled: boolean }) => {
+      const { data } = await api.patch(`/admin/customers/${id}/lock`, { enabled });
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || "Thao tác thành công");
+      queryClient.invalidateQueries({ queryKey: ["admin-customers"] });
+    },
+    onError: (error: ApiError) => {
+      toast.error(error?.response?.data?.message || error?.message || "Có lỗi xảy ra.");
+    }
+  });
+
+  const handleLockUnlock = (customer: AdminCustomerResponse) => {
+    const isCurrentlyActive = customer.accountStatus === "ACTIVE";
+    const action = isCurrentlyActive ? "khóa" : "mở khóa";
+    
+    if (confirm(`Bạn có chắc chắn muốn ${action} tài khoản ${customer.email}?`)) {
+      lockUnlockMutation.mutate({ id: customer.userId, enabled: !isCurrentlyActive });
+    }
+  };
+
   return (
     <div className="p-8 space-y-6">
       <div className="flex justify-between items-center">
@@ -238,24 +261,25 @@ export default function AdminCustomersPage() {
               <TableHead className="font-semibold text-gray-900">Số điện thoại</TableHead>
               <TableHead className="font-semibold text-gray-900">Ngày tạo</TableHead>
               <TableHead className="font-semibold text-gray-900">Trạng thái</TableHead>
+              <TableHead className="font-semibold text-gray-900 text-right">Hành động</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-32 text-center">
+                <TableCell colSpan={6} className="h-32 text-center">
                   <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
                 </TableCell>
               </TableRow>
             ) : isError ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-32 text-center text-red-500 font-medium">
+                <TableCell colSpan={6} className="h-32 text-center text-red-500 font-medium">
                   Đã xảy ra lỗi khi tải dữ liệu! Vui lòng thử lại.
                 </TableCell>
               </TableRow>
             ) : data?.content?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-32 text-center text-gray-500">
+                <TableCell colSpan={6} className="h-32 text-center text-gray-500">
                   Không tìm thấy khách hàng nào phù hợp với bộ lọc.
                 </TableCell>
               </TableRow>
@@ -280,6 +304,20 @@ export default function AdminCustomersPage() {
                     ) : (
                       <Badge variant="secondary">Pending</Badge>
                     )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant={customer.accountStatus === "ACTIVE" ? "destructive" : "default"}
+                      size="sm"
+                      onClick={() => handleLockUnlock(customer)}
+                      disabled={lockUnlockMutation.isPending && lockUnlockMutation.variables?.id === customer.userId}
+                      className={customer.accountStatus !== "ACTIVE" ? "bg-emerald-500 hover:bg-emerald-600" : ""}
+                    >
+                      {lockUnlockMutation.isPending && lockUnlockMutation.variables?.id === customer.userId && (
+                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                      )}
+                      {customer.accountStatus === "ACTIVE" ? "Khóa" : "Mở khóa"}
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))

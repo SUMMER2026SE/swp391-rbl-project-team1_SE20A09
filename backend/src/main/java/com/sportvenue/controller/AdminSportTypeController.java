@@ -11,6 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,5 +34,14 @@ public class AdminSportTypeController {
         log.info("Admin request to create sport type: {}", request.getSportName());
         SportTypeResponse response = sportTypeService.createSportType(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('Admin')")
+    @Operation(summary = "Delete or deactivate sport type", description = "Allows Admin to delete a sport category if not referenced, or deactivate it if referenced. Requires ROLE_Admin.")
+    public ResponseEntity<Void> deleteSportType(@PathVariable Integer id) {
+        log.info("Admin request to delete/deactivate sport type with ID: {}", id);
+        sportTypeService.deleteSportType(id);
+        return ResponseEntity.noContent().build();
     }
 }

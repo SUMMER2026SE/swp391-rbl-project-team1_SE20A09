@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { format } from "date-fns";
+import { vi } from "date-fns/locale";
 import Link from "next/link";
 import {
   Users,
@@ -15,8 +16,13 @@ import {
   Loader2,
   Calendar as CalendarIcon,
   CheckCircle2,
-  XCircle
+  XCircle,
 } from "lucide-react";
+
+interface BookingTrendDto {
+  date: string;   // yyyy-MM-dd
+  count: number;
+}
 
 interface RecentBookingDto {
   bookingId: number;
@@ -42,6 +48,7 @@ interface AdminDashboardResponse {
   pendingOwnerApprovals: number;
   openComplaints: number;
   recentBookings: RecentBookingDto[];
+  bookingTrend: BookingTrendDto[];
 }
 
 interface ApiResponse<T> {
@@ -55,17 +62,17 @@ const fetchDashboardData = async () => {
   return data.result;
 };
 
-// Dữ liệu mock cho biểu đồ do backend chưa trả về dữ liệu trend
-const CHART_DATA = [
-  { day: 'T2', value: 40 }, { day: 'T3', value: 65 }, { day: 'T4', value: 45 },
-  { day: 'T5', value: 80 }, { day: 'T6', value: 55 }, { day: 'T7', value: 95 }, { day: 'CN', value: 85 }
-];
+/** Nhãn ngày trong tuần tiếng Việt — dùng khi hiển thị trend 7 ngày */
+const getDayLabel = (dateStr: string): string => {
+  const date = new Date(dateStr + "T00:00:00");
+  return format(date, "EEE", { locale: vi });
+};
 
-const STATUS_MAP: Record<string, { label: string, classes: string }> = {
-  PENDING: { label: 'Chờ duyệt', classes: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
-  CONFIRMED: { label: 'Đã xác nhận', classes: 'bg-blue-100 text-blue-800 border-blue-200' },
-  COMPLETED: { label: 'Hoàn thành', classes: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-  CANCELLED: { label: 'Đã hủy', classes: 'bg-rose-100 text-rose-800 border-rose-200' },
+const STATUS_MAP: Record<string, { label: string; classes: string }> = {
+  PENDING: { label: "Chờ duyệt", classes: "bg-yellow-100 text-yellow-800 border-yellow-200" },
+  CONFIRMED: { label: "Đã xác nhận", classes: "bg-blue-100 text-blue-800 border-blue-200" },
+  COMPLETED: { label: "Hoàn thành", classes: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+  CANCELLED: { label: "Đã hủy", classes: "bg-rose-100 text-rose-800 border-rose-200" },
 };
 
 const formatLocalDate = (dateStr: string) => {
@@ -78,6 +85,7 @@ export default function AdminDashboardPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["admin-dashboard"],
     queryFn: fetchDashboardData,
+    staleTime: 5 * 60 * 1000, // 5 phút — khớp với TTL cache backend
   });
 
   if (isLoading) {
@@ -97,18 +105,22 @@ export default function AdminDashboardPage() {
   }
 
   const KPI_DATA = [
-    { title: 'Tổng người dùng', value: data.totalUsers.toLocaleString("vi-VN"), trend: 'Số liệu thời gian thực', icon: Users, color: 'text-blue-600', bg: 'bg-blue-100' },
-    { title: 'Tổng chủ sân', value: data.totalOwners.toLocaleString("vi-VN"), trend: 'Số liệu thời gian thực', icon: Building2, color: 'text-indigo-600', bg: 'bg-indigo-100' },
-    { title: 'Tổng số sân', value: data.totalStadiums.toLocaleString("vi-VN"), trend: 'Số liệu thời gian thực', icon: MapPin, color: 'text-purple-600', bg: 'bg-purple-100' },
-    { title: 'Tổng lượt đặt', value: data.totalBookings.toLocaleString("vi-VN"), trend: 'Số liệu thời gian thực', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-100' },
+    { title: "Tổng người dùng", value: data.totalUsers.toLocaleString("vi-VN"), trend: "Số liệu thời gian thực", icon: Users, color: "text-blue-600", bg: "bg-blue-100" },
+    { title: "Tổng chủ sân", value: data.totalOwners.toLocaleString("vi-VN"), trend: "Số liệu thời gian thực", icon: Building2, color: "text-indigo-600", bg: "bg-indigo-100" },
+    { title: "Tổng số sân", value: data.totalStadiums.toLocaleString("vi-VN"), trend: "Số liệu thời gian thực", icon: MapPin, color: "text-purple-600", bg: "bg-purple-100" },
+    { title: "Tổng lượt đặt", value: data.totalBookings.toLocaleString("vi-VN"), trend: "Số liệu thời gian thực", icon: TrendingUp, color: "text-emerald-600", bg: "bg-emerald-100" },
   ];
 
   const BOOKING_STATUS = [
-    { label: 'Chờ duyệt', count: data.pendingBookings, icon: Clock, color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-100' },
-    { label: 'Đã xác nhận', count: data.confirmedBookings, icon: CalendarIcon, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
-    { label: 'Hoàn thành', count: data.completedBookings, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
-    { label: 'Đã hủy', count: data.cancelledBookings, icon: XCircle, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100' },
+    { label: "Chờ duyệt", count: data.pendingBookings, icon: Clock, color: "text-yellow-600", bg: "bg-yellow-50", border: "border-yellow-100" },
+    { label: "Đã xác nhận", count: data.confirmedBookings, icon: CalendarIcon, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-100" },
+    { label: "Hoàn thành", count: data.completedBookings, icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-100" },
+    { label: "Đã hủy", count: data.cancelledBookings, icon: XCircle, color: "text-rose-600", bg: "bg-rose-50", border: "border-rose-100" },
   ];
+
+  // Tính max để scale bar chart đúng tỷ lệ
+  const trendData = data.bookingTrend ?? [];
+  const maxTrendCount = Math.max(...trendData.map((item) => item.count), 1);
 
   return (
     <div className="space-y-8 pb-8">
@@ -150,7 +162,7 @@ export default function AdminDashboardPage() {
 
       {/* MIDDLE SECTION: Booking Status & Pending Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Booking Status Overview */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
           <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
@@ -172,7 +184,10 @@ export default function AdminDashboardPage() {
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col">
           <h2 className="text-lg font-bold text-slate-900 mb-6">Yêu cầu xử lý</h2>
           <div className="space-y-4 flex-1">
-            <Link href="/admin/owner-approvals" className="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-slate-50 hover:bg-slate-100 hover:border-slate-200 transition-colors cursor-pointer group">
+            <Link
+              href="/admin/owner-approvals"
+              className="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-slate-50 hover:bg-slate-100 hover:border-slate-200 transition-colors cursor-pointer group"
+            >
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-white rounded-lg border border-slate-200 text-slate-500 group-hover:text-emerald-600 transition-colors">
                   <Building2 className="h-5 w-5" />
@@ -187,7 +202,10 @@ export default function AdminDashboardPage() {
               </div>
             </Link>
 
-            <Link href="/admin/complaints" className="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-slate-50 hover:bg-slate-100 hover:border-slate-200 transition-colors cursor-pointer group">
+            <Link
+              href="/admin/complaints"
+              className="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-slate-50 hover:bg-slate-100 hover:border-slate-200 transition-colors cursor-pointer group"
+            >
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-white rounded-lg border border-slate-200 text-slate-500 group-hover:text-emerald-600 transition-colors">
                   <AlertOctagon className="h-5 w-5" />
@@ -203,34 +221,39 @@ export default function AdminDashboardPage() {
             </Link>
           </div>
         </div>
-
       </div>
 
       {/* CHARTS & RECENT BOOKINGS */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        
-        {/* Custom Bar Chart (Tailwind only) */}
+
+        {/* Bar Chart — dữ liệu thực từ backend (bookingTrend) */}
         <div className="xl:col-span-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col">
           <h2 className="text-lg font-bold text-slate-900 mb-6">Biểu đồ đặt sân (7 ngày)</h2>
-          <div className="flex-1 flex items-end justify-between gap-2 h-48 mt-auto pt-4">
-            {CHART_DATA.map((data, idx) => (
-              <div key={idx} className="flex flex-col items-center gap-2 group w-full">
-                <span className="text-xs font-semibold text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity -translate-y-2 group-hover:translate-y-0">
-                  {data.value}
-                </span>
-                <div className="w-full relative flex justify-center bg-slate-100 rounded-t-md h-full">
-                  <div 
-                    className="absolute bottom-0 w-full bg-emerald-500 rounded-t-md transition-all duration-500 group-hover:bg-emerald-400"
-                    style={{ height: `${data.value}%` }}
-                  ></div>
+          {trendData.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+              Chưa có dữ liệu
+            </div>
+          ) : (
+            <div className="flex-1 flex items-end justify-between gap-2 h-48 mt-auto pt-4">
+              {trendData.map((item, idx) => (
+                <div key={idx} className="flex flex-col items-center gap-2 group w-full">
+                  <span className="text-xs font-semibold text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity -translate-y-2 group-hover:translate-y-0">
+                    {item.count}
+                  </span>
+                  <div className="w-full relative flex justify-center bg-slate-100 rounded-t-md h-full">
+                    <div
+                      className="absolute bottom-0 w-full bg-emerald-500 rounded-t-md transition-all duration-500 group-hover:bg-emerald-400"
+                      style={{ height: `${(item.count / maxTrendCount) * 100}%` }}
+                    ></div>
+                  </div>
+                  <span className="text-xs font-medium text-slate-500">{getDayLabel(item.date)}</span>
                 </div>
-                <span className="text-xs font-medium text-slate-500">{data.day}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Table */}
+        {/* Recent Bookings Table */}
         <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
           <div className="p-6 border-b border-slate-100 flex items-center justify-between">
             <h2 className="text-lg font-bold text-slate-900">Đơn đặt sân gần đây</h2>
@@ -255,7 +278,10 @@ export default function AdminDashboardPage() {
                   </tr>
                 ) : (
                   data.recentBookings.map((booking) => {
-                    const statusInfo = STATUS_MAP[booking.bookingStatus] || { label: booking.bookingStatus, classes: 'bg-slate-100 text-slate-800 border-slate-200' };
+                    const statusInfo = STATUS_MAP[booking.bookingStatus] || {
+                      label: booking.bookingStatus,
+                      classes: "bg-slate-100 text-slate-800 border-slate-200",
+                    };
                     return (
                       <tr key={booking.bookingId} className="hover:bg-slate-50/80 transition-colors">
                         <td className="px-6 py-4">
@@ -276,7 +302,9 @@ export default function AdminDashboardPage() {
                           }).format(booking.totalPrice)}
                         </td>
                         <td className="px-6 py-4">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${statusInfo.classes}`}>
+                          <span
+                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${statusInfo.classes}`}
+                          >
                             {statusInfo.label}
                           </span>
                         </td>
@@ -288,7 +316,6 @@ export default function AdminDashboardPage() {
             </table>
           </div>
         </div>
-
       </div>
     </div>
   );
