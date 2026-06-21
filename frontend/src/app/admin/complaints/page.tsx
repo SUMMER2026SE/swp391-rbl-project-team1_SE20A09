@@ -1,12 +1,12 @@
-﻿'use client'
+'use client'
 
-import { useState } from "react";
-import { Header } from "@/components/layout/Header";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { useState, useEffect, useCallback } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -15,347 +15,516 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import { AlertCircle, MessageSquare, Image as ImageIcon } from "lucide-react";
+  AlertCircle,
+  MessageSquare,
+  Send,
+  CheckCircle2,
+  Clock,
+} from "lucide-react";
+import { get, post } from "@/lib/api";
+import { toast } from "sonner";
+import { useComplaintWebSocket, type ComplaintChatEvent } from "@/hooks/useComplaintWebSocket";
 
-function ComplaintsManagementPage() {
-  const [selectedComplaint, setSelectedComplaint] = useState<any>(null);
-  const [resolution, setResolution] = useState("");
+type ResponseItem = {
+  from: string;
+  message: string;
+  time: string;
+};
 
-  const complaints = [
-    {
-      id: "CP001",
-      complainant: {
-        name: "Nguyễn Văn A",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=1",
-      },
-      against: {
-        name: "Sân bóng Thành Công",
-        type: "owner",
-      },
-      subject: "Sân không đúng mô tả",
-      description:
-        "Sân thực tế không giống như hình ảnh trên web. Cỏ nhân tạo cũ, bề mặt không bằng phẳng.",
-      submittedDate: "22/05/2024",
-      priority: "high",
-      status: "open",
-      evidence: ["photo1.jpg", "photo2.jpg"],
-    },
-    {
-      id: "CP002",
-      complainant: {
-        name: "Trần Thị B",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=2",
-      },
-      against: {
-        name: "Chủ sân Arena",
-        type: "owner",
-      },
-      subject: "Chủ sân không phản hồi",
-      description:
-        "Đã liên hệ nhiều lần nhưng chủ sân không phản hồi về việc hoàn tiền do hủy sân.",
-      submittedDate: "21/05/2024",
-      priority: "medium",
-      status: "in_progress",
-      evidence: [],
-    },
-    {
-      id: "CP003",
-      complainant: {
-        name: "Lê Văn C",
-        avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=3",
-      },
-      against: {
-        name: "Khách hàng D",
-        type: "customer",
-      },
-      subject: "Khách hàng gây rối",
-      description: "Khách hàng có hành vi thiếu văn hóa, gây ồn ào.",
-      submittedDate: "20/05/2024",
-      priority: "low",
-      status: "resolved",
-      evidence: [],
-      resolution: "Đã cảnh cáo khách hàng và tạm khóa tài khoản 7 ngày.",
-    },
-  ];
+type Complaint = {
+  complaintId: number;
+  subject: string;
+  description: string;
+  status: string;
+  priority: string;
+  submittedDate: string;
+  resolvedDate?: string;
+  resolution?: string;
+  bookingId: number;
+  bookingStatus: string;
+  stadiumId: number;
+  stadiumName: string;
+  ownerName: string;
+  ownerEmail: string;
+  customerName: string;
+  customerEmail: string;
+  responses: ResponseItem[];
+};
 
-  const getPriorityBadge = (priority: string) => {
-    const config = {
-      high: { label: "Cao", className: "bg-red-100 text-red-700" },
-      medium: { label: "Trung bình", className: "bg-yellow-100 text-yellow-700" },
-      low: { label: "Thấp", className: "bg-blue-100 text-blue-700" },
-    };
-    const item = config[priority as keyof typeof config];
-    return <Badge className={item.className}>{item.label}</Badge>;
+function AdminComplaintsPage() {
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
+  const [replyMessage, setReplyMessage] = useState("");
+  const [resolutionText, setResolutionText] = useState("");
+  const [showResolveDialog, setShowResolveDialog] = useState(false);
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterPriority, setFilterPriority] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchComplaints = useCallback(async () => {
+    try {
+      const data = await get<Complaint[]>("/admin/complaints");
+      if (data && Array.isArray(data)) {
+        setComplaints(data);
+        setError(null);
+        setSelectedComplaint(prev => {
+          if (prev) {
+            return data.find(c => c.complaintId === prev.complaintId) ?? null;
+          }
+          return null;
+        });
+      }
+    } catch {
+      setError("Không thể tải dữ liệu khiếu nại. Vui lòng kiểm tra kết nối và thử lại.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchComplaints();
+  }, [fetchComplaints]);
+
+  // Real-time: append new chat event from WebSocket without full re-fetch
+  const handleWsEvent = useCallback((event: ComplaintChatEvent) => {
+    setComplaints(prev => prev.map(c => {
+      if (c.complaintId !== event.complaintId) return c;
+      const alreadyExists = c.responses.some(
+        r => r.from === event.from && r.message === event.message && r.time === event.time
+      );
+      if (alreadyExists) return c;
+      return {
+        ...c,
+        status: event.newStatus || c.status,
+        responses: [...c.responses, { from: event.from, message: event.message, time: event.time }],
+      };
+    }));
+    setSelectedComplaint(prev => {
+      if (!prev || prev.complaintId !== event.complaintId) return prev;
+      const alreadyExists = prev.responses.some(
+        r => r.from === event.from && r.message === event.message && r.time === event.time
+      );
+      if (alreadyExists) return prev;
+      return {
+        ...prev,
+        status: event.newStatus || prev.status,
+        responses: [...prev.responses, { from: event.from, message: event.message, time: event.time }],
+      };
+    });
+  }, []);
+
+  useComplaintWebSocket(selectedComplaint?.complaintId ?? null, handleWsEvent);
+
+  const handleSendMessage = async () => {
+    if (!replyMessage.trim() || !selectedComplaint) return;
+
+    try {
+      await post<unknown>(`/admin/complaints/${selectedComplaint.complaintId}/reply`, {
+        message: replyMessage.trim()
+      });
+      setReplyMessage("");
+      toast.success("Gửi phản hồi thành công!");
+    } catch {
+      toast.error("Gửi phản hồi thất bại. Vui lòng thử lại.");
+    }
   };
 
-  const getStatusBadge = (status: string) => {
-    const config = {
-      open: { label: "Mới", className: "bg-yellow-100 text-yellow-700" },
-      in_progress: { label: "Đang xử lý", className: "bg-blue-100 text-blue-700" },
-      resolved: { label: "Đã giải quyết", className: "bg-green-100 text-green-700" },
-    };
-    const item = config[status as keyof typeof config];
-    return <Badge className={item.className}>{item.label}</Badge>;
+  const handleResolveComplaint = async () => {
+    if (!resolutionText.trim() || !selectedComplaint) return;
+
+    try {
+      await post<unknown>(`/admin/complaints/${selectedComplaint.complaintId}/resolve`, {
+        resolution: resolutionText.trim()
+      });
+      setResolutionText("");
+      setShowResolveDialog(false);
+      toast.success("Giải quyết khiếu nại thành công!");
+    } catch {
+      toast.error("Giải quyết khiếu nại thất bại. Vui lòng thử lại.");
+    }
   };
+
+  const getPriorityConfig = (priority?: string) => {
+    switch (priority?.toLowerCase()) {
+      case "high":
+        return { label: "Cao", color: "bg-red-100 text-red-700 border-red-200" };
+      case "low":
+        return { label: "Thấp", color: "bg-emerald-100 text-emerald-700 border-emerald-200" };
+      default:
+        return { label: "Trung bình", color: "bg-amber-100 text-amber-700 border-amber-200" };
+    }
+  };
+
+  const getStatusConfig = (status: string) => {
+    switch (status.toLowerCase()) {
+      case "resolved":
+        return { label: "Đã giải quyết", color: "bg-emerald-500 text-white" };
+      case "in_progress":
+        return { label: "Đang xử lý", color: "bg-blue-500 text-white" };
+      default:
+        return { label: "Mới nhận", color: "bg-amber-500 text-white" };
+    }
+  };
+
+  const totalCount = complaints.length;
+  const openCount = complaints.filter(c => c.status === "open").length;
+  const progressCount = complaints.filter(c => c.status === "in_progress").length;
+  const resolvedCount = complaints.filter(c => c.status === "resolved").length;
+
+  const filteredComplaints = complaints.filter(c => {
+    const matchesStatus = filterStatus === "all" || c.status.toLowerCase() === filterStatus.toLowerCase();
+    const matchesPriority = filterPriority === "all" || c.priority.toLowerCase() === filterPriority.toLowerCase();
+    const matchesSearch = !searchTerm ||
+      (c.subject || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.stadiumName || '').toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesStatus && matchesPriority && matchesSearch;
+  });
+
+  if (isLoading) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-2">
+          <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm text-muted-foreground">Đang tải dữ liệu...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <AlertCircle className="h-12 w-12 text-destructive" />
+        <p className="text-sm text-destructive font-medium">{error}</p>
+        <Button variant="outline" onClick={fetchComplaints}>Thử lại</Button>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
+    <div className="p-8 flex flex-col gap-6 bg-muted/10 min-h-[calc(100vh-64px)]">
+      <div>
+        <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Quản lý khiếu nại hệ thống</h1>
+        <p className="text-sm text-muted-foreground mt-1">Giám sát và hòa giải khiếu nại giữa khách hàng và các chủ sân thể thao.</p>
+      </div>
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl">Quản lý khiếu nại</h1>
+      {/* Quick Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card><CardContent className="p-5">
+          <div className="text-xs text-muted-foreground font-medium">Tổng khiếu nại</div>
+          <div className="text-2xl font-bold text-foreground mt-1">{totalCount}</div>
+        </CardContent></Card>
+        <Card><CardContent className="p-5">
+          <div className="text-xs text-muted-foreground font-medium">Chưa phản hồi (Mới)</div>
+          <div className="text-2xl font-bold text-amber-500 mt-1">{openCount}</div>
+        </CardContent></Card>
+        <Card><CardContent className="p-5">
+          <div className="text-xs text-muted-foreground font-medium">Đang giải quyết</div>
+          <div className="text-2xl font-bold text-blue-500 mt-1">{progressCount}</div>
+        </CardContent></Card>
+        <Card><CardContent className="p-5">
+          <div className="text-xs text-muted-foreground font-medium">Đã đóng</div>
+          <div className="text-2xl font-bold text-emerald-500 mt-1">{resolvedCount}</div>
+        </CardContent></Card>
+      </div>
 
-          <div className="flex gap-4">
-            <Select defaultValue="all">
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                <SelectItem value="open">Mới</SelectItem>
-                <SelectItem value="in_progress">Đang xử lý</SelectItem>
-                <SelectItem value="resolved">Đã giải quyết</SelectItem>
-              </SelectContent>
-            </Select>
+      {/* Filters Bar */}
+      <div className="flex flex-col sm:flex-row gap-3 bg-card p-4 rounded-lg border shadow-sm">
+        <div className="flex-1">
+          <Input
+            placeholder="Tìm theo chủ đề, nội dung, tên khách hàng, tên sân..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="flex gap-3">
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-40"><SelectValue placeholder="Trạng thái" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Mọi trạng thái</SelectItem>
+              <SelectItem value="open">Mới nhận</SelectItem>
+              <SelectItem value="in_progress">Đang xử lý</SelectItem>
+              <SelectItem value="resolved">Đã giải quyết</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterPriority} onValueChange={setFilterPriority}>
+            <SelectTrigger className="w-40"><SelectValue placeholder="Độ ưu tiên" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Mọi ưu tiên</SelectItem>
+              <SelectItem value="high">Ưu tiên Cao</SelectItem>
+              <SelectItem value="medium">Trung bình</SelectItem>
+              <SelectItem value="low">Thấp</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
-            <Select defaultValue="all-priority">
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all-priority">Tất cả mức độ</SelectItem>
-                <SelectItem value="high">Cao</SelectItem>
-                <SelectItem value="medium">Trung bình</SelectItem>
-                <SelectItem value="low">Thấp</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      {/* Split View */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[550px]">
+        {/* List side */}
+        <div className="lg:col-span-5 flex flex-col gap-3 max-h-[700px] overflow-y-auto pr-1">
+          {filteredComplaints.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center border border-dashed rounded-xl p-8 text-muted-foreground bg-card">
+              <AlertCircle className="h-10 w-10 text-muted-foreground/40 mb-2" />
+              <p className="text-sm">Không tìm thấy khiếu nại nào phù hợp</p>
+            </div>
+          ) : (
+            filteredComplaints.map(c => {
+              const priority = getPriorityConfig(c.priority);
+              const status = getStatusConfig(c.status);
+              const isSelected = selectedComplaint?.complaintId === c.complaintId;
+              return (
+                <Card
+                  key={c.complaintId}
+                  onClick={() => setSelectedComplaint(c)}
+                  className={`cursor-pointer transition-all border shadow-sm ${
+                    isSelected
+                      ? "bg-primary/5 border-primary/40 shadow-primary/10"
+                      : "bg-card hover:border-primary/20 hover:shadow-md"
+                  }`}
+                >
+                  <CardContent className="p-4 flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono text-muted-foreground">ID: #{c.complaintId}</span>
+                      <div className="flex gap-1.5">
+                        <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full border ${priority.color}`}>
+                          {priority.label}
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${status.color}`}>
+                          {status.label}
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-sm text-foreground line-clamp-1">{c.subject}</h3>
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{c.description}</p>
+                    </div>
+                    <div className="flex items-center justify-between border-t pt-3 text-[11px] text-muted-foreground">
+                      <div>Khách: <span className="text-foreground font-medium">{c.customerName}</span></div>
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {c.submittedDate}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })
+          )}
         </div>
 
-        <div className="space-y-4">
-          {complaints.map((complaint) => (
-            <Card
-              key={complaint.id}
-              className="cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => setSelectedComplaint(complaint)}
-            >
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-start gap-4 flex-1">
-                    <Avatar>
-                      <AvatarImage src={complaint.complainant.avatar} />
-                      <AvatarFallback>
-                        {complaint.complainant.name[0]}
-                      </AvatarFallback>
-                    </Avatar>
+        {/* Chat/Detail side */}
+        <div className="lg:col-span-7 flex flex-col bg-card border rounded-xl overflow-hidden shadow-sm max-h-[700px]">
+          {selectedComplaint ? (
+            <div className="flex-1 flex flex-col h-full overflow-hidden">
+              {/* Header */}
+              <div className="p-5 border-b bg-card flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-xs font-mono text-muted-foreground">Khiếu nại #{selectedComplaint.complaintId}</span>
+                    <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full border ${getPriorityConfig(selectedComplaint.priority).color}`}>
+                      {getPriorityConfig(selectedComplaint.priority).label}
+                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${getStatusConfig(selectedComplaint.status).color}`}>
+                      {getStatusConfig(selectedComplaint.status).label}
+                    </span>
+                  </div>
+                  <h2 className="text-base font-semibold text-foreground">{selectedComplaint.subject}</h2>
+                </div>
+                {selectedComplaint.status !== "resolved" && (
+                  <Button
+                    size="sm"
+                    onClick={() => setShowResolveDialog(true)}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Đóng khiếu nại
+                  </Button>
+                )}
+              </div>
 
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="font-mono text-sm">{complaint.id}</span>
-                        {getPriorityBadge(complaint.priority)}
-                        {getStatusBadge(complaint.status)}
-                      </div>
+              {/* Complaint Details Panel */}
+              <div className="px-5 py-4 bg-muted/20 border-b text-xs grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-muted-foreground font-medium">Người gửi khiếu nại</p>
+                  <p className="font-semibold text-foreground mt-0.5">{selectedComplaint.customerName}</p>
+                  <p className="text-[10px] text-muted-foreground font-mono">{selectedComplaint.customerEmail}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground font-medium">Đối tượng bị khiếu nại</p>
+                  <p className="font-semibold text-foreground mt-0.5">{selectedComplaint.stadiumName}</p>
+                  <p className="text-[10px] text-muted-foreground font-mono">Chủ: {selectedComplaint.ownerName}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground font-medium">Đơn đặt sân liên quan</p>
+                  <p className="font-semibold text-foreground mt-0.5">Booking #{selectedComplaint.bookingId}</p>
+                  <p className="text-[10px] text-primary font-bold">{selectedComplaint.bookingStatus}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground font-medium">Thời gian tạo</p>
+                  <p className="font-semibold text-foreground mt-0.5">{selectedComplaint.submittedDate}</p>
+                </div>
+              </div>
 
-                      <h3 className="mb-2">{complaint.subject}</h3>
+              {/* Message / Chat Thread */}
+              <div className="flex-1 p-5 overflow-y-auto bg-muted/5 space-y-4">
+                {/* Customer original complaint */}
+                <div className="flex gap-3 items-start max-w-[85%]">
+                  <Avatar className="h-8 w-8 flex-shrink-0">
+                    <AvatarFallback className="text-xs bg-primary/20 text-primary font-bold">KH</AvatarFallback>
+                  </Avatar>
+                  <div className="bg-card border rounded-2xl rounded-tl-none p-3.5 shadow-sm text-sm">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="font-semibold text-xs text-primary">Khách hàng: {selectedComplaint.customerName}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">{selectedComplaint.submittedDate}</span>
+                    </div>
+                    <p className="text-foreground leading-relaxed">{selectedComplaint.description}</p>
+                  </div>
+                </div>
 
-                      <div className="text-sm text-muted-foreground mb-3">
-                        <strong>{complaint.complainant.name}</strong> khiếu nại về{" "}
-                        <strong>{complaint.against.name}</strong> ({complaint.against.type === "owner" ? "Chủ sân" : "Khách hàng"})
-                      </div>
+                {/* Chat replies */}
+                {selectedComplaint.responses.map((resp, idx) => {
+                  const isAdminMsg = resp.from === "Admin";
+                  const isOwnerMsg = resp.from === "Chủ sân";
+                  const ownerLabel = `Chủ sân: ${selectedComplaint.ownerName ?? 'N/A'}`;
+                  const customerLabel = `Khách hàng: ${selectedComplaint.customerName ?? 'N/A'}`;
+                  const senderLabel = isAdminMsg ? "Quản trị viên (Bạn)" : isOwnerMsg ? ownerLabel : customerLabel;
 
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {complaint.description}
-                      </p>
-
-                      {complaint.evidence.length > 0 && (
-                        <div className="flex items-center gap-2 mt-3">
-                          <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">
-                            {complaint.evidence.length} ảnh minh chứng
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex gap-3 items-start max-w-[85%] ${isAdminMsg ? "ml-auto justify-end" : ""}`}
+                    >
+                      {!isAdminMsg && (
+                        <Avatar className="h-8 w-8 flex-shrink-0">
+                          <AvatarFallback className={`text-[10px] font-bold ${
+                            isOwnerMsg ? "bg-amber-100 text-amber-700" : "bg-primary/20 text-primary"
+                          }`}>
+                            {isOwnerMsg ? "CS" : "KH"}
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
+                      <div className={`p-3.5 rounded-2xl shadow-sm text-sm border ${
+                        isAdminMsg
+                          ? "bg-primary/10 border-primary/20 rounded-tr-none"
+                          : isOwnerMsg
+                          ? "bg-amber-50 border-amber-200 rounded-tl-none"
+                          : "bg-card border rounded-tl-none"
+                      }`}>
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className={`font-semibold text-xs ${
+                            isAdminMsg ? "text-primary" : isOwnerMsg ? "text-amber-600" : "text-primary"
+                          }`}>
+                            {senderLabel}
                           </span>
+                          <span className="text-[10px] text-muted-foreground font-mono">{resp.time}</span>
                         </div>
+                        <p className="text-foreground leading-relaxed">{resp.message}</p>
+                      </div>
+                      {isAdminMsg && (
+                        <Avatar className="h-8 w-8 flex-shrink-0">
+                          <AvatarFallback className="text-[10px] bg-primary/20 text-primary font-bold">AD</AvatarFallback>
+                        </Avatar>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Resolution status */}
+                {selectedComplaint.status === "resolved" && (
+                  <div className="flex justify-center my-6">
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-4 text-center max-w-[80%] shadow-sm">
+                      <CheckCircle2 className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
+                      <h4 className="text-sm font-semibold text-emerald-700 mb-1">Khiếu nại này đã đóng & giải quyết</h4>
+                      {selectedComplaint.resolution && (
+                        <p className="text-xs text-emerald-600 italic mb-2 leading-relaxed">
+                          "{selectedComplaint.resolution}"
+                        </p>
+                      )}
+                      {selectedComplaint.resolvedDate && (
+                        <p className="text-[10px] text-muted-foreground font-mono">Đóng vào: {selectedComplaint.resolvedDate}</p>
                       )}
                     </div>
                   </div>
-
-                  <div className="text-sm text-muted-foreground">
-                    {complaint.submittedDate}
-                  </div>
-                </div>
-
-                {complaint.status !== "resolved" && (
-                  <div className="flex gap-2 justify-end">
-                    <Button size="sm" variant="outline">
-                      Xem chi tiết
-                    </Button>
-                    {complaint.status === "open" && (
-                      <Button size="sm" variant="default">
-                        Bắt đầu xử lý
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Complaint Detail Sheet */}
-        <Sheet
-          open={!!selectedComplaint}
-          onOpenChange={() => setSelectedComplaint(null)}
-        >
-          <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
-            <SheetHeader>
-              <SheetTitle>Chi tiết khiếu nại</SheetTitle>
-            </SheetHeader>
-
-            {selectedComplaint && (
-              <div className="mt-6 space-y-6">
-                {/* Header */}
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="font-mono text-sm">
-                        {selectedComplaint.id}
-                      </span>
-                      {getPriorityBadge(selectedComplaint.priority)}
-                      {getStatusBadge(selectedComplaint.status)}
-                    </div>
-                    <h3 className="mb-2">{selectedComplaint.subject}</h3>
-                    <div className="text-sm text-muted-foreground">
-                      Ngày gửi: {selectedComplaint.submittedDate}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Parties */}
-                <div className="grid grid-cols-2 gap-4">
-                  <Card>
-                    <CardHeader>
-                      <h4 className="text-sm">Người khiếu nại</h4>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarImage src={selectedComplaint.complainant.avatar} />
-                          <AvatarFallback>
-                            {selectedComplaint.complainant.name[0]}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <div>{selectedComplaint.complainant.name}</div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <h4 className="text-sm">Bị khiếu nại</h4>
-                    </CardHeader>
-                    <CardContent>
-                      <div>
-                        <div>{selectedComplaint.against.name}</div>
-                        <Badge variant="outline" className="mt-2">
-                          {selectedComplaint.against.type === "owner"
-                            ? "Chủ sân"
-                            : "Khách hàng"}
-                        </Badge>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Description */}
-                <Card>
-                  <CardHeader>
-                    <h4>Nội dung khiếu nại</h4>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm">{selectedComplaint.description}</p>
-                  </CardContent>
-                </Card>
-
-                {/* Evidence */}
-                {selectedComplaint.evidence.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <h4>Minh chứng ({selectedComplaint.evidence.length})</h4>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-2 gap-2">
-                        {selectedComplaint.evidence.map((file: string, idx: number) => (
-                          <div
-                            key={idx}
-                            className="aspect-video bg-muted rounded-lg flex items-center justify-center"
-                          >
-                            <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Resolution */}
-                {selectedComplaint.status === "resolved" ? (
-                  <Card className="bg-green-50 border-green-200">
-                    <CardHeader>
-                      <h4 className="flex items-center gap-2">
-                        <AlertCircle className="h-5 w-5 text-green-700" />
-                        Đã giải quyết
-                      </h4>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm">{selectedComplaint.resolution}</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <Card>
-                    <CardHeader>
-                      <h4>Giải quyết khiếu nại</h4>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <Textarea
-                        placeholder="Nhập giải pháp xử lý..."
-                        value={resolution}
-                        onChange={(e) => setResolution(e.target.value)}
-                        rows={4}
-                      />
-                      <div className="flex gap-2">
-                        <Button
-                          variant="default"
-                          className="flex-1"
-                          disabled={!resolution}
-                        >
-                          <MessageSquare className="h-4 w-4 mr-2" />
-                          Gửi phản hồi
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="flex-1"
-                          disabled={!resolution}
-                        >
-                          Đánh dấu đã giải quyết
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
                 )}
               </div>
-            )}
-          </SheetContent>
-        </Sheet>
+
+              {/* Chat reply input */}
+              {selectedComplaint.status !== "resolved" && (
+                <div className="p-4 border-t bg-card flex gap-2 items-center">
+                  <Input
+                    placeholder="Nhập nội dung tin nhắn của Quản trị viên..."
+                    value={replyMessage}
+                    onChange={e => setReplyMessage(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && replyMessage.trim()) handleSendMessage();
+                    }}
+                  />
+                  <Button
+                    size="icon"
+                    onClick={handleSendMessage}
+                    disabled={!replyMessage.trim()}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl h-10 w-10 flex-shrink-0"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-muted-foreground">
+              <MessageSquare className="h-12 w-12 text-muted-foreground/30 mb-3" />
+              <h3 className="font-semibold text-base">Chưa chọn khiếu nại</h3>
+              <p className="text-xs text-muted-foreground mt-1 max-w-[280px] text-center">
+                Hãy bấm vào một khiếu nại ở danh sách bên trái để xem nội dung, lịch sử thảo luận và giải quyết tranh chấp.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Resolve dialog */}
+      <Dialog open={showResolveDialog} onOpenChange={setShowResolveDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-primary" />
+              Đóng và giải quyết khiếu nại #{selectedComplaint?.complaintId}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-3">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Bạn đang thực hiện đóng khiếu nại này với tư cách Quản trị viên. Nội dung giải pháp cuối cùng sẽ được ghi nhận và gửi thông báo đến cả Khách hàng và Chủ sân.
+            </p>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-foreground">Phương án giải quyết (Resolution)</label>
+              <Textarea
+                placeholder="Nhập chi tiết quyết định giải quyết của Admin (ví dụ: Hệ thống thực hiện hoàn tiền 100%, hoặc Yêu cầu chủ sân đền bù...)"
+                value={resolutionText}
+                onChange={e => setResolutionText(e.target.value)}
+                rows={4}
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowResolveDialog(false)}>Hủy bỏ</Button>
+            <Button
+              size="sm"
+              onClick={handleResolveComplaint}
+              disabled={!resolutionText.trim()}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
+            >
+              Xác nhận Đóng khiếu nại
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-export default ComplaintsManagementPage;
+export default AdminComplaintsPage;

@@ -26,4 +26,10 @@ public interface ComplaintService {
 
     /** Khách hàng tự đóng khiếu nại của mình. */
     ComplaintResponse closeComplaint(Integer complaintId, String customerEmail);
+
+    /** Admin lấy toàn bộ khiếu nại trong hệ thống. */
+    List<ComplaintResponse> getAllComplaints();
+
+    /** Admin đóng giải quyết khiếu nại. */
+    ComplaintResponse resolveComplaintByAdmin(Integer complaintId, ResolveComplaintRequest request);
 }
