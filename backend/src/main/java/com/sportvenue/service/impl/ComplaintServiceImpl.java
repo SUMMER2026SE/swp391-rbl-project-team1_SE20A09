@@ -135,15 +135,22 @@ public class ComplaintServiceImpl implements ComplaintService {
         }
 
         boolean isCustomer = complaint.getUser().getUserId().equals(user.getUserId());
+        boolean isAdmin = user.getRole() != null && "Admin".equalsIgnoreCase(user.getRole().getRoleName());
 
-        if (!isOwner && !isCustomer) {
+        if (!isOwner && !isCustomer && !isAdmin) {
             throw new BadRequestException("Bạn không có quyền tham gia cuộc thảo luận này!");
         }
 
         // Deserialize existing responses
         List<ComplaintResponse.ResponseItem> items = deserializeResponses(complaint.getResponse());
         
-        String fromLabel = isOwner ? "Chủ sân" : "Khách hàng";
+        String fromLabel = "Khách hàng";
+        if (isOwner) {
+            fromLabel = "Chủ sân";
+        } else if (isAdmin) {
+            fromLabel = "Admin";
+        }
+
         items.add(ComplaintResponse.ResponseItem.builder()
                 .from(fromLabel)
                 .message(request.getMessage().trim())
@@ -152,15 +159,32 @@ public class ComplaintServiceImpl implements ComplaintService {
 
         complaint.setResponse(serializeResponses(items));
         
-        // If it was OPEN, change status to IN_PROGRESS when owner replies
-        if (isOwner && complaint.getStatus() == ComplaintStatus.OPEN) {
+        // If it was OPEN, change status to IN_PROGRESS when owner or admin replies
+        if ((isOwner || isAdmin) && complaint.getStatus() == ComplaintStatus.OPEN) {
             complaint.setStatus(ComplaintStatus.IN_PROGRESS);
         }
 
         Complaint saved = complaintRepository.save(complaint);
         
         // Notify the other party
-        if (isCustomer) {
+        if (isAdmin) {
+            // Notify customer
+            notificationService.createNotification(
+                    complaint.getUser().getUserId(),
+                    "Admin phản hồi khiếu nại",
+                    "Admin vừa phản hồi trong khiếu nại #" + complaintId,
+                    NotificationType.COMPLAINT,
+                    String.valueOf(saved.getComplaintId())
+            );
+            // Notify owner
+            notificationService.createNotification(
+                    complaint.getBooking().getStadium().getOwner().getUser().getUserId(),
+                    "Admin phản hồi khiếu nại",
+                    "Admin vừa phản hồi trong khiếu nại #" + complaintId,
+                    NotificationType.COMPLAINT,
+                    String.valueOf(saved.getComplaintId())
+            );
+        } else if (isCustomer) {
             notificationService.createNotification(
                     complaint.getBooking().getStadium().getOwner().getUser().getUserId(),
                     "Phản hồi khiếu nại mới",
@@ -258,6 +282,53 @@ public class ComplaintServiceImpl implements ComplaintService {
                 complaint.getBooking().getStadium().getOwner().getUser().getUserId(),
                 "Khiếu nại đã được đóng",
                 "Khách hàng đã tự đóng khiếu nại #" + complaintId,
+                NotificationType.COMPLAINT,
+                String.valueOf(saved.getComplaintId())
+        );
+
+        return mapToResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public List<ComplaintResponse> getAllComplaints() {
+        log.info("Admin fetching all complaints");
+        List<Complaint> complaints = complaintRepository.findAllByOrderByCreatedAtDesc();
+        return complaints.stream().map(this::mapToResponse).collect(Collectors.toList());
+    }
+
+    @Transactional
+    @Override
+    public ComplaintResponse resolveComplaintByAdmin(Integer complaintId, ResolveComplaintRequest request) {
+        log.info("Resolving complaintId: {} by Admin", complaintId);
+
+        Complaint complaint = complaintRepository.findById(complaintId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khiếu nại ID: " + complaintId));
+
+        List<ComplaintResponse.ResponseItem> items = deserializeResponses(complaint.getResponse());
+        items.add(ComplaintResponse.ResponseItem.builder()
+                .from("Admin")
+                .message("Đã giải quyết: " + request.getResolution().trim())
+                .time(LocalDateTime.now().format(FORMATTER))
+                .build());
+
+        complaint.setResponse(serializeResponses(items));
+        complaint.setStatus(ComplaintStatus.RESOLVED);
+
+        Complaint saved = complaintRepository.save(complaint);
+
+        notificationService.createNotification(
+                complaint.getUser().getUserId(),
+                "Khiếu nại đã được Admin giải quyết",
+                "Admin đã đóng và giải quyết khiếu nại #" + complaintId,
+                NotificationType.COMPLAINT,
+                String.valueOf(saved.getComplaintId())
+        );
+
+        notificationService.createNotification(
+                complaint.getBooking().getStadium().getOwner().getUser().getUserId(),
+                "Khiếu nại đã được Admin giải quyết",
+                "Admin đã đóng và giải quyết khiếu nại #" + complaintId,
                 NotificationType.COMPLAINT,
                 String.valueOf(saved.getComplaintId())
         );
