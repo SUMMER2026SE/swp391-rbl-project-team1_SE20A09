@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from "react";
-import { Header } from "@/components/layout/Header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -169,20 +168,14 @@ export default function StadiumApprovalPage() {
 
   if (sessionStatus === "loading" || loading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="flex justify-center items-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+      <div className="flex justify-center items-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-
-      <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold">Duyệt sân thể thao</h1>
@@ -242,7 +235,6 @@ export default function StadiumApprovalPage() {
             )}
           </TabsContent>
         </Tabs>
-      </div>
     </div>
   );
 }
