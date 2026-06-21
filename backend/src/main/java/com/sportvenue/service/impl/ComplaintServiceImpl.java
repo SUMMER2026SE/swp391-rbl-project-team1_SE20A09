@@ -165,44 +165,32 @@ public class ComplaintServiceImpl implements ComplaintService {
         }
 
         Complaint saved = complaintRepository.save(complaint);
-        
-        // Notify the other party
-        if (isAdmin) {
-            // Notify customer
-            notificationService.createNotification(
-                    complaint.getUser().getUserId(),
-                    "Admin phản hồi khiếu nại",
-                    "Admin vừa phản hồi trong khiếu nại #" + complaintId,
-                    NotificationType.COMPLAINT,
-                    String.valueOf(saved.getComplaintId())
-            );
-            // Notify owner
-            notificationService.createNotification(
-                    complaint.getBooking().getStadium().getOwner().getUser().getUserId(),
-                    "Admin phản hồi khiếu nại",
-                    "Admin vừa phản hồi trong khiếu nại #" + complaintId,
-                    NotificationType.COMPLAINT,
-                    String.valueOf(saved.getComplaintId())
-            );
-        } else if (isCustomer) {
-            notificationService.createNotification(
-                    complaint.getBooking().getStadium().getOwner().getUser().getUserId(),
-                    "Phản hồi khiếu nại mới",
-                    "Khách hàng vừa phản hồi trong khiếu nại #" + complaintId,
-                    NotificationType.COMPLAINT,
-                    String.valueOf(saved.getComplaintId())
-            );
-        } else if (isOwner) {
-            notificationService.createNotification(
-                    complaint.getUser().getUserId(),
-                    "Phản hồi khiếu nại mới",
-                    "Chủ sân vừa phản hồi trong khiếu nại #" + complaintId,
-                    NotificationType.COMPLAINT,
-                    String.valueOf(saved.getComplaintId())
-            );
-        }
-        
+        sendReplyNotifications(complaint, saved, isAdmin, isCustomer, isOwner);
         return mapToResponse(saved);
+    }
+
+    private void sendReplyNotifications(Complaint complaint, Complaint saved,
+                                        boolean isAdmin, boolean isCustomer, boolean isOwner) {
+        String ref = String.valueOf(saved.getComplaintId());
+        Integer customerId = complaint.getUser().getUserId();
+        Integer ownerId = complaint.getBooking().getStadium().getOwner().getUser().getUserId();
+        Integer id = complaint.getComplaintId();
+        if (isAdmin) {
+            notificationService.createNotification(customerId,
+                    "Admin phản hồi khiếu nại", "Admin vừa phản hồi trong khiếu nại #" + id,
+                    NotificationType.COMPLAINT, ref);
+            notificationService.createNotification(ownerId,
+                    "Admin phản hồi khiếu nại", "Admin vừa phản hồi trong khiếu nại #" + id,
+                    NotificationType.COMPLAINT, ref);
+        } else if (isCustomer) {
+            notificationService.createNotification(ownerId,
+                    "Phản hồi khiếu nại mới", "Khách hàng vừa phản hồi trong khiếu nại #" + id,
+                    NotificationType.COMPLAINT, ref);
+        } else if (isOwner) {
+            notificationService.createNotification(customerId,
+                    "Phản hồi khiếu nại mới", "Chủ sân vừa phản hồi trong khiếu nại #" + id,
+                    NotificationType.COMPLAINT, ref);
+        }
     }
 
     @Transactional
