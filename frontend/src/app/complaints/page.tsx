@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertCircle, Plus, MessageSquare, User, AlertTriangle } from "lucide-react";
+import { AlertCircle, Plus, MessageSquare, XCircle, SlidersHorizontal } from "lucide-react";
 import { get, post } from "@/lib/api";
 import { toast } from "sonner";
 import { fetchMyBookings } from "@/lib/bookings-api";
@@ -91,9 +91,24 @@ function ComplaintsPage() {
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
 
+  // Filter & sort states
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sortOrder, setSortOrder] = useState<string>("newest");
+
   // Reply states
   const [replyText, setReplyText] = useState("");
   const [submittingReply, setSubmittingReply] = useState(false);
+
+  // Close complaint states
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [closingComplaint, setClosingComplaint] = useState(false);
+
+  const filteredComplaints = complaints
+    .filter(c => statusFilter === "all" || c.status === statusFilter)
+    .sort((a, b) => {
+      const diff = new Date(b.submittedDate).getTime() - new Date(a.submittedDate).getTime();
+      return sortOrder === "newest" ? diff : -diff;
+    });
 
   const fetchComplaints = useCallback(async () => {
     try {
@@ -143,7 +158,7 @@ function ComplaintsPage() {
       });
       toast.success("Gửi khiếu nại thành công!");
       fetchComplaints();
-      
+
       // Reset Form
       setSubject("");
       setDescription("");
@@ -155,13 +170,30 @@ function ComplaintsPage() {
     }
   };
 
+  const handleCloseComplaint = async () => {
+    if (!selectedComplaint) return;
+    setClosingComplaint(true);
+    try {
+      const data = await post<Complaint>(`/complaints/${selectedComplaint.complaintId}/close`, {});
+      const updated = complaints.map(c => c.complaintId === data.complaintId ? data : c);
+      setComplaints(updated);
+      setSelectedComplaint(data);
+      setShowCloseConfirm(false);
+      toast.success("Đã đóng khiếu nại thành công!");
+    } catch (error: any) {
+      toast.error(error.message || "Lỗi khi đóng khiếu nại");
+    } finally {
+      setClosingComplaint(false);
+    }
+  };
+
   const handleSendReply = async () => {
     if (!replyText.trim() || !selectedComplaint) return;
     setSubmittingReply(true);
     try {
       const endpoint = `/complaints/${selectedComplaint.complaintId}/reply`;
       const data = await post<Complaint>(endpoint, { message: replyText.trim() });
-      
+
       const updated = complaints.map(c => c.complaintId === data.complaintId ? data : c);
       setComplaints(updated);
       setSelectedComplaint(data);
@@ -196,7 +228,7 @@ function ComplaintsPage() {
     return <Badge variant="outline" className={item.className}>{item.label}</Badge>;
   };
 
-  const activeComplaint = selectedComplaint 
+  const activeComplaint = selectedComplaint
     ? complaints.find(c => c.complaintId === selectedComplaint.complaintId) || selectedComplaint
     : null;
 
@@ -214,8 +246,43 @@ function ComplaintsPage() {
             </Button>
           </div>
 
+          {/* Filter & Sort Bar */}
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <SlidersHorizontal className="h-4 w-4 text-muted-foreground shrink-0" />
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Lọc theo trạng thái" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                <SelectItem value="open">Mới</SelectItem>
+                <SelectItem value="in_progress">Đang xử lý</SelectItem>
+                <SelectItem value="resolved">Đã giải quyết</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={sortOrder} onValueChange={setSortOrder}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Sắp xếp" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Mới nhất trước</SelectItem>
+                <SelectItem value="oldest">Cũ nhất trước</SelectItem>
+              </SelectContent>
+            </Select>
+            {(statusFilter !== "all" || sortOrder !== "newest") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => { setStatusFilter("all"); setSortOrder("newest"); }}
+              >
+                Xóa bộ lọc
+              </Button>
+            )}
+          </div>
+
           <div className="space-y-4">
-            {complaints.map((complaint) => (
+            {filteredComplaints.map((complaint) => (
               <Card
                 key={complaint.complaintId}
                 className="cursor-pointer hover:shadow-lg transition-all border hover:border-primary/30 duration-200"
@@ -252,6 +319,16 @@ function ComplaintsPage() {
               </Card>
             ))}
 
+            {filteredComplaints.length === 0 && complaints.length > 0 && (
+              <Card className="border-dashed">
+                <CardContent className="p-12 text-center text-muted-foreground">
+                  <AlertCircle className="h-12 w-12 mx-auto mb-3 opacity-30 text-primary" />
+                  <p className="font-medium text-lg mb-1">Không có khiếu nại nào phù hợp</p>
+                  <p className="text-sm opacity-80">Thử thay đổi bộ lọc để xem kết quả khác.</p>
+                </CardContent>
+              </Card>
+            )}
+
             {complaints.length === 0 && (
               <Card className="border-dashed">
                 <CardContent className="p-12 text-center text-muted-foreground">
@@ -275,8 +352,8 @@ function ComplaintsPage() {
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
               <Label htmlFor="bookingSelect">Chọn đơn đặt sân đã hoàn thành *</Label>
-              <Select 
-                value={bookingId} 
+              <Select
+                value={bookingId}
                 onValueChange={(val) => {
                   setBookingId(val);
                   const b = completedBookings.find(x => String(x.id) === val);
@@ -310,9 +387,9 @@ function ComplaintsPage() {
 
             <div className="space-y-2">
               <Label htmlFor="subject">Tiêu đề khiếu nại *</Label>
-              <Input 
-                id="subject" 
-                placeholder="Vấn đề bạn gặp phải (ví dụ: Sân không đúng mô tả, sai thông tin...)" 
+              <Input
+                id="subject"
+                placeholder="Vấn đề bạn gặp phải (ví dụ: Sân không đúng mô tả, sai thông tin...)"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
               />
@@ -337,7 +414,7 @@ function ComplaintsPage() {
               >
                 Hủy
               </Button>
-              <Button 
+              <Button
                 className="flex-1 bg-primary hover:bg-primary/95 text-white"
                 disabled={!subject.trim() || !description.trim() || !bookingId}
                 onClick={handleCreateComplaint}
@@ -355,6 +432,7 @@ function ComplaintsPage() {
         onOpenChange={() => {
           setSelectedComplaint(null);
           setReplyText("");
+          setShowCloseConfirm(false);
         }}
       >
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
@@ -433,9 +511,9 @@ function ComplaintsPage() {
                 </Card>
               )}
 
-              {/* Reply box */}
+              {/* Reply box + Close complaint */}
               {activeComplaint.status !== "resolved" && (
-                <div className="space-y-2 border-t pt-4">
+                <div className="space-y-3 border-t pt-4">
                   <Label htmlFor="replyInput" className="font-semibold text-sm">Gửi phản hồi của bạn</Label>
                   <div className="flex gap-2">
                     <Input
@@ -450,13 +528,49 @@ function ComplaintsPage() {
                         }
                       }}
                     />
-                    <Button 
+                    <Button
                       onClick={handleSendReply}
                       disabled={!replyText.trim() || submittingReply}
                     >
                       Gửi
                     </Button>
                   </div>
+
+                  {!showCloseConfirm ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-muted-foreground hover:text-red-600 hover:border-red-200"
+                      onClick={() => setShowCloseConfirm(true)}
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Đóng khiếu nại
+                    </Button>
+                  ) : (
+                    <div className="bg-orange-50 border border-orange-200 dark:bg-orange-950/20 dark:border-orange-900/50 rounded-lg p-3 space-y-2">
+                      <p className="text-sm font-medium text-orange-800 dark:text-orange-300">Xác nhận đóng khiếu nại?</p>
+                      <p className="text-xs text-orange-600 dark:text-orange-400">Khiếu nại sẽ được đánh dấu là đã giải quyết và không thể phản hồi thêm.</p>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => setShowCloseConfirm(false)}
+                          disabled={closingComplaint}
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                          onClick={handleCloseComplaint}
+                          disabled={closingComplaint}
+                        >
+                          {closingComplaint ? "Đang xử lý..." : "Xác nhận đóng"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

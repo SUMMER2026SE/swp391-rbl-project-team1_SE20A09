@@ -223,6 +223,48 @@ public class ComplaintServiceImpl implements ComplaintService {
         return mapToResponse(saved);
     }
 
+    @Transactional
+    @Override
+    public ComplaintResponse closeComplaint(Integer complaintId, String customerEmail) {
+        log.info("Customer {} closing complaintId: {}", customerEmail, complaintId);
+
+        Complaint complaint = complaintRepository.findById(complaintId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khiếu nại ID: " + complaintId));
+
+        User user = userRepository.findByEmail(customerEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng: " + customerEmail));
+
+        if (!complaint.getUser().getUserId().equals(user.getUserId())) {
+            throw new BadRequestException("Bạn không có quyền đóng khiếu nại này!");
+        }
+
+        if (complaint.getStatus() == ComplaintStatus.RESOLVED) {
+            throw new BadRequestException("Khiếu nại này đã được giải quyết trước đó!");
+        }
+
+        List<ComplaintResponse.ResponseItem> items = deserializeResponses(complaint.getResponse());
+        items.add(ComplaintResponse.ResponseItem.builder()
+                .from("Khách hàng")
+                .message("Khách hàng đã đóng khiếu nại.")
+                .time(LocalDateTime.now().format(FORMATTER))
+                .build());
+
+        complaint.setResponse(serializeResponses(items));
+        complaint.setStatus(ComplaintStatus.RESOLVED);
+
+        Complaint saved = complaintRepository.save(complaint);
+
+        notificationService.createNotification(
+                complaint.getBooking().getStadium().getOwner().getUser().getUserId(),
+                "Khiếu nại đã được đóng",
+                "Khách hàng đã tự đóng khiếu nại #" + complaintId,
+                NotificationType.COMPLAINT,
+                String.valueOf(saved.getComplaintId())
+        );
+
+        return mapToResponse(saved);
+    }
+
     private ComplaintResponse mapToResponse(Complaint c) {
         String subject = c.getSubject();
         if (subject == null) {

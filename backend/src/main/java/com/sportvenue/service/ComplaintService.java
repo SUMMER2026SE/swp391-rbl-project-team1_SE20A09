@@ -23,4 +23,7 @@ public interface ComplaintService {
     
     /** Owner đóng giải quyết khiếu nại. */
     ComplaintResponse resolveComplaint(Integer complaintId, ResolveComplaintRequest request, String ownerEmail);
+
+    /** Khách hàng tự đóng khiếu nại của mình. */
+    ComplaintResponse closeComplaint(Integer complaintId, String customerEmail);
 }
