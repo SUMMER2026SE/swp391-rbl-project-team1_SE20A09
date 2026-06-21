@@ -104,6 +104,11 @@ public class Stadium implements Serializable {
     @Builder.Default
     private BigDecimal averageRating = BigDecimal.valueOf(5.0);
 
+    /** Tổng số lượt đánh giá — được cập nhật sau mỗi review. */
+    @Column(name = "review_count", nullable = false)
+    @Builder.Default
+    private Integer reviewCount = 0;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

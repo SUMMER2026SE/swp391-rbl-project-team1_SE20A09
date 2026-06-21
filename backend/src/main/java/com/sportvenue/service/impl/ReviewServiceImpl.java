@@ -62,14 +62,15 @@ public class ReviewServiceImpl implements ReviewService {
 
         review = reviewRepository.save(review);
 
-        // Calculate and update stadium average rating
+        // Calculate and update stadium average rating and review count
         Optional<Double> avgRatingOpt = reviewRepository.calculateAverageRating(booking.getStadium().getStadiumId());
+        long reviewCount = reviewRepository.countByStadiumStadiumId(booking.getStadium().getStadiumId());
+        
+        Stadium stadium = booking.getStadium();
         if (avgRatingOpt.isPresent()) {
-            Stadium stadium = booking.getStadium();
             stadium.setAverageRating(java.math.BigDecimal.valueOf(avgRatingOpt.get()));
-            // stadiumRepository is needed to save the updated stadium, or we rely on transactional save if stadium is attached.
-            // Since it's transactional, modifying stadium should flush automatically if it's managed.
         }
+        stadium.setReviewCount((int) reviewCount);
 
         return mapToResponse(review);
     }
@@ -121,5 +122,30 @@ public class ReviewServiceImpl implements ReviewService {
                 .ownerResponse(review.getOwnerResponse())
                 .createdAt(review.getCreatedAt())
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<com.sportvenue.dto.response.EligibleBookingResponse> getEligibleBookingsForReview(
+            Integer stadiumId, String userEmail) {
+        log.info("Checking eligible bookings for review: stadiumId={}, user={}", stadiumId, userEmail);
+
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        java.util.List<Booking> eligibleBookings =
+                bookingRepository.findCompletedUnreviewedBookings(user.getUserId(), stadiumId);
+
+        return eligibleBookings.stream()
+                .map(b -> com.sportvenue.dto.response.EligibleBookingResponse.builder()
+                        .bookingId(b.getBookingId())
+                        .stadiumId(b.getStadium().getStadiumId())
+                        .stadiumName(b.getStadium().getStadiumName())
+                        .reservationDate(b.getReservationDate())
+                        .slotStartTime(b.getSlot().getStartTime())
+                        .slotEndTime(b.getSlot().getEndTime())
+                        .bookingDate(b.getBookingDate())
+                        .build())
+                .toList();
     }
 }

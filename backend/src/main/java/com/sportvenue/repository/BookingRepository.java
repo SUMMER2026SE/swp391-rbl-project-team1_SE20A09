@@ -347,6 +347,25 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             AND b.expiredAt < :now
             """)
     List<Booking> findExpiredPendingPayments(@Param("now") LocalDateTime now);
+
+    /**
+     * UC-CUS-07: Lấy booking COMPLETED của user tại sân cụ thể mà chưa được review.
+     * FE dùng để xác định customer có đủ điều kiện viết đánh giá không.
+     */
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.user.userId = :userId
+            AND b.stadium.stadiumId = :stadiumId
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
+            AND NOT EXISTS (
+                SELECT r FROM com.sportvenue.entity.Review r
+                WHERE r.booking.bookingId = b.bookingId
+            )
+            ORDER BY b.bookingDate DESC
+            """)
+    List<Booking> findCompletedUnreviewedBookings(
+            @Param("userId") Integer userId,
+            @Param("stadiumId") Integer stadiumId);
 }
 
 

@@ -16,4 +16,11 @@ public interface ReviewService {
     Page<ReviewResponse> getOwnerReviews(String ownerEmail, Pageable pageable);
 
     ReviewResponse replyToReview(Integer reviewId, String replyMessage, String ownerEmail);
+
+    /**
+     * UC-CUS-07: Lấy danh sách booking COMPLETED mà chưa được review cho một sân cụ thể.
+     * Dùng để FE xác định user có đủ điều kiện viết review hay không.
+     */
+    java.util.List<com.sportvenue.dto.response.EligibleBookingResponse> getEligibleBookingsForReview(
+            Integer stadiumId, String userEmail);
 }

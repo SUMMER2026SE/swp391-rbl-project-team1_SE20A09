@@ -48,4 +48,17 @@ public class CustomerReviewController {
         ReviewResponse response = reviewService.createReview(bookingId, request, userPrincipal.getUsername());
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/eligible/{stadiumId}")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(summary = "Kiểm tra booking đủ điều kiện để viết đánh giá",
+               description = "Trả về danh sách booking COMPLETED chưa được review cho sân cụ thể. " +
+                             "Nếu danh sách rỗng, customer không được phép viết review.")
+    public ResponseEntity<java.util.List<com.sportvenue.dto.response.EligibleBookingResponse>> getEligibleBookings(
+            @PathVariable Integer stadiumId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        var result = reviewService.getEligibleBookingsForReview(stadiumId, userPrincipal.getUsername());
+        return ResponseEntity.ok(result);
+    }
 }
+
