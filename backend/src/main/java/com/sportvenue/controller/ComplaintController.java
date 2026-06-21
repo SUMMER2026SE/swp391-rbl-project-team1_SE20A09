@@ -99,4 +99,15 @@ public class ComplaintController {
         ComplaintResponse response = complaintService.replyComplaint(id, request, userPrincipal.getUsername());
         return ResponseEntity.ok(response);
     }
+
+    @PostMapping("/complaints/{id}/close")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(summary = "Khách hàng tự đóng khiếu nại của mình")
+    public ResponseEntity<ComplaintResponse> closeComplaint(
+            @PathVariable Integer id,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("REST request to close complaint {} by customer: {}", id, userPrincipal.getUsername());
+        ComplaintResponse response = complaintService.closeComplaint(id, userPrincipal.getUsername());
+        return ResponseEntity.ok(response);
+    }
 }
