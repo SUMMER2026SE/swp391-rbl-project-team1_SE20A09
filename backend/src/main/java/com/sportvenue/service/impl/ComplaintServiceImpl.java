@@ -357,11 +357,33 @@ public class ComplaintServiceImpl implements ComplaintService {
             }
         }
 
+        String customerName = c.getUser() != null ? c.getUser().getFullName() : "N/A";
+        String customerEmail = c.getUser() != null ? c.getUser().getEmail() : "N/A";
+        
+        String stadiumName = "N/A";
+        Integer stadiumId = null;
+        String ownerName = "N/A";
+        String ownerEmail = "N/A";
+        String bookingStatus = "N/A";
+        
+        if (c.getBooking() != null) {
+            bookingStatus = c.getBooking().getBookingStatus() != null ? c.getBooking().getBookingStatus().name() : "N/A";
+            if (c.getBooking().getStadium() != null) {
+                var stadium = c.getBooking().getStadium();
+                stadiumName = stadium.getStadiumName();
+                stadiumId = stadium.getStadiumId();
+                if (stadium.getOwner() != null && stadium.getOwner().getUser() != null) {
+                    ownerName = stadium.getOwner().getUser().getFullName();
+                    ownerEmail = stadium.getOwner().getUser().getEmail();
+                }
+            }
+        }
+
         return ComplaintResponse.builder()
                 .id("CP" + String.format("%03d", c.getComplaintId()))
                 .complaintId(c.getComplaintId())
                 .subject(subject)
-                .against(c.getBooking().getStadium().getStadiumName())
+                .against(stadiumName)
                 .description(c.getContent())
                 .status(c.getStatus().name().toLowerCase())
                 .priority(c.getPriority() != null ? c.getPriority().name().toLowerCase() : "medium")
@@ -369,6 +391,13 @@ public class ComplaintServiceImpl implements ComplaintService {
                 .resolvedDate(resolvedDate)
                 .resolution(resolution)
                 .bookingId(c.getBooking().getBookingId())
+                .customerName(customerName)
+                .customerEmail(customerEmail)
+                .stadiumName(stadiumName)
+                .stadiumId(stadiumId)
+                .ownerName(ownerName)
+                .ownerEmail(ownerEmail)
+                .bookingStatus(bookingStatus)
                 .responses(responsesList)
                 .build();
     }
