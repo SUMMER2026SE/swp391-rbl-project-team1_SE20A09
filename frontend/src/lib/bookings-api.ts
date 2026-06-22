@@ -276,6 +276,8 @@ export async function createBooking(
   return post<CreateBookingResponse>("/bookings", payload);
 }
 
+export type BookingDetailResponse = CreateBookingResponse;
+
 // ── UC-CUS-03: Cancel booking ───────────────────────────────────────────────
 
 /**
@@ -290,9 +292,9 @@ export async function createBooking(
  */
 export async function cancelBooking(
   bookingId: number,
-  reason: string | undefined
-): Promise<CreateBookingResponse> {
-  return post<CreateBookingResponse>(
+  reason?: string
+): Promise<BookingDetailResponse> {
+  return put<BookingDetailResponse>(
     `/bookings/${bookingId}/cancel`,
     { reason: reason || null }
   );

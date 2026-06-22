@@ -34,28 +34,12 @@ function getActionButtons(
   isOwner: boolean = false,
   onRequestCancel: (bookingId: string) => void
 ) {
-  if (isOwner) {
-    return (
-      <>
-        <Button asChild className="rounded-xl w-full sm:w-auto" variant="outline">
-          <Link href={`/owner/bookings/${booking.id}`}>Xem chi tiết</Link>
-        </Button>
-        {(booking.status === "pending" || booking.status === "confirmed") && (
-          <Button
-            type="button"
-            variant="outline"
-            className="rounded-xl px-6 w-full sm:w-auto font-medium border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-            onClick={() => onRequestCancel(booking.id)}
-          >
-            Hủy đơn
-          </Button>
-        )}
-      </>
-    );
-  }
-
   const primaryBtnClass = "rounded-xl px-6 w-full sm:w-auto font-medium";
   const secondaryBtnClass = "rounded-xl px-6 w-full sm:w-auto font-medium border-slate-200 text-slate-600";
+
+  const detailLink = isOwner 
+    ? `/owner/bookings/${booking.id}` 
+    : `/booking/${booking.id}`;
 
   switch (booking.status) {
     case "pending":
@@ -63,7 +47,7 @@ function getActionButtons(
       return (
         <>
           <Button asChild variant="outline" className={secondaryBtnClass}>
-            <Link href={`/booking/${booking.id}`}>Xem chi tiết</Link>
+            <Link href={detailLink}>Xem chi tiết</Link>
           </Button>
           <Button
             type="button"
@@ -79,17 +63,19 @@ function getActionButtons(
       return (
         <>
           <Button asChild variant="outline" className={secondaryBtnClass}>
-            <Link href={`/booking/${booking.id}`}>Xem chi tiết</Link>
+            <Link href={detailLink}>Xem chi tiết</Link>
           </Button>
-          <Button asChild className={`${primaryBtnClass} bg-emerald-600 hover:bg-emerald-700 text-white`}>
-            <Link href={`/booking/${booking.id}/review`}>Đánh giá</Link>
-          </Button>
+          {!isOwner && (
+            <Button asChild className={`${primaryBtnClass} bg-emerald-600 hover:bg-emerald-700 text-white`}>
+              <Link href={`/booking/${booking.id}/review`}>Đánh giá</Link>
+            </Button>
+          )}
         </>
       );
     case "cancelled":
       return (
         <Button asChild variant="outline" className={`${secondaryBtnClass} w-full`}>
-          <Link href={`/booking/${booking.id}`}>Xem chi tiết</Link>
+          <Link href={detailLink}>Xem chi tiết</Link>
         </Button>
       );
     default:

@@ -122,7 +122,7 @@ public class BookingServiceImpl implements BookingService {
         Booking saved = persistBooking(customer, stadium, slot, request, totalPrice,
                 accessoryComp.entities);
 
-        log.info("[UC-CUS-01] Customer {} đặt sân {} slot {} ngày {} — bookingId={}, totalPrice={}",
+        log.info("✅ UC-CUS-01: Customer {} đặt sân {} slot {} ngày {} — bookingId={}, totalPrice={}",
                 customer.getEmail(), stadium.getStadiumId(), slot.getSlotId(),
                 request.getReservationDate(), saved.getBookingId(), totalPrice);
 
@@ -204,7 +204,7 @@ public class BookingServiceImpl implements BookingService {
                 ba.setBooking(saved);
             }
             bookingAccessoryRepository.saveAll(accessories);
-            log.info("[UC-CUS-01] Booking #{} kèm {} phụ kiện",
+            log.info("🎾 UC-CUS-01: Booking #{} kèm {} phụ kiện",
                     saved.getBookingId(), accessories.size());
         }
         return saved;
@@ -244,7 +244,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setExpiredAt(null);
         Booking saved = bookingRepository.save(booking);
 
-        log.info("[UC-CUS-01] Booking #{} thanh toán thành công — CONFIRMED, expiredAt cleared",
+        log.info("💳 UC-CUS-01: Booking #{} thanh toán thành công — CONFIRMED, expiredAt cleared",
                 saved.getBookingId());
 
         return toBookingDetailResponse(saved, saved.getStadium(), saved.getSlot());
@@ -288,7 +288,7 @@ public class BookingServiceImpl implements BookingService {
 
         Booking saved = bookingRepository.save(booking);
 
-        log.info("[UC-CUS-03] Booking #{} cancelled by userId={}, reason={}",
+        log.info("[UC-CUS-03] Booking #{} was cancelled by userId={}, reason={}",
                 saved.getBookingId(), currentUserId, reason);
 
         return toBookingDetailResponse(saved, saved.getStadium(), saved.getSlot());
@@ -380,7 +380,7 @@ public class BookingServiceImpl implements BookingService {
                     .build());
         }
 
-        log.info("[UC-CUS-01] Stadium {} weekly slots — {}..{} ({} bookings)",
+        log.info("📅 UC-CUS-01: Stadium {} weekly slots — {}..{} ({} bookings)",
                 stadiumId, monday, sunday, weeklyBookings.size());
 
         return WeeklySlotResponse.builder()
@@ -432,7 +432,7 @@ public class BookingServiceImpl implements BookingService {
                             userId, statuses, pageable);
         }
 
-        log.info("[UC-CUS-01] Customer {} xem lịch sử đặt sân — page={}, size={}, status={}, total={}",
+        log.info("📜 UC-CUS-01: Customer {} xem lịch sử đặt sân — page={}, size={}, status={}, total={}",
                 principal.getUser().getEmail(), page, size, statusFilter, bookings.getTotalElements());
 
         return PageResponse.of(bookings.map(this::toHistoryItemDto));
@@ -513,7 +513,7 @@ public class BookingServiceImpl implements BookingService {
             throw new AccessDeniedException("Bạn không có quyền xem đơn đặt sân này");
         }
 
-        log.info("[UC-CUS-04] Customer {} xem chi tiết booking #{}", principal.getUser().getEmail(), bookingId);
+        log.info("🔍 UC-CUS-04: Customer {} xem chi tiết booking #{}", principal.getUser().getEmail(), bookingId);
         return toBookingDetailResponse(booking, booking.getStadium(), booking.getSlot());
     }
 

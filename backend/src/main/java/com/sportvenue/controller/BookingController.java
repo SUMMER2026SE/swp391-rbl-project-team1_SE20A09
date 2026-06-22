@@ -24,11 +24,10 @@ import com.sportvenue.service.PaymentService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
 
 
 import java.time.LocalDate;
@@ -147,22 +146,6 @@ public class BookingController {
     }
 
     /**
-    /**
-     * UC-CUS-04: Xem chi tiết một đơn đặt sân theo ID.
-     * Chỉ chủ booking mới được xem — 403 nếu không phải.
-     */
-    @GetMapping("/api/v1/bookings/{id}")
-    @PreAuthorize("hasRole('Customer')")
-    @Operation(
-            summary = "Chi tiết đơn đặt sân",
-            description = "Xem chi tiết một đơn đặt sân theo ID. Chỉ chủ booking mới được truy cập.")
-    public ResponseEntity<BookingDetailResponse> getBookingDetail(
-            @AuthenticationPrincipal UserPrincipal userPrincipal,
-            @PathVariable("id") Integer bookingId) {
-        return ResponseEntity.ok(bookingService.getBookingDetail(userPrincipal, bookingId));
-    }
-
-    /**
      * UC-CUS-03: Hủy một đơn đặt sân — Customer (chủ booking) hoặc Owner (chủ sân) đều có thể gọi.
      *
      * <p>Body {@link CancelBookingRequest} mang {@code reason} (lý do hủy, không bắt buộc,
@@ -171,7 +154,7 @@ public class BookingController {
      *
      * <p>Trả về {@link BookingDetailResponse} của booking sau khi hủy để FE đồng bộ UI.</p>
      */
-    @PostMapping("/api/v1/bookings/{id}/cancel")
+    @PutMapping("/api/v1/bookings/{id}/cancel")
     @PreAuthorize("hasAnyRole('Customer', 'Owner')")
     @Operation(
             summary = "Hủy đơn đặt sân (Customer hoặc Owner)",
@@ -187,6 +170,21 @@ public class BookingController {
         BookingDetailResponse response = bookingService.cancelBooking(
                 userPrincipal, bookingId, reason);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * UC-CUS-04: Xem chi tiết một đơn đặt sân theo ID.
+     * Chỉ chủ booking mới được xem — 403 nếu không phải.
+     */
+    @GetMapping("/api/v1/bookings/{id}")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Chi tiết đơn đặt sân",
+            description = "Xem chi tiết một đơn đặt sân theo ID. Chỉ chủ booking mới được truy cập.")
+    public ResponseEntity<BookingDetailResponse> getBookingDetail(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable("id") Integer bookingId) {
+        return ResponseEntity.ok(bookingService.getBookingDetail(userPrincipal, bookingId));
     }
 
     /**
