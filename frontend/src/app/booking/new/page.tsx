@@ -114,10 +114,17 @@ function BookingContent() {
         return timePart.substring(0, 5) === hourStr;
       });
 
-      const availabilityMatched = slotAvailabilities?.find(s => s.slotId === matched?.slotId);
-      const available = availabilityMatched 
-        ? availabilityMatched.available 
-        : (matched ? matched.slotStatus === "AVAILABLE" : true);
+      const availabilityMatched = slotAvailabilities?.find(s => {
+        const timePart = s.startTime.includes("T") ? s.startTime.split("T")[1] : s.startTime;
+        return timePart.substring(0, 5) === hourStr;
+      });
+
+      let available = true;
+      if (availabilityMatched) {
+        available = availabilityMatched.available;
+      } else if (matched) {
+        available = matched.slotStatus === "AVAILABLE";
+      }
 
       return {
         id: hourStr,
@@ -152,7 +159,10 @@ function BookingContent() {
       }));
 
     // Find the slot ID from the selected slot (hour string like "08:00")
-    const matchedSlot = venue.timeSlots?.find((s) => {
+    const matchedSlot = slotAvailabilities?.find((s) => {
+      const timePart = s.startTime.includes("T") ? s.startTime.split("T")[1] : s.startTime;
+      return timePart.substring(0, 5) === selectedSlot;
+    }) || venue.timeSlots?.find((s) => {
       const timePart = s.startTime.includes("T") ? s.startTime.split("T")[1] : s.startTime;
       return timePart.substring(0, 5) === selectedSlot;
     });
