@@ -22,6 +22,8 @@ import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.ComplaintService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,20 +55,20 @@ public class ComplaintServiceImpl implements ComplaintService {
 
     @Transactional(readOnly = true)
     @Override
-    public List<ComplaintResponse> getOwnerComplaints(String ownerEmail) {
+    public Page<ComplaintResponse> getOwnerComplaints(String ownerEmail, Pageable pageable) {
         log.info("Fetching complaints for owner: {}", ownerEmail);
-        List<Complaint> complaints = complaintRepository.findByBookingStadiumOwnerUserEmailOrderByCreatedAtDesc(ownerEmail);
-        return complaints.stream().map(this::mapToResponse).collect(Collectors.toList());
+        return complaintRepository.findByBookingStadiumOwnerUserEmailOrderByCreatedAtDesc(ownerEmail, pageable)
+                .map(this::mapToResponse);
     }
 
     @Transactional(readOnly = true)
     @Override
-    public List<ComplaintResponse> getCustomerComplaints(String customerEmail) {
+    public Page<ComplaintResponse> getCustomerComplaints(String customerEmail, Pageable pageable) {
         log.info("Fetching complaints for customer: {}", customerEmail);
         User user = userRepository.findByEmail(customerEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng: " + customerEmail));
-        List<Complaint> complaints = complaintRepository.findByUserUserIdOrderByCreatedAtDesc(user.getUserId());
-        return complaints.stream().map(this::mapToResponse).collect(Collectors.toList());
+        return complaintRepository.findByUserUserIdOrderByCreatedAtDesc(user.getUserId(), pageable)
+                .map(this::mapToResponse);
     }
 
     @Transactional
@@ -88,8 +90,8 @@ public class ComplaintServiceImpl implements ComplaintService {
             throw new BadRequestException("Bạn chỉ có thể khiếu nại đơn đặt sân đã hoàn thành!");
         }
 
-        if (complaintRepository.existsByBookingBookingId(request.getBookingId())) {
-            throw new BadRequestException("Đơn đặt sân này đã được khiếu nại trước đó!");
+        if (complaintRepository.existsByBookingBookingIdAndStatusNot(request.getBookingId(), ComplaintStatus.RESOLVED)) {
+            throw new BadRequestException("Đơn đặt sân này đang có khiếu nại chưa được giải quyết!");
         }
 
         Complaint complaint = Complaint.builder()
@@ -225,6 +227,9 @@ public class ComplaintServiceImpl implements ComplaintService {
         if (!complaint.getBooking().getStadium().getOwner().getOwnerId().equals(owner.getOwnerId())) {
             throw new BadRequestException("Bạn không có quyền giải quyết khiếu nại của sân này!");
         }
+        if (complaint.getStatus() == ComplaintStatus.RESOLVED) {
+            throw new BadRequestException("Khiếu nại này đã được giải quyết trước đó!");
+        }
 
         List<ComplaintResponse.ResponseItem> items = deserializeResponses(complaint.getResponse());
         items.add(ComplaintResponse.ResponseItem.builder()
@@ -315,10 +320,9 @@ public class ComplaintServiceImpl implements ComplaintService {
 
     @Transactional(readOnly = true)
     @Override
-    public List<ComplaintResponse> getAllComplaints() {
+    public Page<ComplaintResponse> getAllComplaints(Pageable pageable) {
         log.info("Admin fetching all complaints");
-        List<Complaint> complaints = complaintRepository.findAllByOrderByCreatedAtDesc();
-        return complaints.stream().map(this::mapToResponse).collect(Collectors.toList());
+        return complaintRepository.findAllByOrderByCreatedAtDesc(pageable).map(this::mapToResponse);
     }
 
     @Transactional
@@ -328,6 +332,10 @@ public class ComplaintServiceImpl implements ComplaintService {
 
         Complaint complaint = complaintRepository.findById(complaintId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khiếu nại ID: " + complaintId));
+
+        if (complaint.getStatus() == ComplaintStatus.RESOLVED) {
+            throw new BadRequestException("Khiếu nại này đã được giải quyết trước đó!");
+        }
 
         List<ComplaintResponse.ResponseItem> items = deserializeResponses(complaint.getResponse());
         items.add(ComplaintResponse.ResponseItem.builder()

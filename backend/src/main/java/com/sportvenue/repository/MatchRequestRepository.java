@@ -45,11 +45,16 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Inte
     List<MatchRequest> findAllByUserEmailOrderByCreatedAtDesc(String email);
 
     @EntityGraph(attributePaths = {"user", "stadium", "sportType"})
-    List<MatchRequest> findAllByUserUserIdOrderByCreatedAtDesc(Integer userId);
+    Page<MatchRequest> findAllByUserUserIdOrderByCreatedAtDesc(Integer userId, Pageable pageable);
 
     @Modifying(clearAutomatically = true)
     @Query("UPDATE MatchRequest m SET m.matchStatus = :status, m.cancelReason = :cancelReason WHERE m.matchId = :matchId")
     void updateStatusAndReason(@Param("matchId") Integer matchId, @Param("status") MatchStatus status, @Param("cancelReason") String cancelReason);
+
+    /** Atomic increment currentPlayers — tránh race condition khi nhiều request approve cùng lúc. */
+    @Modifying(clearAutomatically = true)
+    @Query("UPDATE MatchRequest m SET m.currentPlayers = m.currentPlayers + 1 WHERE m.matchId = :matchId AND m.currentPlayers < m.maxPlayers")
+    int incrementCurrentPlayers(@Param("matchId") Integer matchId);
 
     @EntityGraph(attributePaths = {"user", "stadium", "sportType"})
     Optional<MatchRequest> findByMatchId(Integer matchId);

@@ -9,5 +9,7 @@ public interface SportTypeService {
 
     SportTypeResponse createSportType(CreateSportTypeRequest request);
 
+    SportTypeResponse updateSportType(Integer id, CreateSportTypeRequest request);
+
     void deleteSportType(Integer id);
 }

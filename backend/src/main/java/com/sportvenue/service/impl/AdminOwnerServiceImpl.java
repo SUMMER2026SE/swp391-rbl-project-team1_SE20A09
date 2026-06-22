@@ -105,15 +105,24 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
         user.setAccountStatus(isEnabled ? AccountStatus.ACTIVE : AccountStatus.BLOCKED);
         user.setLockReason(reason);
         
-        // Lock: chuyển tất cả sân về MAINTENANCE
-        // Unlock: khôi phục tất cả sân về AVAILABLE
+        // Lock: chỉ set AVAILABLE → MAINTENANCE (CLOSED giữ nguyên)
+        // Unlock: chỉ set MAINTENANCE → AVAILABLE (CLOSED giữ nguyên)
         List<Stadium> stadiums = stadiumRepository.findByOwnerOwnerId(ownerId);
+        List<Stadium> toUpdate;
         if (!isEnabled) {
-            stadiums.forEach(s -> s.setStadiumStatus(StadiumStatus.MAINTENANCE));
+            toUpdate = stadiums.stream()
+                    .filter(s -> s.getStadiumStatus() == StadiumStatus.AVAILABLE)
+                    .peek(s -> s.setStadiumStatus(StadiumStatus.MAINTENANCE))
+                    .toList();
         } else {
-            stadiums.forEach(s -> s.setStadiumStatus(StadiumStatus.AVAILABLE));
+            toUpdate = stadiums.stream()
+                    .filter(s -> s.getStadiumStatus() == StadiumStatus.MAINTENANCE)
+                    .peek(s -> s.setStadiumStatus(StadiumStatus.AVAILABLE))
+                    .toList();
         }
-        stadiumRepository.saveAll(stadiums);
+        if (!toUpdate.isEmpty()) {
+            stadiumRepository.saveAll(toUpdate);
+        }
 
         try {
             emailService.sendAccountStatusNotification(user.getEmail(), owner.getBusinessName(), isEnabled, reason);

@@ -14,6 +14,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,6 +35,16 @@ public class AdminSportTypeController {
         log.info("Admin request to create sport type: {}", request.getSportName());
         SportTypeResponse response = sportTypeService.createSportType(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('Admin')")
+    @Operation(summary = "Update sport type", description = "UC-ADM-08: Allows Admin to edit a sport category. Requires ROLE_Admin.")
+    public ResponseEntity<SportTypeResponse> updateSportType(
+            @PathVariable Integer id,
+            @Valid @RequestBody CreateSportTypeRequest request) {
+        log.info("Admin request to update sport type ID: {}", id);
+        return ResponseEntity.ok(sportTypeService.updateSportType(id, request));
     }
 
     @DeleteMapping("/{id}")

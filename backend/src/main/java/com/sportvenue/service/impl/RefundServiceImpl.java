@@ -62,8 +62,9 @@ public class RefundServiceImpl implements RefundService {
         // 3. Kiểm tra tính hợp lệ và quyền sở hữu
         validateOwnershipAndStatus(booking, owner);
 
-        // 4. Tìm giao dịch thanh toán gốc
-        Payment originalPayment = paymentRepository.findByBookingBookingId(bookingId)
+        // 4. Tìm giao dịch thanh toán gốc (SUCCESS, amount > 0, mới nhất)
+        Payment originalPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
+                .stream().findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán ban đầu"));
 
         // 5. Áp dụng chính sách hoàn tiền
@@ -97,13 +98,17 @@ public class RefundServiceImpl implements RefundService {
         if (booking.getBookingStatus() == BookingStatus.COMPLETED) {
             throw new BadRequestException("Không thể hủy đơn đặt sân đã hoàn thành (COMPLETED)");
         }
-        if (booking.getPaymentStatus() != PaymentStatus.PAID) {
-            throw new BadRequestException("Chỉ có thể hoàn tiền cho những đơn đặt sân đã thanh toán (PAID)");
+        if (booking.getPaymentStatus() != PaymentStatus.PAID && booking.getPaymentStatus() != PaymentStatus.DEPOSITED) {
+            throw new BadRequestException("Chỉ có thể hoàn tiền cho những đơn đặt sân đã thanh toán (PAID hoặc DEPOSITED)");
         }
     }
 
+    private static LocalDateTime playTime(Booking booking) {
+        return LocalDateTime.of(booking.getReservationDate(), booking.getSlot().getStartTime());
+    }
+
     private RefundCalculation calculateRefund(Booking booking) {
-        LocalDateTime playTime = LocalDateTime.of(booking.getBookingDate().toLocalDate(), booking.getSlot().getStartTime());
+        LocalDateTime playTime = playTime(booking);
         LocalDateTime now = LocalDateTime.now();
         double hoursDiff = (double) java.time.Duration.between(now, playTime).toMinutes() / 60.0;
 
@@ -157,7 +162,7 @@ public class RefundServiceImpl implements RefundService {
                 .bookingId(booking.getBookingId())
                 .stadiumName(booking.getStadium().getStadiumName())
                 .customerName(booking.getUser().getFirstName() + " " + booking.getUser().getLastName())
-                .playTime(LocalDateTime.of(booking.getBookingDate().toLocalDate(), booking.getSlot().getStartTime()))
+                .playTime(playTime(booking))
                 .originalPrice(booking.getTotalPrice())
                 .refundAmount(calc.getAmount())
                 .refundPercentage(calc.getPercentage())
@@ -194,7 +199,7 @@ public class RefundServiceImpl implements RefundService {
                 .bookingId(booking.getBookingId())
                 .stadiumName(booking.getStadium().getStadiumName())
                 .customerName(booking.getUser().getFirstName() + " " + booking.getUser().getLastName())
-                .playTime(LocalDateTime.of(booking.getBookingDate().toLocalDate(), booking.getSlot().getStartTime()))
+                .playTime(playTime(booking))
                 .originalPrice(booking.getTotalPrice())
                 .refundAmount(calculation.getAmount())
                 .refundPercentage(calculation.getPercentage())
@@ -243,14 +248,14 @@ public class RefundServiceImpl implements RefundService {
                     .displayId("BK" + String.format("%06d", b.getBookingId()))
                     .customer(customerInfo)
                     .venue(b.getStadium().getStadiumName())
-                    .date(b.getBookingDate().toLocalDate().toString())
+                    .date(b.getReservationDate().toString())
                     .time(startTimeStr + " - " + endTimeStr)
                     .amount(b.getTotalPrice())
                     .refundAmount(refundAmt)
                     .paymentStatus(b.getPaymentStatus().name().toLowerCase())
                     .status(b.getBookingStatus().name().toLowerCase())
                     .notes(b.getNote() != null ? b.getNote() : "")
-                    .playTimeRaw(b.getSlot().getStartTime().toString())
+                    .playTimeRaw(playTime(b).toString())
                     .build();
         }).collect(java.util.stream.Collectors.toList());
     }

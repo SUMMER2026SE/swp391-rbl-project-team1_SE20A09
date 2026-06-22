@@ -3,6 +3,7 @@ package com.sportvenue.controller;
 import com.sportvenue.dto.request.CreateStadiumRequest;
 import com.sportvenue.dto.request.UpdateStadiumRequest;
 import com.sportvenue.dto.response.StadiumResponse;
+import com.sportvenue.security.RequireApprovedOwner;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.StadiumService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,6 +38,7 @@ public class StadiumController {
 
     @PostMapping
     @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
     @Operation(summary = "Add new stadium", description = "Allows an owner to add a new sport venue. Requires ROLE_Owner.")
     public ResponseEntity<StadiumResponse> createStadium(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
@@ -48,6 +50,7 @@ public class StadiumController {
 
     @GetMapping("/my")
     @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
     @Operation(summary = "Get my stadiums", description = "Returns all stadiums owned by the authenticated owner.")
     public ResponseEntity<List<StadiumResponse>> getMyStadiums(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
@@ -61,6 +64,7 @@ public class StadiumController {
 
     @PutMapping("/{stadiumId}/suspend")
     @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
     @Operation(summary = "Suspend stadium", description = "Allows an owner to suspend their stadium (set status to MAINTENANCE)")
     public ResponseEntity<Void> suspendStadium(
             @PathVariable Integer stadiumId,
@@ -72,6 +76,7 @@ public class StadiumController {
 
     @PutMapping("/{stadiumId}/activate")
     @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
     @Operation(summary = "Activate stadium", description = "Allows an owner to activate their suspended stadium (set status to AVAILABLE)")
     public ResponseEntity<Void> activateStadium(
             @PathVariable Integer stadiumId,
@@ -83,6 +88,7 @@ public class StadiumController {
 
     @DeleteMapping("/{stadiumId}")
     @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
     @Operation(summary = "Delete stadium", description = "Allows an owner to soft-delete their stadium (set status to CLOSED)")
     public ResponseEntity<Void> deleteStadium(
             @PathVariable Integer stadiumId,
@@ -94,6 +100,7 @@ public class StadiumController {
 
     @GetMapping("/{stadiumId}")
     @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
     @Operation(summary = "Get stadium by ID", description = "Returns a specific stadium owned by the authenticated owner.")
     public ResponseEntity<StadiumResponse> getStadiumById(
             @PathVariable Integer stadiumId,
@@ -105,6 +112,7 @@ public class StadiumController {
 
     @PutMapping("/{stadiumId}")
     @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
     @Operation(summary = "Update stadium", description = "Allows an owner to update their stadium. Ownership is verified.")
     public ResponseEntity<StadiumResponse> updateStadium(
             @PathVariable Integer stadiumId,

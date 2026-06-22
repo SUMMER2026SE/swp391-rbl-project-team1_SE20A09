@@ -164,24 +164,19 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("to") LocalDateTime to);
 
     /**
-     * Tổng doanh thu theo NGÀY CHƠI (slot.startTime) — thời điểm khách thực sự ra sân.
-     *
-     * Phù hợp khi báo cáo theo "doanh thu phát sinh trong ngày" (thực tế vận hành sân).
-     * Ví dụ: khách đặt ngày 1 nhưng chơi ngày 5 → tính vào doanh thu ngày 5.
-     *
-     * Dùng cho: UC-OWN-10 (Revenue Report) nếu product owner muốn thống kê theo ngày chơi.
-     * Đây thường là cách tính phù hợp hơn cho báo cáo vận hành sân thể thao.
+     * Tổng doanh thu theo NGÀY CHƠI (reservationDate) — thời điểm khách thực sự ra sân.
+     * Khác với {@link #sumRevenueByBookingDate}: tính theo ngày chơi, không phải ngày đặt.
      */
     @Query("""
             SELECT COALESCE(SUM(b.totalPrice), 0) FROM Booking b
             WHERE b.stadium.stadiumId = :stadiumId
             AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
-            AND b.bookingDate BETWEEN :from AND :to
+            AND b.reservationDate BETWEEN :from AND :to
             """)
     BigDecimal sumRevenueBySlotDate(
             @Param("stadiumId") Integer stadiumId,
-            @Param("from") LocalDateTime from,
-            @Param("to") LocalDateTime to);
+            @Param("from") java.time.LocalDate from,
+            @Param("to") java.time.LocalDate to);
 
     /** Đếm số lượng đặt sân theo trạng thái — dùng cho Dashboard. */
     long countByStadiumStadiumIdAndBookingStatus(Integer stadiumId, BookingStatus status);

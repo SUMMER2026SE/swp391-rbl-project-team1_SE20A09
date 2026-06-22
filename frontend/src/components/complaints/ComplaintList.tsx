@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -14,6 +16,8 @@ import {
 import { AlertCircle, MessageSquare, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
 import { get, post } from "@/lib/api";
 import { toast } from "sonner";
+import { useComplaintWebSocket, type ComplaintChatEvent } from "@/hooks/useComplaintWebSocket";
+
 
 type ComplaintResponse = {
   from: string;
@@ -50,12 +54,33 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
     }
   }, [selectedComplaint]);
 
+  const handleWsEvent = useCallback((event: ComplaintChatEvent) => {
+    const appendMessage = (c: Complaint): Complaint => {
+      if (c.complaintId !== event.complaintId) return c;
+      const alreadyExists = c.responses.some(
+        r => r.from === event.from && r.message === event.message && r.time === event.time
+      );
+      if (alreadyExists) return c;
+      return {
+        ...c,
+        status: event.newStatus || c.status,
+        responses: [...c.responses, { from: event.from, message: event.message, time: event.time }],
+      };
+    };
+    setComplaints(prev => prev.map(appendMessage));
+    setSelectedComplaint(prev => (prev ? appendMessage(prev) : null));
+  }, []);
+
+  useComplaintWebSocket(selectedComplaint?.complaintId ?? null, handleWsEvent);
+
+
   const fetchComplaints = useCallback(async () => {
     try {
       const endpoint = isOwner ? "/owner/complaints" : "/complaints";
-      const data = await get<Complaint[]>(endpoint);
-      if (data && Array.isArray(data)) {
-        setComplaints(data);
+      const data = await get<Complaint[] | { content: Complaint[] }>(endpoint);
+      const list = Array.isArray(data) ? data : data?.content;
+      if (list && Array.isArray(list)) {
+        setComplaints(list);
       } else {
         setComplaints([]);
       }

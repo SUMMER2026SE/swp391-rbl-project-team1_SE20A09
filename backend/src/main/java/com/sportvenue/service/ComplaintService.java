@@ -4,23 +4,23 @@ import com.sportvenue.dto.request.CreateComplaintRequest;
 import com.sportvenue.dto.request.ReplyComplaintRequest;
 import com.sportvenue.dto.request.ResolveComplaintRequest;
 import com.sportvenue.dto.response.ComplaintResponse;
-
-import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface ComplaintService {
-    
+
     /** Lấy toàn bộ khiếu nại của các sân thuộc quản lý của một Owner. */
-    List<ComplaintResponse> getOwnerComplaints(String ownerEmail);
-    
+    Page<ComplaintResponse> getOwnerComplaints(String ownerEmail, Pageable pageable);
+
     /** Lấy danh sách khiếu nại của chính khách hàng đăng nhập. */
-    List<ComplaintResponse> getCustomerComplaints(String customerEmail);
-    
+    Page<ComplaintResponse> getCustomerComplaints(String customerEmail, Pageable pageable);
+
     /** Khách hàng gửi khiếu nại mới. */
     ComplaintResponse createComplaint(CreateComplaintRequest request, String customerEmail);
-    
+
     /** Owner hoặc Customer nhắn phản hồi trong khiếu nại. */
     ComplaintResponse replyComplaint(Integer complaintId, ReplyComplaintRequest request, String userEmail);
-    
+
     /** Owner đóng giải quyết khiếu nại. */
     ComplaintResponse resolveComplaint(Integer complaintId, ResolveComplaintRequest request, String ownerEmail);
 
@@ -28,7 +28,7 @@ public interface ComplaintService {
     ComplaintResponse closeComplaint(Integer complaintId, String customerEmail);
 
     /** Admin lấy toàn bộ khiếu nại trong hệ thống. */
-    List<ComplaintResponse> getAllComplaints();
+    Page<ComplaintResponse> getAllComplaints(Pageable pageable);
 
     /** Admin đóng giải quyết khiếu nại. */
     ComplaintResponse resolveComplaintByAdmin(Integer complaintId, ResolveComplaintRequest request);

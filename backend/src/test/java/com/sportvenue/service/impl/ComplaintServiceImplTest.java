@@ -27,6 +27,11 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +39,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -85,7 +91,7 @@ class ComplaintServiceImplTest {
 
         when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(user));
         when(bookingRepository.findById(1)).thenReturn(Optional.of(booking));
-        when(complaintRepository.existsByBookingBookingId(1)).thenReturn(false);
+        when(complaintRepository.existsByBookingBookingIdAndStatusNot(1, ComplaintStatus.RESOLVED)).thenReturn(false);
 
         Complaint complaint = Complaint.builder()
                 .complaintId(500)
@@ -168,7 +174,7 @@ class ComplaintServiceImplTest {
 
         when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(user));
         when(bookingRepository.findById(1)).thenReturn(Optional.of(booking));
-        when(complaintRepository.existsByBookingBookingId(1)).thenReturn(true);
+        when(complaintRepository.existsByBookingBookingIdAndStatusNot(1, ComplaintStatus.RESOLVED)).thenReturn(true);
 
         assertThrows(BadRequestException.class, () ->
                 complaintService.createComplaint(request, "customer@example.com"));
@@ -263,12 +269,14 @@ class ComplaintServiceImplTest {
                 .createdAt(LocalDateTime.now())
                 .build());
 
-        when(complaintRepository.findAllByOrderByCreatedAtDesc()).thenReturn(mockList);
+        Pageable pageable = PageRequest.of(0, 20);
+        when(complaintRepository.findAllByOrderByCreatedAtDesc(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(mockList));
 
-        List<ComplaintResponse> result = complaintService.getAllComplaints();
+        Page<ComplaintResponse> result = complaintService.getAllComplaints(pageable);
         assertNotNull(result);
-        assertEquals(1, result.size());
-        assertEquals(1, result.get(0).getComplaintId());
+        assertEquals(1, result.getTotalElements());
+        assertEquals(1, result.getContent().get(0).getComplaintId());
     }
 
     @Test
@@ -352,15 +360,18 @@ class ComplaintServiceImplTest {
                         .status(ComplaintStatus.OPEN).createdAt(LocalDateTime.now()).build()
         );
 
-        when(complaintRepository.findByBookingStadiumOwnerUserEmailOrderByCreatedAtDesc("owner@example.com"))
-                .thenReturn(mockList);
+        Pageable pageable = PageRequest.of(0, 20);
+        when(complaintRepository.findByBookingStadiumOwnerUserEmailOrderByCreatedAtDesc(
+                eq("owner@example.com"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(mockList));
 
-        List<ComplaintResponse> result = complaintService.getOwnerComplaints("owner@example.com");
+        Page<ComplaintResponse> result = complaintService.getOwnerComplaints("owner@example.com", pageable);
 
         assertNotNull(result);
-        assertEquals(1, result.size());
-        assertEquals(1, result.get(0).getComplaintId());
-        verify(complaintRepository).findByBookingStadiumOwnerUserEmailOrderByCreatedAtDesc("owner@example.com");
+        assertEquals(1, result.getTotalElements());
+        assertEquals(1, result.getContent().get(0).getComplaintId());
+        verify(complaintRepository).findByBookingStadiumOwnerUserEmailOrderByCreatedAtDesc(
+                eq("owner@example.com"), any(Pageable.class));
     }
 
     @Test
@@ -376,15 +387,17 @@ class ComplaintServiceImplTest {
                         .status(ComplaintStatus.IN_PROGRESS).createdAt(LocalDateTime.now()).build()
         );
 
+        Pageable pageable = PageRequest.of(0, 20);
         when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
-        when(complaintRepository.findByUserUserIdOrderByCreatedAtDesc(10)).thenReturn(mockList);
+        when(complaintRepository.findByUserUserIdOrderByCreatedAtDesc(eq(10), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(mockList));
 
-        List<ComplaintResponse> result = complaintService.getCustomerComplaints("customer@example.com");
+        Page<ComplaintResponse> result = complaintService.getCustomerComplaints("customer@example.com", pageable);
 
         assertNotNull(result);
-        assertEquals(1, result.size());
-        assertEquals(2, result.get(0).getComplaintId());
-        verify(complaintRepository).findByUserUserIdOrderByCreatedAtDesc(10);
+        assertEquals(1, result.getTotalElements());
+        assertEquals(2, result.getContent().get(0).getComplaintId());
+        verify(complaintRepository).findByUserUserIdOrderByCreatedAtDesc(eq(10), any(Pageable.class));
     }
 
     @Test

@@ -19,7 +19,6 @@ import java.util.List;
 public class PageResponse<T> {
     private List<T> content;
 
-    private int pageNo;
     private int pageNumber;
 
     private int pageSize;
@@ -30,7 +29,6 @@ public class PageResponse<T> {
     public static <T> PageResponse<T> of(Page<T> page) {
         return PageResponse.<T>builder()
                 .content(page.getContent())
-                .pageNo(page.getNumber())
                 .pageNumber(page.getNumber())
                 .pageSize(page.getSize())
                 .totalElements(page.getTotalElements())
@@ -39,11 +37,9 @@ public class PageResponse<T> {
                 .build();
     }
 
-    // Hàm chuyển đổi static kèm map danh sách nội dung mới hỗ trợ main
     public static <T, R> PageResponse<R> of(Page<T> page, List<R> content) {
         return PageResponse.<R>builder()
                 .content(content)
-                .pageNo(page.getNumber())
                 .pageNumber(page.getNumber())
                 .pageSize(page.getSize())
                 .totalElements(page.getTotalElements())

@@ -58,11 +58,12 @@ function OwnerComplaintsPage() {
 
   const fetchComplaints = useCallback(async () => {
     try {
-      const data = await get<Complaint[]>("/owner/complaints");
-      if (data && Array.isArray(data)) {
-        setComplaints(data);
+      const data = await get<Complaint[] | { content: Complaint[] }>("/owner/complaints");
+      const list = Array.isArray(data) ? data : data?.content;
+      if (list && Array.isArray(list)) {
+        setComplaints(list);
         setSelectedComplaint(prev =>
-          prev ? (data.find(c => c.complaintId === prev.complaintId) ?? null) : null
+          prev ? (list.find(c => c.complaintId === prev.complaintId) ?? null) : null
         );
       }
     } catch {

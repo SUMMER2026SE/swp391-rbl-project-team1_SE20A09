@@ -66,7 +66,7 @@ export async function fetchMyBookings(
     bookings,
     totalElements: data.totalElements,
     totalPages: data.totalPages,
-    pageNo: data.pageNo,
+    pageNo: data.pageNumber,
     last: data.last,
   };
 }
@@ -139,16 +139,24 @@ export type BookingDetailItem = {
   note: string | null;
 };
 
-/**
- * Lấy chi tiết một đơn đặt sân.
- * Trả về CustomerBookingDetailDto từ backend.
- */
 export async function fetchBookingDetail(id: string | number): Promise<BookingDetailItem> {
   const data = await get<any>(`/bookings/${id}`);
 
   return {
-    ...data,
+    id: String(data.bookingId),
+    displayId: data.displayId,
+    venueName: data.stadium?.stadiumName || "Sân chưa biết",
+    sportType: data.stadium?.sportType || "Khác",
+    imageUrl: data.stadium?.imageUrl || "/images/stadium1.jpg",
+    playDate: data.reservationDate || "Chưa rõ",
+    startTime: data.slot?.startTime || "Chưa rõ",
+    endTime: data.slot?.endTime || "Chưa rõ",
+    address: data.stadium?.address || "Chưa rõ",
     totalPrice: typeof data.totalPrice === "number" ? data.totalPrice : Number(data.totalPrice),
+    status: data.status,
+    paymentStatus: data.paymentStatus,
+    createdAt: data.createdAt || "Chưa rõ",
+    note: data.note || null,
   };
 }
 

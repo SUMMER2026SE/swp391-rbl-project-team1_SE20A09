@@ -65,13 +65,14 @@ function AdminComplaintsPage() {
 
   const fetchComplaints = useCallback(async () => {
     try {
-      const data = await get<Complaint[]>("/admin/complaints");
-      if (data && Array.isArray(data)) {
-        setComplaints(data);
+      const data = await get<Complaint[] | { content: Complaint[] }>("/admin/complaints");
+      const list = Array.isArray(data) ? data : data?.content;
+      if (list && Array.isArray(list)) {
+        setComplaints(list);
         setError(null);
         setSelectedComplaint(prev => {
           if (prev) {
-            return data.find(c => c.complaintId === prev.complaintId) ?? null;
+            return list.find(c => c.complaintId === prev.complaintId) ?? null;
           }
           return null;
         });

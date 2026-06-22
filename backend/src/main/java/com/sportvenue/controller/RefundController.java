@@ -3,6 +3,7 @@ package com.sportvenue.controller;
 import com.sportvenue.dto.request.RefundRequest;
 import com.sportvenue.dto.response.OwnerBookingResponse;
 import com.sportvenue.dto.response.RefundResponse;
+import com.sportvenue.security.RequireApprovedOwner;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.RefundService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,6 +25,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/owner/bookings")
 @RequiredArgsConstructor
+@RequireApprovedOwner
 @Tag(name = "Refund", description = "Quản lý và xử lý hoàn tiền đặt sân (Owner)")
 public class RefundController {
 

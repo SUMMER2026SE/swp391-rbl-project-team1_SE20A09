@@ -127,7 +127,7 @@ class PublicStadiumServiceImplTest {
 
         assertNotNull(response);
         assertTrue(response.getContent().isEmpty());
-        assertEquals(0, response.getPageNo());
+        assertEquals(0, response.getPageNumber());
         assertEquals(5, response.getPageSize());
         assertEquals(0L, response.getTotalElements());
     }

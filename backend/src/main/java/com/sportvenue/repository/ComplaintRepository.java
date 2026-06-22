@@ -1,7 +1,5 @@
 package com.sportvenue.repository;
 
-import java.util.List;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -23,24 +21,21 @@ public interface ComplaintRepository extends JpaRepository<Complaint, Integer> {
     Page<Complaint> findByBookingStadiumStadiumIdAndStatus(
             Integer stadiumId, ComplaintStatus status, Pageable pageable);
 
-    /** Lấy khiếu nại của một user. */
+    /** Lấy toàn bộ khiếu nại của các sân thuộc quản lý của một Owner (phân trang). */
+    @EntityGraph(attributePaths = {"user", "booking", "booking.stadium"})
+    Page<Complaint> findByBookingStadiumOwnerUserEmailOrderByCreatedAtDesc(String email, Pageable pageable);
+
+    /** Lấy toàn bộ khiếu nại của một khách hàng (phân trang). */
+    @EntityGraph(attributePaths = {"user", "booking", "booking.stadium"})
     Page<Complaint> findByUserUserIdOrderByCreatedAtDesc(Integer userId, Pageable pageable);
 
-    /** Lấy toàn bộ khiếu nại của các sân thuộc quản lý của một Owner. */
-    @EntityGraph(attributePaths = {"user", "booking", "booking.stadium"})
-    List<Complaint> findByBookingStadiumOwnerUserEmailOrderByCreatedAtDesc(String email);
-
-    /** Lấy toàn bộ khiếu nại của một khách hàng (không phân trang). */
-    @EntityGraph(attributePaths = {"user", "booking", "booking.stadium"})
-    List<Complaint> findByUserUserIdOrderByCreatedAtDesc(Integer userId);
+    /** Lấy toàn bộ khiếu nại trên hệ thống cho Admin (phân trang). */
+    @EntityGraph(attributePaths = {"user", "booking", "booking.stadium", "booking.stadium.owner", "booking.stadium.owner.user"})
+    Page<Complaint> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     long countByStatus(ComplaintStatus status);
 
-    /** Kiểm tra xem đơn đặt sân đã được khiếu nại chưa. */
-    boolean existsByBookingBookingId(Integer bookingId);
-
-    /** Lấy toàn bộ khiếu nại trên hệ thống cho Admin, sử dụng EntityGraph để tránh N+1. */
-    @EntityGraph(attributePaths = {"user", "booking", "booking.stadium", "booking.stadium.owner", "booking.stadium.owner.user"})
-    List<Complaint> findAllByOrderByCreatedAtDesc();
+    /** Kiểm tra xem đơn đặt sân có khiếu nại chưa được giải quyết không. */
+    boolean existsByBookingBookingIdAndStatusNot(Integer bookingId, ComplaintStatus status);
 }
 

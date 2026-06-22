@@ -59,6 +59,38 @@ public class SportTypeServiceImpl implements SportTypeService {
 
     @Override
     @Transactional
+    public SportTypeResponse updateSportType(Integer id, CreateSportTypeRequest request) {
+        log.info("Updating sport type ID: {} with name: {}", id, request.getSportName());
+
+        SportType sportType = sportTypeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy loại môn thể thao với ID: " + id));
+
+        if (!sportType.getSportName().equals(request.getSportName())
+                && sportTypeRepository.existsBySportName(request.getSportName())) {
+            throw new BadRequestException("Tên loại môn thể thao đã tồn tại: " + request.getSportName());
+        }
+
+        if (!sportType.getSportCode().equals(request.getSportCode())
+                && sportTypeRepository.existsBySportCode(request.getSportCode())) {
+            throw new BadRequestException("Mã môn thể thao đã tồn tại: " + request.getSportCode());
+        }
+
+        sportType.setSportName(request.getSportName());
+        sportType.setNameEn(request.getNameEn());
+        sportType.setSportCode(request.getSportCode());
+        sportType.setDescription(request.getDescription());
+        if (request.getIsActive() != null) {
+            sportType.setIsActive(request.getIsActive());
+        }
+        if (request.getIsFootballType() != null) {
+            sportType.setIsFootballType(request.getIsFootballType());
+        }
+
+        return sportTypeMapper.toResponse(sportTypeRepository.save(sportType));
+    }
+
+    @Override
+    @Transactional
     public void deleteSportType(Integer id) {
         log.info("Request to delete/deactivate sport type with ID: {}", id);
         SportType sportType = sportTypeRepository.findById(id)

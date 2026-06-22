@@ -189,6 +189,9 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         if (owner.getApprovedStatus() != ApprovedStatus.PENDING) {
             throw new BadRequestException("Hồ sơ này đã được xử lý và không thể thay đổi trạng thái.");
         }
+        if (request.getApprovedStatus() == ApprovedStatus.PENDING) {
+            throw new BadRequestException("Không thể set trạng thái PENDING từ hành động này");
+        }
 
         User user = owner.getUser();
 
@@ -212,6 +215,7 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
             if (user.getAccountStatus() == AccountStatus.PENDING) {
                 user.setAccountStatus(AccountStatus.ACTIVE);
             }
+            user.setIsVerified(true);
 
             userRepository.save(user);
             log.info("Owner registration APPROVED for email: {}. Role upgraded to Owner.", user.getEmail());
