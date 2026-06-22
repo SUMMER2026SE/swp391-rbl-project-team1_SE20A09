@@ -11,6 +11,7 @@ import { MapPin, Calendar, Clock, FileText, Loader2, AlertCircle, ChevronLeft, C
 import Image from "next/image";
 import { useBookingHistory } from "@/hooks/useBookingHistory";
 import { type BookingHistoryItem } from "@/lib/bookings-api";
+import { CancelBookingDialog } from "@/components/bookings/CancelBookingDialog";
 
 const STATUS_CONFIG = {
   confirmed: { label: "Đã xác nhận", className: "bg-green-50 text-green-700 border-green-200" },
@@ -28,17 +29,17 @@ function getStatusBadge(status: BookingHistoryItem["status"]) {
   );
 }
 
-function getActionButtons(booking: BookingHistoryItem, isOwner: boolean = false) {
-  if (isOwner) {
-    return (
-      <Button asChild className="rounded-xl w-full sm:w-auto" variant="outline">
-        <Link href={`/owner/bookings/${booking.id}`}>Xem chi tiết</Link>
-      </Button>
-    );
-  }
-
+function getActionButtons(
+  booking: BookingHistoryItem,
+  isOwner: boolean = false,
+  onRequestCancel: (bookingId: string) => void
+) {
   const primaryBtnClass = "rounded-xl px-6 w-full sm:w-auto font-medium";
   const secondaryBtnClass = "rounded-xl px-6 w-full sm:w-auto font-medium border-slate-200 text-slate-600";
+
+  const detailLink = isOwner 
+    ? `/owner/bookings/${booking.id}` 
+    : `/booking/${booking.id}`;
 
   switch (booking.status) {
     case "pending":
@@ -46,10 +47,15 @@ function getActionButtons(booking: BookingHistoryItem, isOwner: boolean = false)
       return (
         <>
           <Button asChild variant="outline" className={secondaryBtnClass}>
-            <Link href={`/booking/${booking.id}`}>Xem chi tiết</Link>
+            <Link href={detailLink}>Xem chi tiết</Link>
           </Button>
-          <Button asChild variant="destructive" className={primaryBtnClass}>
-            <Link href={`/booking/${booking.id}/cancel`}>Hủy lịch</Link>
+          <Button
+            type="button"
+            variant="outline"
+            className={`${primaryBtnClass} border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700`}
+            onClick={() => onRequestCancel(booking.id)}
+          >
+            Hủy đơn
           </Button>
         </>
       );
@@ -57,17 +63,19 @@ function getActionButtons(booking: BookingHistoryItem, isOwner: boolean = false)
       return (
         <>
           <Button asChild variant="outline" className={secondaryBtnClass}>
-            <Link href={`/booking/${booking.id}`}>Xem chi tiết</Link>
+            <Link href={detailLink}>Xem chi tiết</Link>
           </Button>
-          <Button asChild className={`${primaryBtnClass} bg-emerald-600 hover:bg-emerald-700 text-white`}>
-            <Link href={`/booking/${booking.id}/review`}>Đánh giá</Link>
-          </Button>
+          {!isOwner && (
+            <Button asChild className={`${primaryBtnClass} bg-emerald-600 hover:bg-emerald-700 text-white`}>
+              <Link href={`/booking/${booking.id}/review`}>Đánh giá</Link>
+            </Button>
+          )}
         </>
       );
     case "cancelled":
       return (
         <Button asChild variant="outline" className={`${secondaryBtnClass} w-full`}>
-          <Link href={`/booking/${booking.id}`}>Xem chi tiết</Link>
+          <Link href={detailLink}>Xem chi tiết</Link>
         </Button>
       );
     default:
@@ -75,7 +83,15 @@ function getActionButtons(booking: BookingHistoryItem, isOwner: boolean = false)
   }
 }
 
-function BookingCard({ booking, isOwner = false }: { booking: BookingHistoryItem; isOwner?: boolean }) {
+function BookingCard({
+  booking,
+  isOwner = false,
+  onRequestCancel,
+}: {
+  booking: BookingHistoryItem;
+  isOwner?: boolean;
+  onRequestCancel: (bookingId: string) => void;
+}) {
   return (
     <Card className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md">
       <CardContent className="space-y-4 p-4 md:p-5">
@@ -127,7 +143,7 @@ function BookingCard({ booking, isOwner = false }: { booking: BookingHistoryItem
             </p>
           </div>
           <div className="flex flex-wrap gap-2 sm:justify-end">
-            {getActionButtons(booking, isOwner)}
+            {getActionButtons(booking, isOwner, onRequestCancel)}
           </div>
         </div>
       </CardContent>
@@ -215,6 +231,7 @@ interface BookingHistoryListProps {
 export function BookingHistoryList({ isOwner = false }: BookingHistoryListProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("all");
+  const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
 
   const {
     bookings,
@@ -228,6 +245,21 @@ export function BookingHistoryList({ isOwner = false }: BookingHistoryListProps)
 
   const handleTabChange = (val: string) => {
     setActiveTab(val);
+  };
+
+  const handleRequestCancel = (bookingId: string) => {
+    setCancelTargetId(bookingId);
+  };
+
+  const handleCancelDialogChange = (open: boolean) => {
+    if (!open) {
+      setCancelTargetId(null);
+    }
+  };
+
+  const handleCancelled = () => {
+    // refetch danh sách để phản ánh trạng thái CANCELLED mới nhất.
+    reload();
   };
 
   const renderPagination = () => {
@@ -283,7 +315,12 @@ export function BookingHistoryList({ isOwner = false }: BookingHistoryListProps)
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-1">
           {bookings.map((booking) => (
-            <BookingCard key={booking.id} booking={booking} isOwner={isOwner} />
+            <BookingCard
+              key={booking.id}
+              booking={booking}
+              isOwner={isOwner}
+              onRequestCancel={handleRequestCancel}
+            />
           ))}
         </div>
         {renderPagination()}
@@ -316,6 +353,12 @@ export function BookingHistoryList({ isOwner = false }: BookingHistoryListProps)
           </TabsContent>
         </div>
       </Tabs>
+
+      <CancelBookingDialog
+        bookingId={cancelTargetId !== null ? Number(cancelTargetId) : null}
+        onOpenChange={handleCancelDialogChange}
+        onCancelled={handleCancelled}
+      />
     </div>
   );
 }

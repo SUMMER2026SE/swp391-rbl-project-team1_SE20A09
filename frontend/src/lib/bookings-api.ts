@@ -1,4 +1,4 @@
-import { get, post } from "@/lib/api";
+import { get, post, put } from "@/lib/api";
 
 export type BookingHistoryItem = {
   id: string;
@@ -274,5 +274,29 @@ export async function createBooking(
   payload: CreateBookingPayload
 ): Promise<CreateBookingResponse> {
   return post<CreateBookingResponse>("/bookings", payload);
+}
+
+export type BookingDetailResponse = CreateBookingResponse;
+
+// ── UC-CUS-03: Cancel booking ───────────────────────────────────────────────
+
+/**
+ * Hủy một đơn đặt sân — PUT /api/v1/bookings/{bookingId}/cancel.
+ * Customer (chủ booking) hoặc Owner (chủ sân) đều có thể gọi.
+ *
+ * @param bookingId id của booking cần hủy.
+ * @param reason   lý do hủy (tùy chọn, tối đa 255 ký tự — server validate).
+ * @returns booking detail sau khi hủy (status=CANCELLED, cancelReason đã lưu).
+ * @throws Error với message từ BE nếu booking không tồn tại / không có quyền /
+ *         đang ở trạng thái COMPLETED hoặc CANCELLED.
+ */
+export async function cancelBooking(
+  bookingId: number,
+  reason?: string
+): Promise<BookingDetailResponse> {
+  return put<BookingDetailResponse>(
+    `/bookings/${bookingId}/cancel`,
+    { reason: reason || null }
+  );
 }
 
