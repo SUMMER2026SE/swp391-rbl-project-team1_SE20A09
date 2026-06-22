@@ -254,6 +254,8 @@ public class BookingServiceImpl implements BookingService {
         return toBookingDetailResponse(saved, saved.getStadium(), saved.getSlot());
     }
 
+
+
     @Override
     @Transactional(readOnly = true)
     public List<TimeSlotResponse> getSlotsByDate(Integer stadiumId, LocalDate date) {
@@ -481,19 +483,24 @@ public class BookingServiceImpl implements BookingService {
         return toBookingDetailResponse(booking, booking.getStadium(), booking.getSlot());
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // UC-CUS-05: Huỷ đơn đặt sân
-    // ─────────────────────────────────────────────────────────────────────────
 
     @Override
     @Transactional
-    public void cancelBooking(UserPrincipal principal, Integer bookingId, String reason) {
+    public BookingDetailResponse cancelBooking(UserPrincipal principal, Integer bookingId, String reason) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy đơn đặt sân với ID " + bookingId));
 
         Integer currentUserId = principal.getUser().getUserId();
-        if (!booking.getUser().getUserId().equals(currentUserId)) {
+        
+        // UC-CUS-03: chỉ customer của booking hoặc owner của sân mới có quyền hủy.
+        boolean isCustomer = booking.getUser() != null
+                && booking.getUser().getUserId().equals(currentUserId);
+        boolean isVenueOwner = booking.getStadium() != null
+                && booking.getStadium().getOwner() != null
+                && booking.getStadium().getOwner().getUser() != null
+                && booking.getStadium().getOwner().getUser().getUserId().equals(currentUserId);
+        if (!isCustomer && !isVenueOwner) {
             throw new AccessDeniedException("Bạn không có quyền huỷ đơn đặt sân này");
         }
 
@@ -517,9 +524,9 @@ public class BookingServiceImpl implements BookingService {
 
         booking.setBookingStatus(BookingStatus.CANCELLED);
         booking.setPaymentStatus(resultingPaymentStatus);
-        booking.setNote("Khách hàng huỷ: " + (reason != null ? reason : ""));
+        booking.setCancelReason(reason); // Store actual reason
         booking.setExpiredAt(null);
-        bookingRepository.save(booking);
+        Booking saved = bookingRepository.save(booking);
 
         TimeSlot slot = booking.getSlot();
         if (slot != null && slot.getSlotStatus() == SlotStatus.BOOKED) {
@@ -527,8 +534,10 @@ public class BookingServiceImpl implements BookingService {
             timeSlotRepository.save(slot);
         }
 
-        log.info("❌ UC-CUS-05: Customer {} huỷ booking #{} — lý do: {}, paymentStatus={}",
+        log.info("[UC-CUS-05] Customer {} huỷ booking #{} — lý do: {}, paymentStatus={}",
                 principal.getUser().getEmail(), bookingId, reason, resultingPaymentStatus);
+                
+        return toBookingDetailResponse(saved, saved.getStadium(), saved.getSlot());
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -562,7 +571,7 @@ public class BookingServiceImpl implements BookingService {
         LocalDateTime playTime = LocalDateTime.of(
                 booking.getReservationDate(), booking.getSlot().getStartTime());
 
-        log.info("💸 UC-CUS-06: Customer {} xem trước hoàn tiền booking #{} — {}% = {}",
+        log.info("[UC-CUS-06] Customer {} xem trước hoàn tiền booking #{} — {}% = {}",
                 principal.getUser().getEmail(), bookingId,
                 calc.getPercentage(), calc.getAmount());
 

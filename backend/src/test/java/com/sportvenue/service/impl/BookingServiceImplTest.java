@@ -6,6 +6,7 @@ import com.sportvenue.dto.request.CreateBookingRequest;
 import com.sportvenue.entity.Accessory;
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.BookingAccessory;
+import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.Role;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.TimeSlot;
@@ -491,5 +492,141 @@ class BookingServiceImplTest {
         // 4 filters × 1 call each
         verify(bookingRepository, times(4))
                 .findByUserUserIdAndBookingStatusInOrderByReservationDateDesc(eq(1), anyList(), any());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // cancelBooking Tests (UC-CUS-03)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("cancelBooking: customer cancels their own booking successfully")
+    void cancelBooking_happyPath_customerSuccess() {
+        // Arrange
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("150000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .reservationDate(futureDate())
+                .build();
+
+        when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // Act
+        BookingDetailResponse response = bookingService.cancelBooking(principal, 100, "Customer cancelled due to rain");
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
+        assertEquals(PaymentStatus.REFUNDED, booking.getPaymentStatus());
+        assertEquals("Customer cancelled due to rain", booking.getCancelReason());
+        assertNull(booking.getExpiredAt());
+        verify(bookingRepository, times(1)).save(booking);
+    }
+
+    @Test
+    @DisplayName("cancelBooking: owner cancels booking on their stadium successfully")
+    void cancelBooking_happyPath_ownerSuccess() {
+        // Arrange
+        User ownerUser = User.builder()
+                .userId(99)
+                .email("owner@example.com")
+                .role(Role.builder().roleName("Owner").build())
+                .build();
+        Owner owner = Owner.builder()
+                .ownerId(5)
+                .user(ownerUser)
+                .build();
+        stadium.setOwner(owner);
+
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("150000"))
+                .bookingStatus(BookingStatus.PENDING)
+                .paymentStatus(PaymentStatus.UNPAID)
+                .reservationDate(futureDate())
+                .build();
+
+        UserPrincipal ownerPrincipal = new UserPrincipal(ownerUser);
+
+        when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // Act
+        BookingDetailResponse response = bookingService.cancelBooking(ownerPrincipal, 100, "Owner closed court");
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
+        assertEquals(PaymentStatus.UNPAID, booking.getPaymentStatus());
+        assertEquals("Owner closed court", booking.getCancelReason());
+        verify(bookingRepository, times(1)).save(booking);
+    }
+
+    @Test
+    @DisplayName("cancelBooking: user has no permission to cancel booking -> throws BadRequestException")
+    void cancelBooking_noPermission_throwsBadRequest() {
+        // Arrange
+        User stranger = User.builder()
+                .userId(888)
+                .email("stranger@example.com")
+                .build();
+        UserPrincipal strangerPrincipal = new UserPrincipal(stranger);
+
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .build();
+
+        when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+
+        // Act & Assert
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> bookingService.cancelBooking(strangerPrincipal, 100, "No right"));
+        assertTrue(ex.getMessage().contains("không có quyền"));
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cancelBooking: booking already completed -> throws BadRequestException")
+    void cancelBooking_alreadyCompleted_throwsBadRequest() {
+        // Arrange
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .bookingStatus(BookingStatus.COMPLETED)
+                .build();
+
+        when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+
+        // Act & Assert
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> bookingService.cancelBooking(principal, 100, "Too late"));
+        assertTrue(ex.getMessage().contains("Không thể hủy"));
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cancelBooking: booking not found -> throws ResourceNotFoundException")
+    void cancelBooking_notFound_throwsNotFound() {
+        // Arrange
+        when(bookingRepository.findDetailById(999)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThrows(ResourceNotFoundException.class,
+                () -> bookingService.cancelBooking(principal, 999, "Not exists"));
+        verify(bookingRepository, never()).save(any());
     }
 }

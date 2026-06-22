@@ -24,12 +24,10 @@ import com.sportvenue.service.PaymentService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -147,6 +145,33 @@ public class BookingController {
     }
 
     /**
+     * UC-CUS-03: Hủy một đơn đặt sân — Customer (chủ booking) hoặc Owner (chủ sân) đều có thể gọi.
+     *
+     * <p>Body {@link com.sportvenue.dto.request.CancelBookingRequest} mang {@code reason} (lý do hủy, không bắt buộc,
+     * tối đa 255 ký tự). Server kiểm tra quyền ở tầng service — nếu user không phải
+     * customer/owner của booking sẽ trả 400.</p>
+     *
+     * <p>Trả về {@link BookingDetailResponse} của booking sau khi hủy để FE đồng bộ UI.</p>
+     */
+    @PostMapping("/api/v1/bookings/{id}/cancel")
+    @PreAuthorize("hasAnyRole('Customer', 'Owner')")
+    @Operation(
+            summary = "Hủy đơn đặt sân (Customer hoặc Owner)",
+            description = "Đổi booking sang CANCELLED và lưu lý do (nếu có). "
+                    + "Customer chỉ được hủy booking của mình; Owner chỉ được hủy booking của sân mình quản lý. "
+                    + "Trả 400 nếu booking đã COMPLETED hoặc CANCELLED, "
+                    + "hoặc người gọi không có quyền với booking này.")
+    public ResponseEntity<BookingDetailResponse> cancelBooking(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable("id") Integer bookingId,
+            @Valid @RequestBody(required = false) com.sportvenue.dto.request.CancelBookingRequest request) {
+        String reason = request != null ? request.getReason() : null;
+        BookingDetailResponse response = bookingService.cancelBooking(
+                userPrincipal, bookingId, reason);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * UC-CUS-04: Xem chi tiết một đơn đặt sân theo ID.
      * Chỉ chủ booking mới được xem — 403 nếu không phải.
      */
@@ -159,23 +184,6 @@ public class BookingController {
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @PathVariable("id") Integer bookingId) {
         return ResponseEntity.ok(bookingService.getBookingDetail(userPrincipal, bookingId));
-    }
-
-    /**
-     * UC-CUS-05: Huỷ đơn đặt sân.
-     * Chỉ huỷ được khi status là PENDING_PAYMENT / PENDING / CONFIRMED.
-     */
-    @PutMapping("/api/v1/bookings/{id}/cancel")
-    @PreAuthorize("hasRole('Customer')")
-    @Operation(
-            summary = "Huỷ đơn đặt sân",
-            description = "Customer tự huỷ đơn của mình. Không thể huỷ khi đã COMPLETED hoặc CANCELLED.")
-    public ResponseEntity<Void> cancelBooking(
-            @AuthenticationPrincipal UserPrincipal userPrincipal,
-            @PathVariable("id") Integer bookingId,
-            @RequestBody Map<String, String> body) {
-        bookingService.cancelBooking(userPrincipal, bookingId, body.get("reason"));
-        return ResponseEntity.ok().build();
     }
 
     /**

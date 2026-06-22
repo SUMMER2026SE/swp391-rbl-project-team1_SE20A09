@@ -19,14 +19,14 @@ public class VNPayConfig {
     @Value("${vnpay.hash-secret:}")
     private String hashSecret;
 
-    @Value("${vnpay.url}")
+    @Value("${vnpay.url:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}")
     private String url;
 
     /**
      * Return URL mà VNPay gọi về (BE endpoint nhận vnp_* params).
      * VD: http://localhost:8080/api/v1/payments/vnpay-return.
      */
-    @Value("${vnpay.return-url}")
+    @Value("${vnpay.return-url:http://localhost:8080/api/v1/payments/vnpay-return}")
     private String returnUrl;
 
     /**
