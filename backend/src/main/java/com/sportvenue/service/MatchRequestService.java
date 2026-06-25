@@ -72,7 +72,7 @@ public interface MatchRequestService {
      * @param userId ID của người dùng
      * @return danh sách kèo ghép đã tạo
      */
-    List<MatchResponse> getMyCreatedMatches(Integer userId);
+    Page<MatchResponse> getMyCreatedMatches(Integer userId, Pageable pageable);
 
     /**
      * Lấy danh sách các đơn đăng ký tham gia kèo mà người dùng đã gửi (với tư cách Guest).
@@ -80,7 +80,7 @@ public interface MatchRequestService {
      * @param email Email của người dùng
      * @return danh sách đơn đăng ký
      */
-    List<JoinRequestResponse> getMyJoinedRequests(String email);
+    Page<JoinRequestResponse> getMyJoinedRequests(String email, Pageable pageable);
 
     /**
      * Hủy kèo ghép (chỉ Host mới thực hiện được).

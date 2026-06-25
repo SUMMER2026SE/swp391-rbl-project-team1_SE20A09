@@ -24,7 +24,7 @@ export interface StadiumResponse {
 
 export interface PageResponse<T> {
   content: T[]
-  pageNo: number
+  pageNumber: number
   pageSize: number
   totalElements: number
   totalPages: number

@@ -23,9 +23,12 @@ import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.DuplicateResourceException;
 import com.sportvenue.exception.ResourceNotFoundException;
+import com.sportvenue.entity.Payment;
+import com.sportvenue.entity.enums.TransactionStatus;
 import com.sportvenue.repository.AccessoryRepository;
 import com.sportvenue.repository.BookingAccessoryRepository;
 import com.sportvenue.repository.BookingRepository;
+import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
@@ -81,6 +84,7 @@ public class BookingServiceImpl implements BookingService {
     private final StadiumRepository stadiumRepository;
     private final TimeSlotRepository timeSlotRepository;
     private final BookingRepository bookingRepository;
+    private final PaymentRepository paymentRepository;
     private final AccessoryRepository accessoryRepository;
     private final BookingAccessoryRepository bookingAccessoryRepository;
 
@@ -266,8 +270,7 @@ public class BookingServiceImpl implements BookingService {
                 && booking.getStadium().getOwner().getUser() != null
                 && booking.getStadium().getOwner().getUser().getUserId().equals(currentUserId);
         if (!isCustomer && !isVenueOwner) {
-            throw new BadRequestException(
-                    "Bạn không có quyền hủy đơn đặt sân này");
+            throw new BadRequestException("Bạn không có quyền hủy đơn đặt sân này");
         }
 
         // UC-CUS-03: không cho hủy booking đã hoàn thành hoặc đã hủy trước đó.
@@ -277,16 +280,38 @@ public class BookingServiceImpl implements BookingService {
                     "Không thể hủy đơn đặt sân ở trạng thái " + currentStatus);
         }
 
+        boolean wasReallyPaid = booking.getPaymentStatus() == PaymentStatus.PAID
+                || booking.getPaymentStatus() == PaymentStatus.DEPOSITED;
         booking.setBookingStatus(BookingStatus.CANCELLED);
         booking.setCancelReason(reason);
-        // Đã thanh toán thì chuyển payment sang REFUNDED để báo hiệu đã hoàn tiền cho khách.
-        if (booking.getPaymentStatus() == PaymentStatus.PAID) {
+        if (wasReallyPaid) {
             booking.setPaymentStatus(PaymentStatus.REFUNDED);
         }
         // Clear expiredAt nếu có (PENDING_PAYMENT sẽ được set lúc tạo).
         booking.setExpiredAt(null);
 
+        // Restore slot về AVAILABLE nếu đã bị set BOOKED bởi owner confirmation
+        TimeSlot slot = booking.getSlot();
+        if (slot != null && slot.getSlotStatus() == SlotStatus.BOOKED) {
+            slot.setSlotStatus(SlotStatus.AVAILABLE);
+            timeSlotRepository.save(slot);
+        }
+
         Booking saved = bookingRepository.save(booking);
+
+        // Tạo bản ghi refund âm để tracking — tiền thực tế hoàn qua VNPay cần xử lý thêm
+        if (wasReallyPaid) {
+            paymentRepository.findSuccessPaymentsByBookingId(bookingId)
+                    .stream().findFirst()
+                    .ifPresent(original -> paymentRepository.save(Payment.builder()
+                            .booking(saved)
+                            .paymentMethod(original.getPaymentMethod())
+                            .amount(original.getAmount().negate())
+                            .transactionCode("RFND_CUST_" + original.getTransactionCode())
+                            .paymentStatus(TransactionStatus.SUCCESS)
+                            .paidAt(LocalDateTime.now())
+                            .build()));
+        }
 
         log.info("[UC-CUS-03] Booking #{} was cancelled by userId={}, reason={}",
                 saved.getBookingId(), currentUserId, reason);
@@ -445,7 +470,7 @@ public class BookingServiceImpl implements BookingService {
      */
     private List<BookingStatus> mapStatusFilter(String statusFilter) {
         return switch (statusFilter.toLowerCase()) {
-            case "upcoming"  -> List.of(BookingStatus.PENDING, BookingStatus.CONFIRMED);
+            case "upcoming"  -> List.of(BookingStatus.PENDING_PAYMENT, BookingStatus.PENDING, BookingStatus.CONFIRMED);
             case "completed" -> List.of(BookingStatus.COMPLETED);
             case "cancelled" -> List.of(BookingStatus.CANCELLED);
             case "pending"   -> List.of(BookingStatus.PENDING);
@@ -524,6 +549,15 @@ public class BookingServiceImpl implements BookingService {
     // ─────────────────────────────────────────────────────────────────────────
 
     private BookingDetailResponse toBookingDetailResponse(Booking booking, Stadium stadium, TimeSlot slot) {
+        String imageUrl = null;
+        if (stadium.getImages() != null && !stadium.getImages().isEmpty()) {
+            imageUrl = stadium.getImages().iterator().next().getImageUrl();
+        }
+        String sportType = null;
+        if (stadium.getSportType() != null) {
+            sportType = stadium.getSportType().getSportName();
+        }
+
         return BookingDetailResponse.builder()
                 .bookingId(booking.getBookingId())
                 .displayId("BK" + String.format("%06d", booking.getBookingId()))
@@ -537,12 +571,15 @@ public class BookingServiceImpl implements BookingService {
                         .stadiumId(stadium.getStadiumId())
                         .stadiumName(stadium.getStadiumName())
                         .address(stadium.getAddress())
+                        .sportType(sportType)
+                        .imageUrl(imageUrl)
                         .build())
                 .totalPrice(booking.getTotalPrice())
                 .status(booking.getBookingStatus().name().toLowerCase())
                 .paymentStatus(booking.getPaymentStatus().name().toLowerCase())
                 .note(booking.getNote())
                 .expiredAt(booking.getExpiredAt())
+                .createdAt(booking.getBookingDate())
                 .build();
     }
 

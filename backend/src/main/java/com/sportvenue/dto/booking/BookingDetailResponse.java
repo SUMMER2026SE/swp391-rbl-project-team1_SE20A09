@@ -51,6 +51,10 @@ public class BookingDetailResponse {
     @Schema(description = "Ghi chú của khách (nếu có)")
     private String note;
 
+    @Schema(description = "Thời điểm tạo đơn đặt")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime createdAt;
+
     /**
      * UC-CUS-01: Thời điểm hết hạn giữ sân (ISO-8601) — FE dùng để chạy countdown.
      * NULL khi booking đã CONFIRMED / CANCELLED.
@@ -79,5 +83,7 @@ public class BookingDetailResponse {
         private Integer stadiumId;
         private String stadiumName;
         private String address;
+        private String sportType;
+        private String imageUrl;
     }
 }

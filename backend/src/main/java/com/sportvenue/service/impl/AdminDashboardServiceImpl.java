@@ -59,7 +59,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long totalBookings = bookingRepository.count();
         java.math.BigDecimal totalRevenue = paymentRepository.sumTotalRevenue();
 
-        long pendingBookings = bookingRepository.countByBookingStatus(BookingStatus.PENDING);
+        long pendingBookings = bookingRepository.countByBookingStatus(BookingStatus.PENDING)
+                + bookingRepository.countByBookingStatus(BookingStatus.PENDING_PAYMENT);
         long confirmedBookings = bookingRepository.countByBookingStatus(BookingStatus.CONFIRMED);
         long cancelledBookings = bookingRepository.countByBookingStatus(BookingStatus.CANCELLED);
         long completedBookings = bookingRepository.countByBookingStatus(BookingStatus.COMPLETED);

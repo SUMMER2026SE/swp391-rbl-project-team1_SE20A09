@@ -137,7 +137,7 @@ export default function OwnerApprovalPage() {
       case "APPROVED":
         return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Đã duyệt</Badge>;
       case "REJECTED":
-        return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Từ từ chối</Badge>;
+        return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Đã từ chối</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }

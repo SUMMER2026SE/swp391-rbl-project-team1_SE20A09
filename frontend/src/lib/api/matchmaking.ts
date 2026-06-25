@@ -40,7 +40,7 @@ export interface MatchResponse {
 
 export interface PageResponse<T> {
   content: T[];
-  pageNo: number;
+  pageNumber: number;
   pageSize: number;
   totalElements: number;
   totalPages: number;
@@ -127,15 +127,26 @@ export async function rejectJoinRequest(
   return res.data;
 }
 
-export async function getMyCreatedMatches(): Promise<MatchResponse[]> {
-  const res = await api.get<MatchResponse[]>("/matchmaking/my-created");
+export async function getMyCreatedMatches(
+  page = 0,
+  size = 20
+): Promise<PageResponse<MatchResponse>> {
+  const res = await api.get<PageResponse<MatchResponse>>("/matchmaking/my-created", {
+    params: { page, size },
+  });
   return res.data;
 }
 
-export async function getMyJoinedRequests(): Promise<JoinRequestResponse[]> {
-  const res = await api.get<JoinRequestResponse[]>("/matchmaking/my-joined");
+export async function getMyJoinedRequests(
+  page = 0,
+  size = 20
+): Promise<PageResponse<JoinRequestResponse>> {
+  const res = await api.get<PageResponse<JoinRequestResponse>>("/matchmaking/my-joined", {
+    params: { page, size },
+  });
   return res.data;
 }
+
 
 export async function cancelMatchRequest(
   matchId: number,

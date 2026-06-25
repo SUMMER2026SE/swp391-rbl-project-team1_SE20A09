@@ -41,7 +41,6 @@ public class SecurityConfig {
             "/api/v1/hello",
             "/api/v1/ping",
             "/api/v1/auth/**",
-            "/api/v1/bookings",
             "/api/v1/public/stadiums/**",
             "/api/v1/public/amenities/**",
             "/api/v1/sport-types/**",

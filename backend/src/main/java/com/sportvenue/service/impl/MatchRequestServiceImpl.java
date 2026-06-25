@@ -87,7 +87,13 @@ public class MatchRequestServiceImpl implements MatchRequestService {
             throw new BadRequestException("The selected stadium does not support the sport type: " + sportType.getSportName());
         }
 
-        // 5. Kiểm tra trùng lịch kèo ghép và Booking của Host
+        // 5. Validate không tạo kèo với giờ đã qua (kể cả ngày hôm nay)
+        LocalDateTime slotStart = LocalDateTime.of(request.getPlayDate(), request.getStartTime());
+        if (!slotStart.isAfter(LocalDateTime.now())) {
+            throw new BadRequestException("Không thể tạo kèo ghép cho thời điểm đã qua");
+        }
+
+        // 6. Kiểm tra trùng lịch kèo ghép và Booking của Host
         validateOverlappingSchedule(userId, request);
 
         // 7. Tạo và lưu MatchRequest
@@ -169,28 +175,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
             throw new BadRequestException("You have already sent a pending or approved join request for this match");
         }
 
-        boolean hasOverlappingMatch = matchRequestRepository.existsOverlappingMatchRequest(
-                userId,
-                match.getPlayDate(),
-                match.getStartTime(),
-                match.getEndTime()
-        );
-        if (hasOverlappingMatch) {
-            throw new BadRequestException("You already have an active or joined match request overlapping with this time range");
-        }
-
-        LocalDateTime startOfDay = match.getPlayDate().atStartOfDay();
-        LocalDateTime endOfDay = match.getPlayDate().atTime(LocalTime.MAX);
-        boolean hasOverlappingBooking = bookingRepository.existsOverlappingBooking(
-                userId,
-                startOfDay,
-                endOfDay,
-                match.getStartTime(),
-                match.getEndTime()
-        );
-        if (hasOverlappingBooking) {
-            throw new BadRequestException("You have an active booking overlapping with this match request time range");
-        }
+        validateNoScheduleConflicts(userId, match);
 
         if (match.getMatchingType() == com.sportvenue.entity.enums.MatchingType.TEAM_VS_TEAM) {
             if (message == null || message.trim().isEmpty()) {
@@ -208,6 +193,28 @@ public class MatchRequestServiceImpl implements MatchRequestService {
 
         joinRequestRepository.save(joinRequest);
         log.info("Successfully created join request for User ID: {} on Match ID: {}", userId, matchId);
+    }
+
+    private void validateNoScheduleConflicts(Integer userId, MatchRequest match) {
+        boolean hasOverlappingMatch = matchRequestRepository.existsOverlappingMatchRequest(
+                userId, match.getPlayDate(), match.getStartTime(), match.getEndTime());
+        if (hasOverlappingMatch) {
+            throw new BadRequestException("You already have an active or joined match request overlapping with this time range");
+        }
+
+        boolean hasApprovedOverlap = joinRequestRepository.existsApprovedOverlappingJoinRequest(
+                userId, match.getPlayDate(), match.getStartTime(), match.getEndTime());
+        if (hasApprovedOverlap) {
+            throw new BadRequestException("You are already approved in another match overlapping with this time range");
+        }
+
+        LocalDateTime startOfDay = match.getPlayDate().atStartOfDay();
+        LocalDateTime endOfDay = match.getPlayDate().atTime(LocalTime.MAX);
+        boolean hasOverlappingBooking = bookingRepository.existsOverlappingBooking(
+                userId, startOfDay, endOfDay, match.getStartTime(), match.getEndTime());
+        if (hasOverlappingBooking) {
+            throw new BadRequestException("You have an active booking overlapping with this match request time range");
+        }
     }
 
     private void validateOverlappingSchedule(Integer userId, CreateMatchRequest request) {
@@ -307,21 +314,27 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         }
 
         joinRequest.setRequestStatus(JoinRequestStatus.APPROVED);
-        joinRequestRepository.save(joinRequest);
+        joinRequestRepository.saveAndFlush(joinRequest);
 
-        match.setCurrentPlayers(match.getCurrentPlayers() + 1);
+        // Atomic increment để tránh race condition khi approve đồng thời
+        int updated = matchRequestRepository.incrementCurrentPlayers(matchId);
+        if (updated == 0) {
+            throw new BadRequestException("Match is already full");
+        }
 
-        if (match.getCurrentPlayers().equals(match.getMaxPlayers())) {
-            match.setMatchStatus(MatchStatus.FULL);
+        // Reload để lấy currentPlayers mới nhất sau atomic update
+        MatchRequest updatedMatch = matchRequestRepository.findById(matchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Match request not found"));
+
+        if (updatedMatch.getCurrentPlayers().equals(updatedMatch.getMaxPlayers())) {
+            matchRequestRepository.updateStatusAndReason(matchId, MatchStatus.FULL, updatedMatch.getCancelReason());
             log.info("Match ID: {} is now FULL. Auto-rejecting remaining pending requests.", matchId);
-            
             joinRequestRepository.bulkUpdateStatus(
                     matchId,
                     JoinRequestStatus.REJECTED,
                     Arrays.asList(JoinRequestStatus.PENDING)
             );
         }
-        matchRequestRepository.save(match);
     }
 
     @Override
@@ -357,18 +370,17 @@ public class MatchRequestServiceImpl implements MatchRequestService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<MatchResponse> getMyCreatedMatches(Integer userId) {
+    public Page<MatchResponse> getMyCreatedMatches(Integer userId, Pageable pageable) {
         log.info("Retrieving matches created by User ID: {}", userId);
-        List<MatchRequest> matches = matchRequestRepository.findAllByUserUserIdOrderByCreatedAtDesc(userId);
-        return matches.stream().map(this::mapToResponse).collect(Collectors.toList());
+        return matchRequestRepository.findAllByUserUserIdOrderByCreatedAtDesc(userId, pageable)
+                .map(this::mapToResponse);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<JoinRequestResponse> getMyJoinedRequests(String email) {
+    public Page<JoinRequestResponse> getMyJoinedRequests(String email, Pageable pageable) {
         log.info("Retrieving join requests sent by user email: {}", email);
-        List<JoinRequest> requests = joinRequestRepository.findAllByUserEmailOrderByCreatedAtDesc(email);
-        return requests.stream()
+        return joinRequestRepository.findAllByUserEmailOrderByCreatedAtDesc(email, pageable)
                 .map(req -> JoinRequestResponse.builder()
                         .joinId(req.getJoinId())
                         .matchId(req.getMatchRequest().getMatchId())
@@ -389,8 +401,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                         .matchStatus(req.getMatchRequest().getMatchStatus())
                         .matchingType(req.getMatchRequest().getMatchingType())
                         .cancelReason(req.getMatchRequest().getCancelReason())
-                        .build())
-                .collect(Collectors.toList());
+                        .build());
     }
 
     @Override

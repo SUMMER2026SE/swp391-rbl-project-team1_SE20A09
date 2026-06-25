@@ -100,29 +100,31 @@ export function AddressPicker({ initialAddress, initialLat, initialLng, onAddres
 
   const reverseGeocode = useCallback(
     async (lat: number, lng: number) => {
-      const cacheKey = `${lat},${lng}`
+      const roundedLat = Number(lat.toFixed(8))
+      const roundedLng = Number(lng.toFixed(8))
+      const cacheKey = `${roundedLat},${roundedLng}`
       if (reverseCacheRef.current.has(cacheKey)) {
         const cached = reverseCacheRef.current.get(cacheKey)!
         setInputValue(cached.displayName)
-        onAddressChange({ addressText: cached.displayName, lat, lng })
+        onAddressChange({ addressText: cached.displayName, lat: roundedLat, lng: roundedLng })
         return
       }
 
       try {
-        const data = await get<LocationDTO>(`/geocoding/reverse?lat=${lat}&lng=${lng}`)
+        const data = await get<LocationDTO>(`/geocoding/reverse?lat=${roundedLat}&lng=${roundedLng}`)
         
         if (data && data.displayName) {
           reverseCacheRef.current.set(cacheKey, data)
           setInputValue(data.displayName)
-          onAddressChange({ addressText: data.displayName, lat, lng })
+          onAddressChange({ addressText: data.displayName, lat: roundedLat, lng: roundedLng })
         } else {
           setInputValue('')
-          onAddressChange({ addressText: '', lat, lng })
+          onAddressChange({ addressText: '', lat: roundedLat, lng: roundedLng })
         }
       } catch (err) {
         console.error('Reverse geocode error:', err)
         setInputValue('')
-        onAddressChange({ addressText: '', lat, lng })
+        onAddressChange({ addressText: '', lat: roundedLat, lng: roundedLng })
       }
     },
     [onAddressChange]
@@ -170,8 +172,8 @@ export function AddressPicker({ initialAddress, initialLat, initialLng, onAddres
 
   const selectSuggestion = useCallback(
     (item: LocationDTO) => {
-      const lat = item.latitude
-      const lng = item.longitude
+      const lat = Number(item.latitude.toFixed(8))
+      const lng = Number(item.longitude.toFixed(8))
       setPosition({ lat, lng })
       setInputValue(item.displayName)
       setShowDropdown(false)
@@ -182,18 +184,22 @@ export function AddressPicker({ initialAddress, initialLat, initialLng, onAddres
 
   const handleMarkerDragEnd = useCallback(
     (lat: number, lng: number) => {
-      setPosition({ lat, lng })
+      const roundedLat = Number(lat.toFixed(8))
+      const roundedLng = Number(lng.toFixed(8))
+      setPosition({ lat: roundedLat, lng: roundedLng })
       setInputValue('Đang tải địa chỉ...')
-      reverseGeocode(lat, lng)
+      reverseGeocode(roundedLat, roundedLng)
     },
     [reverseGeocode]
   )
 
   const handleMapClick = useCallback(
     (lat: number, lng: number) => {
-      setPosition({ lat, lng })
+      const roundedLat = Number(lat.toFixed(8))
+      const roundedLng = Number(lng.toFixed(8))
+      setPosition({ lat: roundedLat, lng: roundedLng })
       setInputValue('Đang tải địa chỉ...')
-      reverseGeocode(lat, lng)
+      reverseGeocode(roundedLat, roundedLng)
     },
     [reverseGeocode]
   )

@@ -179,12 +179,12 @@ function MatchRequestFeedPage() {
     if (!session?.user) return;
     try {
       setLoadingSidebar(true);
-      const [created, joined] = await Promise.all([
+      const [createdRes, joinedRes] = await Promise.all([
         getMyCreatedMatches(),
         getMyJoinedRequests(),
       ]);
-      setMyCreatedMatches(created);
-      setMyJoinedRequests(joined);
+      setMyCreatedMatches(createdRes?.content || []);
+      setMyJoinedRequests(joinedRes?.content || []);
     } catch (err) {
       console.error("Lỗi khi tải dữ liệu sidebar:", err);
     } finally {

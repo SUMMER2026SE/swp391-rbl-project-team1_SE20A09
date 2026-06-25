@@ -7,6 +7,7 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.FutureOrPresent;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -60,6 +61,7 @@ public class CreateMatchRequest {
 
     @NotNull(message = "Max players is required")
     @Min(value = 2, message = "Max players must be at least 2")
+    @Max(value = 50, message = "Max players cannot exceed 50")
     private Integer maxPlayers;
 
     @NotNull(message = "Skill level is required")

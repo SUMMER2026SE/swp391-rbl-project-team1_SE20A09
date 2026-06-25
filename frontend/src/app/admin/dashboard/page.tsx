@@ -234,19 +234,24 @@ export default function AdminDashboardPage() {
               Chưa có dữ liệu
             </div>
           ) : (
-            <div className="flex-1 flex items-end justify-between gap-2 h-48 mt-auto pt-4">
+            <div className="flex items-stretch justify-between gap-1.5" style={{ height: 180 }}>
               {trendData.map((item, idx) => (
-                <div key={idx} className="flex flex-col items-center gap-2 group w-full">
-                  <span className="text-xs font-semibold text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity -translate-y-2 group-hover:translate-y-0">
-                    {item.count}
+                <div key={idx} className="flex flex-col items-center gap-1 group w-full h-full">
+                  {/* count tooltip — luôn chiếm height cố định để layout ổn định */}
+                  <span className="text-[11px] font-semibold text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity" style={{ minHeight: 16, lineHeight: '16px' }}>
+                    {item.count > 0 ? item.count : ''}
                   </span>
-                  <div className="w-full relative flex justify-center bg-slate-100 rounded-t-md h-full">
+                  {/* gray track — flex-1 để fill hết không gian còn lại */}
+                  <div className="w-full relative bg-slate-100 rounded-t-md flex-1 min-h-0">
                     <div
-                      className="absolute bottom-0 w-full bg-emerald-500 rounded-t-md transition-all duration-500 group-hover:bg-emerald-400"
+                      className="absolute bottom-0 w-full bg-emerald-500 rounded-t-md transition-all duration-700 ease-out group-hover:bg-emerald-400"
                       style={{ height: `${(item.count / maxTrendCount) * 100}%` }}
-                    ></div>
+                    />
                   </div>
-                  <span className="text-xs font-medium text-slate-500">{getDayLabel(item.date)}</span>
+                  {/* day label */}
+                  <span className="text-[11px] font-medium text-slate-500 leading-none mt-0.5 flex-shrink-0">
+                    {getDayLabel(item.date)}
+                  </span>
                 </div>
               ))}
             </div>

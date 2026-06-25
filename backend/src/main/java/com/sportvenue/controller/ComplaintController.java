@@ -4,12 +4,16 @@ import com.sportvenue.dto.request.CreateComplaintRequest;
 import com.sportvenue.dto.request.ReplyComplaintRequest;
 import com.sportvenue.dto.request.ResolveComplaintRequest;
 import com.sportvenue.dto.response.ComplaintResponse;
+import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.ComplaintService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,8 +23,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -36,11 +38,11 @@ public class ComplaintController {
     @GetMapping("/owner/complaints")
     @PreAuthorize("hasRole('Owner')")
     @Operation(summary = "Lấy danh sách khiếu nại của chủ sân (Owner)")
-    public ResponseEntity<List<ComplaintResponse>> listOwnerComplaints(
-            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+    public ResponseEntity<PageResponse<ComplaintResponse>> listOwnerComplaints(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         log.info("REST request to get owner complaints for: {}", userPrincipal.getUsername());
-        List<ComplaintResponse> response = complaintService.getOwnerComplaints(userPrincipal.getUsername());
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(PageResponse.of(complaintService.getOwnerComplaints(userPrincipal.getUsername(), pageable)));
     }
 
     @PostMapping("/owner/complaints/{id}/reply")
@@ -70,11 +72,11 @@ public class ComplaintController {
     @GetMapping("/complaints")
     @PreAuthorize("hasRole('Customer')")
     @Operation(summary = "Khách hàng lấy danh sách khiếu nại của mình")
-    public ResponseEntity<List<ComplaintResponse>> listCustomerComplaints(
-            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+    public ResponseEntity<PageResponse<ComplaintResponse>> listCustomerComplaints(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         log.info("REST request to get customer complaints for: {}", userPrincipal.getUsername());
-        List<ComplaintResponse> response = complaintService.getCustomerComplaints(userPrincipal.getUsername());
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(PageResponse.of(complaintService.getCustomerComplaints(userPrincipal.getUsername(), pageable)));
     }
 
     @PostMapping("/complaints")
@@ -114,10 +116,10 @@ public class ComplaintController {
     @GetMapping("/admin/complaints")
     @PreAuthorize("hasRole('Admin')")
     @Operation(summary = "Admin lấy danh sách toàn bộ khiếu nại trong hệ thống")
-    public ResponseEntity<List<ComplaintResponse>> listAdminComplaints() {
+    public ResponseEntity<PageResponse<ComplaintResponse>> listAdminComplaints(
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         log.info("REST request to get all complaints for Admin");
-        List<ComplaintResponse> response = complaintService.getAllComplaints();
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(PageResponse.of(complaintService.getAllComplaints(pageable)));
     }
 
     @PostMapping("/admin/complaints/{id}/reply")

@@ -14,6 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -142,11 +144,11 @@ public class MatchRequestController {
             summary = "Lấy danh sách kèo tôi đã tạo (Host sidebar)",
             description = "Trả về tất cả kèo ghép mà người dùng hiện tại đã tạo ra, dùng cho sidebar 'Kèo của tôi'."
     )
-    public ResponseEntity<List<MatchResponse>> getMyCreatedMatches(
-            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+    public ResponseEntity<Page<MatchResponse>> getMyCreatedMatches(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         log.info("REST request by User: {} to get their created matches", userPrincipal.getUsername());
-        List<MatchResponse> responses = matchRequestService.getMyCreatedMatches(userPrincipal.getUser().getUserId());
-        return ResponseEntity.ok(responses);
+        return ResponseEntity.ok(matchRequestService.getMyCreatedMatches(userPrincipal.getUser().getUserId(), pageable));
     }
 
     @GetMapping("/my-joined")
@@ -155,11 +157,11 @@ public class MatchRequestController {
             summary = "Lấy danh sách đơn đăng ký tham gia kèo của tôi (Guest sidebar)",
             description = "Trả về tất cả các đơn đăng ký xin tham gia kèo mà người dùng hiện tại đã gửi."
     )
-    public ResponseEntity<List<JoinRequestResponse>> getMyJoinedRequests(
-            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+    public ResponseEntity<Page<JoinRequestResponse>> getMyJoinedRequests(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         log.info("REST request by User: {} to get their join requests", userPrincipal.getUsername());
-        List<JoinRequestResponse> responses = matchRequestService.getMyJoinedRequests(userPrincipal.getUsername());
-        return ResponseEntity.ok(responses);
+        return ResponseEntity.ok(matchRequestService.getMyJoinedRequests(userPrincipal.getUsername(), pageable));
     }
 
     @PutMapping("/{matchId}/cancel")

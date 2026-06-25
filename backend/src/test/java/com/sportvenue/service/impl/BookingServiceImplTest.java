@@ -20,6 +20,7 @@ import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.AccessoryRepository;
 import com.sportvenue.repository.BookingAccessoryRepository;
 import com.sportvenue.repository.BookingRepository;
+import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
@@ -72,6 +73,7 @@ class BookingServiceImplTest {
     @Mock private StadiumRepository stadiumRepository;
     @Mock private TimeSlotRepository timeSlotRepository;
     @Mock private BookingRepository bookingRepository;
+    @Mock private PaymentRepository paymentRepository;
     @Mock private AccessoryRepository accessoryRepository;
     @Mock private BookingAccessoryRepository bookingAccessoryRepository;
 
@@ -515,6 +517,7 @@ class BookingServiceImplTest {
 
         when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of());
 
         // Act
         BookingDetailResponse response = bookingService.cancelBooking(principal, 100, "Customer cancelled due to rain");

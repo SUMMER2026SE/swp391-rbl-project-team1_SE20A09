@@ -3,6 +3,7 @@ package com.sportvenue.controller;
 import com.sportvenue.dto.request.BookingActionRequest;
 import com.sportvenue.dto.response.BookingResponse;
 import com.sportvenue.entity.enums.BookingStatus;
+import com.sportvenue.security.RequireApprovedOwner;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.OwnerBookingService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/owner/bookings")
 @RequiredArgsConstructor
+@RequireApprovedOwner
 @Tag(name = "Owner — Booking Management",
      description = "Quản lý đặt sân: xem danh sách, xác nhận, từ chối")
 @Slf4j

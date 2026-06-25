@@ -64,7 +64,7 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
         if (allStadiums.isEmpty()) {
             return PageResponse.<StadiumResponse>builder()
                     .content(List.of())
-                    .pageNo(pageable.getPageNumber())
+                    .pageNumber(pageable.getPageNumber())
                     .pageSize(pageable.getPageSize())
                     .totalElements(0)
                     .totalPages(0)
@@ -111,7 +111,7 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
 
         return PageResponse.<StadiumResponse>builder()
                 .content(pagedResponses)
-                .pageNo(pageable.getPageNumber())
+                .pageNumber(pageable.getPageNumber())
                 .pageSize(pageable.getPageSize())
                 .totalElements(sortedStadiums.size())
                 .totalPages((int) Math.ceil((double) sortedStadiums.size() / pageable.getPageSize()))
@@ -127,7 +127,7 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
         if (stadiumPage.isEmpty()) {
             return PageResponse.<StadiumResponse>builder()
                     .content(List.of())
-                    .pageNo(stadiumPage.getNumber())
+                    .pageNumber(stadiumPage.getNumber())
                     .pageSize(stadiumPage.getSize())
                     .totalElements(stadiumPage.getTotalElements())
                     .totalPages(stadiumPage.getTotalPages())
@@ -152,7 +152,7 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
 
         return PageResponse.<StadiumResponse>builder()
                 .content(content)
-                .pageNo(stadiumPage.getNumber())
+                .pageNumber(stadiumPage.getNumber())
                 .pageSize(stadiumPage.getSize())
                 .totalElements(stadiumPage.getTotalElements())
                 .totalPages(stadiumPage.getTotalPages())
@@ -330,7 +330,7 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
 
         return PageResponse.<StadiumDetailResponse.ReviewDto>builder()
                 .content(content)
-                .pageNo(reviewPage.getNumber())
+                .pageNumber(reviewPage.getNumber())
                 .pageSize(reviewPage.getSize())
                 .totalElements(reviewPage.getTotalElements())
                 .totalPages(reviewPage.getTotalPages())

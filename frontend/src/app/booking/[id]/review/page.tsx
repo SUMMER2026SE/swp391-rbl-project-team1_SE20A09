@@ -30,7 +30,7 @@ export default function ReviewPage() {
     setIsSubmitting(true);
     setError(null);
     try {
-      await post(`/bookings/${id}/reviews`, {
+      await post(`/reviews/bookings/${id}/reviews`, {
         ratingScore: rating,
         comment: comment
       });
@@ -106,7 +106,7 @@ export default function ReviewPage() {
 
                 <div className="space-y-3">
                   <label htmlFor="comment" className="text-sm font-medium text-slate-700">
-                    Chia sẻ thêm về trải nghiệm của bạn (Tuỳ chọn)
+                    Chia sẻ thêm về trải nghiệm của bạn <span className="text-red-500">*</span>
                   </label>
                   <Textarea
                     id="comment"
@@ -126,7 +126,7 @@ export default function ReviewPage() {
 
                 <Button 
                   type="submit" 
-                  disabled={rating === 0 || isSubmitting} 
+                  disabled={rating === 0 || comment.trim() === "" || isSubmitting}
                   className="w-full h-12 text-base font-semibold bg-primary hover:bg-primary/90"
                 >
                   {isSubmitting ? "Đang gửi..." : (

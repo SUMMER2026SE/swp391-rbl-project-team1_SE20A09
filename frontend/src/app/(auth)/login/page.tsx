@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { Mail, Lock, Chrome, Loader2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,13 +59,24 @@ function LoginPage() {
         setError(getLoginErrorMessage(result.error));
       } else {
         setError(null);
-        // UC-CUS-01: Hỗ trợ ?redirect= query param để quay lại trang đã định sau khi đăng nhập.
-        // Same-origin guard: chỉ chấp nhận path bắt đầu bằng "/" và KHÔNG bắt đầu bằng "//" (tránh open-redirect).
+        const session = await getSession();
+        const roleName = session?.user?.roleName;
         const params = new URLSearchParams(window.location.search);
         const rawRedirect = params.get("redirect");
-        const safeRedirect =
-          rawRedirect && /^\/[^/\\]/.test(rawRedirect) ? rawRedirect : "/";
-        router.push(safeRedirect);
+
+        let destination: string;
+        if (roleName === "Admin") {
+          destination = "/admin/dashboard";
+        } else if (roleName === "Owner") {
+          destination = "/owner/dashboard";
+        } else if (rawRedirect && /^\/[^/\\]/.test(rawRedirect)
+                   && !rawRedirect.startsWith('/admin')
+                   && !rawRedirect.startsWith('/owner')) {
+          destination = rawRedirect;
+        } else {
+          destination = "/";
+        }
+        router.push(destination);
         router.refresh();
       }
     } catch (err: any) {
@@ -79,11 +90,8 @@ function LoginPage() {
     setError(null);
     setIsGoogleLoading(true);
     try {
-      const params = new URLSearchParams(window.location.search);
-      const rawRedirect = params.get("redirect");
-      const safeRedirect =
-        rawRedirect && /^\/[^/\\]/.test(rawRedirect) ? rawRedirect : "/";
-      await signIn("google", { callbackUrl: safeRedirect });
+      // After Google OAuth completes, /auth/redirect will read the role and forward accordingly.
+      await signIn("google", { callbackUrl: "/auth/redirect" });
     } catch (err) {
       setError("Đã xảy ra lỗi khi đăng nhập bằng Google.");
       setIsGoogleLoading(false);

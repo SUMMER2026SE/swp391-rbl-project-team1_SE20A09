@@ -2,6 +2,7 @@ package com.sportvenue.controller;
 
 import com.sportvenue.dto.request.ReplyReviewRequest;
 import com.sportvenue.dto.response.ReviewResponse;
+import com.sportvenue.security.RequireApprovedOwner;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.ReviewService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,6 +24,7 @@ import org.springframework.data.domain.Pageable;
 @RestController
 @RequestMapping("/api/v1/owner/reviews")
 @RequiredArgsConstructor
+@RequireApprovedOwner
 @Tag(name = "Owner — Review Management", description = "Owner xem và phản hồi đánh giá của khách hàng")
 public class OwnerReviewController {
 
