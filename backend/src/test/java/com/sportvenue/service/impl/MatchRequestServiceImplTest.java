@@ -529,18 +529,28 @@ class MatchRequestServiceImplTest {
                 .requestStatus(JoinRequestStatus.PENDING)
                 .build();
 
-        when(matchRequestRepository.findById(matchId)).thenReturn(Optional.of(match));
+        // After atomic SQL increment, DB currentPlayers becomes 2 (equals maxPlayers)
+        MatchRequest matchAfterIncrement = MatchRequest.builder()
+                .matchId(matchId)
+                .user(host)
+                .matchStatus(MatchStatus.OPEN)
+                .maxPlayers(2)
+                .currentPlayers(2)
+                .build();
+
+        when(matchRequestRepository.findById(matchId))
+                .thenReturn(Optional.of(match))           // initial lookup
+                .thenReturn(Optional.of(matchAfterIncrement)); // reload after increment
         when(joinRequestRepository.findById(joinId)).thenReturn(Optional.of(joinRequest));
+        when(matchRequestRepository.incrementCurrentPlayers(matchId)).thenReturn(1);
 
         matchRequestService.approveJoinRequest(matchId, joinId, hostUserId);
 
         assertEquals(JoinRequestStatus.APPROVED, joinRequest.getRequestStatus());
-        assertEquals(2, match.getCurrentPlayers());
-        assertEquals(MatchStatus.FULL, match.getMatchStatus());
-
-        verify(joinRequestRepository).save(joinRequest);
+        verify(joinRequestRepository).saveAndFlush(joinRequest);
+        verify(matchRequestRepository).incrementCurrentPlayers(matchId);
+        verify(matchRequestRepository).updateStatusAndReason(eq(matchId), eq(MatchStatus.FULL), any());
         verify(joinRequestRepository).bulkUpdateStatus(eq(matchId), eq(JoinRequestStatus.REJECTED), any());
-        verify(matchRequestRepository).save(match);
     }
 
     @Test

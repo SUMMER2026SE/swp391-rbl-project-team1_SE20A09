@@ -257,8 +257,7 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional
     public BookingDetailResponse cancelBooking(UserPrincipal principal, Integer bookingId, String reason) {
-        // Pessimistic lock để tránh race condition với payment flow
-        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
+        Booking booking = bookingRepository.findDetailById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy booking với ID " + bookingId));
 
@@ -271,7 +270,7 @@ public class BookingServiceImpl implements BookingService {
                 && booking.getStadium().getOwner().getUser() != null
                 && booking.getStadium().getOwner().getUser().getUserId().equals(currentUserId);
         if (!isCustomer && !isVenueOwner) {
-            throw new AccessDeniedException("Bạn không có quyền hủy đơn đặt sân này");
+            throw new BadRequestException("Bạn không có quyền hủy đơn đặt sân này");
         }
 
         // UC-CUS-03: không cho hủy booking đã hoàn thành hoặc đã hủy trước đó.
