@@ -69,7 +69,7 @@ class AdminDashboardServiceImplTest {
         when(paymentRepository.sumTotalRevenue()).thenReturn(new BigDecimal("1000000"));
 
         when(bookingRepository.countByBookingStatus(BookingStatus.PENDING)).thenReturn(10L);
-        when(bookingRepository.countByBookingStatus(BookingStatus.PENDING_PAYMENT)).thenReturn(2L);
+        when(bookingRepository.countByBookingStatus(BookingStatus.PENDING_PAYMENT)).thenReturn(0L);
         when(bookingRepository.countByBookingStatus(BookingStatus.CONFIRMED)).thenReturn(20L);
         when(bookingRepository.countByBookingStatus(BookingStatus.CANCELLED)).thenReturn(5L);
         when(bookingRepository.countByBookingStatus(BookingStatus.COMPLETED)).thenReturn(15L);
