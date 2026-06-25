@@ -31,8 +31,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
-
 import com.sportvenue.dto.response.ComplaintChatEventDTO;
 import com.sportvenue.service.NotificationService;
 import com.sportvenue.entity.enums.NotificationType;

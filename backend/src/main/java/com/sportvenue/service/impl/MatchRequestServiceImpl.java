@@ -175,38 +175,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
             throw new BadRequestException("You have already sent a pending or approved join request for this match");
         }
 
-        boolean hasOverlappingMatch = matchRequestRepository.existsOverlappingMatchRequest(
-                userId,
-                match.getPlayDate(),
-                match.getStartTime(),
-                match.getEndTime()
-        );
-        if (hasOverlappingMatch) {
-            throw new BadRequestException("You already have an active or joined match request overlapping with this time range");
-        }
-
-        boolean hasApprovedOverlap = joinRequestRepository.existsApprovedOverlappingJoinRequest(
-                userId,
-                match.getPlayDate(),
-                match.getStartTime(),
-                match.getEndTime()
-        );
-        if (hasApprovedOverlap) {
-            throw new BadRequestException("You are already approved in another match overlapping with this time range");
-        }
-
-        LocalDateTime startOfDay = match.getPlayDate().atStartOfDay();
-        LocalDateTime endOfDay = match.getPlayDate().atTime(LocalTime.MAX);
-        boolean hasOverlappingBooking = bookingRepository.existsOverlappingBooking(
-                userId,
-                startOfDay,
-                endOfDay,
-                match.getStartTime(),
-                match.getEndTime()
-        );
-        if (hasOverlappingBooking) {
-            throw new BadRequestException("You have an active booking overlapping with this match request time range");
-        }
+        validateNoScheduleConflicts(userId, match);
 
         if (match.getMatchingType() == com.sportvenue.entity.enums.MatchingType.TEAM_VS_TEAM) {
             if (message == null || message.trim().isEmpty()) {
@@ -224,6 +193,28 @@ public class MatchRequestServiceImpl implements MatchRequestService {
 
         joinRequestRepository.save(joinRequest);
         log.info("Successfully created join request for User ID: {} on Match ID: {}", userId, matchId);
+    }
+
+    private void validateNoScheduleConflicts(Integer userId, MatchRequest match) {
+        boolean hasOverlappingMatch = matchRequestRepository.existsOverlappingMatchRequest(
+                userId, match.getPlayDate(), match.getStartTime(), match.getEndTime());
+        if (hasOverlappingMatch) {
+            throw new BadRequestException("You already have an active or joined match request overlapping with this time range");
+        }
+
+        boolean hasApprovedOverlap = joinRequestRepository.existsApprovedOverlappingJoinRequest(
+                userId, match.getPlayDate(), match.getStartTime(), match.getEndTime());
+        if (hasApprovedOverlap) {
+            throw new BadRequestException("You are already approved in another match overlapping with this time range");
+        }
+
+        LocalDateTime startOfDay = match.getPlayDate().atStartOfDay();
+        LocalDateTime endOfDay = match.getPlayDate().atTime(LocalTime.MAX);
+        boolean hasOverlappingBooking = bookingRepository.existsOverlappingBooking(
+                userId, startOfDay, endOfDay, match.getStartTime(), match.getEndTime());
+        if (hasOverlappingBooking) {
+            throw new BadRequestException("You have an active booking overlapping with this match request time range");
+        }
     }
 
     private void validateOverlappingSchedule(Integer userId, CreateMatchRequest request) {
