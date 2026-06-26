@@ -115,7 +115,7 @@ public class HomeServiceImpl implements HomeService {
 
         return new HomeDashboardResponse(
                 (int) bookingRepository.countByUserUserId(userId),
-                (int) bookingRepository.countDistinctBookedStadiums(userId),
+                (int) venuesVisited,
                 user.getUserPoint() != null ? user.getUserPoint() : 0,
                 upcoming.stream().map(this::toUpcomingDto).toList(),
                 bookedStadiums.stream().map(s -> toVenueDto(s, true, reviewCountMap)).toList(),

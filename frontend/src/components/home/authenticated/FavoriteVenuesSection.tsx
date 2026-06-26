@@ -45,7 +45,7 @@ export function FavoriteVenuesSection({ venues }: FavoriteVenuesSectionProps) {
                 className="home-cta-shine mt-5 rounded-xl bg-green-800 hover:bg-green-900"
                 asChild
               >
-                <Link href="/venues">Khám phá sân</Link>
+                <Link href="/search">Khám phá sân</Link>
               </Button>
             </div>
           </GlowCard>

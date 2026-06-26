@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -70,10 +71,12 @@ export function WelcomeBar({
         <div ref={sliderRef} className="flex h-full w-full overflow-x-hidden snap-x snap-mandatory scroll-smooth">
           {ADS.map((ad, i) => (
             <div key={ad.id} className="relative w-full h-full flex-shrink-0 snap-center">
-              <img 
+              <Image 
                 src={ad.image} 
                 alt={ad.title} 
-                className="absolute inset-0 w-full h-full object-cover transition-transform duration-[15000ms] ease-linear hover:scale-105" 
+                fill
+                priority={i === 0}
+                className="absolute inset-0 object-cover transition-transform duration-[15000ms] ease-linear hover:scale-105" 
               />
               
               {/* Dark Gradient Overlay for text readability */}
