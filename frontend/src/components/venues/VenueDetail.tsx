@@ -38,6 +38,7 @@ import { createBooking } from '@/lib/bookings-api'
 import WeeklySchedule from './WeeklySchedule'
 import EditReviewForm from './EditReviewForm'
 import WriteReviewForm from './WriteReviewForm'
+import { useRouteGuard } from '@/components/shared/RouteGuard'
 
 // Lazy load the Leaflet Map to avoid SSR issues and reduce bundle size
 const VenueMap = dynamic(() => import('./VenueMap'), {
@@ -195,16 +196,18 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
     }
   }
 
+  const { triggerLoginModal } = useRouteGuard()
+
   const handleBookSlot = async () => {
     if (!selectedSlot) {
       toast.error('Vui lòng chọn khung giờ trước khi đặt sân')
       return
     }
 
-    // Guest → redirect to login with current path
+    // Guest → trigger login modal with current path
     if (!session?.user) {
       const redirect = `/venues/${venue.id}`
-      router.push(`/login?redirect=${encodeURIComponent(redirect)}`)
+      triggerLoginModal(redirect)
       return
     }
 

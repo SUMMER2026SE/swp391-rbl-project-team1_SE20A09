@@ -43,11 +43,8 @@ export default function OwnerApprovalPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
 
-  // Authentication guard
   useEffect(() => {
-    if (sessionStatus === "unauthenticated") {
-      router.replace("/login");
-    } else if (sessionStatus === "authenticated" && session?.user?.roleName !== "Admin") {
+    if (sessionStatus === "authenticated" && session?.user?.roleName !== "Admin") {
       toast.error("Bạn không có quyền truy cập trang này");
       router.replace("/");
     }
