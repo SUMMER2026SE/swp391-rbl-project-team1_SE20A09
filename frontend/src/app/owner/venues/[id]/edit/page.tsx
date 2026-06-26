@@ -101,11 +101,6 @@ export default function EditVenuePage() {
     },
   });
 
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.replace("/login");
-    }
-  }, [status, router]);
 
   useEffect(() => {
     if (status === "authenticated") {

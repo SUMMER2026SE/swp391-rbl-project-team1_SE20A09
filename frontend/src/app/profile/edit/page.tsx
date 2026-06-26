@@ -32,11 +32,6 @@ function EditProfilePage() {
   const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.replace('/login?callbackUrl=/profile/edit')
-      return
-    }
-
     if (status !== 'authenticated') return
 
     const loadProfile = async () => {
