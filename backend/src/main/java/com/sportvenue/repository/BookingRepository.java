@@ -364,6 +364,19 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("endDate") LocalDate endDate);
 
     /**
+     * Dashboard: Lấy danh sách stadium ID mà user đã từng đặt (trừ CANCELLED).
+     * Sắp xếp theo booking gần nhất trước.
+     */
+    @Query("""
+            SELECT b.stadium.stadiumId FROM Booking b
+            WHERE b.user.userId = :userId
+            AND b.bookingStatus <> com.sportvenue.entity.enums.BookingStatus.CANCELLED
+            GROUP BY b.stadium.stadiumId
+            ORDER BY MAX(b.bookingDate) DESC
+            """)
+    List<Integer> findDistinctBookedStadiumIds(@Param("userId") Integer userId, Pageable pageable);
+
+    /**
      * UC-CUS-07: Lấy booking COMPLETED của user tại sân cụ thể mà chưa được review.
      * FE dùng để xác định customer có đủ điều kiện viết đánh giá không.
      */

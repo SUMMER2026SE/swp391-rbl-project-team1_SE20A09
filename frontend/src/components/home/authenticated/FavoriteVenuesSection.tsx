@@ -29,7 +29,7 @@ export function FavoriteVenuesSection({ venues }: FavoriteVenuesSectionProps) {
       <div className="container relative mx-auto px-4">
         <SectionHeading
           title="Sân yêu thích của bạn"
-          subtitle="Đặt lại nhanh các sân bạn đã lưu — một chạm là xong"
+          subtitle="Đặt lại nhanh các sân bạn đã chơi — một chạm là xong"
           delayClass="animation-delay-300"
           badge={
             <Heart className="h-5 w-5 fill-rose-500 text-rose-500 animate-float-gentle" />
@@ -45,7 +45,7 @@ export function FavoriteVenuesSection({ venues }: FavoriteVenuesSectionProps) {
                 className="home-cta-shine mt-5 rounded-xl bg-green-800 hover:bg-green-900"
                 asChild
               >
-                <Link href="/search">Khám phá sân</Link>
+                <Link href="/venues">Khám phá sân</Link>
               </Button>
             </div>
           </GlowCard>
@@ -58,7 +58,6 @@ export function FavoriteVenuesSection({ venues }: FavoriteVenuesSectionProps) {
               >
                 <VenueCard
                   {...venue}
-                  saved
                   actionLabel="Đặt lại"
                   actionHref={`/booking/new?venue=${venue.id}`}
                 />
@@ -70,3 +69,4 @@ export function FavoriteVenuesSection({ venues }: FavoriteVenuesSectionProps) {
     </section>
   );
 }
+

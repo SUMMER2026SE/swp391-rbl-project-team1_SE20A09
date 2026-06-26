@@ -73,17 +73,27 @@ public class HomeServiceImpl implements HomeService {
 
         List<Booking> upcoming = bookingRepository.findUpcomingByUserId(userId, now, upcomingPage);
         log.info("Found {} upcoming bookings for user {}", upcoming.size(), userId);
-        List<UserFavoriteStadium> favorites = favoriteRepository.findByUserUserIdOrderByCreatedAtDesc(userId);
-        List<Integer> favoriteIds = favorites.stream()
-                .map(f -> f.getStadium().getStadiumId())
+
+        // Lấy danh sách sân đã từng đặt (real-time từ booking history, trừ CANCELLED)
+        Pageable bookedPage = PageRequest.of(0, 6);
+        List<Integer> bookedStadiumIds = bookingRepository.findDistinctBookedStadiumIds(userId, bookedPage);
+        List<Stadium> bookedStadiums = bookedStadiumIds.isEmpty()
+                ? List.of()
+                : stadiumRepository.findAllById(bookedStadiumIds);
+
+        // Sắp xếp lại theo thứ tự từ query (most recent booking first)
+        Map<Integer, Integer> orderMap = new java.util.HashMap<>();
+        for (int i = 0; i < bookedStadiumIds.size(); i++) {
+            orderMap.put(bookedStadiumIds.get(i), i);
+        }
+        bookedStadiums = bookedStadiums.stream()
+                .sorted(java.util.Comparator.comparingInt(s -> orderMap.getOrDefault(s.getStadiumId(), 999)))
                 .toList();
 
-        List<Stadium> recommended = loadRecommended(favoriteIds);
+        List<Stadium> recommended = loadRecommended(bookedStadiumIds);
 
         // Batch load review counts — tránh N+1
-        List<Stadium> allDisplayedStadiums = favorites.stream()
-                .map(UserFavoriteStadium::getStadium)
-                .collect(Collectors.toList());
+        List<Stadium> allDisplayedStadiums = new java.util.ArrayList<>(bookedStadiums);
         allDisplayedStadiums.addAll(recommended);
 
         List<Integer> allIds = allDisplayedStadiums.stream()
@@ -109,10 +119,10 @@ public class HomeServiceImpl implements HomeService {
 
         return new HomeDashboardResponse(
                 (int) bookingRepository.countByUserUserId(userId),
-                favorites.size(),
+                bookedStadiums.size(),
                 user.getUserPoint() != null ? user.getUserPoint() : 0,
                 upcoming.stream().map(this::toUpcomingDto).toList(),
-                favorites.stream().map(f -> toVenueDto(f.getStadium(), true, reviewCountMap)).toList(),
+                bookedStadiums.stream().map(s -> toVenueDto(s, true, reviewCountMap)).toList(),
                 recommended.stream().map(s -> toVenueDto(s, false, reviewCountMap)).toList(),
                 List.of(),
                 stats
