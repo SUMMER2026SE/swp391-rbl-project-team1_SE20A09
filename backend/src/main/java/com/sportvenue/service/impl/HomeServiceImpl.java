@@ -7,14 +7,12 @@ import com.sportvenue.dto.home.VenueSummaryDto;
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.User;
-import com.sportvenue.entity.UserFavoriteStadium;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.entity.enums.StadiumStatus;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.ReviewRepository;
 import com.sportvenue.repository.StadiumRepository;
-import com.sportvenue.repository.UserFavoriteStadiumRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.HomeService;
@@ -46,7 +44,6 @@ public class HomeServiceImpl implements HomeService {
 
     private final UserRepository userRepository;
     private final BookingRepository bookingRepository;
-    private final UserFavoriteStadiumRepository favoriteRepository;
     private final StadiumRepository stadiumRepository;
     private final ReviewRepository reviewRepository;
 
