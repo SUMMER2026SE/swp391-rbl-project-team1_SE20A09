@@ -91,7 +91,7 @@ export function AuthenticatedHomePage({ user }: AuthenticatedHomePageProps) {
     );
   }
 
-  const favoriteVenues = dashboard.favoriteVenues.map(mapVenueToCard);
+  const recentlyPlayedVenues = dashboard.recentlyPlayedVenues.map(mapVenueToCard);
   const recommendedVenues = dashboard.recommendedVenues.map(mapVenueToCard);
 
   return (
@@ -102,11 +102,11 @@ export function AuthenticatedHomePage({ user }: AuthenticatedHomePageProps) {
         <WelcomeBar
           displayName={displayName}
           bookingCount={dashboard.totalBookingCount}
-          favoriteCount={dashboard.favoriteVenueCount}
+          favoriteCount={dashboard.recentlyPlayedVenueCount}
           rewardPoints={dashboard.rewardPoints}
         />
         <UpcomingBookingsSection bookings={dashboard.upcomingBookings} />
-        <FavoriteVenuesSection venues={favoriteVenues} />
+        <FavoriteVenuesSection venues={recentlyPlayedVenues} />
         <AiRecommendationsSection venues={recommendedVenues} />
         {dashboard.communityEvents.length > 0 && (
           <CommunityFeedSection events={dashboard.communityEvents} />

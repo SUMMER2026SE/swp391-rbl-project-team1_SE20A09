@@ -4,10 +4,10 @@ import java.util.List;
 
 public record HomeDashboardResponse(
         int totalBookingCount,
-        int favoriteVenueCount,
+        int recentlyPlayedVenueCount,
         int rewardPoints,
         List<UpcomingBookingDto> upcomingBookings,
-        List<VenueSummaryDto> favoriteVenues,
+        List<VenueSummaryDto> recentlyPlayedVenues,
         List<VenueSummaryDto> recommendedVenues,
         List<CommunityEventDto> communityEvents,
         PersonalStatsDto personalStats

@@ -23,10 +23,10 @@ export type CommunityEvent = {
 
 export type HomeDashboardResponse = {
   totalBookingCount: number;
-  favoriteVenueCount: number;
+  recentlyPlayedVenueCount: number;
   rewardPoints: number;
   upcomingBookings: UpcomingBooking[];
-  favoriteVenues: VenueSummaryApi[];
+  recentlyPlayedVenues: VenueSummaryApi[];
   recommendedVenues: VenueSummaryApi[];
   communityEvents: CommunityEvent[];
   personalStats: {
