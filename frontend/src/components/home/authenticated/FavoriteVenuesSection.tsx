@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Heart } from "lucide-react";
+import { History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VenueCard } from "@/components/landing/VenueCard";
 import { SectionHeading } from "@/components/home/authenticated/decor/SectionHeading";
@@ -28,19 +28,19 @@ export function FavoriteVenuesSection({ venues }: FavoriteVenuesSectionProps) {
       <div className="absolute inset-0 bg-gradient-to-b from-muted/40 via-emerald-50/30 to-transparent" />
       <div className="container relative mx-auto px-4">
         <SectionHeading
-          title="Sân yêu thích của bạn"
+          title="Sân đã chơi gần đây"
           subtitle="Đặt lại nhanh các sân bạn đã chơi — một chạm là xong"
           delayClass="animation-delay-300"
           badge={
-            <Heart className="h-5 w-5 fill-rose-500 text-rose-500 animate-float-gentle" />
+            <History className="h-5 w-5 text-emerald-600 animate-float-gentle" />
           }
         />
 
         {venues.length === 0 ? (
           <GlowCard className="animation-delay-300">
             <div className="flex flex-col items-center py-14 text-center">
-              <Heart className="mb-3 h-12 w-12 text-rose-300" />
-              <p className="text-muted-foreground">Chưa có sân yêu thích. Khám phá sân ngay!</p>
+              <History className="mb-3 h-12 w-12 text-emerald-300" />
+              <p className="text-muted-foreground">Bạn chưa đặt sân nào gần đây. Khám phá sân và trải nghiệm ngay!</p>
               <Button
                 className="home-cta-shine mt-5 rounded-xl bg-green-800 hover:bg-green-900"
                 asChild

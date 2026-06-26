@@ -376,6 +376,13 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             """)
     List<Integer> findDistinctBookedStadiumIds(@Param("userId") Integer userId, Pageable pageable);
 
+    @Query("""
+            SELECT COUNT(DISTINCT b.stadium.stadiumId) FROM Booking b
+            WHERE b.user.userId = :userId
+            AND b.bookingStatus <> com.sportvenue.entity.enums.BookingStatus.CANCELLED
+            """)
+    long countDistinctBookedStadiums(@Param("userId") Integer userId);
+
     /**
      * UC-CUS-07: Lấy booking COMPLETED của user tại sân cụ thể mà chưa được review.
      * FE dùng để xác định customer có đủ điều kiện viết đánh giá không.

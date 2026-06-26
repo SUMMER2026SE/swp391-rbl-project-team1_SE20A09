@@ -110,13 +110,12 @@ public class HomeServiceImpl implements HomeService {
                     ));
         }
 
-        // Thống kê từ DB — không load entity thô
         long venuesVisited = bookingRepository.countDistinctCompletedVenues(userId);
         PersonalStatsDto stats = buildPersonalStatsFromDb(userId, venuesVisited);
 
         return new HomeDashboardResponse(
                 (int) bookingRepository.countByUserUserId(userId),
-                bookedStadiums.size(),
+                (int) bookingRepository.countDistinctBookedStadiums(userId),
                 user.getUserPoint() != null ? user.getUserPoint() : 0,
                 upcoming.stream().map(this::toUpcomingDto).toList(),
                 bookedStadiums.stream().map(s -> toVenueDto(s, true, reviewCountMap)).toList(),
