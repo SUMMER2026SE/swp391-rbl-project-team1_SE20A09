@@ -4,15 +4,25 @@
 export function HomeAmbientBackground() {
   return (
     <div
-      className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
+      className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-slate-50"
       aria-hidden
     >
-      <div className="absolute inset-0 bg-gradient-to-b from-emerald-50/90 via-background to-amber-50/30" />
-      <div className="home-grid-pattern absolute inset-0 opacity-[0.35]" />
-      <div className="animate-orb-float absolute -left-32 top-20 h-72 w-72 rounded-full bg-emerald-400/25 blur-3xl" />
-      <div className="animate-orb-float animation-delay-2000 absolute right-0 top-1/3 h-96 w-96 rounded-full bg-teal-300/20 blur-3xl" />
-      <div className="animate-orb-float animation-delay-4000 absolute bottom-20 left-1/3 h-64 w-64 rounded-full bg-amber-300/20 blur-3xl" />
-      <div className="animate-shimmer-sweep absolute inset-0 bg-[linear-gradient(105deg,transparent_40%,rgba(255,255,255,0.12)_50%,transparent_60%)] bg-[length:200%_100%]" />
+      {/* Fresh, clean sports-themed gradient base */}
+      <div className="absolute inset-0 bg-gradient-to-br from-emerald-100/40 via-white to-teal-50/60" />
+
+      {/* Dynamic, energetic Orbs matching the brand (Green/Teal/Lime) */}
+      <div className="animate-orb-float absolute -top-[10%] -left-[10%] w-[50vw] h-[50vw] rounded-full bg-emerald-400/20 blur-[100px]" />
+      <div className="animate-orb-float animation-delay-2000 absolute top-[20%] -right-[10%] w-[45vw] h-[45vw] rounded-full bg-teal-400/15 blur-[100px]" />
+      <div className="animate-orb-float animation-delay-4000 absolute -bottom-[10%] left-[15%] w-[60vw] h-[60vw] rounded-full bg-lime-300/20 blur-[120px]" />
+
+      {/* Modern dotted overlay (subtle and clean) */}
+      <div 
+        className="absolute inset-0 opacity-40" 
+        style={{ 
+          backgroundImage: "radial-gradient(circle at 1.5px 1.5px, rgba(16, 185, 129, 0.08) 1.5px, transparent 0)", 
+          backgroundSize: "32px 32px" 
+        }} 
+      />
     </div>
   );
 }
