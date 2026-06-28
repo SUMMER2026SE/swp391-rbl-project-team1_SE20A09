@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import { Toaster } from "sonner";
 import NextAuthProvider from "@/components/providers/NextAuthProvider";
 import QueryProvider from "@/components/providers/QueryProvider";
+import { RouteGuard } from "@/components/shared/RouteGuard";
 
 const inter = Inter({
   subsets: ["latin", "vietnamese"],
@@ -26,7 +27,9 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans antialiased`}>
         <NextAuthProvider>
           <QueryProvider>
-            {children}
+            <RouteGuard>
+              {children}
+            </RouteGuard>
             <Toaster position="top-right" richColors />
           </QueryProvider>
         </NextAuthProvider>

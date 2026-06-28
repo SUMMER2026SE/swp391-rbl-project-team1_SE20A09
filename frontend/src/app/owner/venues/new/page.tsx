@@ -100,12 +100,6 @@ function AddVenuePage() {
     },
   });
 
-  // Auth guard — redirect to login if not authenticated
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.replace("/login");
-    }
-  }, [status, router]);
 
   useEffect(() => {
     stadiumService.getSportTypes()

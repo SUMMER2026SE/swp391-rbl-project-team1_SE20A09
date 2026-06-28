@@ -18,11 +18,6 @@ export default function VenueSlotsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [stadium, setStadium] = useState<StadiumResponse | null>(null);
 
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.replace("/login");
-    }
-  }, [status, router]);
 
   useEffect(() => {
     if (status === "authenticated") {
