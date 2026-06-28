@@ -25,10 +25,27 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
 
     /** Lấy danh sách sân theo chủ sân — dùng cho trang quản lý của Owner. */
     @EntityGraph(attributePaths = {"sportType", "images"})
-    @Query("SELECT s FROM Stadium s WHERE s.owner.ownerId = :ownerId AND s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT AND s.stadiumStatus != :status")
+    @Query("""
+            SELECT s FROM Stadium s
+            LEFT JOIN s.owner o
+            LEFT JOIN s.parentStadium p
+            LEFT JOIN p.complex c
+            LEFT JOIN c.owner co
+            WHERE s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT
+            AND (o.ownerId = :ownerId OR co.ownerId = :ownerId)
+            AND s.stadiumStatus != :status
+            """)
     List<Stadium> findByOwnerOwnerIdAndStadiumStatusNot(@Param("ownerId") Integer ownerId, @Param("status") StadiumStatus status);
 
-    @Query("SELECT s FROM Stadium s WHERE s.owner.ownerId = :ownerId AND s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT")
+    @Query("""
+            SELECT s FROM Stadium s
+            LEFT JOIN s.owner o
+            LEFT JOIN s.parentStadium p
+            LEFT JOIN p.complex c
+            LEFT JOIN c.owner co
+            WHERE s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT
+            AND (o.ownerId = :ownerId OR co.ownerId = :ownerId)
+            """)
     List<Stadium> findByOwnerOwnerId(@Param("ownerId") Integer ownerId);
 
     /** Lấy tất cả sân đang hoạt động — dùng cho trang chủ Guest. */
@@ -51,18 +68,23 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
     /** Tìm kiếm sân theo tên hoặc địa chỉ — dùng cho Search Venue. */
     @Query("""
             SELECT s FROM Stadium s
+            LEFT JOIN s.parentStadium p
+            LEFT JOIN p.complex c
             WHERE s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT
             AND s.stadiumStatus = 'AVAILABLE'
             AND (LOWER(s.stadiumName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                 OR LOWER(s.parentStadium.complex.address) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                 OR LOWER(c.address) LIKE LOWER(CONCAT('%', :keyword, '%')))
             """)
     Page<Stadium> searchByKeyword(@Param("keyword") String keyword, Pageable pageable);
 
     /** Lấy sân theo sport type — dùng cho Filter Venue. */
     @Query("""
             SELECT s FROM Stadium s
+            LEFT JOIN s.parentStadium p
+            LEFT JOIN p.sportType pst
+            LEFT JOIN s.sportType st
             WHERE s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT
-            AND (s.parentStadium.sportType.sportTypeId = :sportTypeId OR s.sportType.sportTypeId = :sportTypeId)
+            AND (pst.sportTypeId = :sportTypeId OR st.sportTypeId = :sportTypeId)
             AND s.stadiumStatus = :status
             """)
     Page<Stadium> findBySportTypeSportTypeIdAndStadiumStatus(
@@ -73,8 +95,12 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
     /** Đếm sân theo owner — dùng cho Dashboard. */
     @Query("""
             SELECT COUNT(s) FROM Stadium s
+            LEFT JOIN s.owner o
+            LEFT JOIN s.parentStadium p
+            LEFT JOIN p.complex c
+            LEFT JOIN c.owner co
             WHERE s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT
-            AND s.parentStadium.complex.owner.ownerId = :ownerId
+            AND (o.ownerId = :ownerId OR co.ownerId = :ownerId)
             AND s.stadiumStatus = :status
             """)
     long countByOwnerOwnerIdAndStadiumStatus(@Param("ownerId") Integer ownerId, @Param("status") StadiumStatus status);
@@ -96,21 +122,38 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
 
     @Query("""
             SELECT COUNT(s) FROM Stadium s
+            LEFT JOIN s.parentStadium p
+            LEFT JOIN p.complex c
+            LEFT JOIN c.owner o
+            LEFT JOIN o.user u
             WHERE s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT
-            AND s.parentStadium.complex.owner.user.email = :ownerEmail
+            AND u.email = :ownerEmail
             """)
     long countStadiumsByOwnerEmail(@Param("ownerEmail") String ownerEmail);
 
     @Query("""
             SELECT CASE WHEN COUNT(s) > 0 THEN true ELSE false END FROM Stadium s
+            LEFT JOIN s.parentStadium p
+            LEFT JOIN p.sportType pst
+            LEFT JOIN s.sportType st
             WHERE s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT
-            AND (s.parentStadium.sportType.sportTypeId = :sportTypeId OR s.sportType.sportTypeId = :sportTypeId)
+            AND (pst.sportTypeId = :sportTypeId OR st.sportTypeId = :sportTypeId)
             """)
     boolean existsBySportTypeSportTypeId(@Param("sportTypeId") Integer sportTypeId);
 
+    @EntityGraph(attributePaths = {"parentStadium", "complex"})
     @Query("SELECT s FROM Stadium s WHERE s.parentStadium.stadiumId = :facilityId AND s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT")
     List<Stadium> findCourtsByFacilityId(@Param("facilityId") Integer facilityId);
 
+    @EntityGraph(attributePaths = {"parentStadium", "complex"})
     @Query("SELECT s FROM Stadium s WHERE s.complex.complexId = :complexId AND s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT")
     List<Stadium> findCourtsByComplexId(@Param("complexId") Integer complexId);
+
+    @EntityGraph(attributePaths = {"parentStadium", "complex"})
+    @Query("SELECT s FROM Stadium s WHERE s.stadiumId IN :ids AND s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT")
+    List<Stadium> findCourtsByIds(@Param("ids") List<Integer> ids);
+
+    @EntityGraph(attributePaths = {"complex", "complex.owner", "complex.owner.user"})
+    @Query("SELECT s FROM Stadium s WHERE s.stadiumId = :stadiumId")
+    Optional<Stadium> findFacilityWithComplexDetails(@Param("stadiumId") Integer stadiumId);
 }

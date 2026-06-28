@@ -70,6 +70,12 @@ public interface TimeSlotRepository extends JpaRepository<TimeSlot, Integer> {
             @Param("from") LocalTime from,
             @Param("to") LocalTime to);
 
+    /**
+     * Tìm kiếm các slot trùng giờ hiện có trên sân.
+     * Quy tắc nghiệp vụ (Business Rule): Không lọc theo trạng thái (status).
+     * Bất kỳ slot nào đã tồn tại (kể cả đang BOOKED hay MAINTENANCE) đều không được phép tạo đè lên
+     * để tránh trùng lặp dữ liệu khung giờ (duplicate slots) của cùng một sân lẻ.
+     */
     @Query("""
             SELECT t FROM TimeSlot t
             WHERE t.stadium.stadiumId = :stadiumId

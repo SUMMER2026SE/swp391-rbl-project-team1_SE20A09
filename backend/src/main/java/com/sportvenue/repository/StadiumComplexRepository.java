@@ -21,7 +21,7 @@ public interface StadiumComplexRepository extends JpaRepository<StadiumComplex, 
 
     List<StadiumComplex> findByOwnerOwnerId(Integer ownerId);
 
-    @EntityGraph(attributePaths = {"owner", "sportTypes", "amenities", "images"})
+    @EntityGraph(attributePaths = {"owner", "owner.user", "sportTypes", "amenities", "images"})
     @Query("SELECT sc FROM StadiumComplex sc WHERE sc.complexId = :complexId")
     Optional<StadiumComplex> findWithDetailsByComplexId(@Param("complexId") Integer complexId);
 
