@@ -168,4 +168,13 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
     @EntityGraph(attributePaths = {"complex", "parentStadium", "sportType"})
     @Query("SELECT s FROM Stadium s WHERE s.stadiumId = :stadiumId")
     Optional<Stadium> findByIdWithComplexAndParent(@Param("stadiumId") Integer stadiumId);
+
+    @Query("""
+        SELECT s.complex.complexId, MIN(s.pricePerHour), MAX(s.pricePerHour)
+        FROM Stadium s
+        WHERE s.complex.complexId IN :complexIds
+        AND s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT
+        GROUP BY s.complex.complexId
+        """)
+    List<Object[]> findMinMaxPriceByComplexIds(@Param("complexIds") List<Integer> complexIds);
 }

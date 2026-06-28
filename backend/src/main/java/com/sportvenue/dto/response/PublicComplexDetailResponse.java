@@ -27,6 +27,9 @@ public class PublicComplexDetailResponse {
     private Integer reviewCount;
     private String ownerName;
     private String ownerPhone;
+    private Double distanceInKm;
+    private BigDecimal minPrice;
+    private BigDecimal maxPrice;
 
     private List<SportTypeInfo> sportTypes;
     private List<AmenityInfo> amenities;

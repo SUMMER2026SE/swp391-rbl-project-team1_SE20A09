@@ -1,7 +1,9 @@
 package com.sportvenue.service.impl;
 
+import com.sportvenue.dto.request.StadiumComplexSearchRequest;
 import com.sportvenue.dto.response.CourtResponse;
 import com.sportvenue.dto.response.FacilityResponse;
+import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.dto.response.PublicComplexDetailResponse;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.StadiumComplex;
@@ -12,7 +14,12 @@ import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.StadiumComplexRepository;
 import com.sportvenue.repository.StadiumRepository;
+import com.sportvenue.repository.specification.StadiumComplexSpecification;
 import com.sportvenue.service.PublicComplexService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -43,7 +50,10 @@ public class PublicComplexServiceImpl implements PublicComplexService {
             throw new ResourceNotFoundException("Complex is not available or does not exist");
         }
 
-        // Map to PublicComplexDetailResponse
+        return mapToDetailResponse(complex);
+    }
+
+    private PublicComplexDetailResponse mapToDetailResponse(StadiumComplex complex) {
         String ownerName = complex.getOwner() != null 
                 ? (complex.getOwner().getBusinessName() != null ? complex.getOwner().getBusinessName() : complex.getOwner().getUser().getFullName())
                 : "N/A";
@@ -82,7 +92,7 @@ public class PublicComplexServiceImpl implements PublicComplexService {
                                         .icon(am.getIcon())
                                         .build())
                                 .collect(Collectors.toList())
-                        : Collections.emptyList())
+                        : java.util.Collections.emptyList())
                 .images(complex.getImages() != null
                         ? complex.getImages().stream()
                                 .map(img -> PublicComplexDetailResponse.ImageInfo.builder()
@@ -90,7 +100,7 @@ public class PublicComplexServiceImpl implements PublicComplexService {
                                         .imageUrl(img.getImageUrl())
                                         .build())
                                 .collect(Collectors.toList())
-                        : Collections.emptyList())
+                        : java.util.Collections.emptyList())
                 .build();
     }
 
@@ -171,5 +181,108 @@ public class PublicComplexServiceImpl implements PublicComplexService {
                 .stadiumStatus(s.getStadiumStatus().name())
                 .imageUrls(imageUrls)
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<PublicComplexDetailResponse> searchComplexes(StadiumComplexSearchRequest request) {
+        log.info("Public request to search complexes with keyword: {}", request.getKeyword());
+
+        Specification<StadiumComplex> spec = StadiumComplexSpecification.withDynamicFilter(request);
+        Pageable pageable = PageRequest.of(request.getPage(), request.getSize());
+
+        List<StadiumComplex> contentList;
+        long totalElements;
+        int totalPages;
+
+        if (request.hasLocation()) {
+            List<StadiumComplex> allMatched = stadiumComplexRepository.findAll(spec);
+
+            List<StadiumComplex> sorted = allMatched.stream()
+                    .filter(c -> c.getLatitude() != null && c.getLongitude() != null)
+                    .sorted((c1, c2) -> {
+                        Double d1 = calculateHaversineDistance(request.getUserLat(), request.getUserLng(), c1.getLatitude(), c1.getLongitude());
+                        Double d2 = calculateHaversineDistance(request.getUserLat(), request.getUserLng(), c2.getLatitude(), c2.getLongitude());
+                        return d1.compareTo(d2);
+                    })
+                    .collect(Collectors.toList());
+
+            int start = (int) pageable.getOffset();
+            int end = Math.min(start + pageable.getPageSize(), sorted.size());
+            contentList = (start <= end) ? sorted.subList(start, end) : Collections.emptyList();
+
+            totalElements = sorted.size();
+            totalPages = (int) Math.ceil((double) totalElements / pageable.getPageSize());
+        } else {
+            Page<StadiumComplex> dbPage = stadiumComplexRepository.findAll(spec, pageable);
+            contentList = dbPage.getContent();
+            totalElements = dbPage.getTotalElements();
+            totalPages = dbPage.getTotalPages();
+        }
+
+        if (contentList.isEmpty()) {
+            return PageResponse.<PublicComplexDetailResponse>builder()
+                    .content(Collections.emptyList())
+                    .pageNumber(pageable.getPageNumber())
+                    .pageSize(pageable.getPageSize())
+                    .totalElements(0)
+                    .totalPages(0)
+                    .last(true)
+                    .build();
+        }
+
+        // Aggregate pricing (Option B: batch fetch to avoid N+1)
+        List<Integer> complexIds = contentList.stream().map(StadiumComplex::getComplexId).collect(Collectors.toList());
+        List<Object[]> minMaxPrices = stadiumRepository.findMinMaxPriceByComplexIds(complexIds);
+
+        java.util.Map<Integer, java.math.BigDecimal[]> priceMap = new java.util.HashMap<>();
+        for (Object[] row : minMaxPrices) {
+            Integer complexId = (Integer) row[0];
+            java.math.BigDecimal minPrice = (java.math.BigDecimal) row[1];
+            java.math.BigDecimal maxPrice = (java.math.BigDecimal) row[2];
+            priceMap.put(complexId, new java.math.BigDecimal[]{minPrice, maxPrice});
+        }
+
+        List<PublicComplexDetailResponse> responses = contentList.stream()
+                .map(complex -> {
+                    PublicComplexDetailResponse detail = mapToDetailResponse(complex);
+                    
+                    // Set distance if location search was performed
+                    if (request.hasLocation() && complex.getLatitude() != null && complex.getLongitude() != null) {
+                        double dist = calculateHaversineDistance(request.getUserLat(), request.getUserLng(), complex.getLatitude(), complex.getLongitude());
+                        detail.setDistanceInKm(dist);
+                    }
+
+                    // Set aggregated prices
+                    java.math.BigDecimal[] prices = priceMap.get(complex.getComplexId());
+                    if (prices != null) {
+                        detail.setMinPrice(prices[0]);
+                        detail.setMaxPrice(prices[1]);
+                    }
+                    return detail;
+                })
+                .collect(Collectors.toList());
+
+        boolean isLast = pageable.getOffset() + responses.size() >= totalElements;
+
+        return PageResponse.<PublicComplexDetailResponse>builder()
+                .content(responses)
+                .pageNumber(pageable.getPageNumber())
+                .pageSize(pageable.getPageSize())
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .last(isLast)
+                .build();
+    }
+
+    private Double calculateHaversineDistance(double lat1, double lon1, double lat2, double lon2) {
+        final int R = 6371;
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lonDistance = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
     }
 }

@@ -1,7 +1,9 @@
 package com.sportvenue.controller;
 
+import com.sportvenue.dto.request.StadiumComplexSearchRequest;
 import com.sportvenue.dto.response.CourtResponse;
 import com.sportvenue.dto.response.FacilityResponse;
+import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.dto.response.PublicComplexDetailResponse;
 import com.sportvenue.service.PublicComplexService;
 import org.junit.jupiter.api.Test;
@@ -87,5 +89,25 @@ public class PublicComplexControllerTest {
         assertEquals(1, result.getBody().size());
         assertEquals("Sân Bóng 1", result.getBody().get(0).getStadiumName());
         verify(publicComplexService).getCourtsByFacilityId(id);
+    }
+
+    @Test
+    void searchComplexes_Success() {
+        // Arrange
+        StadiumComplexSearchRequest request = StadiumComplexSearchRequest.builder().keyword("Test").build();
+        PageResponse<PublicComplexDetailResponse> response = PageResponse.<PublicComplexDetailResponse>builder()
+                .content(List.of(PublicComplexDetailResponse.builder().name("Complex A").build()))
+                .build();
+        when(publicComplexService.searchComplexes(request)).thenReturn(response);
+
+        // Act
+        ResponseEntity<PageResponse<PublicComplexDetailResponse>> result = publicComplexController.searchComplexes(request);
+
+        // Assert
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertNotNull(result.getBody());
+        assertEquals(1, result.getBody().getContent().size());
+        assertEquals("Complex A", result.getBody().getContent().get(0).getName());
+        verify(publicComplexService).searchComplexes(request);
     }
 }
