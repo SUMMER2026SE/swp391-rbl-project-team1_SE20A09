@@ -1,5 +1,16 @@
 import { post, get, put, del } from '../api';
-import { CreateStadiumRequest, UpdateStadiumRequest, StadiumResponse, SportType } from '@/types/stadium';
+import {
+  CreateStadiumRequest,
+  UpdateStadiumRequest,
+  StadiumResponse,
+  SportType,
+  ComplexResponse,
+  CreateFacilityRequest,
+  CreateCourtRequest,
+  BulkTimeSlotRequest,
+  CreateTimeSlotRequest
+} from '@/types/stadium';
+import { TimeSlotDto } from '@/types/complex';
 
 export const stadiumService = {
   createStadium: (data: CreateStadiumRequest) => {
@@ -52,5 +63,25 @@ export const stadiumService = {
 
   deleteStadium: (stadiumId: number) => {
     return del<void>(`/stadiums/${stadiumId}`);
+  },
+  
+  getMyComplexes: () => {
+    return get<ComplexResponse[]>('/complexes/my');
+  },
+
+  createFacility: (data: CreateFacilityRequest) => {
+    return post<StadiumResponse>('/stadiums/facilities', data);
+  },
+
+  createCourt: (data: CreateCourtRequest) => {
+    return post<StadiumResponse>('/stadiums/courts', data);
+  },
+
+  bulkCreateSlotsForFacility: (facilityId: number, data: BulkTimeSlotRequest) => {
+    return post<TimeSlotDto[]>(`/owner/facilities/${facilityId}/time-slots/bulk`, data);
+  },
+
+  bulkCreateSlotsForComplex: (complexId: number, data: BulkTimeSlotRequest) => {
+    return post<TimeSlotDto[]>(`/owner/complexes/${complexId}/time-slots/bulk`, data);
   },
 };
