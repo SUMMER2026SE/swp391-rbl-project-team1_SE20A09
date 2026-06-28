@@ -53,6 +53,23 @@ export const stadiumService = {
     return put<StadiumResponse>(`/stadiums/${stadiumId}/reject`, {});
   },
 
+  getAllComplexesAdmin: (approvedStatus?: string) => {
+    const query = new URLSearchParams();
+    if (approvedStatus) query.append('approvedStatus', approvedStatus);
+    const queryString = query.toString();
+    return get<ComplexResponse[]>(`/complexes${queryString ? `?${queryString}` : ''}`);
+  },
+
+  approveComplex: (complexId: number) => {
+    return put<ComplexResponse>(`/complexes/${complexId}/approve`, {});
+  },
+
+  rejectComplex: (complexId: number, reason: string) => {
+    return put<ComplexResponse>(`/complexes/${complexId}/reject`, undefined, {
+      params: { reason }
+    });
+  },
+
   suspendStadium: (stadiumId: number) => {
     return put<void>(`/stadiums/${stadiumId}/suspend`);
   },
