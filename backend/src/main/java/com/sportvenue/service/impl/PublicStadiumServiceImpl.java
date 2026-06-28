@@ -383,4 +383,19 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 .last(reviewPage.isLast())
                 .build();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.sportvenue.dto.response.ComplexRefResponse getComplexRef(Integer stadiumId) {
+        log.info("Fetching complex reference for stadium ID: {}", stadiumId);
+        return stadiumRepository.findByIdWithComplexAndParent(stadiumId)
+                .map(s -> com.sportvenue.dto.response.ComplexRefResponse.builder()
+                        .stadiumId(s.getStadiumId())
+                        .complexId(s.getComplex() != null ? s.getComplex().getComplexId() : null)
+                        .build())
+                .orElse(com.sportvenue.dto.response.ComplexRefResponse.builder()
+                        .stadiumId(stadiumId)
+                        .complexId(null)
+                        .build());
+    }
 }

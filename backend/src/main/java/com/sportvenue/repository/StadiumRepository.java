@@ -153,6 +153,14 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
     @Query("SELECT s FROM Stadium s WHERE s.stadiumId IN :ids AND s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT")
     List<Stadium> findCourtsByIds(@Param("ids") List<Integer> ids);
 
+    @EntityGraph(attributePaths = {"sportType", "images"})
+    @Query("""
+            SELECT s FROM Stadium s
+            WHERE s.complex.complexId = :complexId
+            AND s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.FACILITY
+            """)
+    List<Stadium> findFacilitiesByComplexId(@Param("complexId") Integer complexId);
+
     @EntityGraph(attributePaths = {"complex", "complex.owner", "complex.owner.user"})
     @Query("SELECT s FROM Stadium s WHERE s.stadiumId = :stadiumId")
     Optional<Stadium> findFacilityWithComplexDetails(@Param("stadiumId") Integer stadiumId);

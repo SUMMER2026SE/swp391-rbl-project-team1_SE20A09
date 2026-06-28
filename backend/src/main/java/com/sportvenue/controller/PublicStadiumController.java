@@ -49,4 +49,11 @@ public class PublicStadiumController {
                 publicStadiumService.getStadiumReviews(id, page, size);
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/{id}/complex-ref")
+    public ResponseEntity<com.sportvenue.dto.response.ComplexRefResponse> getComplexRef(
+            @PathVariable @Positive(message = "ID sân phải là số dương") Integer id) {
+        com.sportvenue.dto.response.ComplexRefResponse response = publicStadiumService.getComplexRef(id);
+        return ResponseEntity.ok(response);
+    }
 }
