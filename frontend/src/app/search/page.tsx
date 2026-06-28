@@ -2,21 +2,32 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { searchStadiums, getAmenities, getSportTypes, StadiumResponse, StadiumSearchRequest, Amenity } from '@/lib/api/stadium'
+import { getAmenities, getSportTypes, Amenity } from '@/lib/api/stadium'
+import { searchComplexes } from '@/lib/api/complex'
+import type { StadiumComplexDto, ComplexSearchParams } from '@/types/complex'
 import { Button } from '@/components/ui/button'
 import { Map, X } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import Image from 'next/image'
 import { toast } from 'sonner'
 
 // Import New Components
 import { HorizontalSearch } from './components/HorizontalSearch'
 import { SportTypeTabs } from './components/SportTypeTabs'
 import { FilterModal } from './components/FilterModal'
-import { StadiumCard } from './components/StadiumCard'
+import { ComplexCard } from './components/ComplexCard'
 import { Header } from '@/components/layout/Header'
 
-const StadiumMapModal = dynamic(() => import('./components/StadiumMapModal'), {
+// Import Pagination
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
+
+const ComplexMapModal = dynamic(() => import('./components/ComplexMapModal'), {
   ssr: false,
 })
 
@@ -43,7 +54,7 @@ function SearchPageContent() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const [stadiums, setStadiums] = useState<StadiumResponse[]>([])
+  const [complexes, setComplexes] = useState<StadiumComplexDto[]>([])
   const [amenitiesList, setAmenitiesList] = useState<Amenity[]>([])
   const [sportTypes, setSportTypes] = useState<{ sportTypeId: number, sportName: string }[]>([])
   const [loading, setLoading] = useState(false)
@@ -51,8 +62,12 @@ function SearchPageContent() {
   const [isMapOpen, setIsMapOpen] = useState(false)
   const [isLocating, setIsLocating] = useState(false)
 
+  // Pagination states
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
+
   // Local state for UI inputs (initialized safely to avoid SSR Hydration mismatch)
-  const [filters, setFilters] = useState<StadiumSearchRequest>({
+  const [filters, setFilters] = useState<ComplexSearchParams>({
     keyword: '',
     sportTypeId: undefined,
     targetDate: '',
@@ -109,7 +124,7 @@ function SearchPageContent() {
 
   // 3. Single Source of Truth: Fetch from URL changes & Sync UI on Back/Forward
   useEffect(() => {
-    const currentFilters: StadiumSearchRequest = {
+    const currentFilters: ComplexSearchParams = {
       keyword: searchParams.get('keyword') || '',
       sportTypeId: searchParams.get('sportTypeId') ? Number(searchParams.get('sportTypeId')) : undefined,
       targetDate: searchParams.get('targetDate') || '',
@@ -133,7 +148,7 @@ function SearchPageContent() {
     })
 
     // Prepare clean filters for API
-    const cleanFilters: Partial<StadiumSearchRequest> = { ...currentFilters }
+    const cleanFilters: Partial<ComplexSearchParams> = { ...currentFilters }
     if (!cleanFilters.targetDate) delete cleanFilters.targetDate
     if (!cleanFilters.startTime) delete cleanFilters.startTime
     if (!cleanFilters.endTime) delete cleanFilters.endTime
@@ -142,11 +157,13 @@ function SearchPageContent() {
     if (cleanFilters.minPrice === 0) delete cleanFilters.minPrice
     if (cleanFilters.maxPrice === 1000000) delete cleanFilters.maxPrice
 
-    const fetchStadiums = async () => {
+    const fetchComplexesData = async () => {
       setLoading(true)
       try {
-        const res = await searchStadiums(cleanFilters as StadiumSearchRequest)
-        setStadiums(res.content)
+        const res = await searchComplexes(cleanFilters as ComplexSearchParams)
+        setComplexes(res.content)
+        setTotalPages(res.totalPages)
+        setTotalElements(res.totalElements)
       } catch (error) {
         console.error(error)
       } finally {
@@ -154,10 +171,10 @@ function SearchPageContent() {
       }
     }
 
-    fetchStadiums()
+    fetchComplexesData()
   }, [searchParams])
 
-  const handleFilterChange = (key: keyof StadiumSearchRequest, value: StadiumSearchRequest[keyof StadiumSearchRequest]) => {
+  const handleFilterChange = (key: keyof ComplexSearchParams, value: ComplexSearchParams[keyof ComplexSearchParams]) => {
     setFilters(prev => ({ ...prev, [key]: value, page: key !== 'page' ? 0 : value as number }))
   }
 
@@ -219,10 +236,10 @@ function SearchPageContent() {
         <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent"></div>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white tracking-tight mb-4 drop-shadow-lg">
-            Khám phá Sân Thể Thao Đỉnh Cao
+            Khám phá Tổ Hợp Thể Thao Đỉnh Cao
           </h1>
           <p className="text-lg md:text-xl text-gray-200 font-medium max-w-2xl drop-shadow-md">
-            Tìm kiếm, xem giá và đặt sân ngay lập tức với hàng trăm lựa chọn tốt nhất xung quanh bạn.
+            Tìm kiếm tổ hợp sân, xem giá và đặt lịch nhanh chóng với đầy đủ các môn thể thao.
           </p>
         </div>
       </div>
@@ -246,17 +263,17 @@ function SearchPageContent() {
 
         {loadError && (
           <div className="mb-6 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            <strong>Lỗi kết nối API:</strong> {loadError}. Đảm bảo backend đang chạy (
-            <code className="text-xs">docker compose up -d backend</code>) và bạn mở đúng cổng (
-            <code className="text-xs">NEXTAUTH_URL</code> khớp URL trình duyệt).
+            <strong>Lỗi kết nối API:</strong> {loadError}. Đảm bảo backend đang chạy và bạn mở đúng cổng.
           </div>
         )}
 
         {/* 4. Filter Info & Modal Trigger */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Danh sách sân</h2>
-            <p className="text-muted-foreground text-sm mt-1">Tìm thấy <strong className="text-foreground">{stadiums.length}</strong> sân phù hợp với bạn</p>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Danh sách tổ hợp sân</h2>
+            <p className="text-muted-foreground text-sm mt-1">
+              Tìm thấy <strong className="text-foreground">{totalElements}</strong> tổ hợp phù hợp với bạn
+            </p>
           </div>
 
           <div className="flex gap-3">
@@ -267,7 +284,7 @@ function SearchPageContent() {
             <FilterModal
               filters={filters}
               amenitiesList={amenitiesList}
-              totalResults={stadiums.length}
+              totalResults={totalElements}
               onFilterChange={handleFilterChange}
               onAmenityToggle={handleAmenityToggle}
               onClearFilters={handleClearFilters}
@@ -283,14 +300,14 @@ function SearchPageContent() {
           </div>
         </div>
 
-        {/* 5. Stadium Grid Area */}
+        {/* 5. Complexes Grid Area */}
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3, 4, 5, 6].map(i => (
               <div key={i} className="animate-pulse bg-card rounded-2xl h-[420px] border border-gray-100 dark:border-border"></div>
             ))}
           </div>
-        ) : stadiums.length === 0 ? (
+        ) : complexes.length === 0 ? (
           <div className="text-center py-20 bg-white dark:bg-card/50 rounded-3xl border border-dashed border-gray-200 dark:border-border shadow-sm flex flex-col items-center justify-center">
             <div className="w-40 h-40 mb-6 opacity-50">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-gray-400 w-full h-full">
@@ -298,30 +315,82 @@ function SearchPageContent() {
                 <path d="M12 6v6l4 4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <h3 className="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Không tìm thấy sân</h3>
-            <p className="text-muted-foreground mb-8 max-w-md">Rất tiếc, chúng tôi không tìm thấy sân nào khớp với điều kiện lọc của bạn. Vui lòng thử nới lỏng các yêu cầu nhé!</p>
+            <h3 className="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Không tìm thấy tổ hợp</h3>
+            <p className="text-muted-foreground mb-8 max-w-md">Rất tiếc, chúng tôi không tìm thấy tổ hợp nào khớp với điều kiện lọc của bạn. Vui lòng thử nới lỏng các yêu cầu nhé!</p>
             <Button onClick={handleClearFilters} className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 rounded-full px-8 py-6 text-base font-bold shadow-lg transition-all hover:scale-105 active:scale-95">
               Xóa tất cả bộ lọc
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {stadiums.map((stadium) => (
-              <StadiumCard
-                key={stadium.stadiumId}
-                stadium={stadium}
-                isUrgent={false}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {complexes.map((complex) => (
+                <ComplexCard
+                  key={complex.complexId}
+                  complex={complex}
+                />
+              ))}
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="mt-12 flex justify-center">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          if (filters.page && filters.page > 0) {
+                            handleFilterChange('page', filters.page - 1)
+                          }
+                        }}
+                        className={filters.page === 0 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                    
+                    {Array.from({ length: totalPages }, (_, idx) => (
+                      <PaginationItem key={idx}>
+                        <PaginationLink
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            handleFilterChange('page', idx)
+                          }}
+                          isActive={filters.page === idx}
+                          className="cursor-pointer"
+                        >
+                          {idx + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          if (filters.page !== undefined && filters.page < totalPages - 1) {
+                            handleFilterChange('page', filters.page + 1)
+                          }
+                        }}
+                        className={filters.page === totalPages - 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
+          </>
         )}
 
       </div>
 
-      <StadiumMapModal
+      <ComplexMapModal
         isOpen={isMapOpen}
         onClose={() => setIsMapOpen(false)}
-        stadiums={stadiums}
+        complexes={complexes}
       />
     </div>
   )

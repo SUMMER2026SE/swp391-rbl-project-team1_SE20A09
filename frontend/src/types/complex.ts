@@ -49,6 +49,9 @@ export interface StadiumComplexDto {
   totalReviews?: number
   ownerName?: string | null
   ownerPhone?: string | null
+  distanceInKm?: number | null
+  minPrice?: number | null
+  maxPrice?: number | null
 }
 
 export interface FacilityDto {
@@ -84,6 +87,7 @@ export interface PageResponse<T> {
 export interface ComplexSearchParams {
   keyword?: string
   sportTypeId?: number
+  address?: string
   userLat?: number
   userLng?: number
   radiusInKm?: number
@@ -91,4 +95,8 @@ export interface ComplexSearchParams {
   maxPrice?: number
   page?: number
   size?: number
+  amenityIds?: number[]
+  targetDate?: string       // "yyyy-MM-dd"
+  startTime?: string        // "HH:mm:ss"
+  endTime?: string          // "HH:mm:ss"
 }
