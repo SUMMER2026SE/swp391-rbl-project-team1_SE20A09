@@ -24,4 +24,8 @@ public interface StadiumService {
     StadiumResponse rejectStadium(Integer stadiumId);
 
     java.util.List<StadiumResponse> getAllStadiums(String approvedStatus);
+
+    StadiumResponse createFacility(com.sportvenue.dto.request.CreateFacilityRequest request, Integer userId);
+
+    StadiumResponse createCourt(com.sportvenue.dto.request.CreateCourtRequest request, Integer userId);
 }

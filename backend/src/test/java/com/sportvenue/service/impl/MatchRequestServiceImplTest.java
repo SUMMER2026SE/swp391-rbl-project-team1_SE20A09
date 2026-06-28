@@ -122,7 +122,7 @@ class MatchRequestServiceImplTest {
                 .build();
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(stadiumRepository.findById(request.getStadiumId())).thenReturn(Optional.of(stadium));
+        when(stadiumRepository.findByIdWithComplexAndParent(request.getStadiumId())).thenReturn(Optional.of(stadium));
         when(sportTypeRepository.findById(request.getSportTypeId())).thenReturn(Optional.of(sportType));
 
         when(matchRequestRepository.existsOverlappingMatchRequest(any(), any(), any(), any())).thenReturn(false);
@@ -181,7 +181,7 @@ class MatchRequestServiceImplTest {
     void createMatch_StadiumNotFound() {
         User user = User.builder().userId(1).accountStatus(AccountStatus.ACTIVE).build();
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
-        when(stadiumRepository.findById(any())).thenReturn(Optional.empty());
+        when(stadiumRepository.findByIdWithComplexAndParent(any())).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () ->
                 matchRequestService.createMatch(validRequest(), 1));
@@ -195,7 +195,7 @@ class MatchRequestServiceImplTest {
         Stadium stadium = Stadium.builder().stadiumId(10).stadiumStatus(StadiumStatus.MAINTENANCE).build();
 
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
-        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(stadiumRepository.findByIdWithComplexAndParent(10)).thenReturn(Optional.of(stadium));
 
         assertThrows(BadRequestException.class, () ->
                 matchRequestService.createMatch(validRequest(), 1));
@@ -213,7 +213,7 @@ class MatchRequestServiceImplTest {
                 .build();
 
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
-        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(stadiumRepository.findByIdWithComplexAndParent(10)).thenReturn(Optional.of(stadium));
 
         assertThrows(BadRequestException.class, () ->
                 matchRequestService.createMatch(validRequest(), 1));
@@ -235,7 +235,7 @@ class MatchRequestServiceImplTest {
                 .build();
 
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
-        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(stadiumRepository.findByIdWithComplexAndParent(10)).thenReturn(Optional.of(stadium));
         when(sportTypeRepository.findById(1)).thenReturn(Optional.of(sportFootball)); // Kèo bóng đá
 
         assertThrows(BadRequestException.class, () ->
@@ -256,7 +256,7 @@ class MatchRequestServiceImplTest {
                 .build();
 
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
-        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(stadiumRepository.findByIdWithComplexAndParent(10)).thenReturn(Optional.of(stadium));
         when(sportTypeRepository.findById(1)).thenReturn(Optional.of(sport));
 
         // Có kèo khác trùng lịch
@@ -280,7 +280,7 @@ class MatchRequestServiceImplTest {
                 .build();
 
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
-        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(stadiumRepository.findByIdWithComplexAndParent(10)).thenReturn(Optional.of(stadium));
         when(sportTypeRepository.findById(1)).thenReturn(Optional.of(sport));
 
         when(matchRequestRepository.existsOverlappingMatchRequest(any(), any(), any(), any())).thenReturn(false);
@@ -362,7 +362,7 @@ class MatchRequestServiceImplTest {
                 .build();
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(stadiumRepository.findById(request.getStadiumId())).thenReturn(Optional.of(stadium));
+        when(stadiumRepository.findByIdWithComplexAndParent(request.getStadiumId())).thenReturn(Optional.of(stadium));
         when(sportTypeRepository.findById(request.getSportTypeId())).thenReturn(Optional.of(sportType));
 
         when(matchRequestRepository.existsOverlappingMatchRequest(any(), any(), any(), any())).thenReturn(false);

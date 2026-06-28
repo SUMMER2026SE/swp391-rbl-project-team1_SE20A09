@@ -156,4 +156,8 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
     @EntityGraph(attributePaths = {"complex", "complex.owner", "complex.owner.user"})
     @Query("SELECT s FROM Stadium s WHERE s.stadiumId = :stadiumId")
     Optional<Stadium> findFacilityWithComplexDetails(@Param("stadiumId") Integer stadiumId);
+
+    @EntityGraph(attributePaths = {"complex", "parentStadium", "sportType"})
+    @Query("SELECT s FROM Stadium s WHERE s.stadiumId = :stadiumId")
+    Optional<Stadium> findByIdWithComplexAndParent(@Param("stadiumId") Integer stadiumId);
 }
