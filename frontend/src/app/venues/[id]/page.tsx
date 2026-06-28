@@ -1,11 +1,13 @@
 /**
  * /venues/[id] — backward compatibility redirect (Server Component).
  *
- * Looks up the complex that owns this court and issues a true HTTP 307
- * redirect so the browser never sees the old page (no client-side flash).
+ * 1. Calls getCourtWithComplex() to check if this stadium belongs to a complex.
+ *    If yes → HTTP 307 redirect to /complexes/{complexId}?courtId={id}.
+ * 2. Falls back to rendering the legacy VenueDetail for unmigrated stadiums.
  */
 import { redirect, notFound } from 'next/navigation'
 import { getVenueDetail } from '@/lib/api/venue'
+import { getCourtWithComplex } from '@/lib/api/complex'
 import VenueDetail from '@/components/venues/VenueDetail'
 import { Header } from '@/components/layout/Header'
 
@@ -21,6 +23,15 @@ export default async function VenueDetailPage({ params }: PageProps) {
     notFound()
   }
 
+  // --- Fast path: redirect to new complex page if stadium belongs to a complex ---
+  // getCourtWithComplex returns null gracefully if the endpoint is not yet
+  // implemented (catches all errors), so this is safe to call first.
+  const courtRef = await getCourtWithComplex(venueId)
+  if (courtRef?.complexId) {
+    redirect(`/complexes/${courtRef.complexId}?courtId=${venueId}`)
+  }
+
+  // --- Fallback: render legacy VenueDetail for unmigrated stadiums ---
   let venue
   try {
     venue = await getVenueDetail(venueId)
@@ -28,16 +39,8 @@ export default async function VenueDetailPage({ params }: PageProps) {
     notFound()
   }
 
-  // If stadium belongs to a complex hierarchy, redirect to new complex page
-  // preserving the courtId as a query param so the accordion auto-opens
-  if (venue && (venue as unknown as { complexId?: number }).complexId) {
-    const complexId = (venue as unknown as { complexId: number }).complexId
-    redirect(`/complexes/${complexId}?courtId=${venueId}`)
-  }
-
   if (!venue) notFound()
 
-  // Fallback: render legacy detail view for stadiums not yet migrated
   const formatTimeNum = (timeStr: string) => {
     try {
       const parts = timeStr.split(':')

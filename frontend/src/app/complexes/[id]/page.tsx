@@ -7,7 +7,7 @@ import { Header } from '@/components/layout/Header'
 import ComplexHeader from '@/components/complexes/ComplexHeader'
 import FacilityTabs from '@/components/complexes/FacilityTabs'
 import CourtScheduleAccordion from '@/components/complexes/CourtScheduleAccordion'
-import { getComplexDetail, getComplexFacilities, getComplexCourts } from '@/lib/api/complex'
+import { getComplexDetail, getComplexFacilities, getFacilityCourts } from '@/lib/api/complex'
 import { createBooking } from '@/lib/bookings-api'
 import { useSession } from 'next-auth/react'
 import { toast } from 'sonner'
@@ -53,10 +53,10 @@ export default function ComplexDetailPage() {
   // Auto-select facility when data arrives
   const activeFacilityId = selectedFacilityId ?? (facilities[0]?.stadiumId ?? null)
 
-  // 3. Fetch courts under selected facility (L3)
+  // 3. Fetch courts under selected facility (L3) — endpoint: /public/facilities/{id}/courts
   const { data: courts = [], isLoading: courtsLoading } = useQuery({
     queryKey: ['facility-courts', activeFacilityId],
-    queryFn: () => getComplexCourts(activeFacilityId!),
+    queryFn: () => getFacilityCourts(activeFacilityId!),
     enabled: activeFacilityId !== null,
     staleTime: 60_000,
   })

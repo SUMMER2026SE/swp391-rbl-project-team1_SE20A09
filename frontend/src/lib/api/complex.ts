@@ -17,8 +17,8 @@ export async function getComplexDetail(id: number): Promise<StadiumComplexDto> {
 }
 
 /**
- * Fetch courts under a complex with optional date for slot availability.
- * Used client-side with React Query for real-time slot status.
+ * Fetch all courts directly under a complex (L1 → L3, skipping facility).
+ * Used when complex has no facility layer, or for a flat list overview.
  */
 export async function getComplexCourts(
   complexId: number,
@@ -26,6 +26,22 @@ export async function getComplexCourts(
 ): Promise<CourtWithSlotsDto[]> {
   const res = await api.get<CourtWithSlotsDto[]>(
     `/public/complexes/${complexId}/courts`,
+    { params: date ? { date } : undefined }
+  )
+  return res.data
+}
+
+/**
+ * Fetch courts under a specific facility (L2 → L3).
+ * This is the correct function to use from the complex detail page
+ * where the user has already selected a facility tab.
+ */
+export async function getFacilityCourts(
+  facilityId: number,
+  date?: string
+): Promise<CourtWithSlotsDto[]> {
+  const res = await api.get<CourtWithSlotsDto[]>(
+    `/public/facilities/${facilityId}/courts`,
     { params: date ? { date } : undefined }
   )
   return res.data
