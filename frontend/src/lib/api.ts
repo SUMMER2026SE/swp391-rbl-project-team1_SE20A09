@@ -24,6 +24,9 @@ const api: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  paramsSerializer: {
+    indexes: null,
+  },
 })
 
 // ── Request interceptor: đính kèm JWT token ──────────────

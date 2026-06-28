@@ -190,6 +190,9 @@ function SearchPageContent() {
     setFilters({
       keyword: '',
       sportTypeId: undefined,
+      targetDate: '',
+      startTime: '',
+      endTime: '',
       amenityIds: [],
       userLat: undefined,
       userLng: undefined,
