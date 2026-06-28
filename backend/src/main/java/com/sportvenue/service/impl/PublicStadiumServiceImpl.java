@@ -9,6 +9,10 @@ import com.sportvenue.dto.response.StadiumResponse;
 import com.sportvenue.dto.response.TimeSlotResponse;
 import com.sportvenue.entity.Review;
 import com.sportvenue.entity.Stadium;
+import com.sportvenue.entity.Owner;
+import com.sportvenue.entity.SportType;
+import com.sportvenue.entity.enums.ApprovedStatus;
+import com.sportvenue.entity.enums.StadiumStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.ReviewRepository;
@@ -189,24 +193,43 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                     .toList();
         }
 
+        SportType sportType = stadium.getSportType() != null ? stadium.getSportType() :
+                (stadium.getParentStadium() != null ? stadium.getParentStadium().getSportType() : null);
+
+        String address = stadium.getAddress() != null ? stadium.getAddress() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getAddress() : null);
+
+        Double latitude = stadium.getLatitude() != null ? stadium.getLatitude() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getLatitude() : null);
+
+        Double longitude = stadium.getLongitude() != null ? stadium.getLongitude() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getLongitude() : null);
+
+        ApprovedStatus approvedStatusVal = stadium.getApprovedStatus() != null ? stadium.getApprovedStatus() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getApprovedStatus() : null);
+
         return StadiumResponse.builder()
                 .stadiumId(stadium.getStadiumId())
                 .stadiumName(stadium.getStadiumName())
                 .description(stadium.getDescription())
-                .address(stadium.getAddress())
+                .address(address)
                 .averageRating(stadium.getAverageRating())
-                .latitude(stadium.getLatitude())
-                .longitude(stadium.getLongitude())
+                .latitude(latitude)
+                .longitude(longitude)
                 .distanceInKm(distance)
-                .sportName(stadium.getSportType().getSportName())
-                .sportTypeId(stadium.getSportType().getSportTypeId())
+                .sportName(sportType != null ? sportType.getSportName() : null)
+                .sportTypeId(sportType != null ? sportType.getSportTypeId() : null)
                 .firstImageUrl(firstImageUrl)
                 .imageUrls(imageUrls)
                 .openTime(stadium.getOpenTime())
                 .closeTime(stadium.getCloseTime())
                 .pricePerHour(stadium.getPricePerHour())
                 .stadiumStatus(stadium.getStadiumStatus() != null ? stadium.getStadiumStatus().name() : null)
-                .approvedStatus(stadium.getApprovedStatus() != null ? stadium.getApprovedStatus().name() : null)
+                .approvedStatus(approvedStatusVal != null ? approvedStatusVal.name() : null)
                 .amenities(amenityResponses)
                 .build();
     }
@@ -241,22 +264,45 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
 
         long totalReviews = reviewRepository.countByStadiumStadiumId(stadiumId);
 
+        SportType sportType = stadium.getSportType() != null ? stadium.getSportType() :
+                (stadium.getParentStadium() != null ? stadium.getParentStadium().getSportType() : null);
+
+        String address = stadium.getAddress() != null ? stadium.getAddress() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getAddress() : null);
+
+        Double latitude = stadium.getLatitude() != null ? stadium.getLatitude() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getLatitude() : null);
+
+        Double longitude = stadium.getLongitude() != null ? stadium.getLongitude() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getLongitude() : null);
+
+        ApprovedStatus approvedStatusVal = stadium.getApprovedStatus() != null ? stadium.getApprovedStatus() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getApprovedStatus() : null);
+
+        Owner owner = stadium.getOwner() != null ? stadium.getOwner() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getOwner() : null);
+
         return StadiumDetailResponse.builder()
                 .stadiumId(stadium.getStadiumId())
                 .stadiumName(stadium.getStadiumName())
                 .description(stadium.getDescription())
-                .address(stadium.getAddress())
+                .address(address)
                 .pricePerHour(stadium.getPricePerHour())
                 .averageRating(stadium.getAverageRating())
                 .totalReviews(totalReviews)
-                .latitude(stadium.getLatitude())
-                .longitude(stadium.getLongitude())
-                .sportName(stadium.getSportType().getSportName())
+                .latitude(latitude)
+                .longitude(longitude)
+                .sportName(sportType != null ? sportType.getSportName() : null)
                 .imageUrls(stadium.getImages().stream().map(img -> img.getImageUrl()).toList())
                 .openTime(stadium.getOpenTime())
                 .closeTime(stadium.getCloseTime())
                 .stadiumStatus(stadium.getStadiumStatus() != null ? stadium.getStadiumStatus().name() : null)
-                .approvedStatus(stadium.getApprovedStatus() != null ? stadium.getApprovedStatus().name() : null)
+                .approvedStatus(approvedStatusVal != null ? approvedStatusVal.name() : null)
                 .amenities(stadium.getAmenities().stream()
                         .map(a -> AmenityResponse.builder()
                                 .amenityId(a.getAmenityId())
@@ -280,11 +326,11 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                                 .slotStatus(ts.getSlotStatus() != null ? ts.getSlotStatus().name() : null)
                                 .build())
                         .toList())
-                .owner(StadiumDetailResponse.OwnerInfoDto.builder()
-                        .ownerId(stadium.getOwner().getOwnerId())
-                        .ownerName(stadium.getOwner().getUser().getFullName())
-                        .phoneNumber(stadium.getOwner().getUser().getPhoneNumber())
-                        .build())
+                .owner(owner != null ? StadiumDetailResponse.OwnerInfoDto.builder()
+                        .ownerId(owner.getOwnerId())
+                        .ownerName(owner.getUser() != null ? owner.getUser().getFullName() : null)
+                        .phoneNumber(owner.getUser() != null ? owner.getUser().getPhoneNumber() : null)
+                        .build() : null)
                 .recentReviews(recentReviews.stream()
                         .map(r -> StadiumDetailResponse.ReviewDto.builder()
                                 .reviewId(r.getReviewId())
