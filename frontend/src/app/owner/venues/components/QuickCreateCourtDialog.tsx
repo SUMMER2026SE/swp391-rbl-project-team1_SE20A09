@@ -49,8 +49,9 @@ export function QuickCreateCourtDialog({ isOpen, onClose, parentStadiumId, onSuc
       setPricePerHour(150000)
       onSuccess()
       onClose()
-    } catch (err: any) {
-      toast.error(err.message || 'Đã có lỗi xảy ra khi tạo sân lẻ')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Đã có lỗi xảy ra khi tạo sân lẻ'
+      toast.error(msg)
     } finally {
       setSubmitting(false)
     }

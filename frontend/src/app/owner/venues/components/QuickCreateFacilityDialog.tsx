@@ -66,8 +66,9 @@ export function QuickCreateFacilityDialog({ isOpen, onClose, complexId, onSucces
       setCloseTime('22:00')
       onSuccess()
       onClose()
-    } catch (err: any) {
-      toast.error(err.message || 'Đã có lỗi xảy ra khi tạo khu sân')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Đã có lỗi xảy ra khi tạo khu sân'
+      toast.error(msg)
     } finally {
       setSubmitting(false)
     }

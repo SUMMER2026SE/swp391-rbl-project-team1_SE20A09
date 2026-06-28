@@ -29,7 +29,7 @@ export function BulkTimeSlotConfigDialog({
   onSuccess
 }: BulkTimeSlotConfigDialogProps) {
   const [openTime, setOpenTime] = useState('06:00')
-  const [closeTime, setOpenTimeClose] = useState('22:00')
+  const [closeTime, setCloseTime] = useState('22:00')
   const [duration, setDuration] = useState<number>(60)
   const [pricePerSlot, setPricePerSlot] = useState<number>(150000)
   const [selectedCourtIds, setSelectedCourtIds] = useState<number[]>([])
@@ -102,8 +102,9 @@ export function BulkTimeSlotConfigDialog({
       setApplyToAll(true)
       onSuccess()
       onClose()
-    } catch (err: any) {
-      toast.error(err.message || 'Đã có lỗi xảy ra khi cấu hình giờ hàng loạt')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Đã có lỗi xảy ra khi cấu hình giờ hàng loạt'
+      toast.error(msg)
     } finally {
       setSubmitting(false)
     }
@@ -134,7 +135,7 @@ export function BulkTimeSlotConfigDialog({
                 id="bulk-close-time"
                 type="time"
                 value={closeTime}
-                onChange={(e) => setOpenTimeClose(e.target.value)}
+                onChange={(e) => setCloseTime(e.target.value)}
                 disabled={submitting}
               />
             </div>
