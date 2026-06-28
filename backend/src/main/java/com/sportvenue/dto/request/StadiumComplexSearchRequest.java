@@ -25,10 +25,10 @@ public class StadiumComplexSearchRequest {
     private String keyword;
     private Integer sportTypeId;
 
-    @DecimalMin(value = "0.0", message = "Giá thấp nhất không được âm")
+    @DecimalMin(value = "0.0", message = "Minimum price must not be negative")
     private BigDecimal minPrice;
 
-    @DecimalMin(value = "0.0", message = "Giá cao nhất không được âm")
+    @DecimalMin(value = "0.0", message = "Maximum price must not be negative")
     private BigDecimal maxPrice;
 
     private List<Integer> amenityIds;
@@ -42,23 +42,23 @@ public class StadiumComplexSearchRequest {
     @DateTimeFormat(pattern = "HH:mm")
     private LocalTime endTime;
 
-    @DecimalMin(value = "-90.0", message = "Vĩ độ không hợp lệ")
-    @DecimalMax(value = "90.0", message = "Vĩ độ không hợp lệ")
+    @DecimalMin(value = "-90.0", message = "Latitude must be between -90 and 90")
+    @DecimalMax(value = "90.0", message = "Latitude must be between -90 and 90")
     private Double userLat;
 
-    @DecimalMin(value = "-180.0", message = "Kinh độ không hợp lệ")
-    @DecimalMax(value = "180.0", message = "Kinh độ không hợp lệ")
+    @DecimalMin(value = "-180.0", message = "Longitude must be between -180 and 180")
+    @DecimalMax(value = "180.0", message = "Longitude must be between -180 and 180")
     private Double userLng;
 
-    @Positive(message = "Bán kính tìm kiếm phải là số dương")
+    @Positive(message = "Search radius must be a positive number")
     private Double radiusInKm;
 
-    @Min(value = 0, message = "Trang phải lớn hơn hoặc bằng 0")
+    @Min(value = 0, message = "Page index must be >= 0")
     @Builder.Default
     private int page = 0;
 
-    @Min(value = 1, message = "Kích thước trang phải tối thiểu là 1")
-    @Max(value = 50, message = "Kích thước trang tối đa là 50")
+    @Min(value = 1, message = "Page size must be at least 1")
+    @Max(value = 50, message = "Page size must not exceed 50")
     @Builder.Default
     private int size = 12;
 
