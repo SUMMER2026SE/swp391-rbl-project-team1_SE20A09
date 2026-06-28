@@ -16,9 +16,18 @@ public class FacilityResponse {
     private Integer stadiumId;
     private String stadiumName;
     private String description;
-    private SportTypeResponse sportType;
+    private SportTypeInfo sportType;
     private LocalTime openTime;
     private LocalTime closeTime;
     private String stadiumStatus;
     private List<String> imageUrls;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SportTypeInfo {
+        private Integer sportTypeId;
+        private String sportName;
+    }
 }

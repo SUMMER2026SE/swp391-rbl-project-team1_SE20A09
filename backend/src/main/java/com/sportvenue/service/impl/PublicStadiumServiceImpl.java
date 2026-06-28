@@ -3,6 +3,7 @@ package com.sportvenue.service.impl;
 import com.sportvenue.dto.request.StadiumSearchRequest;
 import com.sportvenue.dto.response.AccessoryResponse;
 import com.sportvenue.dto.response.AmenityResponse;
+import com.sportvenue.dto.response.ComplexRefResponse;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.dto.response.StadiumDetailResponse;
 import com.sportvenue.dto.response.StadiumResponse;
@@ -386,14 +387,14 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
 
     @Override
     @Transactional(readOnly = true)
-    public com.sportvenue.dto.response.ComplexRefResponse getComplexRef(Integer stadiumId) {
+    public ComplexRefResponse getComplexRef(Integer stadiumId) {
         log.info("Fetching complex reference for stadium ID: {}", stadiumId);
         return stadiumRepository.findByIdWithComplexAndParent(stadiumId)
-                .map(s -> com.sportvenue.dto.response.ComplexRefResponse.builder()
+                .map(s -> ComplexRefResponse.builder()
                         .stadiumId(s.getStadiumId())
                         .complexId(s.getComplex() != null ? s.getComplex().getComplexId() : null)
                         .build())
-                .orElse(com.sportvenue.dto.response.ComplexRefResponse.builder()
+                .orElse(ComplexRefResponse.builder()
                         .stadiumId(stadiumId)
                         .complexId(null)
                         .build());

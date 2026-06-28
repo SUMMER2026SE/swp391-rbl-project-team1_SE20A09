@@ -1,6 +1,7 @@
 package com.sportvenue.controller;
 
 import com.sportvenue.dto.request.StadiumSearchRequest;
+import com.sportvenue.dto.response.ComplexRefResponse;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.dto.response.StadiumDetailResponse;
 import com.sportvenue.dto.response.StadiumResponse;
@@ -51,9 +52,9 @@ public class PublicStadiumController {
     }
 
     @GetMapping("/{id}/complex-ref")
-    public ResponseEntity<com.sportvenue.dto.response.ComplexRefResponse> getComplexRef(
+    public ResponseEntity<ComplexRefResponse> getComplexRef(
             @PathVariable @Positive(message = "ID sân phải là số dương") Integer id) {
-        com.sportvenue.dto.response.ComplexRefResponse response = publicStadiumService.getComplexRef(id);
+        ComplexRefResponse response = publicStadiumService.getComplexRef(id);
         return ResponseEntity.ok(response);
     }
 }

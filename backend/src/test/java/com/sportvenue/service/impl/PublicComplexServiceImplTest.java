@@ -14,6 +14,7 @@ import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.entity.enums.ComplexStatus;
 import com.sportvenue.entity.enums.StadiumNodeType;
 import com.sportvenue.entity.enums.StadiumStatus;
+import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.StadiumComplexRepository;
 import com.sportvenue.repository.StadiumRepository;
@@ -183,5 +184,20 @@ public class PublicComplexServiceImplTest {
         assertEquals(1, response.size());
         assertEquals("Sân Bóng 1", response.get(0).getStadiumName());
         assertEquals(facilityId, response.get(0).getParentStadiumId());
+    }
+
+    @Test
+    void getCourtsByFacilityId_ShouldThrowBadRequestException_WhenNodeIsNotFacility() {
+        // Arrange
+        Integer facilityId = 10;
+        Stadium notFacility = Stadium.builder()
+                .stadiumId(facilityId)
+                .nodeType(StadiumNodeType.COURT) // Not a FACILITY
+                .build();
+
+        when(stadiumRepository.findById(facilityId)).thenReturn(Optional.of(notFacility));
+
+        // Act & Assert
+        assertThrows(BadRequestException.class, () -> publicComplexService.getCourtsByFacilityId(facilityId));
     }
 }

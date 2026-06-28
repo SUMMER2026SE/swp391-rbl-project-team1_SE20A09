@@ -3,11 +3,12 @@ package com.sportvenue.service.impl;
 import com.sportvenue.dto.response.CourtResponse;
 import com.sportvenue.dto.response.FacilityResponse;
 import com.sportvenue.dto.response.PublicComplexDetailResponse;
-import com.sportvenue.dto.response.SportTypeResponse;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.StadiumComplex;
 import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.entity.enums.ComplexStatus;
+import com.sportvenue.entity.enums.StadiumNodeType;
+import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.StadiumComplexRepository;
 import com.sportvenue.repository.StadiumRepository;
@@ -118,6 +119,10 @@ public class PublicComplexServiceImpl implements PublicComplexService {
         // Verify facility exists and is a facility node
         Stadium facility = stadiumRepository.findById(facilityId)
                 .orElseThrow(() -> new ResourceNotFoundException("Facility not found with ID: " + facilityId));
+
+        if (facility.getNodeType() != StadiumNodeType.FACILITY) {
+            throw new BadRequestException("Provided ID is not a facility");
+        }
         
         List<Stadium> courts = stadiumRepository.findCourtsByFacilityId(facilityId);
         return courts.stream()
@@ -126,17 +131,11 @@ public class PublicComplexServiceImpl implements PublicComplexService {
     }
 
     private FacilityResponse mapToFacilityResponse(Stadium s) {
-        SportTypeResponse sportTypeResponse = null;
+        FacilityResponse.SportTypeInfo sportTypeInfo = null;
         if (s.getSportType() != null) {
-            sportTypeResponse = SportTypeResponse.builder()
+            sportTypeInfo = FacilityResponse.SportTypeInfo.builder()
                     .sportTypeId(s.getSportType().getSportTypeId())
                     .sportName(s.getSportType().getSportName())
-                    .nameEn(s.getSportType().getNameEn())
-                    .sportCode(s.getSportType().getSportCode())
-                    .description(s.getSportType().getDescription())
-                    .isActive(s.getSportType().getIsActive())
-                    .isFootballType(s.getSportType().getIsFootballType())
-                    .createdAt(s.getSportType().getCreatedAt())
                     .build();
         }
 
@@ -148,7 +147,7 @@ public class PublicComplexServiceImpl implements PublicComplexService {
                 .stadiumId(s.getStadiumId())
                 .stadiumName(s.getStadiumName())
                 .description(s.getDescription())
-                .sportType(sportTypeResponse)
+                .sportType(sportTypeInfo)
                 .openTime(s.getOpenTime())
                 .closeTime(s.getCloseTime())
                 .stadiumStatus(s.getStadiumStatus().name())
