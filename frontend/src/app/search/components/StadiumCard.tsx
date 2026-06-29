@@ -79,12 +79,11 @@ export function StadiumCard({ stadium, isUrgent = false }: StadiumCardProps) {
       </Link>
 
       <CardFooter className="p-5 border-t border-gray-100 dark:border-border bg-white dark:bg-card flex justify-between items-center gap-4">
-        <Link href={`/venues/${stadium.stadiumId}`} className="hover:opacity-80 transition-opacity">
-          <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Giá mỗi giờ</div>
-          <div className="font-extrabold text-2xl text-gray-900 dark:text-white">
-            {(stadium.pricePerHour ?? 0).toLocaleString('vi-VN')}₫
-          </div>
-        </Link>
+        <Button asChild variant="outline" className="rounded-xl px-6 py-6 font-bold shadow-sm border-gray-200 hover:bg-gray-50 transition-all">
+          <Link href={`/venues/${stadium.stadiumId}`}>
+            Xem chi tiết
+          </Link>
+        </Button>
         <Button asChild className="rounded-xl px-6 py-6 font-bold bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95">
           <Link href={`/booking/new?stadiumId=${stadium.stadiumId}`}>
             Đặt Ngay

@@ -16,8 +16,9 @@ import { FilterModal } from './components/FilterModal'
 import { StadiumCard } from './components/StadiumCard'
 import { Header } from '@/components/layout/Header'
 
-const StadiumMapModal = dynamic(() => import('./components/StadiumMapModal'), {
+const StadiumMap = dynamic(() => import('./components/StadiumMap'), {
   ssr: false,
+  loading: () => <div className="w-full h-full bg-muted animate-pulse rounded-2xl" />
 })
 
 // Hook debounce
@@ -48,7 +49,6 @@ function SearchPageContent() {
   const [sportTypes, setSportTypes] = useState<{ sportTypeId: number, sportName: string }[]>([])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [isMapOpen, setIsMapOpen] = useState(false)
   const [isLocating, setIsLocating] = useState(false)
 
   // Local state for UI inputs (initialized safely to avoid SSR Hydration mismatch)
@@ -242,7 +242,7 @@ function SearchPageContent() {
         onSelect={(id) => handleFilterChange('sportTypeId', id)}
       />
 
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-[1600px] mt-6">
 
         {loadError && (
           <div className="mb-6 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -255,8 +255,8 @@ function SearchPageContent() {
         {/* 4. Filter Info & Modal Trigger */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Danh sách sân</h2>
-            <p className="text-muted-foreground text-sm mt-1">Tìm thấy <strong className="text-foreground">{stadiums.length}</strong> sân phù hợp với bạn</p>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Danh sách tổ hợp</h2>
+            <p className="text-muted-foreground text-sm mt-1">Tìm thấy <strong className="text-foreground">{stadiums.length}</strong> tổ hợp phù hợp với bạn</p>
           </div>
 
           <div className="flex gap-3">
@@ -272,57 +272,54 @@ function SearchPageContent() {
               onAmenityToggle={handleAmenityToggle}
               onClearFilters={handleClearFilters}
             />
-
-            <Button
-              variant="outline"
-              onClick={() => setIsMapOpen(true)}
-              className="border-gray-200 dark:border-border font-semibold hover:bg-gray-50 dark:hover:bg-muted shadow-sm"
-            >
-              <Map className="mr-2 h-4 w-4" /> Bản đồ
-            </Button>
           </div>
         </div>
 
-        {/* 5. Stadium Grid Area */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="animate-pulse bg-card rounded-2xl h-[420px] border border-gray-100 dark:border-border"></div>
-            ))}
+        {/* 5. Split-Screen Layout: List + Map */}
+        <div className="flex flex-col lg:flex-row gap-6">
+          
+          {/* Left Column: Stadium List */}
+          <div className="flex-1 lg:w-[55%] xl:w-[60%] flex flex-col gap-6">
+            {loading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-6">
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                  <div key={i} className="animate-pulse bg-card rounded-2xl h-[420px] border border-gray-100 dark:border-border"></div>
+                ))}
+              </div>
+            ) : stadiums.length === 0 ? (
+              <div className="text-center py-20 bg-white dark:bg-card/50 rounded-3xl border border-dashed border-gray-200 dark:border-border shadow-sm flex flex-col items-center justify-center">
+                <div className="w-40 h-40 mb-6 opacity-50">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-gray-400 w-full h-full">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M12 6v6l4 4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <h3 className="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Không tìm thấy tổ hợp</h3>
+                <p className="text-muted-foreground mb-8 max-w-md">Rất tiếc, chúng tôi không tìm thấy tổ hợp nào khớp với điều kiện lọc của bạn. Vui lòng thử nới lỏng các yêu cầu nhé!</p>
+                <Button onClick={handleClearFilters} className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 rounded-full px-8 py-6 text-base font-bold shadow-lg transition-all hover:scale-105 active:scale-95">
+                  Xóa tất cả bộ lọc
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-6">
+                {stadiums.map((stadium) => (
+                  <StadiumCard
+                    key={stadium.stadiumId}
+                    stadium={stadium}
+                    isUrgent={false}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        ) : stadiums.length === 0 ? (
-          <div className="text-center py-20 bg-white dark:bg-card/50 rounded-3xl border border-dashed border-gray-200 dark:border-border shadow-sm flex flex-col items-center justify-center">
-            <div className="w-40 h-40 mb-6 opacity-50">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-gray-400 w-full h-full">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M12 6v6l4 4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <h3 className="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Không tìm thấy sân</h3>
-            <p className="text-muted-foreground mb-8 max-w-md">Rất tiếc, chúng tôi không tìm thấy sân nào khớp với điều kiện lọc của bạn. Vui lòng thử nới lỏng các yêu cầu nhé!</p>
-            <Button onClick={handleClearFilters} className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 rounded-full px-8 py-6 text-base font-bold shadow-lg transition-all hover:scale-105 active:scale-95">
-              Xóa tất cả bộ lọc
-            </Button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {stadiums.map((stadium) => (
-              <StadiumCard
-                key={stadium.stadiumId}
-                stadium={stadium}
-                isUrgent={false}
-              />
-            ))}
-          </div>
-        )}
 
+          {/* Right Column: Sticky Map */}
+          <div className="w-full lg:w-[45%] xl:w-[40%] h-[500px] lg:h-[calc(100vh-140px)] lg:sticky lg:top-24 mb-10 lg:mb-0 rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+            <StadiumMap stadiums={stadiums} />
+          </div>
+
+        </div>
       </div>
-
-      <StadiumMapModal
-        isOpen={isMapOpen}
-        onClose={() => setIsMapOpen(false)}
-        stadiums={stadiums}
-      />
     </div>
   )
 }
