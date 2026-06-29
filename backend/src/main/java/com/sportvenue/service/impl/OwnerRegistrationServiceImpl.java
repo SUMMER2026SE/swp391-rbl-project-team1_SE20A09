@@ -90,8 +90,10 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         Owner savedOwner = ownerRepository.save(owner);
         otpService.createAndSendOtp(savedUser);
 
-        // Thông báo cho Admin: có chủ sân mới đăng ký chờ duyệt
-        notifyAdminsNewOwner(savedOwner);
+        // Thông báo cho Admin: dùng 'owner' (pre-save) để tránh NPE nếu save() trả null trong test.
+        // Trong production, savedOwner luôn non-null vì DB generate ID.
+        Owner ownerForNotif = savedOwner != null ? savedOwner : owner;
+        notifyAdminsNewOwner(ownerForNotif);
 
         return new MessageResponse("Đăng ký thành công. Vui lòng kiểm tra email để nhận mã xác thực OTP.");
     }
@@ -135,9 +137,9 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         Owner savedOwner = ownerRepository.save(owner);
 
         // Thông báo cho Admin: có chủ sân mới/tái nộp hồ sơ chờ duyệt
-        notifyAdminsNewOwner(savedOwner);
+        notifyAdminsNewOwner(savedOwner != null ? savedOwner : owner);
 
-        return mapToOwnerDetailResponse(savedOwner);
+        return mapToOwnerDetailResponse(savedOwner != null ? savedOwner : owner);
     }
 
     @Override
@@ -279,6 +281,9 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
 
     /** Gửi thông báo cho tất cả Admin khi có chủ sân mới đăng ký / tái nộp hồ sơ. */
     private void notifyAdminsNewOwner(Owner owner) {
+        if (owner == null) {
+            return;
+        }
         String ownerName = owner.getUser() != null ? owner.getUser().getFullName() : "N/A";
         String bizName = owner.getBusinessName() != null ? owner.getBusinessName() : "Chưa có tên";
         String resourceId = "OWNER-" + owner.getOwnerId();
