@@ -417,7 +417,9 @@ public class ComplaintServiceImpl implements ComplaintService {
     }
 
     private String truncate(String s, int maxLen) {
-        if (s == null) return "";
+        if (s == null) {
+            return "";
+        }
         return s.length() <= maxLen ? s : s.substring(0, maxLen) + "...";
     }
 
