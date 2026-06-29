@@ -5,7 +5,8 @@ import { useSession } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
 import { AdminSidebar } from "@/components/layout/AdminSidebar";
 import { UserAccountMenu } from "@/components/layout/Header";
-import { Loader2, Menu, Calendar as CalendarIcon, Bell, ChevronDown } from "lucide-react";
+import { Loader2, Menu, Calendar as CalendarIcon, ChevronDown } from "lucide-react";
+import { AdminNotificationBell } from "@/components/notifications/AdminNotificationBell";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 
@@ -154,13 +155,7 @@ export default function AdminLayout({
                 </div>
               )}
 
-              <button
-                className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
-                aria-label="Thông báo"
-              >
-                <Bell className="h-5 w-5" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
-              </button>
+              <AdminNotificationBell />
 
               <div className="h-8 w-px bg-slate-200 hidden md:block"></div>
 

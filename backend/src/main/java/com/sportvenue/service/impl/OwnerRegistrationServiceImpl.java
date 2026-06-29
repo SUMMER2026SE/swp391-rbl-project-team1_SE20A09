@@ -28,9 +28,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-@Service
+import org.springframework.transaction.annotation.Transactional;@Service
 @RequiredArgsConstructor
 @Slf4j
 public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
@@ -87,9 +85,11 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                 .identityCardUrl(request.getIdentityCardUrl())
                 .approvedStatus(ApprovedStatus.PENDING)
                 .build();
-        ownerRepository.save(owner);
-
+        Owner savedOwner = ownerRepository.save(owner);
         otpService.createAndSendOtp(savedUser);
+
+        // Thông báo cho Admin: có chủ sân mới đăng ký chờ duyệt
+        notifyAdminsNewOwner(savedOwner);
 
         return new MessageResponse("Đăng ký thành công. Vui lòng kiểm tra email để nhận mã xác thực OTP.");
     }
@@ -131,6 +131,10 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         }
 
         Owner savedOwner = ownerRepository.save(owner);
+
+        // Thông báo cho Admin: có chủ sân mới/tái nộp hồ sơ chờ duyệt
+        notifyAdminsNewOwner(savedOwner);
+
         return mapToOwnerDetailResponse(savedOwner);
     }
 
@@ -269,5 +273,21 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                 .approvedByEmail(owner.getApprovedBy() != null ? owner.getApprovedBy().getEmail() : null)
                 .approvedAt(owner.getApprovedAt())
                 .build();
+    }
+
+    /** Gửi thông báo cho tất cả Admin khi có chủ sân mới đăng ký / tái nộp hồ sơ. */
+    private void notifyAdminsNewOwner(Owner owner) {
+        String ownerName = owner.getUser() != null ? owner.getUser().getFullName() : "N/A";
+        String bizName = owner.getBusinessName() != null ? owner.getBusinessName() : "Chưa có tên";
+        String resourceId = "OWNER-" + owner.getOwnerId();
+        userRepository.findAllAdmins().forEach(admin ->
+            notificationService.createNotification(
+                admin.getUserId(),
+                "Chủ sân mới đăng ký",
+                ownerName + " (" + bizName + ") đang chờ phê duyệt",
+                NotificationType.OWNER_APPROVAL,
+                resourceId
+            )
+        );
     }
 }

@@ -7,6 +7,17 @@ import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import Link from "next/link";
 import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+} from "recharts";
+import {
   Users,
   Building2,
   MapPin,
@@ -68,12 +79,6 @@ const fetchDashboardData = async (dateRange: DateRange | null) => {
   return data.result;
 };
 
-/** Nhãn ngày trong tuần tiếng Việt — dùng khi hiển thị trend 7 ngày */
-const getDayLabel = (dateStr: string): string => {
-  const date = new Date(dateStr + "T00:00:00");
-  return format(date, "EEE", { locale: vi });
-};
-
 const STATUS_MAP: Record<string, { label: string; classes: string }> = {
   PENDING: { label: "Chờ duyệt", classes: "bg-yellow-100 text-yellow-800 border-yellow-200" },
   CONFIRMED: { label: "Đã xác nhận", classes: "bg-blue-100 text-blue-800 border-blue-200" },
@@ -104,6 +109,167 @@ function getQuickRanges() {
     thisQuarter: { startDate: toISO(new Date(y, quarter * 3, 1)), endDate: toISO(new Date(y, quarter * 3 + 3, 0)) },
     thisYear: { startDate: toISO(new Date(y, 0, 1)), endDate: toISO(new Date(y, 11, 31)) },
   };
+}
+
+// ── Chart helpers ─────────────────────────────────────────────────────────────
+
+type ChartMode = "bar-full" | "bar-dense" | "bar-thin" | "line-weekly";
+
+interface ChartConfig {
+  mode: ChartMode;
+  /** Minimum px width per data point — drives horizontal scroll */
+  minBarPx: number;
+  /** Show label on every Nth tick (1 = every tick) */
+  tickEvery: number;
+  /** Rotate x-axis labels */
+  tickAngle: number;
+  /** Height for tick area below the axis */
+  xAxisHeight: number;
+}
+
+function getChartConfig(n: number): ChartConfig {
+  if (n <= 7)  return { mode: "bar-full",    minBarPx: 44, tickEvery: 1, tickAngle: 0,  xAxisHeight: 24 };
+  if (n <= 14) return { mode: "bar-dense",   minBarPx: 36, tickEvery: 1, tickAngle: -35, xAxisHeight: 40 };
+  if (n <= 30) return { mode: "bar-thin",    minBarPx: 26, tickEvery: 3, tickAngle: -45, xAxisHeight: 44 };
+  // > 30 days: data already grouped into weeks by backend, display as line
+  return          { mode: "line-weekly",   minBarPx: 56, tickEvery: 1, tickAngle: -35, xAxisHeight: 44 };
+}
+
+/** Full date label for tooltip: DD/MM/YYYY */
+function fullDateLabel(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+/** Short axis label by range size */
+function axisLabel(dateStr: string, mode: ChartMode): string {
+  const date = new Date(dateStr + "T00:00:00");
+  if (mode === "bar-full")    return format(date, "EEE", { locale: vi });   // Thứ 2
+  if (mode === "bar-dense")   return format(date, "dd/MM");                 // 01/06
+  if (mode === "bar-thin")    return format(date, "dd/MM");                 // 01/06
+  // line-weekly: backend returns week-start dates
+  return `T${format(date, "dd/MM")}`;                                       // T01/06
+}
+
+// ── Custom Recharts tooltip ───────────────────────────────────────────────────
+interface TooltipPayload {
+  value: number;
+  payload: { date: string; count: number };
+}
+function ChartTooltip({ active, payload }: { active?: boolean; payload?: TooltipPayload[] }) {
+  if (!active || !payload?.length) return null;
+  const { date, count } = payload[0].payload;
+  return (
+    <div className="bg-white border border-slate-200 rounded-lg shadow-lg px-3 py-2 text-sm">
+      <p className="font-semibold text-slate-700 mb-0.5">{fullDateLabel(date)}</p>
+      <p className="text-emerald-600 font-bold">{count} lượt đặt</p>
+    </div>
+  );
+}
+
+// ── BookingTrendChart component ───────────────────────────────────────────────
+interface BookingTrendChartProps {
+  trendData: Array<{ date: string; count: number }>;
+  title: string;
+}
+
+function BookingTrendChart({ trendData, title }: BookingTrendChartProps) {
+  const n = trendData.length;
+  const cfg = getChartConfig(n);
+
+  // Compute inner chart width so bars never shrink below minBarPx
+  const minWidth = n * cfg.minBarPx;
+
+  // Filter ticks: only show every Nth label
+  const ticks = trendData
+    .filter((_, i) => i % cfg.tickEvery === 0)
+    .map((d) => d.date);
+
+  const commonAxisProps = {
+    dataKey: "date",
+    tickLine: false,
+    axisLine: false,
+    height: cfg.xAxisHeight,
+    tick: ({ x, y, payload }: { x: number; y: number; payload: { value: string } }) => {
+      const label = axisLabel(payload.value, cfg.mode);
+      return (
+        <g transform={`translate(${x},${y})`}>
+          <text
+            x={0}
+            y={0}
+            dy={12}
+            textAnchor={cfg.tickAngle !== 0 ? "end" : "middle"}
+            transform={cfg.tickAngle !== 0 ? `rotate(${cfg.tickAngle})` : undefined}
+            fill="#94a3b8"
+            fontSize={10}
+            fontWeight={500}
+          >
+            {label}
+          </text>
+        </g>
+      );
+    },
+    ticks,
+  } as const;
+
+  const yAxisProps = {
+    tickLine: false,
+    axisLine: false,
+    tick: { fontSize: 10, fill: "#94a3b8" },
+    width: 28,
+    allowDecimals: false,
+  } as const;
+
+  return (
+    <div className="xl:col-span-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col">
+      <h2 className="text-lg font-bold text-slate-900 mb-4">{title}</h2>
+
+      {n === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+          Chưa có dữ liệu
+        </div>
+      ) : (
+        /* Scrollable wrapper — bars never shrink below minBarPx */
+        <div className="overflow-x-auto -mx-1 px-1">
+          <div style={{ minWidth: Math.max(minWidth, 240), height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              {cfg.mode === "line-weekly" ? (
+                <LineChart data={trendData} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis {...commonAxisProps} />
+                  <YAxis {...yAxisProps} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ stroke: "#e2e8f0" }} />
+                  <Line
+                    type="monotone"
+                    dataKey="count"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: "#10b981", strokeWidth: 0 }}
+                    activeDot={{ r: 5, fill: "#059669" }}
+                  />
+                </LineChart>
+              ) : (
+                <BarChart data={trendData} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}
+                  barCategoryGap={cfg.mode === "bar-thin" ? "30%" : "20%"}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis {...commonAxisProps} />
+                  <YAxis {...yAxisProps} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f0fdf4" }} />
+                  <Bar
+                    dataKey="count"
+                    fill="#10b981"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={cfg.mode === "bar-full" ? 40 : cfg.mode === "bar-dense" ? 28 : 18}
+                  />
+                </BarChart>
+              )}
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Inline Date Filter Panel ─────────────────────────────────────────────────
@@ -260,7 +426,6 @@ export default function AdminDashboardPage() {
 
   // Tính max để scale bar chart đúng tỷ lệ
   const trendData = data.bookingTrend ?? [];
-  const maxTrendCount = Math.max(...trendData.map((item) => item.count), 1);
 
   // Dynamic chart title based on date range
   const chartDays = trendData.length;
@@ -379,37 +544,8 @@ export default function AdminDashboardPage() {
       {/* CHARTS & RECENT BOOKINGS */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
-        {/* Bar Chart */}
-        <div className="xl:col-span-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col">
-          <h2 className="text-lg font-bold text-slate-900 mb-6">{chartTitle}</h2>
-          {trendData.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
-              Chưa có dữ liệu
-            </div>
-          ) : (
-            <div className="flex items-stretch justify-between gap-1.5" style={{ height: 180 }}>
-              {trendData.map((item, idx) => (
-                <div key={idx} className="flex flex-col items-center gap-1 group w-full h-full">
-                  {/* count tooltip */}
-                  <span className="text-[11px] font-semibold text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity" style={{ minHeight: 16, lineHeight: '16px' }}>
-                    {item.count > 0 ? item.count : ''}
-                  </span>
-                  {/* gray track */}
-                  <div className="w-full relative bg-slate-100 rounded-t-md flex-1 min-h-0">
-                    <div
-                      className="absolute bottom-0 w-full bg-emerald-500 rounded-t-md transition-all duration-700 ease-out group-hover:bg-emerald-400"
-                      style={{ height: `${(item.count / maxTrendCount) * 100}%` }}
-                    />
-                  </div>
-                  {/* day label */}
-                  <span className="text-[11px] font-medium text-slate-500 leading-none mt-0.5 flex-shrink-0">
-                    {getDayLabel(item.date)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Booking Trend Chart */}
+        <BookingTrendChart trendData={trendData} title={chartTitle} />
 
         {/* Recent Bookings Table */}
         <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">

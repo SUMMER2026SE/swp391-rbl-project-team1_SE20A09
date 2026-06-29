@@ -40,6 +40,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.service.NotificationService;
+import com.sportvenue.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
 class StadiumServiceImplTest {
@@ -58,6 +59,9 @@ class StadiumServiceImplTest {
 
     @Mock
     private AmenityRepository amenityRepository;
+
+    @Mock
+    private UserRepository userRepository;
 
     @Mock
     private StadiumMapper stadiumMapper;
@@ -83,6 +87,7 @@ class StadiumServiceImplTest {
                 stadiumMapper,
                 fileStorageProperties,
                 notificationService,
+                userRepository,
                 env);
     }
 

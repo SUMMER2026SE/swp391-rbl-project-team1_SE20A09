@@ -112,6 +112,18 @@ public class ComplaintServiceImpl implements ComplaintService {
                 NotificationType.COMPLAINT,
                 String.valueOf(saved.getComplaintId())
         );
+
+        // Notify all admins
+        String adminResourceId = "COMPLAINT-" + saved.getComplaintId();
+        userRepository.findAllAdmins().forEach(admin ->
+            notificationService.createNotification(
+                admin.getUserId(),
+                "Khiếu nại mới",
+                user.getFullName() + ": \"" + truncate(saved.getSubject(), 60) + "\"",
+                NotificationType.COMPLAINT,
+                adminResourceId
+            )
+        );
         
         return mapToResponse(saved);
     }
@@ -377,14 +389,46 @@ public class ComplaintServiceImpl implements ComplaintService {
         return mapToResponse(saved);
     }
 
+    private List<ComplaintResponse.ResponseItem> deserializeResponses(String json) {
+        if (json == null || json.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<ComplaintResponse.ResponseItem>>() { });
+        } catch (Exception e) {
+            log.warn("Failed to deserialize complaint response JSON: {}", json, e);
+            List<ComplaintResponse.ResponseItem> fallbackList = new ArrayList<>();
+            fallbackList.add(ComplaintResponse.ResponseItem.builder()
+                    .from("Chủ sân")
+                    .message(json)
+                    .time(LocalDateTime.now().format(FORMATTER))
+                    .build());
+            return fallbackList;
+        }
+    }
+
+    private String serializeResponses(List<ComplaintResponse.ResponseItem> list) {
+        try {
+            return objectMapper.writeValueAsString(list);
+        } catch (Exception e) {
+            log.error("Failed to serialize complaint response list to JSON", e);
+            return "[]";
+        }
+    }
+
+    private String truncate(String s, int maxLen) {
+        if (s == null) return "";
+        return s.length() <= maxLen ? s : s.substring(0, maxLen) + "...";
+    }
+
     private ComplaintResponse mapToResponse(Complaint c) {
         String subject = c.getSubject();
         if (subject == null) {
             subject = "Khiếu nại đặt sân #" + c.getBooking().getBookingId();
         }
-        
+
         List<ComplaintResponse.ResponseItem> responsesList = deserializeResponses(c.getResponse());
-        
+
         String resolution = null;
         String resolvedDate = null;
         if (c.getStatus() == ComplaintStatus.RESOLVED) {
@@ -400,13 +444,13 @@ public class ComplaintServiceImpl implements ComplaintService {
 
         String customerName = c.getUser() != null ? c.getUser().getFullName() : "N/A";
         String customerEmail = c.getUser() != null ? c.getUser().getEmail() : "N/A";
-        
+
         String stadiumName = "N/A";
         Integer stadiumId = null;
         String ownerName = "N/A";
         String ownerEmail = "N/A";
         String bookingStatus = "N/A";
-        
+
         if (c.getBooking() != null) {
             bookingStatus = c.getBooking().getBookingStatus() != null ? c.getBooking().getBookingStatus().name() : "N/A";
             if (c.getBooking().getStadium() != null) {
@@ -441,33 +485,5 @@ public class ComplaintServiceImpl implements ComplaintService {
                 .bookingStatus(bookingStatus)
                 .responses(responsesList)
                 .build();
-    }
-
-    private List<ComplaintResponse.ResponseItem> deserializeResponses(String json) {
-        if (json == null || json.trim().isEmpty()) {
-            return new ArrayList<>();
-        }
-        try {
-            return objectMapper.readValue(json, new TypeReference<List<ComplaintResponse.ResponseItem>>() { });
-        } catch (Exception e) {
-            log.warn("Failed to deserialize complaint response JSON: {}", json, e);
-            // Fallback for non-JSON string formats
-            List<ComplaintResponse.ResponseItem> fallbackList = new ArrayList<>();
-            fallbackList.add(ComplaintResponse.ResponseItem.builder()
-                    .from("Chủ sân")
-                    .message(json)
-                    .time(LocalDateTime.now().format(FORMATTER))
-                    .build());
-            return fallbackList;
-        }
-    }
-
-    private String serializeResponses(List<ComplaintResponse.ResponseItem> list) {
-        try {
-            return objectMapper.writeValueAsString(list);
-        } catch (Exception e) {
-            log.error("Failed to serialize complaint response list to JSON", e);
-            return "[]";
-        }
     }
 }
