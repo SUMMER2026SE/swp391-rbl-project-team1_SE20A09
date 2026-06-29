@@ -52,7 +52,6 @@ import {
   Monitor,
   Bell,
   LogIn,
-  Hash,
   ToggleRight,
 } from "lucide-react";
 
@@ -712,9 +711,7 @@ function UserProfilePage() {
                               Đang hoạt động
                             </Badge>
                           </div>
-                          <p className="text-xs text-slate-400 text-center">
-                            Quản lý nhiều phiên đăng nhập — sắp có
-                          </p>
+                          <p className="text-xs text-slate-400 text-center sr-only" aria-hidden="true" />
                         </div>
                       </div>
                     </div>
@@ -751,20 +748,8 @@ function UserProfilePage() {
                             </div>
                           </div>
 
-                          {/* Login count card */}
-                          <div className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 bg-slate-50">
-                            <div className="p-2 bg-white rounded-lg border border-slate-200 shrink-0">
-                              <Hash className="h-5 w-5 text-slate-500" />
-                            </div>
-                            <div>
-                              <div className="font-semibold text-sm text-slate-800">Tổng số lần đăng nhập</div>
-                              <div className="text-xs text-slate-500 mt-0.5">
-                                <span className="font-bold text-slate-700 text-base mr-1">—</span>
-                                lần
-                                <span className="ml-2 text-slate-400">(sắp có)</span>
-                              </div>
-                            </div>
-                          </div>
+                          {/* Login count card — removed */}
+
                         </div>
                       </div>
 
