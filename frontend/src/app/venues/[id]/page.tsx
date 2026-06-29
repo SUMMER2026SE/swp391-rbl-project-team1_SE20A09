@@ -23,15 +23,7 @@ export default async function VenueDetailPage({ params }: PageProps) {
     notFound()
   }
 
-  // --- Fast path: redirect to new complex page if stadium belongs to a complex ---
-  // getCourtWithComplex returns null gracefully if the endpoint is not yet
-  // implemented (catches all errors), so this is safe to call first.
-  const courtRef = await getCourtWithComplex(venueId)
-  if (courtRef?.complexId) {
-    redirect(`/complexes/${courtRef.complexId}?courtId=${venueId}`)
-  }
-
-  // --- Fallback: render legacy VenueDetail for unmigrated stadiums ---
+  // --- Render VenueDetail for courts ---
   let venue
   try {
     venue = await getVenueDetail(venueId)

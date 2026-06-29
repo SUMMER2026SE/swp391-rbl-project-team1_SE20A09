@@ -45,7 +45,9 @@ const LeafletMap = dynamic(
 
 export function AddressPicker({ initialAddress, initialLat, initialLng, onAddressChange }: Props) {
   const [position, setPosition] = useState<{ lat: number; lng: number }>(() => {
-    if (initialLat && initialLng) return { lat: initialLat, lng: initialLng }
+    if (initialLat !== undefined && initialLat !== null && initialLng !== undefined && initialLng !== null) {
+      return { lat: initialLat, lng: initialLng }
+    }
     return DA_NANG_CENTER
   })
   const [inputValue, setInputValue] = useState(initialAddress || '')
@@ -63,14 +65,14 @@ export function AddressPicker({ initialAddress, initialLat, initialLng, onAddres
 
   // Keep local input value in sync with prop from react-hook-form parent only when not typing
   useEffect(() => {
-    if (!isFocused && initialAddress !== undefined && initialAddress !== inputValue) {
+    if (!isFocused && initialAddress !== undefined && initialAddress !== null && initialAddress !== inputValue) {
       setInputValue(initialAddress)
     }
   }, [initialAddress, inputValue, isFocused])
 
   // Keep local map position in sync with prop from react-hook-form parent
   useEffect(() => {
-    if (initialLat !== undefined && initialLng !== undefined && (initialLat !== position.lat || initialLng !== position.lng)) {
+    if (initialLat !== undefined && initialLat !== null && initialLng !== undefined && initialLng !== null && (initialLat !== position.lat || initialLng !== position.lng)) {
       setPosition({ lat: initialLat, lng: initialLng })
     }
   }, [initialLat, initialLng, position])

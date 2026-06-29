@@ -67,13 +67,10 @@ export default function ComplexHeader({ complex }: ComplexHeaderProps) {
             className="col-span-2 row-span-2 relative cursor-pointer group"
             onClick={() => openLightbox(0)}
           >
-            <Image
+            <img
               src={displayImages[0]}
               alt={complex.name}
-              fill
-              className="object-cover transition-transform duration-500 group-hover:scale-105"
-              sizes="50vw"
-              priority
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
             />
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
           </div>
@@ -87,12 +84,10 @@ export default function ComplexHeader({ complex }: ComplexHeaderProps) {
             >
               {displayImages[i] ? (
                 <>
-                  <Image
+                  <img
                     src={displayImages[i]}
                     alt={`${complex.name} ${i + 1}`}
-                    fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    sizes="25vw"
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                   {/* "Show all" overlay on last visible thumbnail */}
                   {i === 4 && displayImages.length > 5 && (
@@ -224,12 +219,10 @@ export default function ComplexHeader({ complex }: ComplexHeaderProps) {
             className="relative w-full max-w-4xl h-[80vh] px-16"
             onClick={(e) => e.stopPropagation()}
           >
-            <Image
+            <img
               src={displayImages[lightboxIdx]}
               alt={`${complex.name} photo ${lightboxIdx + 1}`}
-              fill
-              className="object-contain"
-              sizes="90vw"
+              className="w-full h-full object-contain"
             />
           </div>
 

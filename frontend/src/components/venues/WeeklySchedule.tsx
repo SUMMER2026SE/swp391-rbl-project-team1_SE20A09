@@ -11,7 +11,7 @@ import {
 interface WeeklyScheduleProps {
   stadiumId: number
   /** Callback khi user click một slot AVAILABLE — parent dùng để đặt sân. */
-  onSlotSelect: (slotId: number, date: string) => void
+  onSlotSelect: (slotId: number, date: string, startTime?: string, price?: number, endTime?: string) => void
 }
 
 /**
@@ -201,7 +201,7 @@ export default function WeeklySchedule({ stadiumId, onSlotSelect }: WeeklySchedu
 interface SlotCellProps {
   slot: WeeklySlotItem | undefined
   date: string
-  onPick: (slotId: number, date: string) => void
+  onPick: (slotId: number, date: string, startTime: string, price: number, endTime: string) => void
 }
 
 function SlotCell({ slot, date, onPick }: SlotCellProps) {
@@ -224,6 +224,28 @@ function SlotCell({ slot, date, onPick }: SlotCellProps) {
     )
   }
 
+  if (slot.status === 'OWNER_CLOSED') {
+    return (
+      <div
+        aria-disabled
+        className="min-h-[48px] h-[48px] rounded-[6px] bg-[#fff7ed] border-[0.5px] border-[#ffedd5] flex items-center justify-center px-3 text-[13px] font-medium text-[#c2410c] select-none cursor-not-allowed"
+      >
+        Tạm đóng
+      </div>
+    )
+  }
+
+  if (slot.status === 'MAINTENANCE') {
+    return (
+      <div
+        aria-disabled
+        className="min-h-[48px] h-[48px] rounded-[6px] bg-[#f3f4f6] border-[0.5px] border-[#e5e7eb] flex items-center justify-center px-3 text-[13px] font-medium text-gray-500 select-none cursor-not-allowed"
+      >
+        Bảo trì
+      </div>
+    )
+  }
+
   if (slot.status === 'PAST') {
     return (
       <div
@@ -239,7 +261,7 @@ function SlotCell({ slot, date, onPick }: SlotCellProps) {
   return (
     <button
       type="button"
-      onClick={() => onPick(slot.slotId, date)}
+      onClick={() => onPick(slot.slotId, date, slot.startTime, slot.price, slot.endTime)}
       className="min-h-[48px] h-[48px] w-full rounded-[6px] bg-[#e8f7ee] border-[0.5px] border-[#9eddb6] flex flex-col items-center justify-center px-3 cursor-pointer hover:bg-[#d4f0e2] active:bg-[#c0e8d2] transition-colors group"
       aria-label={`Đặt slot ${slot.startTime}-${slot.endTime} ngày ${date}`}
     >

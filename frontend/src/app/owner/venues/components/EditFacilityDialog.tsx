@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,18 +8,24 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { stadiumService } from '@/lib/services/stadium'
-import { SportType } from '@/types/stadium'
+import { StadiumResponse, SportType } from '@/types/stadium'
 import { toast } from 'sonner'
 
-interface QuickCreateFacilityDialogProps {
+interface EditFacilityDialogProps {
   isOpen: boolean
   onClose: () => void
-  complexId: number | null
+  facility: StadiumResponse | null
   complexSportTypeIds?: number[]
   onSuccess: () => void
 }
 
-export function QuickCreateFacilityDialog({ isOpen, onClose, complexId, complexSportTypeIds, onSuccess }: QuickCreateFacilityDialogProps) {
+export function EditFacilityDialog({
+  isOpen,
+  onClose,
+  facility,
+  complexSportTypeIds,
+  onSuccess
+}: EditFacilityDialogProps) {
   const [stadiumName, setStadiumName] = useState('')
   const [description, setDescription] = useState('')
   const [sportTypeId, setSportTypeId] = useState<number | null>(null)
@@ -42,9 +48,19 @@ export function QuickCreateFacilityDialog({ isOpen, onClose, complexId, complexS
     }
   }, [isOpen, complexSportTypeIds])
 
+  useEffect(() => {
+    if (isOpen && facility) {
+      setStadiumName(facility.stadiumName)
+      setDescription(facility.description || '')
+      setSportTypeId(facility.sportTypeId || null)
+      setOpenTime(facility.openTime.substring(0, 5))
+      setCloseTime(facility.closeTime.substring(0, 5))
+    }
+  }, [isOpen, facility])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!complexId) return
+    if (!facility) return
     if (!stadiumName.trim()) {
       toast.error('Vui lòng nhập tên khu sân')
       return
@@ -53,28 +69,31 @@ export function QuickCreateFacilityDialog({ isOpen, onClose, complexId, complexS
       toast.error('Vui lòng chọn môn thể thao')
       return
     }
+    if (openTime >= closeTime) {
+      toast.error('Giờ mở cửa phải trước giờ đóng cửa')
+      return
+    }
 
     setSubmitting(true)
     try {
-      await stadiumService.createFacility({
-        complexId,
+      await stadiumService.updateStadium(facility.stadiumId, {
         stadiumName: stadiumName.trim(),
+        address: facility.address || 'Address',
+        sportTypeId: sportTypeId,
+        pricePerHour: facility.pricePerHour || 0,
         description: description.trim() || undefined,
-        sportTypeId,
         openTime: `${openTime}:00`,
         closeTime: `${closeTime}:00`,
+        latitude: facility.latitude || 16.0544,
+        longitude: facility.longitude || 108.2022,
+        imageUrls: facility.imageUrls || [],
       })
-      toast.success('Đã tạo khu sân thành công!')
-      // Reset form
-      setStadiumName('')
-      setDescription('')
-      setSportTypeId(null)
-      setOpenTime('06:00')
-      setCloseTime('22:00')
+
+      toast.success('Cập nhật khu sân thành công!')
       onSuccess()
       onClose()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Đã có lỗi xảy ra khi tạo khu sân'
+      const msg = err instanceof Error ? err.message : 'Đã xảy ra lỗi khi cập nhật khu sân'
       toast.error(msg)
     } finally {
       setSubmitting(false)
@@ -85,34 +104,35 @@ export function QuickCreateFacilityDialog({ isOpen, onClose, complexId, complexS
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold">Thêm Khu Sân Mới (L2)</DialogTitle>
+          <DialogTitle className="text-xl font-bold">Chỉnh sửa Khu sân (L2)</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          
           <div className="space-y-2">
-            <Label htmlFor="facility-name">Tên khu sân <span className="text-red-500">*</span></Label>
+            <Label htmlFor="edit-fac-name">Tên khu sân *</Label>
             <Input
-              id="facility-name"
-              placeholder="Ví dụ: Khu Sân Bóng Đá Kỳ Hòa"
+              id="edit-fac-name"
               value={stadiumName}
               onChange={(e) => setStadiumName(e.target.value)}
               disabled={submitting}
+              placeholder="VD: Sân bóng đá 7 người"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="sport-type">Môn thể thao <span className="text-red-500">*</span></Label>
+            <Label htmlFor="edit-fac-sport">Môn thể thao *</Label>
             <Select
               disabled={submitting}
               onValueChange={(val) => setSportTypeId(Number(val))}
               value={sportTypeId ? String(sportTypeId) : undefined}
             >
-              <SelectTrigger>
+              <SelectTrigger id="edit-fac-sport">
                 <SelectValue placeholder="Chọn môn thể thao" />
               </SelectTrigger>
               <SelectContent>
-                {sportTypes.map((st) => (
-                  <SelectItem key={st.sportTypeId} value={String(st.sportTypeId)}>
-                    {st.sportName}
+                {sportTypes.map((type) => (
+                  <SelectItem key={type.sportTypeId} value={String(type.sportTypeId)}>
+                    {type.sportName}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -121,9 +141,9 @@ export function QuickCreateFacilityDialog({ isOpen, onClose, complexId, complexS
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="open-time">Giờ mở cửa</Label>
+              <Label htmlFor="edit-fac-open">Giờ mở cửa *</Label>
               <Input
-                id="open-time"
+                id="edit-fac-open"
                 type="time"
                 value={openTime}
                 onChange={(e) => setOpenTime(e.target.value)}
@@ -131,9 +151,9 @@ export function QuickCreateFacilityDialog({ isOpen, onClose, complexId, complexS
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="close-time">Giờ đóng cửa</Label>
+              <Label htmlFor="edit-fac-close">Giờ đóng cửa *</Label>
               <Input
-                id="close-time"
+                id="edit-fac-close"
                 type="time"
                 value={closeTime}
                 onChange={(e) => setCloseTime(e.target.value)}
@@ -143,13 +163,13 @@ export function QuickCreateFacilityDialog({ isOpen, onClose, complexId, complexS
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="facility-desc">Mô tả chi tiết</Label>
+            <Label htmlFor="edit-fac-desc">Mô tả chi tiết</Label>
             <Textarea
-              id="facility-desc"
-              placeholder="Nhập thông tin giới thiệu, các lưu ý, quy định của khu sân..."
+              id="edit-fac-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               disabled={submitting}
+              placeholder="Nhập thông tin giới thiệu khu sân..."
               rows={3}
             />
           </div>
@@ -159,7 +179,7 @@ export function QuickCreateFacilityDialog({ isOpen, onClose, complexId, complexS
               Hủy
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? 'Đang tạo...' : 'Tạo Khu Sân'}
+              {submitting ? 'Đang lưu...' : 'Lưu thay đổi'}
             </Button>
           </DialogFooter>
         </form>

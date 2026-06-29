@@ -99,4 +99,7 @@ public interface TimeSlotRepository extends JpaRepository<TimeSlot, Integer> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT t FROM TimeSlot t WHERE t.slotId = :slotId")
     Optional<TimeSlot> findByIdForUpdate(@Param("slotId") Integer slotId);
+
+    @Query("SELECT s FROM TimeSlot s JOIN FETCH s.stadium st JOIN FETCH st.owner o JOIN FETCH o.user u WHERE s.slotId = :slotId")
+    Optional<TimeSlot> findByIdWithOwner(@Param("slotId") Integer slotId);
 }

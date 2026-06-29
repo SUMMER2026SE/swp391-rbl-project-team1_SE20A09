@@ -103,3 +103,16 @@ export interface SportType {
   sportTypeId: number;
   sportName: string;
 }
+
+export interface CreateComplexRequest {
+  name: string;
+  description?: string;
+  address: string;
+  phone?: string;
+  latitude: number;
+  longitude: number;
+  coverImageUrl?: string;
+  sportTypeIds?: number[];
+  amenityIds?: number[];
+  imageUrls?: string[];
+}

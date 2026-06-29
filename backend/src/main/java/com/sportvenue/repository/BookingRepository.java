@@ -257,11 +257,12 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             WHERE b.stadium.stadiumId = :stadiumId
             AND b.bookingStatus IN (com.sportvenue.entity.enums.BookingStatus.PENDING,
                                     com.sportvenue.entity.enums.BookingStatus.CONFIRMED)
-            AND b.slot.endTime >= :now
+            AND (b.reservationDate > :today OR (b.reservationDate = :today AND b.slot.endTime >= :nowTime))
             """)
     List<Booking> findFutureBookingsByStadiumId(
             @Param("stadiumId") Integer stadiumId,
-            @Param("now") LocalDateTime now);
+            @Param("today") java.time.LocalDate today,
+            @Param("nowTime") java.time.LocalTime nowTime);
 
     @Query("""
             SELECT COUNT(b) > 0 FROM Booking b

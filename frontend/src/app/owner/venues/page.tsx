@@ -57,6 +57,8 @@ import { useConfirm } from "@/hooks/useConfirm";
 import { QuickCreateFacilityDialog } from './components/QuickCreateFacilityDialog'
 import { QuickCreateCourtDialog } from './components/QuickCreateCourtDialog'
 import { BulkTimeSlotConfigDialog } from './components/BulkSlotConfigDialog'
+import { EditComplexDialog } from './components/EditComplexDialog'
+import { EditFacilityDialog } from './components/EditFacilityDialog'
 
 interface VenueModalData {
   id: number;
@@ -78,6 +80,8 @@ function VenueManagementPage() {
   const [deleteVenue, setDeleteVenue] = useState<VenueModalData | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingComplex, setEditingComplex] = useState<ComplexResponse | null>(null);
+  const [editingFacility, setEditingFacility] = useState<StadiumResponse | null>(null);
 
   // Quick action states
   const [activeComplexIdForFacility, setActiveComplexIdForFacility] = useState<number | null>(null);
@@ -167,7 +171,7 @@ function VenueManagementPage() {
     try {
       await stadiumService.deleteStadium(deleteVenue.id);
       toast.success("Đã xóa sân thành công.");
-      setVenues(venues.filter(v => v.stadiumId !== deleteVenue.id));
+      fetchTreeData();
       setDeleteVenue(null);
       setDeleteConfirmText("");
     } catch (error) {
@@ -236,29 +240,39 @@ function VenueManagementPage() {
               <Card key={complex.complexId} className="border-slate-100 dark:border-border overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                 {/* L1: Complex Node Header */}
                 <div className="bg-slate-50/70 dark:bg-muted/40 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-border">
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
                     <button
                       onClick={() => toggleComplex(complex.complexId)}
-                      className="p-1 hover:bg-slate-200 dark:hover:bg-muted rounded text-slate-500 mt-1"
+                      className="p-1 hover:bg-slate-200 dark:hover:bg-muted rounded text-slate-500 mt-1 shrink-0"
                     >
                       {isComplexCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                     </button>
-                    <div>
-                      <div className="flex items-center gap-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2.5">
                         <Building2 className="h-5 w-5 text-primary shrink-0" />
-                        <h3 className="font-extrabold text-xl text-slate-900 dark:text-white leading-tight">
+                        <h3 className="font-extrabold text-xl text-slate-900 dark:text-white leading-tight truncate">
                           {complex.name}
                         </h3>
                         {getApprovedStatusBadge(complex.approvedStatus)}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
-                        📍 {complex.address}
+                      <p className="text-xs text-muted-foreground mt-1.5 flex items-start gap-1.5 whitespace-normal break-words">
+                        <span className="shrink-0">📍</span>
+                        <span>{complex.address}</span>
                       </p>
                     </div>
                   </div>
 
                   {/* Actions for Complex */}
                   <div className="flex flex-wrap gap-2 md:self-center pl-8 md:pl-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditingComplex(complex)}
+                      className="text-xs font-semibold"
+                    >
+                      <Edit className="mr-1.5 h-3.5 w-3.5" />
+                      Chỉnh sửa
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -323,28 +337,77 @@ function VenueManagementPage() {
                                   </div>
                                 </div>
 
-                                <div className="flex gap-2 pl-8 md:pl-0">
+                                <div className="flex items-center gap-1.5 pl-8 md:pl-0">
                                   <Button
-                                    variant="ghost"
+                                    variant="outline"
                                     size="sm"
                                     onClick={() => {
                                       setBulkFacilityId(facility.stadiumId);
                                       setBulkCourtsList(facilityCourts);
                                     }}
-                                    className="text-xs text-muted-foreground hover:text-slate-900"
+                                    className="text-xs font-semibold h-8"
                                   >
-                                    <Sliders className="mr-1 h-3.5 w-3.5" />
+                                    <Sliders className="mr-1.5 h-3.5 w-3.5" />
                                     Cấu hình giờ
                                   </Button>
                                   <Button
                                     variant="outline"
                                     size="sm"
                                     onClick={() => setActiveFacilityIdForCourt(facility.stadiumId)}
-                                    className="text-xs text-primary font-semibold border-primary/20 hover:bg-primary/5"
+                                    className="text-xs font-semibold h-8 border-primary/20 text-primary hover:bg-primary/5"
                                   >
-                                    <Plus className="mr-1 h-3.5 w-3.5" />
+                                    <Plus className="mr-1.5 h-3.5 w-3.5" />
                                     Thêm sân lẻ (L3)
                                   </Button>
+
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                                        <MoreVertical className="h-4.5 w-4.5" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-44">
+                                      <DropdownMenuItem onClick={() => setEditingFacility(facility)}>
+                                        <Edit className="mr-2 h-4 w-4" />
+                                        Chỉnh sửa
+                                      </DropdownMenuItem>
+
+                                      <DropdownMenuItem
+                                        onClick={() => {
+                                          setSelectedVenueForAccessory({ id: facility.stadiumId, name: facility.stadiumName });
+                                          setIsAccessoryOpen(true);
+                                        }}
+                                      >
+                                        <Package className="mr-2 h-4 w-4" />
+                                        Quản lý phụ kiện
+                                      </DropdownMenuItem>
+                                      
+                                      {facility.stadiumStatus === 'AVAILABLE' ? (
+                                        <DropdownMenuItem onClick={() => setSuspendVenue({ id: facility.stadiumId, name: facility.stadiumName })}>
+                                          <Pause className="mr-2 h-4 w-4" />
+                                          Tạm dừng
+                                        </DropdownMenuItem>
+                                      ) : facility.stadiumStatus === 'MAINTENANCE' ? (
+                                        <DropdownMenuItem onClick={() => setActivateVenue({ id: facility.stadiumId, name: facility.stadiumName })}>
+                                          <PlayCircle className="mr-2 h-4 w-4" />
+                                          Hoạt động
+                                        </DropdownMenuItem>
+                                      ) : null}
+
+                                      {facility.stadiumStatus !== 'CLOSED' && (
+                                        <DropdownMenuItem
+                                          onClick={() => {
+                                            setDeleteVenue({ id: facility.stadiumId, name: facility.stadiumName });
+                                            setDeleteConfirmText("");
+                                          }}
+                                          className="text-destructive focus:text-destructive"
+                                        >
+                                          <Trash className="mr-2 h-4 w-4" />
+                                          Xóa khu sân
+                                        </DropdownMenuItem>
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 </div>
                               </div>
 
@@ -388,18 +451,6 @@ function VenueManagementPage() {
                                                     title="Xem lịch đặt sân"
                                                   >
                                                     <CalendarDays className="h-4.5 w-4.5" />
-                                                  </Button>
-                                                  <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 shrink-0 text-slate-500 hover:text-slate-900"
-                                                    onClick={() => {
-                                                      setSelectedVenueForAccessory({ id: court.stadiumId, name: court.stadiumName });
-                                                      setIsAccessoryOpen(true);
-                                                    }}
-                                                    title="Quản lý phụ kiện"
-                                                  >
-                                                    <Package className="h-4.5 w-4.5" />
                                                   </Button>
                                                   <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
@@ -551,6 +602,26 @@ function VenueManagementPage() {
         isOpen={activeComplexIdForFacility !== null}
         onClose={() => setActiveComplexIdForFacility(null)}
         complexId={activeComplexIdForFacility}
+        complexSportTypeIds={
+          complexes.find(c => c.complexId === activeComplexIdForFacility)?.sportTypeIds || []
+        }
+        onSuccess={fetchTreeData}
+      />
+
+      <EditComplexDialog
+        isOpen={editingComplex !== null}
+        onClose={() => setEditingComplex(null)}
+        complex={editingComplex}
+        onSuccess={fetchTreeData}
+      />
+
+      <EditFacilityDialog
+        isOpen={editingFacility !== null}
+        onClose={() => setEditingFacility(null)}
+        facility={editingFacility}
+        complexSportTypeIds={
+          complexes.find(c => c.complexId === editingFacility?.complexId)?.sportTypeIds || []
+        }
         onSuccess={fetchTreeData}
       />
 

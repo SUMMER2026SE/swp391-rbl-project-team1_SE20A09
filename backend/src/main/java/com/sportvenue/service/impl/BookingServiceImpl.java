@@ -32,6 +32,8 @@ import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.repository.TimeSlotExceptionRepository;
+import com.sportvenue.entity.TimeSlotException;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.BookingService;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -87,6 +90,7 @@ public class BookingServiceImpl implements BookingService {
     private final PaymentRepository paymentRepository;
     private final AccessoryRepository accessoryRepository;
     private final BookingAccessoryRepository bookingAccessoryRepository;
+    private final TimeSlotExceptionRepository timeSlotExceptionRepository;
 
     @Override
     @Transactional
@@ -118,8 +122,24 @@ public class BookingServiceImpl implements BookingService {
                             + ". Vui lòng chọn khung giờ hoặc ngày khác.");
         }
 
+        Optional<TimeSlotException> exceptionOpt = timeSlotExceptionRepository.findBySlotSlotIdAndExceptionDate(
+                slot.getSlotId(), request.getReservationDate());
+        if (exceptionOpt.isPresent()) {
+            TimeSlotException ex = exceptionOpt.get();
+            if (Boolean.TRUE.equals(ex.getClosed())) {
+                throw new BadRequestException("Khung giờ này đã tạm đóng vào ngày " + request.getReservationDate());
+            }
+            if (Boolean.TRUE.equals(ex.getHidden())) {
+                throw new BadRequestException("Khung giờ này không tồn tại vào ngày " + request.getReservationDate());
+            }
+        }
+
+        BigDecimal basePrice = (exceptionOpt.isPresent() && exceptionOpt.get().getPriceOverride() != null)
+                ? exceptionOpt.get().getPriceOverride()
+                : slot.getPricePerSlot();
+
         AccessoryComputation accessoryComp = computeAccessories(request.getAccessories());
-        BigDecimal totalPrice = slot.getPricePerSlot()
+        BigDecimal totalPrice = basePrice
                 .add(accessoryComp.total)
                 .add(SERVICE_FEE);
 
@@ -332,11 +352,51 @@ public class BookingServiceImpl implements BookingService {
         Set<Integer> bookedSlotIds = Set.copyOf(
                 bookingRepository.findBookedSlotIds(stadiumId, date, ACTIVE_STATUSES));
 
+        List<TimeSlotException> exceptions = timeSlotExceptionRepository.findByStadiumAndDateRange(stadiumId, date, date);
+        Map<Integer, TimeSlotException> exceptionMap = exceptions.stream()
+                .collect(Collectors.toMap(e -> e.getSlot().getSlotId(), e -> e));
+
         LocalDateTime now = LocalDateTime.now();
 
+        java.time.LocalTime openT = stadium.getOpenTime() != null ? stadium.getOpenTime() : java.time.LocalTime.MIN;
+        java.time.LocalTime closeT = stadium.getCloseTime() != null ? stadium.getCloseTime() : java.time.LocalTime.MAX;
+
         return slots.stream()
-                .map(slot -> toTimeSlotResponse(slot, bookedSlotIds.contains(slot.getSlotId()),
-                        LocalDateTime.of(date, slot.getStartTime()).isAfter(now)))
+                .filter(slot -> {
+                    TimeSlotException exception = exceptionMap.get(slot.getSlotId());
+                    // Resolve effective times — apply override before comparing with open/close window.
+                    java.time.LocalTime effectiveStart = (exception != null && exception.getStartTimeOverride() != null)
+                            ? exception.getStartTimeOverride() : slot.getStartTime();
+                    java.time.LocalTime effectiveEnd = (exception != null && exception.getEndTimeOverride() != null)
+                            ? exception.getEndTimeOverride() : slot.getEndTime();
+                    if (effectiveStart.isBefore(openT) || effectiveEnd.isAfter(closeT)) {
+                        return false;
+                    }
+                    return exception == null || !Boolean.TRUE.equals(exception.getHidden());
+                })
+                .map(slot -> {
+                    TimeSlotException exception = exceptionMap.get(slot.getSlotId());
+                    java.time.LocalTime startT = (exception != null && exception.getStartTimeOverride() != null)
+                            ? exception.getStartTimeOverride() : slot.getStartTime();
+                    java.time.LocalTime endT = (exception != null && exception.getEndTimeOverride() != null)
+                            ? exception.getEndTimeOverride() : slot.getEndTime();
+                    BigDecimal price = (exception != null && exception.getPriceOverride() != null)
+                            ? exception.getPriceOverride()
+                            : slot.getPricePerSlot();
+                    boolean isClosed = exception != null && Boolean.TRUE.equals(exception.getClosed());
+                    boolean isFuture = LocalDateTime.of(date, startT).isAfter(now);
+                    boolean isBooked = bookedSlotIds.contains(slot.getSlotId());
+
+                    return TimeSlotResponse.builder()
+                            .slotId(slot.getSlotId())
+                            .stadiumId(slot.getStadium().getStadiumId())
+                            .startTime(startT)
+                            .endTime(endT)
+                            .pricePerSlot(price)
+                            .slotStatus(isClosed ? "OWNER_CLOSED" : (slot.getSlotStatus() != null ? slot.getSlotStatus().name() : null))
+                            .available(!isBooked && isFuture && !isClosed)
+                            .build();
+                })
                 .toList();
     }
 
@@ -357,14 +417,25 @@ public class BookingServiceImpl implements BookingService {
         List<Booking> weeklyBookings = bookingRepository.findWeeklyBookings(
                 stadiumId, monday, sunday, ACTIVE_STATUSES);
 
-        // Map (date → tập slotId đã được đặt active) — service trả về
-        // Set<slotId> cho từng ngày để render nhanh trong vòng lặp 7 ngày.
+        List<TimeSlotException> exceptions = timeSlotExceptionRepository.findByStadiumAndDateRange(stadiumId, monday, sunday);
+
+        // Map (date → tập slotId đã được đặt active)
         Map<LocalDate, Set<Integer>> bookedByDate = weeklyBookings.stream()
                 .collect(Collectors.groupingBy(
                         Booking::getReservationDate,
                         Collectors.mapping(
                                 b -> b.getSlot().getSlotId(),
                                 Collectors.toSet())));
+
+        // Map (date → Map<slotId → exception>)
+        Map<LocalDate, Map<Integer, TimeSlotException>> exceptionsByDate = exceptions.stream()
+                .collect(Collectors.groupingBy(
+                        TimeSlotException::getExceptionDate,
+                        Collectors.toMap(
+                                e -> e.getSlot().getSlotId(),
+                                e -> e
+                        )
+                ));
 
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter hhmm = DateTimeFormatter.ofPattern("HH:mm");
@@ -373,26 +444,53 @@ public class BookingServiceImpl implements BookingService {
         for (int i = 0; i < 7; i++) {
             LocalDate date = monday.plusDays(i);
             Set<Integer> bookedSlotIds = bookedByDate.getOrDefault(date, Set.of());
+            Map<Integer, TimeSlotException> dayExceptions = exceptionsByDate.getOrDefault(date, Map.of());
+
+            java.time.LocalTime openT = stadium.getOpenTime() != null ? stadium.getOpenTime() : java.time.LocalTime.MIN;
+            java.time.LocalTime closeT = stadium.getCloseTime() != null ? stadium.getCloseTime() : java.time.LocalTime.MAX;
 
             List<WeeklySlotItemDto> daySlots = slots.stream()
                     .sorted(Comparator.comparing(TimeSlot::getStartTime))
+                    .filter(slot -> {
+                        TimeSlotException exception = dayExceptions.get(slot.getSlotId());
+                        // Resolve effective times — apply override before comparing with open/close window.
+                        java.time.LocalTime effectiveStart = (exception != null && exception.getStartTimeOverride() != null)
+                                ? exception.getStartTimeOverride() : slot.getStartTime();
+                        java.time.LocalTime effectiveEnd = (exception != null && exception.getEndTimeOverride() != null)
+                                ? exception.getEndTimeOverride() : slot.getEndTime();
+                        if (effectiveStart.isBefore(openT) || effectiveEnd.isAfter(closeT)) {
+                            return false;
+                        }
+                        return exception == null || !Boolean.TRUE.equals(exception.getHidden());
+                    })
                     .map(slot -> {
-                        LocalDateTime slotStart = LocalDateTime.of(date, slot.getStartTime());
+                        TimeSlotException exception = dayExceptions.get(slot.getSlotId());
+                        java.time.LocalTime startT = (exception != null && exception.getStartTimeOverride() != null)
+                                ? exception.getStartTimeOverride() : slot.getStartTime();
+                        java.time.LocalTime endT = (exception != null && exception.getEndTimeOverride() != null)
+                                ? exception.getEndTimeOverride() : slot.getEndTime();
+                        LocalDateTime slotStart = LocalDateTime.of(date, startT);
+                        boolean isClosed = exception != null && Boolean.TRUE.equals(exception.getClosed());
+                        BigDecimal price = (exception != null && exception.getPriceOverride() != null)
+                                ? exception.getPriceOverride()
+                                : slot.getPricePerSlot();
+
                         String status;
-                        if (bookedSlotIds.contains(slot.getSlotId())) {
+                        if (isClosed) {
+                            status = "OWNER_CLOSED";
+                        } else if (bookedSlotIds.contains(slot.getSlotId())) {
                             status = "BOOKED";
                         } else if (!slotStart.isAfter(now)) {
                             status = "PAST";
                         } else {
                             status = "AVAILABLE";
                         }
+                        
                         return WeeklySlotItemDto.builder()
                                 .slotId(slot.getSlotId())
-                                .startTime(slot.getStartTime() != null
-                                        ? slot.getStartTime().format(hhmm) : null)
-                                .endTime(slot.getEndTime() != null
-                                        ? slot.getEndTime().format(hhmm) : null)
-                                .price(slot.getPricePerSlot())
+                                .startTime(startT != null ? startT.format(hhmm) : null)
+                                .endTime(endT != null ? endT.format(hhmm) : null)
+                                .price(price)
                                 .status(status)
                                 .build();
                     })
@@ -511,7 +609,7 @@ public class BookingServiceImpl implements BookingService {
                 .displayId("BK" + String.format("%06d", booking.getBookingId()))
                 .venue(stadium != null ? stadium.getStadiumName() : "Sân chưa biết")
                 .sportType(sportType != null ? sportType.getSportName() : "Khác")
-                .imageUrl(imageUrl != null ? imageUrl : "/images/stadium1.jpg")
+                .imageUrl(imageUrl != null ? imageUrl : "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=300&auto=format&fit=crop")
                 .date(dateStr)
                 .time(timeStr)
                 .location(stadium != null ? stadium.getAddress() : null)

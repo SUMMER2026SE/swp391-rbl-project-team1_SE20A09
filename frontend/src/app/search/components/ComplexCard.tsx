@@ -25,12 +25,10 @@ export function ComplexCard({ complex }: ComplexCardProps) {
       <Link href={`/complexes/${complex.complexId}`} className="flex flex-col flex-1">
         <div className="relative h-64 w-full bg-muted overflow-hidden">
           {complex.coverImageUrl ? (
-            <Image
+            <img
               src={complex.coverImageUrl}
               alt={complex.name}
-              fill
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-              className="object-cover group-hover:scale-110 transition-transform duration-700 ease-in-out"
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-in-out"
             />
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground bg-secondary/50 font-bold">Không có ảnh</div>

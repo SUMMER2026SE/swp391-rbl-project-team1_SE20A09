@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,6 +35,13 @@ export function BulkTimeSlotConfigDialog({
   const [selectedCourtIds, setSelectedCourtIds] = useState<number[]>([])
   const [applyToAll, setApplyToAll] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (isOpen && courts && courts.length > 0) {
+      // Tự động điền giá dựa trên sân con đầu tiên
+      setPricePerSlot(courts[0].pricePerHour)
+    }
+  }, [isOpen, courts])
 
   const handleToggleCourt = (courtId: number) => {
     setSelectedCourtIds(prev => 
@@ -153,6 +160,7 @@ export function BulkTimeSlotConfigDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="30">30 phút (0.5 giờ)</SelectItem>
                   <SelectItem value="60">60 phút (1 giờ)</SelectItem>
                   <SelectItem value="90">90 phút (1.5 giờ)</SelectItem>
                   <SelectItem value="120">120 phút (2 giờ)</SelectItem>

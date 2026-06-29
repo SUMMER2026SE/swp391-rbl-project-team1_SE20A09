@@ -132,13 +132,10 @@ export default function ComplexMapModal({ isOpen, onClose, complexes }: ComplexM
                     <div className="w-60 overflow-hidden font-sans p-1">
                       {complex.coverImageUrl ? (
                         <div className="relative w-full h-28 mb-2">
-                          <Image
+                          <img
                             src={complex.coverImageUrl}
                             alt={complex.name}
-                            fill
-                            unoptimized
-                            priority
-                            className="object-cover rounded-lg shadow-sm"
+                            className="w-full h-full object-cover rounded-lg shadow-sm"
                           />
                         </div>
                       ) : (

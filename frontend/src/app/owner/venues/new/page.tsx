@@ -10,101 +10,76 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Upload, X, MapPin, Loader2 } from "lucide-react";
-import Image from "next/image";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { stadiumService } from "@/lib/services/stadium";
 import { SportType } from "@/types/stadium";
+import { getAmenities, Amenity } from "@/lib/api/stadium";
 import { uploadStadiumImage } from "@/lib/api";
 import { toast } from "sonner";
 import { AddressPicker } from "@/components/AddressPicker";
 
-const stadiumSchema = z.object({
-  stadiumName: z.string()
-    .min(3, "Tên sân phải có ít nhất 3 ký tự")
-    .max(100, "Tên sân không được quá 100 ký tự"),
+const complexSchema = z.object({
+  name: z.string()
+    .min(3, "Tên tổ hợp phải có ít nhất 3 ký tự")
+    .max(150, "Tên tổ hợp không được quá 150 ký tự"),
   address: z.string()
     .min(5, "Địa chỉ phải có ít nhất 5 ký tự")
     .max(500, "Địa chỉ không được quá 500 ký tự"),
+  phone: z.string()
+    .max(20, "Số điện thoại không được quá 20 ký tự")
+    .optional()
+    .or(z.literal("")),
   latitude: z.number({ message: "Vui lòng chọn vị trí trên bản đồ" })
     .min(-90, "Vĩ độ không hợp lệ")
     .max(90, "Vĩ độ không hợp lệ"),
   longitude: z.number({ message: "Vui lòng chọn vị trí trên bản đồ" })
     .min(-180, "Kinh độ không hợp lệ")
     .max(180, "Kinh độ không hợp lệ"),
-  sportTypeId: z.number({ message: "Vui lòng chọn môn thể thao" })
-    .min(1, "Vui lòng chọn môn thể thao"),
-  pricePerHour: z.number({ message: "Vui lòng nhập giá" })
-    .min(1000, "Giá tối thiểu là 1,000đ")
-    .max(99999999.99, "Giá không được vượt quá 99,999,999.99đ"),
   description: z.string().max(2000, "Mô tả không được quá 2000 ký tự").optional(),
-  openTime: z.string().optional(),
-  closeTime: z.string().optional(),
-}).refine(
-  (data) => {
-    if (!data.openTime || !data.closeTime) return true;
-    return data.closeTime > data.openTime;
-  },
-  { message: "Giờ đóng cửa phải sau giờ mở cửa", path: ["closeTime"] }
-).refine(
-  (data) => {
-    if (!data.stadiumName) return true;
-    return data.stadiumName.trim() === data.stadiumName;
-  },
-  { message: "Tên sân không được bắt đầu hoặc kết thúc bằng khoảng trắng", path: ["stadiumName"] }
-);
-
-const validatedStadiumSchema = stadiumSchema.superRefine((data, ctx) => {
-  if (data.stadiumName.trim().length < 3) {
-    ctx.addIssue({ code: "custom", message: "Tên sân phải có ít nhất 3 ký tự", path: ["stadiumName"] });
-  }
-  if (data.address.trim().length > 500) {
-    ctx.addIssue({ code: "custom", message: "Địa chỉ không được quá 500 ký tự", path: ["address"] });
-  }
-  if (data.description && data.description.trim().length > 2000) {
-    ctx.addIssue({ code: "custom", message: "Mô tả không được quá 2000 ký tự", path: ["description"] });
-  }
-  if (!data.openTime) {
-    ctx.addIssue({ code: "custom", message: "Vui lòng chọn giờ mở cửa", path: ["openTime"] });
-  }
-  if (!data.closeTime) {
-    ctx.addIssue({ code: "custom", message: "Vui lòng chọn giờ đóng cửa", path: ["closeTime"] });
-  }
+  sportTypeIds: z.array(z.number()).min(1, "Vui lòng chọn ít nhất 1 môn thể thao"),
+  amenityIds: z.array(z.number()),
 });
 
-type StadiumFormValues = z.infer<typeof validatedStadiumSchema>;
+type ComplexFormValues = z.infer<typeof complexSchema>;
 
 function AddVenuePage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [currentStep, setCurrentStep] = useState(1);
   const [sportTypes, setSportTypes] = useState<SportType[]>([]);
+  const [amenities, setAmenities] = useState<Amenity[]>([]);
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<StadiumFormValues>({
-    resolver: zodResolver(validatedStadiumSchema),
+  const form = useForm<ComplexFormValues>({
+    resolver: zodResolver(complexSchema),
     defaultValues: {
-      stadiumName: "",
+      name: "",
       address: "",
+      phone: "",
       latitude: 16.0544,
       longitude: 108.2022,
-      pricePerHour: 100000,
       description: "",
-      openTime: "06:00",
-      closeTime: "22:00",
+      sportTypeIds: [],
+      amenityIds: [],
     },
   });
 
-
   useEffect(() => {
-    stadiumService.getSportTypes()
-      .then(setSportTypes)
-      .catch(() => toast.error("Không thể tải danh sách môn thể thao"));
+    Promise.all([
+      stadiumService.getSportTypes(),
+      getAmenities()
+    ])
+      .then(([sports, amens]) => {
+        setSportTypes(sports);
+        setAmenities(amens);
+      })
+      .catch(() => toast.error("Không thể tải danh sách môn thể thao và tiện ích"));
   }, []);
 
   if (status === "loading") {
@@ -140,7 +115,7 @@ function AddVenuePage() {
     setIsUploading(false);
   };
 
-  const onSubmit = async (data: StadiumFormValues) => {
+  const onSubmit = async (data: ComplexFormValues) => {
     if (uploadedPhotos.length < 1) {
       toast.error("Vui lòng tải lên ít nhất 1 ảnh");
       setCurrentStep(2);
@@ -148,267 +123,290 @@ function AddVenuePage() {
     }
     setIsSubmitting(true);
     try {
-      // Normalize HH:mm → HH:mm:ss for backend LocalTime deserialization
-      const normalizeTime = (t?: string) => {
-        if (!t) return undefined;
-        // Already HH:mm:ss
-        if (/^\d{2}:\d{2}:\d{2}$/.test(t)) return t;
-        // HH:mm → append :00
-        return `${t}:00`;
-      };
-      const openTime = normalizeTime(data.openTime);
-      const closeTime = normalizeTime(data.closeTime);
-      await stadiumService.createStadium({ ...data, openTime, closeTime, imageUrls: uploadedPhotos });
-      toast.success("Thêm sân thành công!");
+      await stadiumService.createComplex({
+        name: data.name.trim(),
+        address: data.address.trim(),
+        phone: data.phone?.trim() || undefined,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        description: data.description?.trim() || undefined,
+        sportTypeIds: data.sportTypeIds,
+        amenityIds: data.amenityIds,
+        coverImageUrl: uploadedPhotos[0],
+        imageUrls: uploadedPhotos,
+      });
+      toast.success("Đăng ký tổ hợp sân thành công! Đang chờ Admin phê duyệt.");
       router.push("/owner/venues");
     } catch (error: any) {
-      toast.error(error.message || "Đã xảy ra lỗi khi thêm sân");
+      toast.error(error.message || "Đã xảy ra lỗi khi thêm tổ hợp");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const steps = ["Thông tin cơ bản", "Hình ảnh", "Giá & Giờ mở cửa"];
+  const steps = ["Thông tin cơ bản", "Hình ảnh", "Môn thể thao & Tiện ích"];
 
   const handleNext = async () => {
     let valid = false;
     if (currentStep === 1) {
-      valid = await form.trigger(["stadiumName", "address", "sportTypeId"]);
+      valid = await form.trigger(["name", "address", "phone"]);
     } else if (currentStep === 2) {
+      if (uploadedPhotos.length < 1) {
+        toast.error("Vui lòng tải lên ít nhất 1 ảnh");
+        return;
+      }
       valid = true;
     }
     if (valid) setCurrentStep(prev => prev + 1);
   };
 
   return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bold mb-8">Thêm sân mới</h1>
+    <div className="container mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold mb-8">Đăng ký Tổ hợp mới (L1)</h1>
 
-          {/* Progress */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-3">
-              {steps.map((step, idx) => (
+        {/* Progress */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            {steps.map((step, idx) => (
+              <div
+                key={idx}
+                className={`flex-1 text-center ${idx + 1 === currentStep ? "text-primary font-medium" : "text-muted-foreground"}`}
+              >
                 <div
-                  key={idx}
-                  className={`flex-1 text-center ${idx + 1 === currentStep ? "text-primary font-medium" : "text-muted-foreground"}`}
+                  className={`w-10 h-10 rounded-full mx-auto mb-2 flex items-center justify-center border-2 ${
+                    idx + 1 <= currentStep ? "bg-primary text-white border-primary" : "bg-muted border-muted"
+                  }`}
                 >
-                  <div
-                    className={`w-10 h-10 rounded-full mx-auto mb-2 flex items-center justify-center border-2 ${
-                      idx + 1 <= currentStep ? "bg-primary text-white border-primary" : "bg-muted border-muted"
-                    }`}
-                  >
-                    {idx + 1}
-                  </div>
-                  <div className="text-xs sm:text-sm">{step}</div>
+                  {idx + 1}
                 </div>
-              ))}
-            </div>
-            <Progress value={(currentStep / steps.length) * 100} className="h-2" />
+                <div className="text-xs sm:text-sm">{step}</div>
+              </div>
+            ))}
           </div>
+          <Progress value={(currentStep / steps.length) * 100} className="h-2" />
+        </div>
 
-          {/* Dùng div thay vì form để tránh browser auto-submit khi nhấn Enter */}
-          <div>
-            {/* Step 1: Basic Info */}
-            {currentStep === 1 && (
-              <Card>
-                <CardHeader>
-                  <h2 className="text-xl font-semibold">Thông tin cơ bản</h2>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="stadiumName">Tên sân *</Label>
-                    <Input
-                      {...form.register("stadiumName")}
-                      id="stadiumName"
-                      placeholder="VD: Sân bóng Thành Công"
+        {/* Form Container */}
+        <div>
+          {/* Step 1: Basic Info */}
+          {currentStep === 1 && (
+            <Card>
+              <CardHeader>
+                <h2 className="text-xl font-semibold">Thông tin cơ bản</h2>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Tên tổ hợp *</Label>
+                  <Input
+                    {...form.register("name")}
+                    id="name"
+                    placeholder="VD: Tổ hợp thể thao Kỳ Hòa"
+                  />
+                  {form.formState.errors.name && (
+                    <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Số điện thoại liên hệ</Label>
+                  <Input
+                    {...form.register("phone")}
+                    id="phone"
+                    placeholder="VD: 0901234567"
+                  />
+                  {form.formState.errors.phone && (
+                    <p className="text-sm text-destructive">{form.formState.errors.phone.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <AddressPicker
+                    initialAddress={form.watch("address")}
+                    initialLat={form.watch("latitude")}
+                    initialLng={form.watch("longitude")}
+                    onAddressChange={(data) => {
+                      form.setValue("address", data.addressText, { shouldValidate: true });
+                      form.setValue("latitude", data.lat, { shouldValidate: true });
+                      form.setValue("longitude", data.lng, { shouldValidate: true });
+                    }}
+                  />
+                  {form.formState.errors.address && (
+                    <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>
+                  )}
+                  {form.formState.errors.latitude && (
+                    <p className="text-sm text-destructive">{form.formState.errors.latitude.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="description">Mô tả</Label>
+                  <Textarea
+                    {...form.register("description")}
+                    id="description"
+                    placeholder="Mô tả chi tiết về tổ hợp, các tiện ích, quy định..."
+                    rows={4}
+                  />
+                  {form.formState.errors.description && (
+                    <p className="text-sm text-destructive">{form.formState.errors.description.message}</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Step 2: Photos */}
+          {currentStep === 2 && (
+            <Card>
+              <CardHeader>
+                <h2 className="text-xl font-semibold">Hình ảnh tổ hợp</h2>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {uploadedPhotos.map((photo, idx) => (
+                    <div key={idx} className="relative aspect-video">
+                      <img
+                        src={photo}
+                        alt={`Photo ${idx + 1}`}
+                        className="w-full h-full object-cover rounded-lg border"
+                      />
+                      {idx === 0 && (
+                        <Badge className="absolute top-2 left-2">Ảnh bìa</Badge>
+                      )}
+                      <button
+                        type="button"
+                        className="absolute top-2 right-2 bg-destructive text-destructive-foreground rounded-full p-1 shadow-sm"
+                        onClick={() => setUploadedPhotos(uploadedPhotos.filter((_, i) => i !== idx))}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+
+                  <label className="aspect-video border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-muted-foreground hover:border-primary hover:text-primary cursor-pointer transition-colors bg-muted/50">
+                    {isUploading ? (
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                    ) : (
+                      <>
+                        <Upload className="h-8 w-8 mb-2" />
+                        <span className="text-xs sm:text-sm">Tải ảnh lên</span>
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handlePhotoUpload}
+                      disabled={isUploading}
                     />
-                    {form.formState.errors.stadiumName && (
-                      <p className="text-sm text-destructive">{form.formState.errors.stadiumName.message}</p>
-                    )}
-                  </div>
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  * Tải lên tối thiểu 1 ảnh. Ảnh đầu tiên sẽ làm ảnh bìa đại diện.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
-                  <div className="space-y-2">
-                    <Label>Loại môn thể thao *</Label>
-                    <Select onValueChange={(val) => form.setValue("sportTypeId", parseInt(val), { shouldValidate: true })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Chọn môn thể thao" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {sportTypes.map((type) => (
-                          <SelectItem key={type.sportTypeId} value={type.sportTypeId.toString()}>
-                            {type.sportName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {form.formState.errors.sportTypeId && (
-                      <p className="text-sm text-destructive">{form.formState.errors.sportTypeId.message}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <AddressPicker
-                      initialAddress={form.watch("address")}
-                      initialLat={form.watch("latitude")}
-                      initialLng={form.watch("longitude")}
-                      onAddressChange={(data) => {
-                        form.setValue("address", data.addressText, { shouldValidate: true });
-                        form.setValue("latitude", data.lat, { shouldValidate: true });
-                        form.setValue("longitude", data.lng, { shouldValidate: true });
-                      }}
-                    />
-                    {form.formState.errors.address && (
-                      <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>
-                    )}
-                    {form.formState.errors.latitude && (
-                      <p className="text-sm text-destructive">{form.formState.errors.latitude.message}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Mô tả</Label>
-                    <Textarea
-                      {...form.register("description")}
-                      id="description"
-                      placeholder="Mô tả chi tiết về sân, tiện ích, quy định..."
-                      rows={4}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Step 2: Photos */}
-            {currentStep === 2 && (
-              <Card>
-                <CardHeader>
-                  <h2 className="text-xl font-semibold">Hình ảnh sân</h2>
-                </CardHeader>
-                <CardContent className="space-y-4">
+          {/* Step 3: Sport Types & Amenities */}
+          {currentStep === 3 && (
+            <Card>
+              <CardHeader>
+                <h2 className="text-xl font-semibold">Môn thể thao & Tiện ích</h2>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <Label className="text-base font-bold text-slate-800">Các môn thể thao hỗ trợ *</Label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    {uploadedPhotos.map((photo, idx) => (
-                      <div key={idx} className="relative aspect-video">
-                        <Image
-                          src={photo}
-                          alt={`Photo ${idx + 1}`}
-                          fill
-                          className="object-cover rounded-lg border"
-                          unoptimized
-                        />
-                        {idx === 0 && (
-                          <Badge className="absolute top-2 left-2">Ảnh chính</Badge>
-                        )}
-                        <button
-                          type="button"
-                          className="absolute top-2 right-2 bg-destructive text-destructive-foreground rounded-full p-1 shadow-sm"
-                          onClick={() => setUploadedPhotos(uploadedPhotos.filter((_, i) => i !== idx))}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-
-                    <label className="aspect-video border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-muted-foreground hover:border-primary hover:text-primary cursor-pointer transition-colors bg-muted/50">
-                      {isUploading ? (
-                        <Loader2 className="h-8 w-8 animate-spin" />
-                      ) : (
-                        <>
-                          <Upload className="h-8 w-8 mb-2" />
-                          <span className="text-xs sm:text-sm">Tải ảnh lên</span>
-                        </>
-                      )}
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handlePhotoUpload}
-                        disabled={isUploading}
-                      />
-                    </label>
+                    {sportTypes.map((type) => {
+                      const isChecked = form.watch("sportTypeIds").includes(type.sportTypeId);
+                      return (
+                        <div key={type.sportTypeId} className="flex items-center space-x-2.5 border rounded-lg p-3 bg-white hover:bg-slate-50 transition-colors">
+                          <Checkbox
+                            id={`sport-${type.sportTypeId}`}
+                            checked={isChecked}
+                            onCheckedChange={(checked) => {
+                              const currentIds = form.getValues("sportTypeIds") || [];
+                              if (checked) {
+                                form.setValue("sportTypeIds", [...currentIds, type.sportTypeId], { shouldValidate: true });
+                              } else {
+                                form.setValue("sportTypeIds", currentIds.filter(id => id !== type.sportTypeId), { shouldValidate: true });
+                              }
+                            }}
+                          />
+                          <Label htmlFor={`sport-${type.sportTypeId}`} className="font-semibold text-slate-700 cursor-pointer select-none">
+                            {type.sportName}
+                          </Label>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    * Tải lên tối thiểu 1 ảnh. Nên dùng ảnh ngang (16:9) để hiển thị tốt nhất.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
+                  {form.formState.errors.sportTypeIds && (
+                    <p className="text-sm text-destructive">{form.formState.errors.sportTypeIds.message}</p>
+                  )}
+                </div>
 
-            {/* Step 3: Pricing & Open Time */}
-            {currentStep === 3 && (
-              <Card>
-                <CardHeader>
-                  <h2 className="text-xl font-semibold">Giá & Thời gian hoạt động</h2>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="pricePerHour">Giá thuê mỗi giờ (VNĐ) *</Label>
-                    <Input
-                      {...form.register("pricePerHour", { valueAsNumber: true })}
-                      id="pricePerHour"
-                      type="number"
-                      placeholder="VD: 200000"
-                    />
-                    {form.formState.errors.pricePerHour && (
-                      <p className="text-sm text-destructive">{form.formState.errors.pricePerHour.message}</p>
-                    )}
+                <div className="space-y-4">
+                  <Label className="text-base font-bold text-slate-800">Tiện ích sẵn có (Amenities)</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    {amenities.map((amenity) => {
+                      const isChecked = form.watch("amenityIds").includes(amenity.amenityId);
+                      return (
+                        <div key={amenity.amenityId} className="flex items-center space-x-2.5 border rounded-lg p-3 bg-white hover:bg-slate-50 transition-colors">
+                          <Checkbox
+                            id={`amenity-${amenity.amenityId}`}
+                            checked={isChecked}
+                            onCheckedChange={(checked) => {
+                              const currentIds = form.getValues("amenityIds") || [];
+                              if (checked) {
+                                form.setValue("amenityIds", [...currentIds, amenity.amenityId], { shouldValidate: true });
+                              } else {
+                                form.setValue("amenityIds", currentIds.filter(id => id !== amenity.amenityId), { shouldValidate: true });
+                              }
+                            }}
+                          />
+                          <Label htmlFor={`amenity-${amenity.amenityId}`} className="font-semibold text-slate-700 cursor-pointer select-none">
+                            {amenity.name}
+                          </Label>
+                        </div>
+                      );
+                    })}
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="openTime">Giờ mở cửa</Label>
-                      <Input
-                        {...form.register("openTime")}
-                        id="openTime"
-                        type="time"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="closeTime">Giờ đóng cửa</Label>
-                      <Input
-                        {...form.register("closeTime")}
-                        id="closeTime"
-                        type="time"
-                      />
-                      {form.formState.errors.closeTime && (
-                        <p className="text-sm text-destructive">{form.formState.errors.closeTime.message}</p>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+          {/* Navigation */}
+          <div className="flex justify-between mt-8">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCurrentStep(prev => prev - 1)}
+              disabled={currentStep === 1 || isSubmitting}
+            >
+              Quay lại
+            </Button>
 
-            {/* Navigation */}
-            <div className="flex justify-between mt-8">
+            {currentStep < steps.length ? (
+              <Button type="button" onClick={handleNext}>
+                Tiếp tục
+              </Button>
+            ) : (
               <Button
                 type="button"
-                variant="outline"
-                onClick={() => setCurrentStep(prev => prev - 1)}
-                disabled={currentStep === 1 || isSubmitting}
+                disabled={isSubmitting}
+                onClick={form.handleSubmit(onSubmit)}
               >
-                Quay lại
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Hoàn tất & Đăng ký
               </Button>
-
-              {currentStep < steps.length ? (
-                <Button type="button" onClick={handleNext}>
-                  Tiếp tục
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={form.handleSubmit(onSubmit)}
-                >
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Hoàn tất & Thêm sân
-                </Button>
-              )}
-            </div>
+            )}
           </div>
         </div>
       </div>
+    </div>
   );
 }
 

@@ -8,6 +8,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { stadiumService } from '@/lib/services/stadium'
 import { toast } from 'sonner'
+import { uploadStadiumImage } from '@/lib/api'
+import { X, Upload, Loader2 } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 
 interface QuickCreateCourtDialogProps {
   isOpen: boolean
@@ -20,7 +23,32 @@ export function QuickCreateCourtDialog({ isOpen, onClose, parentStadiumId, onSuc
   const [stadiumName, setStadiumName] = useState('')
   const [description, setDescription] = useState('')
   const [pricePerHour, setPricePerHour] = useState<number>(150000)
+  const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([])
+  const [isUploading, setIsUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+    if (uploadedPhotos.length + files.length > 10) {
+      toast.error('Chỉ được tải lên tối đa 10 ảnh')
+      e.target.value = ''
+      return
+    }
+    setIsUploading(true)
+    let successCount = 0
+    for (const file of Array.from(files)) {
+      try {
+        const result = await uploadStadiumImage(file)
+        setUploadedPhotos(prev => [...prev, result.url])
+        successCount++
+      } catch {
+        toast.error(`Không thể tải lên ảnh "${file.name}"`)
+      }
+    }
+    if (successCount > 0) toast.success(`Đã tải lên ${successCount} ảnh`)
+    setIsUploading(false)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,12 +69,14 @@ export function QuickCreateCourtDialog({ isOpen, onClose, parentStadiumId, onSuc
         stadiumName: stadiumName.trim(),
         description: description.trim() || undefined,
         pricePerHour,
+        imageUrls: uploadedPhotos,
       })
       toast.success('Đã tạo sân lẻ thành công!')
       // Reset form
       setStadiumName('')
       setDescription('')
       setPricePerHour(150000)
+      setUploadedPhotos([])
       onSuccess()
       onClose()
     } catch (err: unknown) {
@@ -98,6 +128,50 @@ export function QuickCreateCourtDialog({ isOpen, onClose, parentStadiumId, onSuc
               disabled={submitting}
               rows={3}
             />
+          </div>
+
+          {/* Album ảnh */}
+          <div className="space-y-2">
+            <Label>Hình ảnh sân lẻ</Label>
+            <div className="grid grid-cols-3 gap-3">
+              {uploadedPhotos.map((photo, idx) => (
+                <div key={idx} className="relative aspect-video">
+                  <img
+                    src={photo}
+                    alt={`Photo ${idx + 1}`}
+                    className="w-full h-full object-cover rounded-lg border"
+                  />
+                  {idx === 0 && (
+                    <Badge className="absolute top-1 left-1 text-[9px] px-1 py-0 h-4 bg-primary text-primary-foreground hover:bg-primary">Ảnh bìa</Badge>
+                  )}
+                  <button
+                    type="button"
+                    className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 shadow-sm"
+                    onClick={() => setUploadedPhotos(uploadedPhotos.filter((_, i) => i !== idx))}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+              <label className="aspect-video border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-muted-foreground hover:border-primary hover:text-primary cursor-pointer transition-colors bg-muted/50">
+                {isUploading ? (
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                ) : (
+                  <>
+                     <Upload className="h-6 w-6 mb-1" />
+                     <span className="text-[10px]">Tải ảnh</span>
+                  </>
+                )}
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoUpload}
+                  disabled={isUploading}
+                />
+              </label>
+            </div>
           </div>
 
           <DialogFooter className="pt-4">

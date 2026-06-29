@@ -507,7 +507,7 @@ class StadiumServiceImplTest {
 
         when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
         when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
-        when(bookingRepository.findFutureBookingsByStadiumId(org.mockito.ArgumentMatchers.eq(10), any()))
+        when(bookingRepository.findFutureBookingsByStadiumId(org.mockito.ArgumentMatchers.eq(10), any(), any()))
                 .thenReturn(List.of(booking1));
 
         stadiumService.deleteStadium(10, 1);

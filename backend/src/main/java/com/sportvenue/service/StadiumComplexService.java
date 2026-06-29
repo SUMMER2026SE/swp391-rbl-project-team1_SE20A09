@@ -13,4 +13,5 @@ public interface StadiumComplexService {
     List<ComplexResponse> getAllComplexes(String approvedStatus);
     ComplexResponse approveComplex(Integer complexId);
     ComplexResponse rejectComplex(Integer complexId, String reason);
+    ComplexResponse updateComplex(Integer complexId, CreateComplexRequest request, Integer userId);
 }

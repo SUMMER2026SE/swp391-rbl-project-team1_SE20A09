@@ -1,4 +1,4 @@
-import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosError } from 'axios'
+import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 
 /**
  * Trình duyệt: gọi /api/v1 cùng origin → Next.js proxy (next.config rewrites).
@@ -12,6 +12,35 @@ function resolveApiBaseUrl(): string {
   const serverUrl =
     process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080'
   return `${serverUrl.replace(/\/$/, '')}/api/v1`
+}
+
+/** Config mở rộng để track số lần retry trên mỗi request. */
+type RetryConfig = InternalAxiosRequestConfig & { _retryCount?: number }
+
+/**
+ * Retry với exponential backoff — chỉ cho GET và lỗi transient (5xx / network).
+ * POST/PUT/PATCH/DELETE không được retry tự động để tránh double-submit.
+ */
+async function retryWithBackoff(error: AxiosError): Promise<unknown> {
+  const config = error.config as RetryConfig | undefined
+  if (!config) return Promise.reject(error)
+
+  const method = (config.method ?? '').toUpperCase()
+  const status = error.response?.status
+  const isNetwork = !error.response && Boolean(error.request)
+  const isServerError = status !== undefined && status >= 500
+
+  // Chỉ retry GET, chỉ khi là lỗi mạng hoặc 5xx, tối đa 3 lần
+  if (method !== 'GET' || (!isNetwork && !isServerError)) {
+    return Promise.reject(error)
+  }
+
+  config._retryCount = (config._retryCount ?? 0) + 1
+  if (config._retryCount > 3) return Promise.reject(error)
+
+  const delayMs = 1000 * Math.pow(2, config._retryCount - 1) // 1s, 2s, 4s
+  await new Promise((r) => setTimeout(r, delayMs))
+  return api(config)
 }
 
 /**
@@ -56,10 +85,14 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// ── Response interceptor: xử lý lỗi tập trung ───────────
+// ── Response interceptor: retry + xử lý lỗi tập trung ───
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
+    // Thử retry trước (GET + 5xx/network) — nếu thành công, không xử lý lỗi bên dưới
+    const retryResult = await retryWithBackoff(error).catch(() => null)
+    if (retryResult !== null) return retryResult
+
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean }
 
     // Chỉ 401 (Unauthorized) mới đăng xuất — 403 (Forbidden) là lỗi phân quyền,
@@ -176,4 +209,23 @@ export async function uploadDocument(file: File): Promise<FileUploadResult> {
     timeout: 60_000,
   })
   return res.data
+}
+
+/**
+ * Tạo idempotency key (UUID v4 đơn giản) để gắn vào header X-Idempotency-Key.
+ * Gọi một lần khi user mở form đặt sân — không gọi lại mỗi submit.
+ *
+ * @example
+ * const idemKey = useRef(generateIdempotencyKey())
+ * await post('/bookings', body, { headers: { 'X-Idempotency-Key': idemKey.current } })
+ */
+export function generateIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  // Fallback cho môi trường không có crypto.randomUUID (Node.js < 14.17)
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+  })
 }

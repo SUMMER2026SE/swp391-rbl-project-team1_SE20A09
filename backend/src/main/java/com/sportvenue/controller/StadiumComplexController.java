@@ -96,4 +96,17 @@ public class StadiumComplexController {
         ComplexResponse response = stadiumComplexService.rejectComplex(complexId, reason);
         return ResponseEntity.ok(response);
     }
+
+    @PutMapping("/{complexId}")
+    @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
+    @Operation(summary = "Update complex details", description = "Allows an owner to edit complex metadata, sport types, and amenities.")
+    public ResponseEntity<ComplexResponse> updateComplex(
+            @PathVariable Integer complexId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @Valid @RequestBody CreateComplexRequest request) {
+        log.info("Received request to update complex ID: {} from owner: {}", complexId, userPrincipal.getUsername());
+        ComplexResponse response = stadiumComplexService.updateComplex(complexId, request, userPrincipal.getUser().getUserId());
+        return ResponseEntity.ok(response);
+    }
 }

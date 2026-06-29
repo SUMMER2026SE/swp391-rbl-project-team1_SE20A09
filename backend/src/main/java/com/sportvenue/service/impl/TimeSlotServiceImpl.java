@@ -122,6 +122,56 @@ public class TimeSlotServiceImpl implements TimeSlotService {
         return timeSlotMapper.toResponse(timeSlotRepository.save(slot));
     }
 
+    @Override
+    @Transactional
+    public TimeSlotResponse updateSlot(Integer slotId, CreateTimeSlotRequest request, Integer userId) {
+        TimeSlot slot = timeSlotRepository.findById(slotId)
+                .orElseThrow(() -> new ResourceNotFoundException("Time slot not found"));
+        
+        Stadium stadium = slot.getStadium();
+        validateOwnership(stadium, userId);
+
+        if (slot.getSlotStatus() == SlotStatus.BOOKED) {
+            throw new BadRequestException("Cannot update a booked slot");
+        }
+
+        // Validate time
+        if (!request.getEndTime().isAfter(request.getStartTime())) {
+            throw new BadRequestException("End time must be after start time");
+        }
+
+        if (request.getStartTime().isBefore(stadium.getOpenTime()) || 
+            request.getEndTime().isAfter(stadium.getCloseTime())) {
+            throw new BadRequestException(String.format(
+                    "Slot %s-%s is outside stadium operating hours (%s-%s)",
+                    request.getStartTime(), request.getEndTime(),
+                    stadium.getOpenTime(), stadium.getCloseTime()));
+        }
+
+        // Overlap check, excluding this slotId
+        List<TimeSlot> existingSlots = timeSlotRepository.findOverlappingSlots(
+                stadium.getStadiumId(), request.getStartTime(), request.getEndTime());
+        
+        boolean hasOverlap = existingSlots.stream()
+                .anyMatch(s -> !s.getSlotId().equals(slotId));
+        
+        if (hasOverlap) {
+            TimeSlot conflict = existingSlots.stream()
+                    .filter(s -> !s.getSlotId().equals(slotId))
+                    .findFirst()
+                    .get();
+            throw new BadRequestException(String.format(
+                    "Time slot overlaps with existing slot %s-%s",
+                    conflict.getStartTime(), conflict.getEndTime()));
+        }
+
+        slot.setStartTime(request.getStartTime());
+        slot.setEndTime(request.getEndTime());
+        slot.setPricePerSlot(request.getPricePerSlot());
+        
+        return timeSlotMapper.toResponse(timeSlotRepository.save(slot));
+    }
+
     private void validateOwnership(Stadium stadium, Integer userId) {
         if (!stadium.getOwner().getUser().getUserId().equals(userId)) {
             throw new BadRequestException("You do not have permission to manage slots for this stadium");

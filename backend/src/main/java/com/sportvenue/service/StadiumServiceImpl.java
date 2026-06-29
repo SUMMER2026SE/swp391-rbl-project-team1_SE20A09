@@ -74,6 +74,23 @@ public class StadiumServiceImpl implements StadiumService {
         stadium.setSportType(sportType);
         stadium.setStadiumStatus(StadiumStatus.AVAILABLE);
         stadium.setApprovedStatus(ApprovedStatus.PENDING);
+        // Phải set FACILITY (không phải COURT) vì sân này là top-level,
+        // không có parent. Trigger check_stadium_parent_node_type() yêu cầu
+        // COURT phải có parent_stadium_id — FACILITY thì không cần.
+        stadium.setNodeType(StadiumNodeType.FACILITY);
+
+        // Tự động tạo StadiumComplex wrapper để thỏa mãn ràng buộc cấu trúc cây
+        // (FACILITY bắt buộc phải thuộc về 1 Complex).
+        StadiumComplex autoComplex = StadiumComplex.builder()
+                .owner(owner)
+                .name(request.getStadiumName())
+                .address(request.getAddress())
+                .latitude(request.getLatitude() != null ? request.getLatitude().doubleValue() : null)
+                .longitude(request.getLongitude() != null ? request.getLongitude().doubleValue() : null)
+                .sportTypes(java.util.Set.of(sportType))
+                .build();
+        StadiumComplex savedComplex = stadiumComplexRepository.save(autoComplex);
+        stadium.setComplex(savedComplex);
 
         List<StadiumImage> images = request.getImageUrls().stream()
                 .map(url -> StadiumImage.builder()
@@ -100,6 +117,9 @@ public class StadiumServiceImpl implements StadiumService {
             
             // Must belong to this owner
             predicates.add(cb.equal(root.get("owner").get("ownerId"), owner.getOwnerId()));
+
+            // Exclude CLOSED (deleted) stadiums
+            predicates.add(cb.notEqual(root.get("stadiumStatus"), StadiumStatus.CLOSED));
             
             
             // Keyword search on name
@@ -390,8 +410,23 @@ public class StadiumServiceImpl implements StadiumService {
         stadium.setDeletedAt(LocalDateTime.now());
         stadiumRepository.save(stadium);
 
-        List<Booking> futureBookings = bookingRepository.findFutureBookingsByStadiumId(stadiumId, LocalDateTime.now());
-        log.info("Found {} future bookings to cancel for stadium {}", futureBookings.size(), stadiumId);
+        if (stadium.getNodeType() == StadiumNodeType.FACILITY) {
+            List<Stadium> childCourts = stadiumRepository.findCourtsByFacilityId(stadiumId);
+            for (Stadium court : childCourts) {
+                court.setStadiumStatus(StadiumStatus.CLOSED);
+                court.setDeletedAt(LocalDateTime.now());
+                stadiumRepository.save(court);
+                cancelFutureBookingsForCourt(court);
+            }
+        }
+
+        cancelFutureBookingsForCourt(stadium);
+        log.info("Stadium {} successfully soft-deleted by owner {}", stadiumId, userId);
+    }
+
+    private void cancelFutureBookingsForCourt(Stadium stadium) {
+        List<Booking> futureBookings = bookingRepository.findFutureBookingsByStadiumId(stadium.getStadiumId(), java.time.LocalDate.now(), java.time.LocalTime.now());
+        log.info("Found {} future bookings to cancel for stadium {}", futureBookings.size(), stadium.getStadiumId());
         for (Booking booking : futureBookings) {
             booking.setBookingStatus(BookingStatus.CANCELLED);
             booking.setNote("Sân bị đóng cửa vĩnh viễn bởi chủ sân.");
@@ -411,7 +446,6 @@ public class StadiumServiceImpl implements StadiumService {
                     booking.getBookingId().toString()
             );
         }
-        log.info("Stadium {} successfully soft-deleted by owner {}", stadiumId, userId);
     }
 
     @Override

@@ -288,6 +288,14 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
                         stadium.getParentStadium().getComplex().getOwner() : null);
 
+        java.util.Set<com.sportvenue.entity.Accessory> stadiumAccessories = stadium.getAccessories();
+        if ((stadiumAccessories == null || stadiumAccessories.isEmpty()) && stadium.getParentStadium() != null) {
+            stadiumAccessories = stadium.getParentStadium().getAccessories();
+        }
+        if (stadiumAccessories == null) {
+            stadiumAccessories = java.util.Collections.emptySet();
+        }
+
         return StadiumDetailResponse.builder()
                 .stadiumId(stadium.getStadiumId())
                 .stadiumName(stadium.getStadiumName())
@@ -311,7 +319,7 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                                 .icon(a.getIcon())
                                 .build())
                         .toList())
-                .accessories(stadium.getAccessories().stream()
+                .accessories(stadiumAccessories.stream()
                         .map(acc -> AccessoryResponse.builder()
                                 .accessoryId(acc.getAccessoryId())
                                 .name(acc.getName())

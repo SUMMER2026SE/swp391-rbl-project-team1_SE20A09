@@ -178,6 +178,73 @@ public class StadiumComplexServiceImpl implements StadiumComplexService {
         return mapToResponse(saved);
     }
 
+    @Override
+    @Transactional
+    public ComplexResponse updateComplex(Integer complexId, CreateComplexRequest request, Integer userId) {
+        log.info("Updating complex ID: {} for user ID: {}", complexId, userId);
+
+        Owner owner = ownerRepository.findByUserUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Owner profile not found for user ID: " + userId));
+
+        StadiumComplex complex = stadiumComplexRepository.findById(complexId)
+                .orElseThrow(() -> new ResourceNotFoundException("StadiumComplex not found with ID: " + complexId));
+
+        if (!complex.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+            throw new BadRequestException("You do not own this complex");
+        }
+
+        // Check if location changed, put status to PENDING for re-approval
+        boolean addressChanged = !complex.getAddress().trim().equals(request.getAddress().trim());
+        boolean latChanged = (complex.getLatitude() == null && request.getLatitude() != null) ||
+                (complex.getLatitude() != null && request.getLatitude() == null) ||
+                (complex.getLatitude() != null && request.getLatitude() != null && !complex.getLatitude().equals(request.getLatitude().doubleValue()));
+        boolean lngChanged = (complex.getLongitude() == null && request.getLongitude() != null) ||
+                (complex.getLongitude() != null && request.getLongitude() == null) ||
+                (complex.getLongitude() != null && request.getLongitude() != null && !complex.getLongitude().equals(request.getLongitude().doubleValue()));
+
+        if (addressChanged || latChanged || lngChanged) {
+            complex.setApprovedStatus(ApprovedStatus.PENDING);
+        }
+
+        complex.setName(request.getName().trim());
+        complex.setDescription(request.getDescription());
+        complex.setAddress(request.getAddress().trim());
+        complex.setPhone(request.getPhone());
+        complex.setLatitude(request.getLatitude() != null ? request.getLatitude().doubleValue() : null);
+        complex.setLongitude(request.getLongitude() != null ? request.getLongitude().doubleValue() : null);
+        complex.setCoverImageUrl(request.getCoverImageUrl());
+
+        // Update sport types
+        Set<SportType> sportTypes = new HashSet<>();
+        if (request.getSportTypeIds() != null && !request.getSportTypeIds().isEmpty()) {
+            sportTypes = new HashSet<>(sportTypeRepository.findAllById(request.getSportTypeIds()));
+        }
+        complex.setSportTypes(sportTypes);
+
+        // Update amenities
+        Set<Amenity> amenities = new HashSet<>();
+        if (request.getAmenityIds() != null && !request.getAmenityIds().isEmpty()) {
+            amenities = new HashSet<>(amenityRepository.findAllById(request.getAmenityIds()));
+        }
+        complex.setAmenities(amenities);
+
+        // Update gallery images
+        complex.getImages().clear();
+        if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
+            Set<StadiumComplexImage> images = request.getImageUrls().stream()
+                    .map(url -> StadiumComplexImage.builder()
+                            .complex(complex)
+                            .imageUrl(url)
+                            .uploadedAt(LocalDateTime.now())
+                            .build())
+                    .collect(Collectors.toSet());
+            complex.getImages().addAll(images);
+        }
+
+        StadiumComplex saved = stadiumComplexRepository.save(complex);
+        return mapToResponse(saved);
+    }
+
     private ComplexResponse mapToResponse(StadiumComplex complex) {
         return ComplexResponse.builder()
                 .complexId(complex.getComplexId())

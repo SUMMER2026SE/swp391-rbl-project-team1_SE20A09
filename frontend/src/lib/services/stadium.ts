@@ -8,7 +8,8 @@ import {
   CreateFacilityRequest,
   CreateCourtRequest,
   BulkTimeSlotRequest,
-  CreateTimeSlotRequest
+  CreateTimeSlotRequest,
+  CreateComplexRequest
 } from '@/types/stadium';
 import { TimeSlotDto } from '@/types/complex';
 
@@ -100,5 +101,17 @@ export const stadiumService = {
 
   bulkCreateSlotsForComplex: (complexId: number, data: BulkTimeSlotRequest) => {
     return post<TimeSlotDto[]>(`/owner/complexes/${complexId}/time-slots/bulk`, data);
+  },
+
+  createComplex: (data: CreateComplexRequest) => {
+    return post<ComplexResponse>('/complexes', data);
+  },
+
+  updateComplex: (complexId: number, data: CreateComplexRequest) => {
+    return put<ComplexResponse>(`/complexes/${complexId}`, data);
+  },
+
+  updateTimeSlot: (slotId: number, data: CreateTimeSlotRequest) => {
+    return put<any>(`/stadiums/time-slots/${slotId}`, data);
   },
 };
