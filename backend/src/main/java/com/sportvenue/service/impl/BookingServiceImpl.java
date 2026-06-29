@@ -445,62 +445,7 @@ public class BookingServiceImpl implements BookingService {
             LocalDate date = monday.plusDays(i);
             Set<Integer> bookedSlotIds = bookedByDate.getOrDefault(date, Set.of());
             Map<Integer, TimeSlotException> dayExceptions = exceptionsByDate.getOrDefault(date, Map.of());
-
-            java.time.LocalTime openT = stadium.getOpenTime() != null ? stadium.getOpenTime() : java.time.LocalTime.MIN;
-            java.time.LocalTime closeT = stadium.getCloseTime() != null ? stadium.getCloseTime() : java.time.LocalTime.MAX;
-
-            List<WeeklySlotItemDto> daySlots = slots.stream()
-                    .sorted(Comparator.comparing(TimeSlot::getStartTime))
-                    .filter(slot -> {
-                        TimeSlotException exception = dayExceptions.get(slot.getSlotId());
-                        // Resolve effective times — apply override before comparing with open/close window.
-                        java.time.LocalTime effectiveStart = (exception != null && exception.getStartTimeOverride() != null)
-                                ? exception.getStartTimeOverride() : slot.getStartTime();
-                        java.time.LocalTime effectiveEnd = (exception != null && exception.getEndTimeOverride() != null)
-                                ? exception.getEndTimeOverride() : slot.getEndTime();
-                        if (effectiveStart.isBefore(openT) || effectiveEnd.isAfter(closeT)) {
-                            return false;
-                        }
-                        return exception == null || !Boolean.TRUE.equals(exception.getHidden());
-                    })
-                    .map(slot -> {
-                        TimeSlotException exception = dayExceptions.get(slot.getSlotId());
-                        java.time.LocalTime startT = (exception != null && exception.getStartTimeOverride() != null)
-                                ? exception.getStartTimeOverride() : slot.getStartTime();
-                        java.time.LocalTime endT = (exception != null && exception.getEndTimeOverride() != null)
-                                ? exception.getEndTimeOverride() : slot.getEndTime();
-                        LocalDateTime slotStart = LocalDateTime.of(date, startT);
-                        boolean isClosed = exception != null && Boolean.TRUE.equals(exception.getClosed());
-                        BigDecimal price = (exception != null && exception.getPriceOverride() != null)
-                                ? exception.getPriceOverride()
-                                : slot.getPricePerSlot();
-
-                        String status;
-                        if (isClosed) {
-                            status = "OWNER_CLOSED";
-                        } else if (bookedSlotIds.contains(slot.getSlotId())) {
-                            status = "BOOKED";
-                        } else if (!slotStart.isAfter(now)) {
-                            status = "PAST";
-                        } else {
-                            status = "AVAILABLE";
-                        }
-                        
-                        return WeeklySlotItemDto.builder()
-                                .slotId(slot.getSlotId())
-                                .startTime(startT != null ? startT.format(hhmm) : null)
-                                .endTime(endT != null ? endT.format(hhmm) : null)
-                                .price(price)
-                                .status(status)
-                                .build();
-                    })
-                    .toList();
-
-            days.add(WeeklySlotDayDto.builder()
-                    .date(date.toString())
-                    .dayName(vietnameseDayName(date))
-                    .slots(daySlots)
-                    .build());
+            days.add(buildWeeklySlotDay(date, stadium, slots, bookedSlotIds, dayExceptions, now, hhmm));
         }
 
         log.info("📅 UC-CUS-01: Stadium {} weekly slots — {}..{} ({} bookings)",
@@ -510,6 +455,70 @@ public class BookingServiceImpl implements BookingService {
                 .weekStart(monday.toString())
                 .weekEnd(sunday.toString())
                 .days(days)
+                .build();
+    }
+
+    private WeeklySlotDayDto buildWeeklySlotDay(
+            LocalDate date,
+            Stadium stadium,
+            List<TimeSlot> slots,
+            Set<Integer> bookedSlotIds,
+            Map<Integer, TimeSlotException> dayExceptions,
+            LocalDateTime now,
+            DateTimeFormatter hhmm) {
+        java.time.LocalTime openT = stadium.getOpenTime() != null ? stadium.getOpenTime() : java.time.LocalTime.MIN;
+        java.time.LocalTime closeT = stadium.getCloseTime() != null ? stadium.getCloseTime() : java.time.LocalTime.MAX;
+
+        List<WeeklySlotItemDto> daySlots = slots.stream()
+                .sorted(Comparator.comparing(TimeSlot::getStartTime))
+                .filter(slot -> {
+                    TimeSlotException exception = dayExceptions.get(slot.getSlotId());
+                    java.time.LocalTime effectiveStart = (exception != null && exception.getStartTimeOverride() != null)
+                            ? exception.getStartTimeOverride() : slot.getStartTime();
+                    java.time.LocalTime effectiveEnd = (exception != null && exception.getEndTimeOverride() != null)
+                            ? exception.getEndTimeOverride() : slot.getEndTime();
+                    if (effectiveStart.isBefore(openT) || effectiveEnd.isAfter(closeT)) {
+                        return false;
+                    }
+                    return exception == null || !Boolean.TRUE.equals(exception.getHidden());
+                })
+                .map(slot -> {
+                    TimeSlotException exception = dayExceptions.get(slot.getSlotId());
+                    java.time.LocalTime startT = (exception != null && exception.getStartTimeOverride() != null)
+                            ? exception.getStartTimeOverride() : slot.getStartTime();
+                    java.time.LocalTime endT = (exception != null && exception.getEndTimeOverride() != null)
+                            ? exception.getEndTimeOverride() : slot.getEndTime();
+                    LocalDateTime slotStart = LocalDateTime.of(date, startT);
+                    boolean isClosed = exception != null && Boolean.TRUE.equals(exception.getClosed());
+                    BigDecimal price = (exception != null && exception.getPriceOverride() != null)
+                            ? exception.getPriceOverride()
+                            : slot.getPricePerSlot();
+
+                    String status;
+                    if (isClosed) {
+                        status = "OWNER_CLOSED";
+                    } else if (bookedSlotIds.contains(slot.getSlotId())) {
+                        status = "BOOKED";
+                    } else if (!slotStart.isAfter(now)) {
+                        status = "PAST";
+                    } else {
+                        status = "AVAILABLE";
+                    }
+                    
+                    return WeeklySlotItemDto.builder()
+                            .slotId(slot.getSlotId())
+                            .startTime(startT != null ? startT.format(hhmm) : null)
+                            .endTime(endT != null ? endT.format(hhmm) : null)
+                            .price(price)
+                            .status(status)
+                            .build();
+                })
+                .toList();
+
+        return WeeklySlotDayDto.builder()
+                .date(date.toString())
+                .dayName(vietnameseDayName(date))
+                .slots(daySlots)
                 .build();
     }
 

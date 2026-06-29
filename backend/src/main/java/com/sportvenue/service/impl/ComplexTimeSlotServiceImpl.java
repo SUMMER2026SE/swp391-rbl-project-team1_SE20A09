@@ -42,7 +42,6 @@ public class ComplexTimeSlotServiceImpl implements ComplexTimeSlotService {
     public List<TimeSlotResponse> bulkCreateSlotsForFacility(Integer facilityId, BulkTimeSlotRequest request, Integer userId) {
         log.info("Bulk creating slots for facility ID: {} by user ID: {}", facilityId, userId);
 
-        // 1. Kiểm tra Facility tồn tại và thuộc loại node FACILITY
         Stadium facility = stadiumRepository.findFacilityWithComplexDetails(facilityId)
                 .orElseThrow(() -> new ResourceNotFoundException("Khu vực sân không tồn tại"));
 
@@ -50,10 +49,32 @@ public class ComplexTimeSlotServiceImpl implements ComplexTimeSlotService {
             throw new BadRequestException("ID cung cấp không phải là một Khu vực (FACILITY)");
         }
 
-        // 2. Kiểm tra quyền sở hữu
         validateFacilityOwnership(facility, userId);
+        List<Stadium> targetCourts = resolveTargetCourtsForFacility(facilityId, request);
+        List<CreateTimeSlotRequest> sortedSlots = validateAndSortRequestSlots(request.getSlots());
 
-        // 3. Thu thập danh sách sân lẻ (COURT) cần áp dụng
+        return createAndSaveSlotsForCourts(targetCourts, sortedSlots);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public List<TimeSlotResponse> bulkCreateSlotsForComplex(Integer complexId, BulkTimeSlotRequest request, Integer userId) {
+        log.info("Bulk creating slots for complex ID: {} by user ID: {}", complexId, userId);
+
+        StadiumComplex complex = stadiumComplexRepository.findWithDetailsByComplexId(complexId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tổ hợp sân không tồn tại"));
+
+        if (!complex.getOwner().getUser().getUserId().equals(userId)) {
+            throw new BadRequestException("Bạn không có quyền quản lý khung giờ cho tổ hợp này");
+        }
+
+        List<Stadium> uniqueCourts = resolveTargetCourtsForComplex(complexId, request);
+        List<CreateTimeSlotRequest> sortedSlots = validateAndSortRequestSlots(request.getSlots());
+
+        return createAndSaveSlotsForCourts(uniqueCourts, sortedSlots);
+    }
+
+    private List<Stadium> resolveTargetCourtsForFacility(Integer facilityId, BulkTimeSlotRequest request) {
         List<Stadium> targetCourts;
         if (Boolean.TRUE.equals(request.getApplyToAllCourts())) {
             targetCourts = stadiumRepository.findCourtsByFacilityId(facilityId);
@@ -62,7 +83,6 @@ public class ComplexTimeSlotServiceImpl implements ComplexTimeSlotService {
                 throw new BadRequestException("Danh sách courtIds không được để trống khi không chọn applyToAllCourts");
             }
             targetCourts = stadiumRepository.findCourtsByIds(request.getCourtIds());
-            // Validate các sân lẻ này thực sự thuộc Facility
             for (Stadium court : targetCourts) {
                 if (court.getNodeType() != StadiumNodeType.COURT) {
                     throw new BadRequestException("ID " + court.getStadiumId() + " không phải là Sân lẻ (COURT)");
@@ -72,77 +92,17 @@ public class ComplexTimeSlotServiceImpl implements ComplexTimeSlotService {
                 }
             }
         }
-
         if (targetCourts.isEmpty()) {
             throw new BadRequestException("Không tìm thấy sân lẻ nào khả dụng để áp dụng");
         }
-
-        // 4. Validate các slots đầu vào (kiểm tra overlap nội bộ trước)
-        List<CreateTimeSlotRequest> sortedSlots = validateAndSortRequestSlots(request.getSlots());
-
-        // 5. Kiểm tra trùng lặp và lưu trữ (All-or-Nothing)
-        List<TimeSlot> slotsToSave = new ArrayList<>();
-        for (Stadium court : targetCourts) {
-            // Lấy giờ hoạt động thừa kế hoặc ghi đè
-            LocalTime openTime = court.getOpenTime() != null ? court.getOpenTime() : facility.getOpenTime();
-            LocalTime closeTime = court.getCloseTime() != null ? court.getCloseTime() : facility.getCloseTime();
-
-            if (openTime == null || closeTime == null) {
-                throw new BadRequestException("Sân lẻ hoặc Khu vực cha chưa cấu hình giờ mở/đóng cửa hoạt động");
-            }
-
-            for (CreateTimeSlotRequest slotReq : sortedSlots) {
-                // Kiểm tra giờ hoạt động
-                if (slotReq.getStartTime().isBefore(openTime) || slotReq.getEndTime().isAfter(closeTime)) {
-                    throw new BadRequestException(String.format(
-                            "Khung giờ %s-%s nằm ngoài giờ hoạt động (%s-%s) của sân lẻ ID: %s",
-                            slotReq.getStartTime(), slotReq.getEndTime(),
-                            openTime, closeTime, court.getStadiumId()));
-                }
-
-                // Kiểm tra overlap trên Database
-                List<TimeSlot> overlapping = timeSlotRepository.findOverlappingSlots(
-                        court.getStadiumId(), slotReq.getStartTime(), slotReq.getEndTime());
-                if (!overlapping.isEmpty()) {
-                    throw new BadRequestException(String.format(
-                            "Khung giờ %s-%s bị trùng với lịch hiện tại trên sân lẻ ID: %s (%s)",
-                            slotReq.getStartTime(), slotReq.getEndTime(),
-                            court.getStadiumId(), court.getStadiumName()));
-                }
-
-                TimeSlot timeSlot = timeSlotMapper.toEntity(slotReq);
-                timeSlot.setStadium(court);
-                timeSlot.setSlotStatus(SlotStatus.AVAILABLE);
-                slotsToSave.add(timeSlot);
-            }
-        }
-
-        List<TimeSlot> saved = timeSlotRepository.saveAll(slotsToSave);
-        return saved.stream()
-                .map(timeSlotMapper::toResponse)
-                .collect(Collectors.toList());
+        return targetCourts;
     }
 
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public List<TimeSlotResponse> bulkCreateSlotsForComplex(Integer complexId, BulkTimeSlotRequest request, Integer userId) {
-        log.info("Bulk creating slots for complex ID: {} by user ID: {}", complexId, userId);
-
-        // 1. Kiểm tra Complex tồn tại
-        StadiumComplex complex = stadiumComplexRepository.findWithDetailsByComplexId(complexId)
-                .orElseThrow(() -> new ResourceNotFoundException("Tổ hợp sân không tồn tại"));
-
-        // 2. Kiểm tra quyền sở hữu
-        if (!complex.getOwner().getUser().getUserId().equals(userId)) {
-            throw new BadRequestException("Bạn không có quyền quản lý khung giờ cho tổ hợp này");
-        }
-
-        // 3. Thu nhập danh sách sân lẻ thuộc Complex
+    private List<Stadium> resolveTargetCourtsForComplex(Integer complexId, BulkTimeSlotRequest request) {
         List<Stadium> targetCourts = new ArrayList<>();
         if (Boolean.TRUE.equals(request.getApplyToAllCourts())) {
             targetCourts = stadiumRepository.findCourtsByComplexId(complexId);
         } else {
-            // Gom nhóm từ courtIds
             if (request.getCourtIds() != null && !request.getCourtIds().isEmpty()) {
                 List<Stadium> courts = stadiumRepository.findCourtsByIds(request.getCourtIds());
                 for (Stadium court : courts) {
@@ -155,8 +115,6 @@ public class ComplexTimeSlotServiceImpl implements ComplexTimeSlotService {
                     targetCourts.add(court);
                 }
             }
-
-            // Gom nhóm từ facilityIds
             if (request.getFacilityIds() != null && !request.getFacilityIds().isEmpty()) {
                 for (Integer facId : request.getFacilityIds()) {
                     Stadium facility = stadiumRepository.findById(facId)
@@ -171,8 +129,6 @@ public class ComplexTimeSlotServiceImpl implements ComplexTimeSlotService {
                 }
             }
         }
-
-        // Loại bỏ trùng lặp nếu trùng courtId giữa danh mục lựa chọn
         Set<Integer> courtIdSet = new HashSet<>();
         List<Stadium> uniqueCourts = new ArrayList<>();
         for (Stadium c : targetCourts) {
@@ -180,17 +136,15 @@ public class ComplexTimeSlotServiceImpl implements ComplexTimeSlotService {
                 uniqueCourts.add(c);
             }
         }
-
         if (uniqueCourts.isEmpty()) {
             throw new BadRequestException("Không tìm thấy sân lẻ nào khả dụng để áp dụng");
         }
+        return uniqueCourts;
+    }
 
-        // 4. Validate slots đầu vào
-        List<CreateTimeSlotRequest> sortedSlots = validateAndSortRequestSlots(request.getSlots());
-
-        // 5. Kiểm tra trùng lặp và lưu trữ
+    private List<TimeSlotResponse> createAndSaveSlotsForCourts(List<Stadium> targetCourts, List<CreateTimeSlotRequest> sortedSlots) {
         List<TimeSlot> slotsToSave = new ArrayList<>();
-        for (Stadium court : uniqueCourts) {
+        for (Stadium court : targetCourts) {
             Stadium facility = court.getParentStadium();
             LocalTime openTime = court.getOpenTime() != null ? court.getOpenTime() :
                     (facility != null ? facility.getOpenTime() : null);

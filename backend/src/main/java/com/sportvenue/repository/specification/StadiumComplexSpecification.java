@@ -11,8 +11,6 @@ import com.sportvenue.entity.enums.ComplexStatus;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.entity.enums.StadiumNodeType;
 import com.sportvenue.entity.enums.StadiumStatus;
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
@@ -77,47 +75,57 @@ public class StadiumComplexSpecification {
             }
 
             // 6. Price range and Time Slot availability filters on child COURTs
-            if (req.getMinPrice() != null || req.getMaxPrice() != null || 
-                (req.getStartTime() != null && req.getEndTime() != null)) {
-                
-                Subquery<Integer> courtSubquery = query.subquery(Integer.class);
-                Root<Stadium> courtRoot = courtSubquery.from(Stadium.class);
-                courtSubquery.select(courtRoot.get("stadiumId"));
-                
-                List<Predicate> courtPreds = new ArrayList<>();
-                courtPreds.add(cb.equal(courtRoot.get("complex").get("complexId"), root.get("complexId")));
-                courtPreds.add(cb.equal(courtRoot.get("nodeType"), StadiumNodeType.COURT));
-                courtPreds.add(cb.equal(courtRoot.get("stadiumStatus"), StadiumStatus.AVAILABLE));
-
-                if (req.getMinPrice() != null) {
-                    courtPreds.add(cb.greaterThanOrEqualTo(courtRoot.get("pricePerHour"), req.getMinPrice()));
-                }
-                if (req.getMaxPrice() != null) {
-                    courtPreds.add(cb.lessThanOrEqualTo(courtRoot.get("pricePerHour"), req.getMaxPrice()));
-                }
-
-                if (req.getStartTime() != null && req.getEndTime() != null) {
-                    Subquery<Integer> slotSubquery = query.subquery(Integer.class);
-                    Root<TimeSlot> slotRoot = slotSubquery.from(TimeSlot.class);
-                    slotSubquery.select(slotRoot.get("stadium").get("stadiumId"));
-                    
-                    List<Predicate> slotPreds = new ArrayList<>();
-                    slotPreds.add(cb.equal(slotRoot.get("stadium").get("stadiumId"), courtRoot.get("stadiumId")));
-                    slotPreds.add(cb.equal(slotRoot.get("slotStatus"), SlotStatus.AVAILABLE));
-                    slotPreds.add(cb.and(
-                            cb.lessThan(slotRoot.get("startTime"), req.getEndTime()),
-                            cb.greaterThan(slotRoot.get("endTime"), req.getStartTime())
-                    ));
-                    
-                    slotSubquery.where(cb.and(slotPreds.toArray(new Predicate[0])));
-                    courtPreds.add(cb.exists(slotSubquery));
-                }
-
-                courtSubquery.where(cb.and(courtPreds.toArray(new Predicate[0])));
-                predicates.add(cb.exists(courtSubquery));
-            }
+            addCourtSubqueryPredicate(req, root, query, cb, predicates);
 
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    private static void addCourtSubqueryPredicate(
+            StadiumComplexSearchRequest req,
+            Root<StadiumComplex> root,
+            jakarta.persistence.criteria.CriteriaQuery<?> query,
+            jakarta.persistence.criteria.CriteriaBuilder cb,
+            List<Predicate> predicates) {
+        if (req.getMinPrice() == null && req.getMaxPrice() == null &&
+            (req.getStartTime() == null || req.getEndTime() == null)) {
+            return;
+        }
+
+        Subquery<Integer> courtSubquery = query.subquery(Integer.class);
+        Root<Stadium> courtRoot = courtSubquery.from(Stadium.class);
+        courtSubquery.select(courtRoot.get("stadiumId"));
+
+        List<Predicate> courtPreds = new ArrayList<>();
+        courtPreds.add(cb.equal(courtRoot.get("complex").get("complexId"), root.get("complexId")));
+        courtPreds.add(cb.equal(courtRoot.get("nodeType"), StadiumNodeType.COURT));
+        courtPreds.add(cb.equal(courtRoot.get("stadiumStatus"), StadiumStatus.AVAILABLE));
+
+        if (req.getMinPrice() != null) {
+            courtPreds.add(cb.greaterThanOrEqualTo(courtRoot.get("pricePerHour"), req.getMinPrice()));
+        }
+        if (req.getMaxPrice() != null) {
+            courtPreds.add(cb.lessThanOrEqualTo(courtRoot.get("pricePerHour"), req.getMaxPrice()));
+        }
+
+        if (req.getStartTime() != null && req.getEndTime() != null) {
+            Subquery<Integer> slotSubquery = query.subquery(Integer.class);
+            Root<TimeSlot> slotRoot = slotSubquery.from(TimeSlot.class);
+            slotSubquery.select(slotRoot.get("stadium").get("stadiumId"));
+
+            List<Predicate> slotPreds = new ArrayList<>();
+            slotPreds.add(cb.equal(slotRoot.get("stadium").get("stadiumId"), courtRoot.get("stadiumId")));
+            slotPreds.add(cb.equal(slotRoot.get("slotStatus"), SlotStatus.AVAILABLE));
+            slotPreds.add(cb.and(
+                    cb.lessThan(slotRoot.get("startTime"), req.getEndTime()),
+                    cb.greaterThan(slotRoot.get("endTime"), req.getStartTime())
+            ));
+
+            slotSubquery.where(cb.and(slotPreds.toArray(new Predicate[0])));
+            courtPreds.add(cb.exists(slotSubquery));
+        }
+
+        courtSubquery.where(cb.and(courtPreds.toArray(new Predicate[0])));
+        predicates.add(cb.exists(courtSubquery));
     }
 }

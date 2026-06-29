@@ -231,7 +231,20 @@ public class PublicComplexServiceImpl implements PublicComplexService {
                     .build();
         }
 
-        // Aggregate pricing (Option B: batch fetch to avoid N+1)
+        List<PublicComplexDetailResponse> responses = buildSearchResponses(contentList, request);
+        boolean isLast = pageable.getOffset() + responses.size() >= totalElements;
+
+        return PageResponse.<PublicComplexDetailResponse>builder()
+                .content(responses)
+                .pageNumber(pageable.getPageNumber())
+                .pageSize(pageable.getPageSize())
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .last(isLast)
+                .build();
+    }
+
+    private List<PublicComplexDetailResponse> buildSearchResponses(List<StadiumComplex> contentList, StadiumComplexSearchRequest request) {
         List<Integer> complexIds = contentList.stream().map(StadiumComplex::getComplexId).collect(Collectors.toList());
         List<Object[]> minMaxPrices = stadiumRepository.findMinMaxPriceByComplexIds(complexIds);
 
@@ -243,17 +256,13 @@ public class PublicComplexServiceImpl implements PublicComplexService {
             priceMap.put(complexId, new java.math.BigDecimal[]{minPrice, maxPrice});
         }
 
-        List<PublicComplexDetailResponse> responses = contentList.stream()
+        return contentList.stream()
                 .map(complex -> {
                     PublicComplexDetailResponse detail = mapToDetailResponse(complex);
-                    
-                    // Set distance if location search was performed
                     if (request.hasLocation() && complex.getLatitude() != null && complex.getLongitude() != null) {
                         double dist = calculateHaversineDistance(request.getUserLat(), request.getUserLng(), complex.getLatitude(), complex.getLongitude());
                         detail.setDistanceInKm(dist);
                     }
-
-                    // Set aggregated prices
                     java.math.BigDecimal[] prices = priceMap.get(complex.getComplexId());
                     if (prices != null) {
                         detail.setMinPrice(prices[0]);
@@ -262,17 +271,6 @@ public class PublicComplexServiceImpl implements PublicComplexService {
                     return detail;
                 })
                 .collect(Collectors.toList());
-
-        boolean isLast = pageable.getOffset() + responses.size() >= totalElements;
-
-        return PageResponse.<PublicComplexDetailResponse>builder()
-                .content(responses)
-                .pageNumber(pageable.getPageNumber())
-                .pageSize(pageable.getPageSize())
-                .totalElements(totalElements)
-                .totalPages(totalPages)
-                .last(isLast)
-                .build();
     }
 
     private Double calculateHaversineDistance(double lat1, double lon1, double lat2, double lon2) {

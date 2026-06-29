@@ -9,8 +9,12 @@ import com.sportvenue.dto.response.PublicComplexDetailResponse;
 import java.util.List;
 
 public interface PublicComplexService {
+
     PublicComplexDetailResponse getPublicComplexById(Integer complexId);
+
     List<FacilityResponse> getFacilitiesByComplexId(Integer complexId);
+
     List<CourtResponse> getCourtsByFacilityId(Integer facilityId);
+
     PageResponse<PublicComplexDetailResponse> searchComplexes(StadiumComplexSearchRequest request);
 }

@@ -13,7 +13,6 @@ import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.SportType;
 import com.sportvenue.entity.enums.ApprovedStatus;
-import com.sportvenue.entity.enums.StadiumStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.ReviewRepository;
@@ -265,6 +264,10 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
 
         long totalReviews = reviewRepository.countByStadiumStadiumId(stadiumId);
 
+        return buildStadiumDetailResponse(stadium, totalReviews, recentReviews);
+    }
+
+    private StadiumDetailResponse buildStadiumDetailResponse(Stadium stadium, long totalReviews, List<Review> recentReviews) {
         SportType sportType = stadium.getSportType() != null ? stadium.getSportType() :
                 (stadium.getParentStadium() != null ? stadium.getParentStadium().getSportType() : null);
 
@@ -312,47 +315,63 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 .closeTime(stadium.getCloseTime())
                 .stadiumStatus(stadium.getStadiumStatus() != null ? stadium.getStadiumStatus().name() : null)
                 .approvedStatus(approvedStatusVal != null ? approvedStatusVal.name() : null)
-                .amenities(stadium.getAmenities().stream()
-                        .map(a -> AmenityResponse.builder()
-                                .amenityId(a.getAmenityId())
-                                .name(a.getName())
-                                .icon(a.getIcon())
-                                .build())
-                        .toList())
-                .accessories(stadiumAccessories.stream()
-                        .map(acc -> AccessoryResponse.builder()
-                                .accessoryId(acc.getAccessoryId())
-                                .name(acc.getName())
-                                .pricePerUnit(acc.getPricePerUnit())
-                                .quantity(acc.getQuantity())
-                                .build())
-                        .toList())
-                .timeSlots(stadium.getTimeSlots().stream()
-                        .map(ts -> TimeSlotResponse.builder()
-                                .slotId(ts.getSlotId())
-                                .startTime(ts.getStartTime())
-                                .endTime(ts.getEndTime())
-                                .slotStatus(ts.getSlotStatus() != null ? ts.getSlotStatus().name() : null)
-                                .build())
-                        .toList())
+                .amenities(mapAmenities(stadium))
+                .accessories(mapAccessories(stadiumAccessories))
+                .timeSlots(mapTimeSlots(stadium))
                 .owner(owner != null ? StadiumDetailResponse.OwnerInfoDto.builder()
                         .ownerId(owner.getOwnerId())
                         .ownerName(owner.getUser() != null ? owner.getUser().getFullName() : null)
                         .phoneNumber(owner.getUser() != null ? owner.getUser().getPhoneNumber() : null)
                         .build() : null)
-                .recentReviews(recentReviews.stream()
-                        .map(r -> StadiumDetailResponse.ReviewDto.builder()
-                                .reviewId(r.getReviewId())
-                                .userId(r.getUser().getUserId())
-                                .userName(r.getUser().getFullName())
-                                .userAvatar(r.getUser().getAvatarUrl())
-                                .ratingScore(r.getRatingScore())
-                                .comment(r.getComment())
-                                .ownerResponse(r.getOwnerResponse())
-                                .createdAt(r.getCreatedAt())
-                                .build())
-                        .toList())
+                .recentReviews(mapReviews(recentReviews))
                 .build();
+    }
+
+    private List<AmenityResponse> mapAmenities(Stadium stadium) {
+        return stadium.getAmenities().stream()
+                .map(a -> AmenityResponse.builder()
+                        .amenityId(a.getAmenityId())
+                        .name(a.getName())
+                        .icon(a.getIcon())
+                        .build())
+                .toList();
+    }
+
+    private List<AccessoryResponse> mapAccessories(java.util.Set<com.sportvenue.entity.Accessory> accessories) {
+        return accessories.stream()
+                .map(acc -> AccessoryResponse.builder()
+                        .accessoryId(acc.getAccessoryId())
+                        .name(acc.getName())
+                        .pricePerUnit(acc.getPricePerUnit())
+                        .quantity(acc.getQuantity())
+                        .build())
+                .toList();
+    }
+
+    private List<TimeSlotResponse> mapTimeSlots(Stadium stadium) {
+        return stadium.getTimeSlots().stream()
+                .map(ts -> TimeSlotResponse.builder()
+                        .slotId(ts.getSlotId())
+                        .startTime(ts.getStartTime())
+                        .endTime(ts.getEndTime())
+                        .slotStatus(ts.getSlotStatus() != null ? ts.getSlotStatus().name() : null)
+                        .build())
+                .toList();
+    }
+
+    private List<StadiumDetailResponse.ReviewDto> mapReviews(List<Review> recentReviews) {
+        return recentReviews.stream()
+                .map(r -> StadiumDetailResponse.ReviewDto.builder()
+                        .reviewId(r.getReviewId())
+                        .userId(r.getUser().getUserId())
+                        .userName(r.getUser().getFullName())
+                        .userAvatar(r.getUser().getAvatarUrl())
+                        .ratingScore(r.getRatingScore())
+                        .comment(r.getComment())
+                        .ownerResponse(r.getOwnerResponse())
+                        .createdAt(r.getCreatedAt())
+                        .build())
+                .toList();
     }
 
     @Override
