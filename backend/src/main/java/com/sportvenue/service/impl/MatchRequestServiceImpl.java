@@ -18,10 +18,10 @@ import com.sportvenue.repository.MatchRequestRepository;
 import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.UserRepository;
-import com.sportvenue.entity.JoinRequest;
 import com.sportvenue.entity.enums.JoinRequestStatus;
 import com.sportvenue.dto.response.JoinRequestResponse;
 import com.sportvenue.service.MatchRequestService;
+import com.sportvenue.service.ChatService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -52,6 +52,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
     private final SportTypeRepository sportTypeRepository;
     private final BookingRepository bookingRepository;
     private final JoinRequestRepository joinRequestRepository;
+    private final ChatService chatService;
 
     @Override
     @Transactional
@@ -335,6 +336,9 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                     Arrays.asList(JoinRequestStatus.PENDING)
             );
         }
+
+        // Create or update group chat
+        chatService.createOrUpdateMatchGroupChat(updatedMatch, joinRequest.getUser().getUserId());
     }
 
     @Override

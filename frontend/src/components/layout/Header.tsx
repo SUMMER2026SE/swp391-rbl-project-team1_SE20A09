@@ -3,10 +3,12 @@
 import { useSession, signOut } from "next-auth/react";
 import type { Session } from "next-auth";
 import { Menu, LogOut, User as UserIcon, Settings, BarChart2, Clock } from "lucide-react";
+import { IconBrandMessenger } from "@tabler/icons-react";
 import { Button } from "../ui/button";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NotificationBell } from "../notifications/NotificationBell";
+import { ChatBadge } from "../chat/ChatBadge";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import {
   DropdownMenu,
@@ -244,8 +246,8 @@ export function Header() {
               <Link
                 href="/search"
                 className={`text-sm transition-colors ${pathname === "/search"
-                    ? "text-primary font-bold"
-                    : "text-muted-foreground hover:text-primary"
+                  ? "text-primary font-bold"
+                  : "text-muted-foreground hover:text-primary"
                   }`}
               >
                 Tìm sân
@@ -253,8 +255,8 @@ export function Header() {
               <Link
                 href="/community"
                 className={`text-sm transition-colors ${pathname === "/community"
-                    ? "text-primary font-bold"
-                    : "text-muted-foreground hover:text-primary"
+                  ? "text-primary font-bold"
+                  : "text-muted-foreground hover:text-primary"
                   }`}
               >
                 Cộng đồng
@@ -265,6 +267,7 @@ export function Header() {
               <div className="w-10 h-10 rounded-full bg-muted animate-pulse" />
             ) : user ? (
               <div className="flex items-center gap-3">
+                <ChatBadge userId={(user as any)?.userId} />
                 {isOwnerArea && user.roleName === "Owner" && <NotificationBell />}
                 <UserAccountMenu user={user} />
               </div>

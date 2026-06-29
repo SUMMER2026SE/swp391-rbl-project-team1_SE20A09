@@ -1,140 +1,259 @@
-﻿'use client'
+'use client'
 
-import { useState } from "react";
-import { Header } from "@/components/layout/Header";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
-import { Send, Smile, Paperclip, Search, MoreVertical } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react"
+import { useSession } from "next-auth/react"
+import { useQueryClient } from "@tanstack/react-query"
+import { Header } from "@/components/layout/Header"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
+import {
+  Send, Search, MoreVertical, MessageSquare,
+  ArrowLeft, Loader2, CheckCheck, Users
+} from "lucide-react"
+import {
+  getConversations, getMessages, sendMessage, markConversationAsRead,
+  getUnreadCount, searchUsers,
+  type ConversationDto, type ChatMessageDto
+} from "@/lib/chat-api"
+import { useChatWebSocket, type TypingEvent } from "@/hooks/useChatWebSocket"
+
+function formatTime(dateStr: string | null): string {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  const now = new Date()
+  const diff = now.getTime() - d.getTime()
+  if (diff < 86400000) return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+  if (diff < 172800000) return 'Hôm qua'
+  return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })
+}
 
 function ChatPage() {
-  const [message, setMessage] = useState("");
-  const [selectedChat, setSelectedChat] = useState(1);
+  const { data: session } = useSession()
+  const currentUserId = (session?.user as any)?.userId as number | undefined
+  const queryClient = useQueryClient()
 
-  const conversations = [
-    {
-      id: 1,
-      name: "Nguyễn Văn A",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=1",
-      lastMessage: "Ok, hẹn gặp bạn tối nay!",
-      timestamp: "14:30",
-      unread: 2,
-      online: true,
-    },
-    {
-      id: 2,
-      name: "Sân bóng Thành Công",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=venue1",
-      lastMessage: "Đơn của bạn đã được xác nhận",
-      timestamp: "10:15",
-      unread: 0,
-      online: false,
-    },
-    {
-      id: 3,
-      name: "Trần Thị B",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=2",
-      lastMessage: "Bạn có rảnh chiều mai không?",
-      timestamp: "Hôm qua",
-      unread: 1,
-      online: true,
-    },
-  ];
+  // ── State ──────────────────────────────────────────────────
+  const [conversations, setConversations] = useState<ConversationDto[]>([])
+  const [selectedConv, setSelectedConv] = useState<ConversationDto | null>(null)
+  const [messages, setMessages] = useState<ChatMessageDto[]>([])
+  const [messageInput, setMessageInput] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<ConversationDto[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [loadingMessages, setLoadingMessages] = useState(false)
+  const [sendingMessage, setSendingMessage] = useState(false)
+  const [totalUnread, setTotalUnread] = useState(0)
+  const [typingUsers, setTypingUsers] = useState<Map<number, string>>(new Map())
+  const [showMobileChat, setShowMobileChat] = useState(false)
 
-  const messages = [
-    {
-      id: 1,
-      sender: "other",
-      content: "Chào bạn! Tôi thấy bạn đăng tìm người chơi bóng",
-      timestamp: "14:20",
-    },
-    {
-      id: 2,
-      sender: "me",
-      content: "Chào bạn! Đúng rồi, bạn có thể tham gia không?",
-      timestamp: "14:22",
-    },
-    {
-      id: 3,
-      sender: "other",
-      content: "Được chứ! Tối nay lúc 18h phải không?",
-      timestamp: "14:25",
-    },
-    {
-      id: 4,
-      sender: "me",
-      content: "Đúng rồi! Sân bóng Thành Công, Quận 1 nhé",
-      timestamp: "14:27",
-    },
-    {
-      id: 5,
-      sender: "other",
-      content: "Ok, hẹn gặp bạn tối nay!",
-      timestamp: "14:30",
-      typing: false,
-    },
-  ];
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout>>()
 
-  const selectedConversation = conversations.find(
-    (c) => c.id === selectedChat
-  );
+  // ── WebSocket ──────────────────────────────────────────────
+  const handleWsMessage = useCallback((msg: ChatMessageDto) => {
+    if (selectedConv && msg.conversationId === selectedConv.conversationId) {
+      setMessages(prev => {
+        if (prev.some(m => m.messageId === msg.messageId)) return prev
+        return [...prev, msg]
+      })
+      if (msg.senderId !== currentUserId && selectedConv.conversationId) {
+        markConversationAsRead(selectedConv.conversationId).catch(() => {})
+      }
+    }
+    // Update conversation list
+    setConversations(prev => {
+      const updated = prev.map(c => {
+        if (c.conversationId === msg.conversationId) {
+          return { ...c, lastMessagePreview: msg.content, lastMessageAt: msg.sentAt,
+            unreadCount: (selectedConv?.conversationId === msg.conversationId && msg.senderId !== currentUserId) ? 0 : c.unreadCount + (msg.senderId !== currentUserId ? 1 : 0) }
+        }
+        return c
+      })
+      return updated.sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime())
+    })
+    refreshUnread()
+  }, [selectedConv, currentUserId])
+
+  const handleTyping = useCallback((event: TypingEvent) => {
+    setTypingUsers(prev => {
+      const next = new Map(prev)
+      if (event.isTyping) next.set(event.userId, event.userName)
+      else next.delete(event.userId)
+      return next
+    })
+  }, [])
+
+  const { sendTypingIndicator } = useChatWebSocket({
+    userId: currentUserId ?? null,
+    onMessage: handleWsMessage,
+    onTyping: handleTyping,
+  })
+
+  // ── Data Loading ───────────────────────────────────────────
+  const refreshUnread = useCallback(async () => {
+    try { 
+      const r = await getUnreadCount(); 
+      setTotalUnread(r.unreadCount);
+      queryClient.setQueryData(['chat', 'unread-count'], r);
+    } catch {}
+  }, [queryClient])
+
+  useEffect(() => {
+    if (!currentUserId) return
+    loadConversations()
+    refreshUnread()
+  }, [currentUserId])
+
+  async function loadConversations() {
+    try { const data = await getConversations(); setConversations(data) } catch {}
+  }
+
+  async function loadMessages(convId: number) {
+    setLoadingMessages(true)
+    try {
+      const data = await getMessages(convId)
+      setMessages([...data.content].reverse())
+      await markConversationAsRead(convId)
+      refreshUnread()
+      setConversations(prev => prev.map(c => c.conversationId === convId ? { ...c, unreadCount: 0 } : c))
+    } catch {} finally { setLoadingMessages(false) }
+  }
+
+  function selectConversation(conv: ConversationDto) {
+    setSelectedConv(conv)
+    setShowMobileChat(true)
+    if (conv.conversationId) loadMessages(conv.conversationId)
+    else setMessages([])
+  }
+
+  // ── Search ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (searchQuery.length < 2) { setSearchResults([]); return }
+    const timer = setTimeout(async () => {
+      setIsSearching(true)
+      try { const r = await searchUsers(searchQuery); setSearchResults(r) } catch {} finally { setIsSearching(false) }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // ── Send Message ───────────────────────────────────────────
+  async function handleSendMessage() {
+    if (!messageInput.trim() || !selectedConv || !currentUserId) return
+    setSendingMessage(true)
+    try {
+      const payload: any = { content: messageInput.trim() }
+      if (selectedConv.isGroup || !selectedConv.otherUserId) {
+        payload.conversationId = selectedConv.conversationId
+      } else {
+        payload.recipientId = selectedConv.otherUserId
+        if (selectedConv.conversationId) payload.conversationId = selectedConv.conversationId
+      }
+      
+      const msg = await sendMessage(payload)
+      setMessages(prev => {
+        if (prev.some(m => m.messageId === msg.messageId)) return prev
+        return [...prev, msg]
+      })
+      setMessageInput("")
+      if (!selectedConv.conversationId) {
+        setSelectedConv(prev => prev ? { ...prev, conversationId: msg.conversationId } : prev)
+        loadConversations()
+      }
+      if (selectedConv.otherUserId) {
+        sendTypingIndicator(selectedConv.otherUserId, false)
+      }
+    } catch {} finally { setSendingMessage(false) }
+  }
+
+  // ── Typing Indicator ──────────────────────────────────────
+  function handleInputChange(value: string) {
+    setMessageInput(value)
+    if (selectedConv && selectedConv.otherUserId) {
+      sendTypingIndicator(selectedConv.otherUserId, true)
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+      typingTimeoutRef.current = setTimeout(() => {
+        if (selectedConv && selectedConv.otherUserId) sendTypingIndicator(selectedConv.otherUserId, false)
+      }, 2000)
+    }
+  }
+
+  // ── Auto-scroll ────────────────────────────────────────────
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+
+  if (!session) {
+    return (
+      <div className="h-screen flex flex-col bg-background">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <MessageSquare className="h-16 w-16 mx-auto text-muted-foreground" />
+            <h2 className="text-xl font-semibold">Đăng nhập để sử dụng Chat</h2>
+            <p className="text-muted-foreground">Bạn cần đăng nhập để nhắn tin và sử dụng trợ lý AI.</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const isTypingForSelected = selectedConv && typingUsers.has(selectedConv.otherUserId)
+  const displayedList = searchQuery.length >= 2 ? searchResults : conversations
 
   return (
     <div className="h-screen flex flex-col bg-background">
       <Header />
+      <div className="flex-1 container mx-auto px-2 sm:px-4 py-2 sm:py-4 overflow-hidden">
+        <div className="h-full flex gap-3">
 
-      <div className="flex-1 container mx-auto px-4 py-4 overflow-hidden">
-        <div className="h-full grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Conversations List */}
-          <div className="md:col-span-1 bg-card border rounded-lg flex flex-col">
-            <div className="p-4">
-              <h2 className="mb-4">Tin nhắn</h2>
+          {/* ═══ LEFT SIDEBAR ═══ */}
+          <div className={`${showMobileChat ? 'hidden md:flex' : 'flex'} w-full md:w-[340px] lg:w-[380px] flex-col bg-card border rounded-xl overflow-hidden flex-shrink-0`}>
+            <div className="flex items-center justify-between px-4 py-4">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                Đoạn chat
+              </h2>
+              {totalUnread > 0 && <Badge className="bg-red-500 text-white">{totalUnread} tin mới</Badge>}
+            </div>
+            
+            {/* Search */}
+            <div className="px-3 pb-3">
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Tìm kiếm..." className="pl-9" />
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Tìm người dùng..." className="pl-9 h-10 bg-muted/50 border-transparent focus-visible:ring-1 rounded-full" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
               </div>
             </div>
-
             <Separator />
-
+            {/* Conversation List */}
             <ScrollArea className="flex-1">
-              {conversations.map((conv) => (
-                <button
-                  key={conv.id}
-                  onClick={() => setSelectedChat(conv.id)}
-                  className={`w-full p-4 flex gap-3 hover:bg-muted transition-colors ${
-                    selectedChat === conv.id ? "bg-muted" : ""
-                  }`}
-                >
-                  <div className="relative">
-                    <Avatar>
-                      <AvatarImage src={conv.avatar} />
-                      <AvatarFallback>{conv.name[0]}</AvatarFallback>
+              {isSearching && <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}
+              {!isSearching && displayedList.length === 0 && (
+                <div className="text-center py-12 px-4">
+                  <MessageSquare className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
+                  <p className="text-sm text-muted-foreground">{searchQuery ? 'Không tìm thấy người dùng' : 'Chưa có cuộc trò chuyện nào'}</p>
+                </div>
+              )}
+              {displayedList.map((conv, i) => (
+                <button key={(conv.otherUserId || conv.conversationId) + '-' + i} onClick={() => selectConversation(conv)}
+                  className={`w-full p-3.5 flex gap-3 hover:bg-muted/60 transition-all duration-150 ${selectedConv?.conversationId === conv.conversationId ? 'bg-primary/5 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent'}`}>
+                  <div className="relative flex-shrink-0">
+                    <Avatar className="h-12 w-12">
+                      <AvatarImage src={conv.otherUserAvatar || undefined} />
+                      <AvatarFallback className={conv.isGroup ? "bg-emerald-100 text-emerald-600" : "bg-primary/10 text-primary font-semibold text-sm"}>
+                        {conv.isGroup ? <Users className="h-5 w-5" /> : (conv.otherUserName?.[0]?.toUpperCase() || '?')}
+                      </AvatarFallback>
                     </Avatar>
-                    {conv.online && (
-                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
-                    )}
+                    {conv.otherUserOnline && <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-card" />}
                   </div>
-
-                  <div className="flex-1 text-left min-w-0">
+                  <div className="flex-1 text-left min-w-0 flex flex-col justify-center">
                     <div className="flex items-center justify-between mb-1">
-                      <h4 className="text-sm truncate">{conv.name}</h4>
-                      <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
-                        {conv.timestamp}
-                      </span>
+                      <h4 className="text-sm font-semibold truncate">{conv.otherUserName}</h4>
+                      {conv.lastMessageAt && <span className="text-[11px] text-muted-foreground flex-shrink-0 ml-2">{formatTime(conv.lastMessageAt)}</span>}
                     </div>
                     <div className="flex items-center justify-between">
-                      <p className="text-sm text-muted-foreground truncate">
-                        {conv.lastMessage}
-                      </p>
-                      {conv.unread > 0 && (
-                        <Badge className="ml-2 bg-primary text-xs px-2 py-0 h-5 flex-shrink-0">
-                          {conv.unread}
-                        </Badge>
-                      )}
+                      <p className={`text-xs truncate pr-2 ${conv.unreadCount > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>{conv.lastMessagePreview || 'Bắt đầu trò chuyện...'}</p>
+                      {conv.unreadCount > 0 && <Badge className="bg-primary text-[10px] px-1.5 py-0 h-4 flex-shrink-0">{conv.unreadCount}</Badge>}
                     </div>
                   </div>
                 </button>
@@ -142,116 +261,111 @@ function ChatPage() {
             </ScrollArea>
           </div>
 
-          {/* Chat Window */}
-          <div className="md:col-span-2 bg-card border rounded-lg flex flex-col">
-            {/* Chat Header */}
-            <div className="p-4 border-b flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Avatar>
-                    <AvatarImage src={selectedConversation?.avatar} />
-                    <AvatarFallback>
-                      {selectedConversation?.name[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  {selectedConversation?.online && (
-                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
-                  )}
-                </div>
-                <div>
-                  <h3 className="text-sm">{selectedConversation?.name}</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedConversation?.online
-                      ? "Đang hoạt động"
-                      : "Offline"}
-                  </p>
-                </div>
-              </div>
-              <Button variant="ghost" size="sm">
-                <MoreVertical className="h-5 w-5" />
-              </Button>
-            </div>
-
-            {/* Messages */}
-            <ScrollArea className="flex-1 p-4">
-              <div className="space-y-4">
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex ${
-                      msg.sender === "me" ? "justify-end" : "justify-start"
-                    }`}
-                  >
-                    <div
-                      className={`max-w-sm md:max-w-md ${
-                        msg.sender === "me"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted"
-                      } rounded-lg px-4 py-2`}
-                    >
-                      <p className="text-sm">{msg.content}</p>
-                      <p
-                        className={`text-xs mt-1 ${
-                          msg.sender === "me"
-                            ? "text-primary-foreground/70"
-                            : "text-muted-foreground"
-                        }`}
-                      >
-                        {msg.timestamp}
+          {/* ═══ RIGHT: CHAT WINDOW ═══ */}
+          <div className={`${showMobileChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-card border rounded-xl overflow-hidden`}>
+            {selectedConv ? (
+              <>
+                {/* Chat Header */}
+                <div className="px-4 py-3 border-b flex items-center justify-between bg-card/80 backdrop-blur-sm">
+                  <div className="flex items-center gap-3">
+                    <Button variant="ghost" size="sm" className="md:hidden h-8 w-8 p-0" onClick={() => setShowMobileChat(false)}>
+                      <ArrowLeft className="h-5 w-5" />
+                    </Button>
+                    <div className="relative">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={selectedConv.otherUserAvatar || undefined} />
+                        <AvatarFallback className={selectedConv.isGroup ? "bg-emerald-100 text-emerald-600" : "bg-primary/10 text-primary font-semibold"}>
+                          {selectedConv.isGroup ? <Users className="h-5 w-5" /> : selectedConv.otherUserName?.[0]?.toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      {selectedConv.otherUserOnline && <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />}
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold">{selectedConv.otherUserName}</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {isTypingForSelected ? <span className="text-primary animate-pulse">Đang nhập...</span> : selectedConv.isGroup ? 'Nhóm trò chuyện' : selectedConv.otherUserOnline ? 'Đang hoạt động' : 'Ngoại tuyến'}
                       </p>
                     </div>
                   </div>
-                ))}
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><MoreVertical className="h-4 w-4" /></Button>
+                </div>
 
-                {/* Typing Indicator */}
-                <div className="flex justify-start">
-                  <div className="bg-muted rounded-lg px-4 py-2">
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" />
-                      <div
-                        className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                        style={{ animationDelay: "0.1s" }}
-                      />
-                      <div
-                        className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                        style={{ animationDelay: "0.2s" }}
-                      />
+                {/* Messages Area */}
+                <ScrollArea className="flex-1 p-4">
+                  {loadingMessages ? (
+                    <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+                  ) : messages.length === 0 ? (
+                    <div className="text-center py-16">
+                      <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
+                      <p className="text-sm text-muted-foreground">Bắt đầu cuộc trò chuyện!</p>
                     </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {messages.map((msg) => {
+                        const isMe = msg.senderId === currentUserId
+                        return (
+                          <div key={msg.messageId} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
+                            <div className={`max-w-[75%] sm:max-w-sm md:max-w-md ${isMe ? 'bg-primary text-primary-foreground rounded-2xl rounded-br-md' : 'bg-muted rounded-2xl rounded-bl-md'} px-3.5 py-2`}>
+                              {selectedConv.isGroup && !isMe && (
+                                <p className="text-xs font-semibold text-primary mb-1">{msg.senderName}</p>
+                              )}
+                              <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                              <div className={`flex items-center gap-1 mt-0.5 ${isMe ? 'justify-end' : ''}`}>
+                                <span className={`text-[10px] ${isMe ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
+                                  {formatTime(msg.sentAt)}
+                                </span>
+                                {isMe && msg.isRead && !selectedConv.isGroup && <CheckCheck className="h-3 w-3 text-primary-foreground/60" />}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                      {isTypingForSelected && (
+                        <div className="flex justify-start">
+                          <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-2.5">
+                            <div className="flex gap-1.5">
+                              <div className="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce" />
+                              <div className="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                              <div className="w-2 h-2 bg-muted-foreground/60 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <div ref={messagesEndRef} />
+                    </div>
+                  )}
+                </ScrollArea>
+
+                {/* Message Input */}
+                <div className="px-4 py-3 border-t bg-card/80 backdrop-blur-sm">
+                  <div className="flex gap-2 items-end">
+                    <Input placeholder="Nhập tin nhắn..." value={messageInput}
+                      onChange={(e) => handleInputChange(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && messageInput.trim()) { e.preventDefault(); handleSendMessage() } }}
+                      className="h-10" disabled={sendingMessage} />
+                    <Button className="h-10 px-4" disabled={!messageInput.trim() || sendingMessage} onClick={handleSendMessage}>
+                      {sendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    </Button>
                   </div>
                 </div>
+              </>
+            ) : (
+              /* Empty state */
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center space-y-4 p-8">
+                  <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-primary/20 to-emerald-500/20 flex items-center justify-center">
+                    <MessageSquare className="h-10 w-10 text-primary" />
+                  </div>
+                  <h2 className="text-lg font-semibold">Chọn một cuộc trò chuyện</h2>
+                  <p className="text-sm text-muted-foreground max-w-sm">Chọn một người bạn từ danh sách bên trái hoặc tìm kiếm để bắt đầu trò chuyện mới.</p>
+                </div>
               </div>
-            </ScrollArea>
-
-            {/* Input */}
-            <div className="p-4 border-t">
-              <div className="flex gap-2">
-                <Button variant="ghost" size="sm">
-                  <Smile className="h-5 w-5" />
-                </Button>
-                <Button variant="ghost" size="sm">
-                  <Paperclip className="h-5 w-5" />
-                </Button>
-                <Input
-                  placeholder="Nhập tin nhắn..."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === "Enter" && message.trim()) {
-                      // Send message
-                      setMessage("");
-                    }
-                  }}
-                />
-                <Button disabled={!message.trim()}>
-                  <Send className="h-5 w-5" />
-                </Button>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
     </div>
-  );
+  )
 }
 
-export default ChatPage;
+export default ChatPage
