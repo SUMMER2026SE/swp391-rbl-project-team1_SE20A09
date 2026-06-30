@@ -194,7 +194,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         log.info("Successfully created match request with ID: {}", savedMatch.getMatchId());
 
         // Create empty group chat for the host immediately upon match creation
-        chatService.createOrUpdateMatchGroupChat(savedMatch, userId);
+        chatService.createOrUpdateMatchGroupChat(savedMatch, user.getUserId());
 
         return mapToResponse(savedMatch);
     }

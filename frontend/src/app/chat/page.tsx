@@ -75,7 +75,7 @@ function ChatPage() {
       const updated = prev.map(c => {
         if (c.conversationId === msg.conversationId) {
           return {
-            ...c, lastMessagePreview: msg.content, lastMessageAt: msg.sentAt,
+            ...c, lastMessagePreview: msg.content, lastMessageAt: msg.timestamp,
             unreadCount: (selectedConv?.conversationId === msg.conversationId && msg.senderId !== currentUserId) ? 0 : c.unreadCount + (msg.senderId !== currentUserId ? 1 : 0)
           }
         }
@@ -263,7 +263,7 @@ function ChatPage() {
     )
   }
 
-  const isTypingForSelected = selectedConv && typingUsers.has(selectedConv.otherUserId)
+  const isTypingForSelected = selectedConv && selectedConv.otherUserId !== null && typingUsers.has(selectedConv.otherUserId)
   const displayedList = searchQuery.length >= 2 ? searchResults : conversations
 
   return (
@@ -467,8 +467,8 @@ function ChatPage() {
                                 <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                                   <span className="text-[10px] text-muted-foreground">
                                     {isMe
-                                      ? (msg.isRead ? 'Đã xem' : `Đã gửi ${formatRelativeTime(msg.sentAt)}`)
-                                      : formatRelativeTime(msg.sentAt)}
+                                      ? (msg.isRead ? 'Đã xem' : `Đã gửi ${formatRelativeTime(msg.timestamp)}`)
+                                      : formatRelativeTime(msg.timestamp)}
                                   </span>
                                   {isMe && msg.isRead && !selectedConv.isGroup && (
                                     <div className="w-3.5 h-3.5 rounded-full overflow-hidden border border-background ml-1 shrink-0">
