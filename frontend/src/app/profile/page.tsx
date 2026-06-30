@@ -304,10 +304,6 @@ function UserProfilePage() {
   };
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login?callbackUrl=/profile");
-      return;
-    }
     if (status === "authenticated" && session?.accessToken) {
       fetchUserProfile();
     }

@@ -38,6 +38,7 @@ import { createBooking } from '@/lib/bookings-api'
 import WeeklySchedule from './WeeklySchedule'
 import EditReviewForm from './EditReviewForm'
 import WriteReviewForm from './WriteReviewForm'
+import { useRouteGuard } from '@/components/shared/RouteGuard'
 
 // Lazy load the Leaflet Map to avoid SSR issues and reduce bundle size
 const VenueMap = dynamic(() => import('./VenueMap'), {
@@ -123,6 +124,9 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
     return d
   })
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null)
+  const [selectedSlotTime, setSelectedSlotTime] = useState<string>('')
+  const [selectedSlotEndTime, setSelectedSlotEndTime] = useState<string>('')
+  const [selectedSlotPrice, setSelectedSlotPrice] = useState<number | null>(null)
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
 
   /**
@@ -176,8 +180,17 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
   // VenueDetail chỉ giữ selectedDate/selectedSlot để truyền vào booking CTA.
 
   /** Handler khi user click một slot AVAILABLE trong weekly grid. */
-  const handleSlotPicked = (slotId: number, date: string) => {
+  const handleSlotPicked = (slotId: number, date: string, startTime?: string, price?: number, endTime?: string) => {
     setSelectedSlot(slotId)
+    if (startTime) {
+      setSelectedSlotTime(startTime.substring(0, 5))
+    }
+    if (price !== undefined) {
+      setSelectedSlotPrice(price)
+    }
+    if (endTime) {
+      setSelectedSlotEndTime(endTime.substring(0, 5))
+    }
     // date là "YYYY-MM-DD" — convert về local Date (00:00) cho booking CTA.
     const [y, m, d] = date.split('-').map(Number)
     setSelectedDate(new Date(y, m - 1, d))
@@ -195,20 +208,22 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
     }
   }
 
+  const { triggerLoginModal } = useRouteGuard()
+
   const handleBookSlot = async () => {
     if (!selectedSlot) {
       toast.error('Vui lòng chọn khung giờ trước khi đặt sân')
       return
     }
 
-    // Guest → redirect to login with current path
+    // Guest → trigger login modal with current path
     if (!session?.user) {
       const redirect = `/venues/${venue.id}`
-      router.push(`/login?redirect=${encodeURIComponent(redirect)}`)
+      triggerLoginModal(redirect)
       return
     }
 
-    router.push(`/booking/new?venueId=${venue.id}&date=${getSelectedDateString()}`)
+    router.push(`/booking/new?venueId=${venue.id}&date=${getSelectedDateString()}&slot=${selectedSlotTime}`)
   }
 
   // Star renderer helper
@@ -294,12 +309,10 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
           className="w-full h-[320px] relative overflow-hidden cursor-pointer bg-[#1e4535]"
         >
         {venue.images[activeIndex] ? (
-          <Image 
+          <img 
             src={venue.images[activeIndex]} 
             alt={venue.name} 
-            fill
-            className="object-cover transition-all duration-300"
-            unoptimized
+            className="w-full h-full object-cover transition-all duration-300"
           />
         ) : (
           <div className="w-full h-full bg-[#1e4535] flex items-center justify-center">
@@ -380,12 +393,10 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
               className="relative h-[64px] cursor-pointer bg-[#1e4535] overflow-hidden"
             >
               {img ? (
-                <Image 
+                <img 
                   src={img} 
                   alt={`Thumbnail ${i + 1}`} 
-                  fill
-                  className="object-cover"
-                  unoptimized
+                  className="w-full h-full object-cover"
                 />
               ) : (
                 <div className="w-full h-full bg-[#1e4535] flex items-center justify-center text-[10px] text-white/40">
@@ -409,13 +420,11 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
         <div className="flex flex-col min-w-0">
           
           {/* TAB BAR */}
-          <div className="grid grid-cols-5 bg-white border-[0.5px] border-gray-200 rounded-[12px] overflow-hidden mb-3.5">
+          <div className="grid grid-cols-3 bg-white border-[0.5px] border-gray-200 rounded-[12px] overflow-hidden mb-3.5">
             {[
               { id: 'overview', icon: IconInfoCircle, label: 'Tổng quan' },
               { id: 'slots', icon: IconClock, label: 'Khung giờ' },
-              { id: 'services', icon: IconPackage, label: 'Dịch vụ' },
-              { id: 'location', icon: IconMap2, label: 'Vị trí' },
-              { id: 'reviews', icon: IconMessageCircle, label: 'Đánh giá' }
+              { id: 'services', icon: IconPackage, label: 'Dịch vụ' }
             ].map((tab) => {
               const TabIcon = tab.icon
               const isActive = tab.id === activeTab
@@ -542,148 +551,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
               </div>
             )}
 
-            {/* TAB 4: Vị trí */}
-            {activeTab === 'location' && (
-              <div className="space-y-4">
-                {/* Map Wrapper */}
-                <div className="border-[0.5px] border-gray-200 rounded-[8px] overflow-hidden bg-gray-55 text-center flex flex-col">
-                  {mapLoaded && (
-                    <VenueMap 
-                      latitude={venue.coordinates.lat} 
-                      longitude={venue.coordinates.lng} 
-                      venueName={venue.name} 
-                      height="h-[180px]"
-                    />
-                  )}
-                  <div className="border-t-[0.5px] border-gray-200 p-3 flex items-start gap-1.5 text-left">
-                    <IconMapPin className="w-[16px] h-[16px] text-[#1a8a4a] shrink-0 mt-0.5" />
-                    <span className="text-[13px] text-gray-500 font-normal leading-normal">
-                      {venue.address}
-                    </span>
-                  </div>
-                </div>
 
-                {/* Owner Contact section */}
-                <div className="space-y-2">
-                  <span className="block text-[11px] font-medium tracking-[0.5px] uppercase text-gray-400">
-                    LIÊN HỆ CHỦ SÂN
-                  </span>
-                  <ContactCard />
-                </div>
-              </div>
-            )}
-
-            {/* TAB 5: Đánh giá — UC-CUS-07 */}
-            {activeTab === 'reviews' && (
-              <div className="space-y-6">
-                
-                {/* Rating score header */}
-                <div className="flex items-center gap-4 bg-gray-50 border-[0.5px] border-gray-200 rounded-[12px] p-4 shadow-none">
-                  <span className="text-[36px] font-medium text-gray-700 leading-none">
-                    {venue.rating.toFixed(1)}
-                  </span>
-                  <div className="flex flex-col leading-tight">
-                    <div className="flex items-center gap-0.5">
-                      {renderStars(venue.rating)}
-                    </div>
-                    <span className="text-[12px] text-gray-400 font-normal mt-1.5">
-                      {venue.reviewCount} đánh giá
-                    </span>
-                  </div>
-                </div>
-
-                {/* UC-CUS-07: Write Review Form — only visible when customer has eligible bookings */}
-                <WriteReviewForm
-                  key={reviewRefreshKey}
-                  stadiumId={venue.id}
-                  onReviewCreated={() => {
-                    setReviewRefreshKey(k => k + 1)
-                    queryClient.invalidateQueries({ queryKey: ['venue-detail', venue.id] })
-                  }}
-                />
-
-                {/* Reviews list or Empty State */}
-                {venue.recentReviews && venue.recentReviews.length > 0 ? (
-                  <div className="flex flex-col gap-3">
-                    {venue.recentReviews.map((review) => {
-                      const isMyReview = session?.user?.userId?.toString() === review.userId?.toString()
-                      const isEditing = editingReviewId === review.reviewId
-
-                      if (isEditing) {
-                        return (
-                          <div key={review.reviewId} className="bg-gray-50 border-[0.5px] border-gray-200 rounded-[10px] p-4 flex flex-col gap-2">
-                            <EditReviewForm
-                              reviewId={review.reviewId}
-                              initialRating={review.ratingScore}
-                              initialComment={review.comment}
-                              onSuccess={() => {
-                                setEditingReviewId(null)
-                                queryClient.invalidateQueries({ queryKey: ['venue-detail', venue.id] })
-                              }}
-                              onCancel={() => setEditingReviewId(null)}
-                            />
-                          </div>
-                        )
-                      }
-
-                      return (
-                      <div key={review.reviewId} className="bg-gray-50 border-[0.5px] border-gray-200 rounded-[10px] p-4 flex flex-col gap-2 relative group">
-                        {isMyReview && (
-                          <button
-                            onClick={() => setEditingReviewId(review.reviewId)}
-                            className="absolute top-4 right-4 text-[12px] font-medium text-gray-500 hover:text-[#1a8a4a] opacity-0 group-hover:opacity-100 transition-opacity bg-white border border-gray-200 rounded px-2 py-1"
-                          >
-                            Chỉnh sửa
-                          </button>
-                        )}
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            {review.userAvatar ? (
-                              <Image 
-                                src={review.userAvatar} 
-                                alt={review.userName} 
-                                width={32} 
-                                height={32} 
-                                className="rounded-full object-cover" 
-                                unoptimized
-                              />
-                            ) : (
-                              <div className="w-8 h-8 rounded-full bg-[#d4f0e2] text-[#1a8a4a] font-medium text-[12px] flex items-center justify-center uppercase">
-                                {review.userName?.charAt(0) || 'U'}
-                              </div>
-                            )}
-                            <span className="text-[13px] font-medium text-gray-700">{review.userName}</span>
-                          </div>
-                          <div className="flex items-center gap-0.5">
-                            {renderStars(review.ratingScore, 13)}
-                          </div>
-                        </div>
-                        <p className="text-[13px] text-gray-600 leading-relaxed pr-16">{review.comment}</p>
-                        {review.ownerResponse && (
-                          <div className="bg-white border-[0.5px] border-[#9edbb6] rounded-[8px] px-3 py-2 mt-1">
-                            <span className="block text-[11px] font-medium text-[#1a8a4a] mb-0.5">Phản hồi của chủ sân</span>
-                            <p className="text-[12px] text-gray-600">{review.ownerResponse}</p>
-                          </div>
-                        )}
-                        <span className="text-[11px] text-gray-400">
-                          {new Date(review.createdAt).toLocaleDateString('vi-VN')}
-                        </span>
-                      </div>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-[24px] px-4 text-center select-none">
-                    <div className="w-[54px] h-[54px] rounded-full bg-gray-50 border-[0.5px] border-gray-200 flex items-center justify-center mb-3">
-                      <IconMessageOff className="w-[28px] h-[28px] text-gray-300" />
-                    </div>
-                    <p className="text-[13px] text-gray-500 font-medium mb-0.5">Chưa có đánh giá nào.</p>
-                    <p className="text-[12px] text-gray-400 font-normal">Hãy là người đầu tiên đánh giá sân này!</p>
-                  </div>
-                )}
-
-              </div>
-            )}
 
           </div>
         </div>
@@ -696,31 +564,52 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
             {/* CARD 1: Booking card */}
             <div className="bg-white border-[0.5px] border-gray-200 rounded-[12px] p-4 flex flex-col gap-3.5 shadow-none">
               
-              <div>
-                <span className="block text-[11px] text-gray-400 font-normal">Giá từ</span>
-                <div className="flex items-baseline gap-0.5 mt-0.5">
-                  <span className="text-[26px] font-medium text-[#1a8a4a] leading-none">
-                    {venue.pricePerHour.toLocaleString('vi-VN')}đ
+              {selectedSlot !== null ? (
+                <div>
+                  <span className="block text-[11px] text-gray-400 font-normal">Giá thuê khung giờ đã chọn</span>
+                  <div className="flex items-baseline gap-0.5 mt-0.5">
+                    <span className="text-[26px] font-bold text-[#1a8a4a] leading-none">
+                      {selectedSlotPrice?.toLocaleString('vi-VN')}đ
+                    </span>
+                    <span className="text-[13px] text-gray-400 font-normal">/khung giờ</span>
+                  </div>
+                  <span className="block text-[12px] text-gray-600 font-semibold mt-1">
+                    Đã chọn: {selectedSlotTime} - {selectedSlotEndTime}, ngày {getSelectedDateString().split('-').reverse().join('/')}
                   </span>
-                  <span className="text-[13px] text-gray-400 font-normal">/giờ</span>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <span className="block text-[11px] text-gray-400 font-normal">Giá thuê tiêu chuẩn</span>
+                  <div className="flex items-baseline gap-0.5 mt-0.5">
+                    <span className="text-[26px] font-semibold text-[#1a8a4a] leading-none">
+                      {venue.pricePerHour.toLocaleString('vi-VN')}đ
+                    </span>
+                    <span className="text-[13px] text-gray-400 font-normal">/giờ</span>
+                  </div>
+                </div>
+              )}
 
               {/* Rating chip */}
-              <div className="flex items-center gap-1.5 bg-[#fffbeb] border-[0.5px] border-[#e8c84a] rounded-[8px] px-3 py-1.5 select-none">
-                <IconStar className="w-[14px] h-[14px] fill-[#f0a500] text-[#f0a500]" />
-                <span className="text-[14px] font-medium text-[#7a5800] leading-none">
-                  {venue.rating.toFixed(1)} / 5.0
-                </span>
-                <span className="text-[11px] text-[#7a5800]/70 font-normal leading-none">
-                  • {venue.reviewCount} đánh giá
-                </span>
-              </div>
+              {venue.reviewCount > 0 ? (
+                <div className="flex items-center gap-1.5 bg-[#fffbeb] border-[0.5px] border-[#e8c84a] rounded-[8px] px-3 py-1.5 select-none">
+                  <IconStar className="w-[14px] h-[14px] fill-[#f0a500] text-[#f0a500]" />
+                  <span className="text-[14px] font-medium text-[#7a5800] leading-none">
+                    {venue.rating.toFixed(1)} / 5.0
+                  </span>
+                  <span className="text-[11px] text-[#7a5800]/70 font-normal leading-none">
+                    • {venue.reviewCount} đánh giá
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 bg-gray-50 border-[0.5px] border-gray-200 rounded-[8px] px-3 py-1.5 select-none">
+                  <span className="text-[12px] text-gray-400 font-medium leading-none">Chưa có đánh giá</span>
+                </div>
+              )}
 
               {/* CTA Booking Button — UC-CUS-01 single booking */}
               <button
                 onClick={handleBookSlot}
-                disabled={!selectedSlot || bookingSubmitting}
+                disabled={selectedSlot === null || bookingSubmitting}
                 className="w-full flex items-center justify-center gap-1.5 bg-[#1a8a4a] hover:bg-[#157a3e] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium text-[14px] py-3 rounded-[8px] transition-colors border-none"
                 type="button"
               >
@@ -728,14 +617,14 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
                 <span>
                   {bookingSubmitting
                     ? 'Đang đặt sân…'
-                    : selectedSlot
+                    : selectedSlot !== null
                       ? 'Đặt sân ngay'
                       : 'Chọn khung giờ để đặt'}
                 </span>
               </button>
 
               <div className="border-t-[0.5px] border-gray-200 pt-3 flex flex-col gap-2">
-                <span className="block text-[11px] font-medium tracking-[0.5px] uppercase text-gray-400">
+                <span className="block text-[11px] font-semibold tracking-[0.5px] uppercase text-gray-400">
                   THÔNG TIN NHANH
                 </span>
                 <div className="flex items-center justify-between text-[13px]">
@@ -788,12 +677,10 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
             {/* Image display */}
             <div className="w-full h-[400px] bg-black rounded-[12px] overflow-hidden flex items-center justify-center border border-white/10 relative">
               {venue.images[lightboxIndex] ? (
-                <Image 
+                <img 
                   src={venue.images[lightboxIndex]} 
                   alt={`Viewer ${lightboxIndex + 1}`} 
-                  fill
-                  className="object-cover"
-                  unoptimized
+                  className="w-full h-full object-cover"
                 />
               ) : (
                 <div className="w-full h-full bg-[#1e4535] flex items-center justify-center text-white/50 text-[14px]">

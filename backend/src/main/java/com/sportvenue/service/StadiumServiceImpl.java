@@ -2,8 +2,13 @@ package com.sportvenue.service;
 
 import com.sportvenue.dto.request.CreateStadiumRequest;
 import com.sportvenue.dto.request.UpdateStadiumRequest;
+import com.sportvenue.dto.request.CreateFacilityRequest;
+import com.sportvenue.dto.request.CreateCourtRequest;
 import com.sportvenue.dto.response.StadiumResponse;
 import com.sportvenue.config.FileStorageProperties;
+import com.sportvenue.entity.StadiumComplex;
+import com.sportvenue.entity.enums.StadiumNodeType;
+import com.sportvenue.repository.StadiumComplexRepository;
 import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.SportType;
 import com.sportvenue.entity.Stadium;
@@ -47,6 +52,7 @@ public class StadiumServiceImpl implements StadiumService {
     private final NotificationService notificationService;
     private final com.sportvenue.repository.UserRepository userRepository;
     private final Environment env;
+    private final StadiumComplexRepository stadiumComplexRepository;
 
     @Override
     @Transactional
@@ -69,6 +75,23 @@ public class StadiumServiceImpl implements StadiumService {
         stadium.setSportType(sportType);
         stadium.setStadiumStatus(StadiumStatus.AVAILABLE);
         stadium.setApprovedStatus(ApprovedStatus.PENDING);
+        // Phải set FACILITY (không phải COURT) vì sân này là top-level,
+        // không có parent. Trigger check_stadium_parent_node_type() yêu cầu
+        // COURT phải có parent_stadium_id — FACILITY thì không cần.
+        stadium.setNodeType(StadiumNodeType.FACILITY);
+
+        // Tự động tạo StadiumComplex wrapper để thỏa mãn ràng buộc cấu trúc cây
+        // (FACILITY bắt buộc phải thuộc về 1 Complex).
+        StadiumComplex autoComplex = StadiumComplex.builder()
+                .owner(owner)
+                .name(request.getStadiumName())
+                .address(request.getAddress())
+                .latitude(request.getLatitude() != null ? request.getLatitude().doubleValue() : null)
+                .longitude(request.getLongitude() != null ? request.getLongitude().doubleValue() : null)
+                .sportTypes(java.util.Set.of(sportType))
+                .build();
+        StadiumComplex savedComplex = stadiumComplexRepository.save(autoComplex);
+        stadium.setComplex(savedComplex);
 
         List<StadiumImage> images = request.getImageUrls().stream()
                 .map(url -> StadiumImage.builder()
@@ -108,6 +131,9 @@ public class StadiumServiceImpl implements StadiumService {
             
             // Must belong to this owner
             predicates.add(cb.equal(root.get("owner").get("ownerId"), owner.getOwnerId()));
+
+            // Exclude CLOSED (deleted) stadiums
+            predicates.add(cb.notEqual(root.get("stadiumStatus"), StadiumStatus.CLOSED));
             
             
             // Keyword search on name
@@ -148,7 +174,8 @@ public class StadiumServiceImpl implements StadiumService {
         Stadium stadium = stadiumRepository.findById(stadiumId)
                 .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
 
-        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || !resolvedOwner.getOwnerId().equals(owner.getOwnerId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
@@ -167,7 +194,8 @@ public class StadiumServiceImpl implements StadiumService {
         Stadium stadium = stadiumRepository.findById(stadiumId)
                 .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
 
-        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || !resolvedOwner.getOwnerId().equals(owner.getOwnerId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
@@ -352,7 +380,8 @@ public class StadiumServiceImpl implements StadiumService {
         Stadium stadium = stadiumRepository.findById(stadiumId)
                 .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
 
-        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || !resolvedOwner.getOwnerId().equals(owner.getOwnerId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
@@ -371,7 +400,8 @@ public class StadiumServiceImpl implements StadiumService {
         Stadium stadium = stadiumRepository.findById(stadiumId)
                 .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
 
-        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || !resolvedOwner.getOwnerId().equals(owner.getOwnerId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
@@ -390,7 +420,8 @@ public class StadiumServiceImpl implements StadiumService {
         Stadium stadium = stadiumRepository.findById(stadiumId)
                 .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
 
-        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || !resolvedOwner.getOwnerId().equals(owner.getOwnerId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
@@ -398,8 +429,23 @@ public class StadiumServiceImpl implements StadiumService {
         stadium.setDeletedAt(LocalDateTime.now());
         stadiumRepository.save(stadium);
 
-        List<Booking> futureBookings = bookingRepository.findFutureBookingsByStadiumId(stadiumId, LocalDateTime.now());
-        log.info("Found {} future bookings to cancel for stadium {}", futureBookings.size(), stadiumId);
+        if (stadium.getNodeType() == StadiumNodeType.FACILITY) {
+            List<Stadium> childCourts = stadiumRepository.findCourtsByFacilityId(stadiumId);
+            for (Stadium court : childCourts) {
+                court.setStadiumStatus(StadiumStatus.CLOSED);
+                court.setDeletedAt(LocalDateTime.now());
+                stadiumRepository.save(court);
+                cancelFutureBookingsForCourt(court);
+            }
+        }
+
+        cancelFutureBookingsForCourt(stadium);
+        log.info("Stadium {} successfully soft-deleted by owner {}", stadiumId, userId);
+    }
+
+    private void cancelFutureBookingsForCourt(Stadium stadium) {
+        List<Booking> futureBookings = bookingRepository.findFutureBookingsByStadiumId(stadium.getStadiumId(), java.time.LocalDate.now(), java.time.LocalTime.now());
+        log.info("Found {} future bookings to cancel for stadium {}", futureBookings.size(), stadium.getStadiumId());
         for (Booking booking : futureBookings) {
             booking.setBookingStatus(BookingStatus.CANCELLED);
             booking.setNote("Sân bị đóng cửa vĩnh viễn bởi chủ sân.");
@@ -419,6 +465,124 @@ public class StadiumServiceImpl implements StadiumService {
                     booking.getBookingId().toString()
             );
         }
-        log.info("Stadium {} successfully soft-deleted by owner {}", stadiumId, userId);
+    }
+
+    @Override
+    @Transactional
+    public StadiumResponse createFacility(CreateFacilityRequest request, Integer userId) {
+        log.info("Creating Facility under Complex ID: {} by user ID: {}", request.getComplexId(), userId);
+
+        Owner owner = ownerRepository.findByUserUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Owner profile not found for user ID: " + userId));
+
+        if (owner.getApprovedStatus() != ApprovedStatus.APPROVED) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        StadiumComplex complex = stadiumComplexRepository.findById(request.getComplexId())
+                .orElseThrow(() -> new ResourceNotFoundException("Complex not found with ID: " + request.getComplexId()));
+
+        if (!complex.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+            throw new BadRequestException("You do not own this complex");
+        }
+
+        SportType sportType = sportTypeRepository.findById(request.getSportTypeId())
+                .orElseThrow(() -> new ResourceNotFoundException("Sport type not found with ID: " + request.getSportTypeId()));
+
+        // Kiểm tra xem Complex có hỗ trợ môn thể thao này không
+        boolean supportsSport = complex.getSportTypes().stream()
+                .anyMatch(st -> st.getSportTypeId().equals(sportType.getSportTypeId()));
+        if (!supportsSport) {
+            throw new BadRequestException("Complex does not support this sport type: " + sportType.getSportName());
+        }
+
+        Stadium facility = Stadium.builder()
+                .complex(complex)
+                .owner(owner)
+                .sportType(sportType)
+                .stadiumName(request.getStadiumName().trim())
+                .description(request.getDescription())
+                .openTime(request.getOpenTime())
+                .closeTime(request.getCloseTime())
+                .nodeType(StadiumNodeType.FACILITY)
+                .stadiumStatus(StadiumStatus.AVAILABLE)
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
+            List<StadiumImage> images = request.getImageUrls().stream()
+                    .map(url -> StadiumImage.builder()
+                            .stadium(facility)
+                            .imageUrl(url)
+                            .build())
+                    .toList();
+            facility.getImages().addAll(images);
+        }
+
+        Stadium savedFacility = stadiumRepository.save(facility);
+        log.info("Successfully created Facility with ID: {}", savedFacility.getStadiumId());
+
+        return stadiumMapper.toResponse(savedFacility);
+    }
+
+    @Override
+    @Transactional
+    public StadiumResponse createCourt(CreateCourtRequest request, Integer userId) {
+        log.info("Creating Court under Facility ID: {} by user ID: {}", request.getParentStadiumId(), userId);
+
+        Owner owner = ownerRepository.findByUserUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Owner profile not found for user ID: " + userId));
+
+        if (owner.getApprovedStatus() != ApprovedStatus.APPROVED) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        Stadium parent = stadiumRepository.findById(request.getParentStadiumId())
+                .orElseThrow(() -> new ResourceNotFoundException("Facility not found with ID: " + request.getParentStadiumId()));
+
+        if (parent.getNodeType() != StadiumNodeType.FACILITY) {
+            throw new BadRequestException("Parent node is not a FACILITY");
+        }
+
+        StadiumComplex complex = parent.getComplex();
+        if (complex == null) {
+            throw new BadRequestException("Facility does not belong to any Complex");
+        }
+
+        if (!complex.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+            throw new BadRequestException("You do not own this complex");
+        }
+
+        Stadium court = Stadium.builder()
+                .complex(complex)
+                .parentStadium(parent)
+                .owner(owner)
+                .sportType(parent.getSportType()) // Kế thừa sportType từ Facility
+                .stadiumName(request.getStadiumName().trim())
+                .description(request.getDescription())
+                .pricePerHour(request.getPricePerHour())
+                .openTime(parent.getOpenTime()) // Kế thừa giờ đóng/mở cửa từ Facility
+                .closeTime(parent.getCloseTime())
+                .nodeType(StadiumNodeType.COURT)
+                .stadiumStatus(StadiumStatus.AVAILABLE)
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
+            List<StadiumImage> images = request.getImageUrls().stream()
+                    .map(url -> StadiumImage.builder()
+                            .stadium(court)
+                            .imageUrl(url)
+                            .build())
+                    .toList();
+            court.getImages().addAll(images);
+        }
+
+        Stadium savedCourt = stadiumRepository.save(court);
+        log.info("Successfully created Court with ID: {}", savedCourt.getStadiumId());
+
+        return stadiumMapper.toResponse(savedCourt);
     }
 }

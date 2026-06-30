@@ -57,10 +57,25 @@ public class MatchRequest implements Serializable {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    /** Sân nơi diễn ra trận đấu */
+    /** Sân cụ thể diễn ra trận đấu (Legacy, nullable sau refactor) */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "stadium_id", nullable = false)
+    @JoinColumn(name = "stadium_id", nullable = true)
     private Stadium stadium;
+
+    /** Tổ hợp diễn ra trận đấu (Bắt buộc sau refactor) */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "complex_id")
+    private StadiumComplex complex;
+
+    /** Khu vực sân ưu tiên (L2, tùy chọn) */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "preferred_facility_id")
+    private Stadium preferredFacility;
+
+    /** Sân cụ thể ưu tiên (L3, tùy chọn) */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "preferred_court_id")
+    private Stadium preferredCourt;
 
     /** Môn thể thao của trận đấu */
     @ManyToOne(fetch = FetchType.LAZY)

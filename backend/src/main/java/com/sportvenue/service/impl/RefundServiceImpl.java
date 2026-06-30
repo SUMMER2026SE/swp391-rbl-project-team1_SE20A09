@@ -86,9 +86,11 @@ public class RefundServiceImpl implements RefundService {
 
     private void validateOwnershipAndStatus(Booking booking, Owner owner) {
         Stadium stadium = booking.getStadium();
-        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || !resolvedOwner.getOwnerId().equals(owner.getOwnerId())) {
             log.warn("Security Alert! Owner ID {} tried to access booking ID {} of Owner ID {}",
-                    owner.getOwnerId(), booking.getBookingId(), stadium.getOwner().getOwnerId());
+                    owner.getOwnerId(), booking.getBookingId(),
+                    resolvedOwner != null ? resolvedOwner.getOwnerId() : null);
             throw new BadRequestException("Bạn không có quyền quản lý đơn đặt sân này!");
         }
 

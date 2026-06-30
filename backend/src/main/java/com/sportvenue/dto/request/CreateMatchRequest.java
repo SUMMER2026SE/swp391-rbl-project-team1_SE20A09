@@ -31,9 +31,15 @@ import java.time.LocalTime;
 @AllArgsConstructor
 public class CreateMatchRequest {
 
-    @NotNull(message = "Stadium ID is required")
     @Min(value = 1, message = "Invalid Stadium ID")
     private Integer stadiumId;
+
+    @Min(value = 1, message = "Invalid Complex ID")
+    private Integer complexId;
+
+    private Integer preferredFacilityId;
+
+    private Integer preferredCourtId;
 
     @NotNull(message = "Sport Type ID is required")
     @Min(value = 1, message = "Invalid Sport Type ID")

@@ -101,7 +101,7 @@ export async function fetchOwnerBookings(
     displayId: `#${b.bookingId}`,
     venue: b.stadium?.stadiumName || "Sân chưa biết",
     sportType: b.stadium?.sportType || "Khác",
-    imageUrl: "/images/stadium1.jpg", // Placeholder if no image provided
+    imageUrl: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=300&auto=format&fit=crop",
     date: b.slot?.startTime ? new Date(b.slot.startTime).toLocaleDateString("vi-VN") : "Chưa có",
     time: b.slot?.startTime && b.slot?.endTime 
           ? `${new Date(b.slot.startTime).toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })} - ${new Date(b.slot.endTime).toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}`
@@ -147,7 +147,7 @@ export async function fetchBookingDetail(id: string | number): Promise<BookingDe
     displayId: data.displayId,
     venueName: data.stadium?.stadiumName || "Sân chưa biết",
     sportType: data.stadium?.sportType || "Khác",
-    imageUrl: data.stadium?.imageUrl || "/images/stadium1.jpg",
+    imageUrl: data.stadium?.imageUrl || "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=300&auto=format&fit=crop",
     playDate: data.reservationDate || "Chưa rõ",
     startTime: data.slot?.startTime || "Chưa rõ",
     endTime: data.slot?.endTime || "Chưa rõ",
@@ -222,7 +222,7 @@ export async function getSlotsByDate(
 // ── UC-CUS-01: Weekly schedule ──────────────────────────────────────────────
 
 /** Trạng thái của một slot trong weekly grid. */
-export type WeeklySlotStatus = "AVAILABLE" | "BOOKED" | "PAST";
+export type WeeklySlotStatus = "AVAILABLE" | "BOOKED" | "PAST" | "OWNER_CLOSED" | "MAINTENANCE";
 
 /** Một khung giờ của sân trong weekly grid — kèm trạng thái cho một ngày cụ thể. */
 export type WeeklySlotItem = {
@@ -277,11 +277,17 @@ export async function getWeeklySlots(
 /**
  * Tạo đơn đặt sân đơn lẻ — POST /api/v1/bookings.
  * Trả 409 nếu slot đã bị đặt active trên cùng ngày; 400 nếu đã qua giờ.
+ *
+ * @param idempotencyKey UUID sinh 1 lần khi mở form — dùng generateIdempotencyKey().
+ *   Server dùng key này để dedup double-submit: nếu gửi lại cùng key, trả booking cũ thay vì tạo mới.
  */
 export async function createBooking(
-  payload: CreateBookingPayload
+  payload: CreateBookingPayload,
+  idempotencyKey?: string
 ): Promise<CreateBookingResponse> {
-  return post<CreateBookingResponse>("/bookings", payload);
+  return post<CreateBookingResponse>("/bookings", payload, {
+    headers: idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : undefined,
+  });
 }
 
 export type BookingDetailResponse = CreateBookingResponse;

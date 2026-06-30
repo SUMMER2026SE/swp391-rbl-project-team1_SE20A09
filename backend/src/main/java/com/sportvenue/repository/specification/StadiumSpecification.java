@@ -7,6 +7,8 @@ import com.sportvenue.entity.TimeSlot;
 import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.entity.enums.StadiumStatus;
+import com.sportvenue.entity.enums.StadiumNodeType;
+import com.sportvenue.entity.StadiumComplex;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Join;
@@ -26,10 +28,17 @@ public class StadiumSpecification {
             query.distinct(true);
             List<Predicate> predicates = new ArrayList<>();
 
+            // 0. NodeType Filter - Chỉ tìm kiếm COURT (sân lẻ bookable)
+            predicates.add(cb.equal(root.get("nodeType"), StadiumNodeType.COURT));
+
             // 1. Status Filter
             if (isPublicSearch) {
                 predicates.add(cb.equal(root.get("stadiumStatus"), StadiumStatus.AVAILABLE));
-                predicates.add(cb.equal(root.get("approvedStatus"), ApprovedStatus.APPROVED));
+                // Thừa hưởng phê duyệt: Sân cũ approved_status = APPROVED HOẶC Complex cha approved_status = APPROVED
+                predicates.add(cb.or(
+                    cb.equal(root.get("approvedStatus"), ApprovedStatus.APPROVED),
+                    cb.equal(root.get("parentStadium").get("complex").get("approvedStatus"), ApprovedStatus.APPROVED)
+                ));
             } else if (req.getStatus() != null) {
                 predicates.add(cb.equal(root.get("stadiumStatus"), req.getStatus()));
             }
@@ -55,10 +64,17 @@ public class StadiumSpecification {
 
     private static void addBasicFilters(List<Predicate> preds, CriteriaBuilder cb, Root<Stadium> root, CriteriaQuery<?> query, StadiumSearchRequest req) {
         if (req.getSportTypeId() != null) {
-            preds.add(cb.equal(root.get("sportType").get("sportTypeId"), req.getSportTypeId()));
+            preds.add(cb.or(
+                cb.equal(root.get("sportType").get("sportTypeId"), req.getSportTypeId()),
+                cb.equal(root.get("parentStadium").get("sportType").get("sportTypeId"), req.getSportTypeId())
+            ));
         }
         if (StringUtils.hasText(req.getAddress())) {
-            preds.add(cb.like(cb.lower(root.get("address")), "%" + req.getAddress().toLowerCase() + "%"));
+            String searchAddress = "%" + req.getAddress().toLowerCase() + "%";
+            preds.add(cb.or(
+                cb.like(cb.lower(root.get("address")), searchAddress),
+                cb.like(cb.lower(root.get("parentStadium").get("complex").get("address")), searchAddress)
+            ));
         }
         if (req.getMinPrice() != null || req.getMaxPrice() != null) {
             Subquery<Integer> priceSubquery = query.subquery(Integer.class);
@@ -108,25 +124,43 @@ public class StadiumSpecification {
             double minLon = req.getUserLng() - lonDelta;
             double maxLon = req.getUserLng() + lonDelta;
 
-            preds.add(cb.between(root.get("latitude"), minLat, maxLat));
-            preds.add(cb.between(root.get("longitude"), minLon, maxLon));
+            preds.add(cb.or(
+                cb.between(root.get("latitude"), minLat, maxLat),
+                cb.between(root.get("parentStadium").get("complex").get("latitude"), minLat, maxLat)
+            ));
+            preds.add(cb.or(
+                cb.between(root.get("longitude"), minLon, maxLon),
+                cb.between(root.get("parentStadium").get("complex").get("longitude"), minLon, maxLon)
+            ));
         }
     }
 
     private static void addAmenitiesPredicate(List<Predicate> preds, CriteriaBuilder cb, Root<Stadium> root, CriteriaQuery<?> query, List<Integer> amenityIds) {
         if (amenityIds != null && !amenityIds.isEmpty()) {
-            Subquery<Long> amenitySubquery = query.subquery(Long.class);
-            var subRoot = amenitySubquery.from(Stadium.class);
-            Join<Stadium, Amenity> amenityJoin = subRoot.join("amenities");
-            
-            amenitySubquery.select(cb.countDistinct(amenityJoin.get("amenityId")));
-            
-            Predicate idMatch = cb.equal(subRoot.get("stadiumId"), root.get("stadiumId"));
-            Predicate amenityIn = amenityJoin.get("amenityId").in(amenityIds);
-            
-            amenitySubquery.where(cb.and(idMatch, amenityIn));
-            
-            preds.add(cb.equal(amenitySubquery, (long) amenityIds.size()));
+            // 1. Kiểm tra tiện nghi trên COURT trực tiếp (Dữ liệu cũ hoặc override)
+            Subquery<Long> courtAmenitySubquery = query.subquery(Long.class);
+            var courtSubRoot = courtAmenitySubquery.from(Stadium.class);
+            Join<Stadium, Amenity> courtAmenityJoin = courtSubRoot.join("amenities");
+            courtAmenitySubquery.select(cb.countDistinct(courtAmenityJoin.get("amenityId")));
+            courtAmenitySubquery.where(cb.and(
+                cb.equal(courtSubRoot.get("stadiumId"), root.get("stadiumId")),
+                courtAmenityJoin.get("amenityId").in(amenityIds)
+            ));
+
+            // 2. Kiểm tra tiện nghi trên Complex sở hữu (Cấu trúc 3 tầng mới)
+            Subquery<Long> complexAmenitySubquery = query.subquery(Long.class);
+            var complexSubRoot = complexAmenitySubquery.from(StadiumComplex.class);
+            Join<StadiumComplex, Amenity> complexAmenityJoin = complexSubRoot.join("amenities");
+            complexAmenitySubquery.select(cb.countDistinct(complexAmenityJoin.get("amenityId")));
+            complexAmenitySubquery.where(cb.and(
+                cb.equal(complexSubRoot.get("complexId"), root.get("parentStadium").get("complex").get("complexId")),
+                complexAmenityJoin.get("amenityId").in(amenityIds)
+            ));
+
+            preds.add(cb.or(
+                cb.equal(courtAmenitySubquery, (long) amenityIds.size()),
+                cb.equal(complexAmenitySubquery, (long) amenityIds.size())
+            ));
         }
     }
 }

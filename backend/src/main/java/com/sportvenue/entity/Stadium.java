@@ -2,6 +2,7 @@ package com.sportvenue.entity;
 
 import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.entity.enums.StadiumStatus;
+import com.sportvenue.entity.enums.StadiumNodeType;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -56,14 +57,14 @@ public class Stadium implements Serializable {
     @Column(name = "stadium_id")
     private Integer stadiumId;
 
-    /** Chủ sân — phải là Owner đã được Approved. */
+    /** Chủ sân — có thể null đối với Court/Facility mới (resolve qua Complex). */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "owner_id", nullable = false)
+    @JoinColumn(name = "owner_id", nullable = true)
     private Owner owner;
 
-    /** Loại môn thể thao của sân. */
+    /** Loại môn thể thao của sân (null đối với Court để kế thừa từ Facility). */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sport_type_id", nullable = false)
+    @JoinColumn(name = "sport_type_id", nullable = true)
     private SportType sportType;
 
     @Column(name = "stadium_name", nullable = false, length = 100)
@@ -72,7 +73,8 @@ public class Stadium implements Serializable {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "address", nullable = false, columnDefinition = "TEXT")
+    /** Địa chỉ của sân (null đối với Court/Facility để kế thừa từ Complex). */
+    @Column(name = "address", nullable = true, columnDefinition = "TEXT")
     private String address;
 
     /** Giờ mở cửa hàng ngày. */
@@ -93,11 +95,10 @@ public class Stadium implements Serializable {
     @Builder.Default
     private StadiumStatus stadiumStatus = StadiumStatus.AVAILABLE;
 
-    /** Trạng thái duyệt của sân. */
+    /** Trạng thái duyệt của sân (null đối với Court/Facility mới). */
     @Enumerated(EnumType.STRING)
-    @Column(name = "approved_status", nullable = false, length = 20)
-    @Builder.Default
-    private ApprovedStatus approvedStatus = ApprovedStatus.PENDING;
+    @Column(name = "approved_status", nullable = true, length = 20)
+    private ApprovedStatus approvedStatus;
 
     /** Điểm đánh giá trung bình — được cập nhật sau mỗi review. */
     @Column(name = "average_rating", nullable = false, precision = 3, scale = 2)
@@ -108,6 +109,27 @@ public class Stadium implements Serializable {
     @Column(name = "review_count", nullable = false)
     @Builder.Default
     private Integer reviewCount = 0;
+
+    /** Phân loại node (FACILITY / COURT). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "node_type", nullable = false, length = 20)
+    @Builder.Default
+    private StadiumNodeType nodeType = StadiumNodeType.COURT;
+
+    /** Tổ hợp sở hữu sân này (bắt buộc cho cả FACILITY và COURT). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "complex_id")
+    private StadiumComplex complex;
+
+    /** Sân cha (chỉ dành cho COURT, trỏ về FACILITY). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_stadium_id")
+    private Stadium parentStadium;
+
+    /** Danh sách các sân con (chỉ dành cho FACILITY, chứa các COURT). */
+    @OneToMany(mappedBy = "parentStadium", cascade = CascadeType.ALL)
+    @Builder.Default
+    private Set<Stadium> childCourts = new LinkedHashSet<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
@@ -145,4 +167,20 @@ public class Stadium implements Serializable {
     )
     @Builder.Default
     private Set<Amenity> amenities = new HashSet<>();
+
+    /**
+     * Lấy Owner sở hữu sân này theo cấu trúc cây (Court -> Facility -> Complex -> Owner).
+     */
+    public Owner resolveOwner() {
+        if (this.nodeType == StadiumNodeType.FACILITY && this.complex != null) {
+            return this.complex.getOwner();
+        } else if (this.nodeType == StadiumNodeType.COURT && this.parentStadium != null) {
+            StadiumComplex parentComplex = this.parentStadium.getComplex();
+            if (parentComplex == null) {
+                throw new IllegalStateException("Court thiếu complex reference ở parent Facility: " + this.stadiumId);
+            }
+            return parentComplex.getOwner();
+        }
+        return this.owner; // Fallback cho dữ liệu cũ
+    }
 }

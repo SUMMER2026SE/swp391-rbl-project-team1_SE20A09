@@ -70,6 +70,12 @@ public interface TimeSlotRepository extends JpaRepository<TimeSlot, Integer> {
             @Param("from") LocalTime from,
             @Param("to") LocalTime to);
 
+    /**
+     * Tìm kiếm các slot trùng giờ hiện có trên sân.
+     * Quy tắc nghiệp vụ (Business Rule): Không lọc theo trạng thái (status).
+     * Bất kỳ slot nào đã tồn tại (kể cả đang BOOKED hay MAINTENANCE) đều không được phép tạo đè lên
+     * để tránh trùng lặp dữ liệu khung giờ (duplicate slots) của cùng một sân lẻ.
+     */
     @Query("""
             SELECT t FROM TimeSlot t
             WHERE t.stadium.stadiumId = :stadiumId
@@ -79,6 +85,18 @@ public interface TimeSlotRepository extends JpaRepository<TimeSlot, Integer> {
             """)
     List<TimeSlot> findOverlappingSlots(
             @Param("stadiumId") Integer stadiumId,
+            @Param("from") LocalTime from,
+            @Param("to") LocalTime to);
+
+    @Query("""
+            SELECT t FROM TimeSlot t
+            JOIN FETCH t.stadium
+            WHERE t.stadium.stadiumId IN :stadiumIds
+            AND t.startTime < :to
+            AND t.endTime > :from
+            """)
+    List<TimeSlot> findOverlappingSlotsByStadiumIds(
+            @Param("stadiumIds") List<Integer> stadiumIds,
             @Param("from") LocalTime from,
             @Param("to") LocalTime to);
 
@@ -93,4 +111,7 @@ public interface TimeSlotRepository extends JpaRepository<TimeSlot, Integer> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT t FROM TimeSlot t WHERE t.slotId = :slotId")
     Optional<TimeSlot> findByIdForUpdate(@Param("slotId") Integer slotId);
+
+    @Query("SELECT s FROM TimeSlot s JOIN FETCH s.stadium st JOIN FETCH st.owner o JOIN FETCH o.user u WHERE s.slotId = :slotId")
+    Optional<TimeSlot> findByIdWithOwner(@Param("slotId") Integer slotId);
 }

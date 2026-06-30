@@ -472,9 +472,10 @@ public class ComplaintServiceImpl implements ComplaintService {
                 var stadium = c.getBooking().getStadium();
                 stadiumName = stadium.getStadiumName();
                 stadiumId = stadium.getStadiumId();
-                if (stadium.getOwner() != null && stadium.getOwner().getUser() != null) {
-                    ownerName = stadium.getOwner().getUser().getFullName();
-                    ownerEmail = stadium.getOwner().getUser().getEmail();
+                Owner resolvedOwner = stadium.resolveOwner();
+                if (resolvedOwner != null && resolvedOwner.getUser() != null) {
+                    ownerName = resolvedOwner.getUser().getFullName();
+                    ownerEmail = resolvedOwner.getUser().getEmail();
                 }
             }
         }
