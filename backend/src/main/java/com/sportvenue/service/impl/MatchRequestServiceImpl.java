@@ -42,6 +42,7 @@ import java.time.LocalTime;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -289,32 +290,25 @@ public class MatchRequestServiceImpl implements MatchRequestService {
             throw new BadRequestException("No courts found in the selected range");
         }
 
-        boolean hasAvailableCourt = false;
-        for (Stadium court : candidateCourts) {
-            List<TimeSlot> matchingSlots = timeSlotRepository.findOverlappingSlots(
-                    court.getStadiumId(), request.getStartTime(), request.getEndTime());
+        List<Integer> courtIds = candidateCourts.stream()
+                .map(Stadium::getStadiumId)
+                .collect(Collectors.toList());
 
-            for (TimeSlot slot : matchingSlots) {
-                if (slot.getSlotStatus() != com.sportvenue.entity.enums.SlotStatus.AVAILABLE) {
-                    continue;
-                }
+        List<TimeSlot> allSlots = timeSlotRepository.findOverlappingSlotsByStadiumIds(
+                courtIds, request.getStartTime(), request.getEndTime());
 
-                boolean isBooked = bookingRepository.existsActiveBooking(
-                        court.getStadiumId(),
-                        slot.getSlotId(),
-                        request.getPlayDate(),
-                        Arrays.asList(BookingStatus.PENDING_PAYMENT, BookingStatus.PENDING, BookingStatus.CONFIRMED)
-                );
+        List<BookingStatus> activeStatuses = Arrays.asList(
+                BookingStatus.PENDING_PAYMENT, BookingStatus.PENDING, BookingStatus.CONFIRMED);
+        Set<String> bookedKeys = bookingRepository.findActiveBookingKeysByStadiumIds(
+                courtIds, request.getPlayDate(), activeStatuses)
+                .stream()
+                .map(row -> row[0] + "-" + row[1])
+                .collect(Collectors.toSet());
 
-                if (!isBooked) {
-                    hasAvailableCourt = true;
-                    break;
-                }
-            }
-            if (hasAvailableCourt) {
-                break;
-            }
-        }
+        boolean hasAvailableCourt = allSlots.stream()
+                .filter(slot -> slot.getSlotStatus() == com.sportvenue.entity.enums.SlotStatus.AVAILABLE)
+                .anyMatch(slot -> !bookedKeys.contains(
+                        slot.getStadium().getStadiumId() + "-" + slot.getSlotId()));
 
         if (!hasAvailableCourt) {
             throw new BadRequestException("No available court in the selected complex/facility during the requested time slot");

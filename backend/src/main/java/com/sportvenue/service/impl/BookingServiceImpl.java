@@ -109,7 +109,14 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy khung giờ với ID " + request.getSlotId()));
 
-        validateSlotForBooking(slot, stadium, request.getReservationDate());
+        Optional<TimeSlotException> exceptionOpt = timeSlotExceptionRepository.findBySlotSlotIdAndExceptionDate(
+                slot.getSlotId(), request.getReservationDate());
+        java.time.LocalTime effectiveStart = exceptionOpt
+                .filter(e -> e.getStartTimeOverride() != null)
+                .map(TimeSlotException::getStartTimeOverride)
+                .orElse(slot.getStartTime());
+
+        validateSlotForBooking(slot, stadium, request.getReservationDate(), effectiveStart);
 
         // Conflict check: 1 slot chỉ có 1 booking active tại một ngày
         if (bookingRepository.existsActiveBooking(
@@ -121,9 +128,6 @@ public class BookingServiceImpl implements BookingService {
                     "Khung giờ này đã được đặt cho ngày " + request.getReservationDate()
                             + ". Vui lòng chọn khung giờ hoặc ngày khác.");
         }
-
-        Optional<TimeSlotException> exceptionOpt = timeSlotExceptionRepository.findBySlotSlotIdAndExceptionDate(
-                slot.getSlotId(), request.getReservationDate());
         if (exceptionOpt.isPresent()) {
             TimeSlotException ex = exceptionOpt.get();
             if (Boolean.TRUE.equals(ex.getClosed())) {
@@ -157,7 +161,8 @@ public class BookingServiceImpl implements BookingService {
      * Validate slot thuộc đúng sân, không MAINTENANCE, và chưa qua giờ.
      * Tách riêng để giữ createBooking dưới 80 dòng (checkstyle MethodLength).
      */
-    private void validateSlotForBooking(TimeSlot slot, Stadium stadium, java.time.LocalDate reservationDate) {
+    private void validateSlotForBooking(TimeSlot slot, Stadium stadium, java.time.LocalDate reservationDate,
+                                        java.time.LocalTime effectiveStart) {
         if (!slot.getStadium().getStadiumId().equals(stadium.getStadiumId())) {
             throw new BadRequestException(
                     "Khung giờ #" + slot.getSlotId() + " không thuộc sân #" + stadium.getStadiumId());
@@ -166,7 +171,7 @@ public class BookingServiceImpl implements BookingService {
             throw new BadRequestException(
                     "Khung giờ #" + slot.getSlotId() + " đang bảo trì, không thể đặt");
         }
-        LocalDateTime slotStart = LocalDateTime.of(reservationDate, slot.getStartTime());
+        LocalDateTime slotStart = LocalDateTime.of(reservationDate, effectiveStart);
         if (!slotStart.isAfter(LocalDateTime.now())) {
             throw new BadRequestException(
                     "Khung giờ đã qua — không thể đặt sân cho thời điểm trong quá khứ");

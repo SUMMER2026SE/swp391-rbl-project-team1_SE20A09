@@ -2,6 +2,7 @@ package com.sportvenue.service.impl;
 
 import com.sportvenue.dto.request.CreateExceptionRequest;
 import com.sportvenue.dto.response.TimeSlotExceptionResponse;
+import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.TimeSlot;
 import com.sportvenue.entity.TimeSlotException;
@@ -34,8 +35,9 @@ public class TimeSlotExceptionServiceImpl implements TimeSlotExceptionService {
 
         Stadium stadium = slot.getStadium();
         // Validate ownership
-        if (stadium.getOwner() == null || stadium.getOwner().getUser() == null ||
-                !stadium.getOwner().getUser().getUserId().equals(userId)) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || resolvedOwner.getUser() == null ||
+                !resolvedOwner.getUser().getUserId().equals(userId)) {
             throw new AccessDeniedException("Bạn không có quyền chỉnh sửa ngoại lệ cho khung giờ này");
         }
 
@@ -77,8 +79,9 @@ public class TimeSlotExceptionServiceImpl implements TimeSlotExceptionService {
 
         Stadium stadium = slot.getStadium();
         // Validate ownership
-        if (stadium.getOwner() == null || stadium.getOwner().getUser() == null ||
-                !stadium.getOwner().getUser().getUserId().equals(userId)) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || resolvedOwner.getUser() == null ||
+                !resolvedOwner.getUser().getUserId().equals(userId)) {
             throw new AccessDeniedException("Bạn không có quyền xóa ngoại lệ cho khung giờ này");
         }
 

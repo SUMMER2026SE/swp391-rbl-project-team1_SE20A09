@@ -2,6 +2,7 @@ package com.sportvenue.service.impl;
 
 import com.sportvenue.dto.request.CreateTimeSlotRequest;
 import com.sportvenue.dto.response.TimeSlotResponse;
+import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.TimeSlot;
 import com.sportvenue.entity.enums.SlotStatus;
@@ -173,7 +174,9 @@ public class TimeSlotServiceImpl implements TimeSlotService {
     }
 
     private void validateOwnership(Stadium stadium, Integer userId) {
-        if (!stadium.getOwner().getUser().getUserId().equals(userId)) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || resolvedOwner.getUser() == null
+                || !resolvedOwner.getUser().getUserId().equals(userId)) {
             throw new BadRequestException("You do not have permission to manage slots for this stadium");
         }
     }

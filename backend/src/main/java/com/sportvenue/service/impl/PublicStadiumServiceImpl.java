@@ -287,9 +287,13 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
                         stadium.getParentStadium().getComplex().getApprovedStatus() : null);
 
-        Owner owner = stadium.getOwner() != null ? stadium.getOwner() :
-                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
-                        stadium.getParentStadium().getComplex().getOwner() : null);
+        Owner owner;
+        try {
+            owner = stadium.resolveOwner();
+        } catch (IllegalStateException e) {
+            log.warn("Cannot resolve owner for stadium {}: {}", stadium.getStadiumId(), e.getMessage());
+            owner = null;
+        }
 
         java.util.Set<com.sportvenue.entity.Accessory> stadiumAccessories = stadium.getAccessories();
         if ((stadiumAccessories == null || stadiumAccessories.isEmpty()) && stadium.getParentStadium() != null) {

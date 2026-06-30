@@ -303,6 +303,17 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("reservationDate") LocalDate reservationDate,
             @Param("statuses") List<BookingStatus> statuses);
 
+    @Query("""
+            SELECT b.stadium.stadiumId, b.slot.slotId FROM Booking b
+            WHERE b.stadium.stadiumId IN :stadiumIds
+            AND b.reservationDate = :reservationDate
+            AND b.bookingStatus IN :statuses
+            """)
+    List<Object[]> findActiveBookingKeysByStadiumIds(
+            @Param("stadiumIds") List<Integer> stadiumIds,
+            @Param("reservationDate") LocalDate reservationDate,
+            @Param("statuses") List<BookingStatus> statuses);
+
     /**
      * UC-CUS-01: Trả về tập slotId đã có đơn active (PENDING/CONFIRMED) cho
      * sân vào một ngày cụ thể — dùng để render availability FE.

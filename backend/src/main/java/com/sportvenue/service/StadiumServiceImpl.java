@@ -160,7 +160,8 @@ public class StadiumServiceImpl implements StadiumService {
         Stadium stadium = stadiumRepository.findById(stadiumId)
                 .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
 
-        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || !resolvedOwner.getOwnerId().equals(owner.getOwnerId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
@@ -179,7 +180,8 @@ public class StadiumServiceImpl implements StadiumService {
         Stadium stadium = stadiumRepository.findById(stadiumId)
                 .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
 
-        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || !resolvedOwner.getOwnerId().equals(owner.getOwnerId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
@@ -364,7 +366,8 @@ public class StadiumServiceImpl implements StadiumService {
         Stadium stadium = stadiumRepository.findById(stadiumId)
                 .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
 
-        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || !resolvedOwner.getOwnerId().equals(owner.getOwnerId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
@@ -383,7 +386,8 @@ public class StadiumServiceImpl implements StadiumService {
         Stadium stadium = stadiumRepository.findById(stadiumId)
                 .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
 
-        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || !resolvedOwner.getOwnerId().equals(owner.getOwnerId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
@@ -402,7 +406,8 @@ public class StadiumServiceImpl implements StadiumService {
         Stadium stadium = stadiumRepository.findById(stadiumId)
                 .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
 
-        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || !resolvedOwner.getOwnerId().equals(owner.getOwnerId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 

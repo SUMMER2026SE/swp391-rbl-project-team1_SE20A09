@@ -88,6 +88,18 @@ public interface TimeSlotRepository extends JpaRepository<TimeSlot, Integer> {
             @Param("from") LocalTime from,
             @Param("to") LocalTime to);
 
+    @Query("""
+            SELECT t FROM TimeSlot t
+            JOIN FETCH t.stadium
+            WHERE t.stadium.stadiumId IN :stadiumIds
+            AND t.startTime < :to
+            AND t.endTime > :from
+            """)
+    List<TimeSlot> findOverlappingSlotsByStadiumIds(
+            @Param("stadiumIds") List<Integer> stadiumIds,
+            @Param("from") LocalTime from,
+            @Param("to") LocalTime to);
+
     /** Kiểm tra slot còn trống không — dùng trước khi tạo booking. */
     boolean existsBySlotIdAndSlotStatus(Integer slotId, SlotStatus status);
 

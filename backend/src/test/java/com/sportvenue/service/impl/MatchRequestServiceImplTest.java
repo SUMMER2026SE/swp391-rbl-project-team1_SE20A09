@@ -697,6 +697,7 @@ class MatchRequestServiceImplTest {
 
         TimeSlot slot = TimeSlot.builder()
                 .slotId(50)
+                .stadium(court)
                 .startTime(LocalTime.of(18, 0))
                 .endTime(LocalTime.of(19, 0))
                 .slotStatus(com.sportvenue.entity.enums.SlotStatus.AVAILABLE)
@@ -706,8 +707,8 @@ class MatchRequestServiceImplTest {
         when(stadiumComplexRepository.findById(5)).thenReturn(Optional.of(complex));
         when(sportTypeRepository.findById(1)).thenReturn(Optional.of(sportType));
         when(stadiumRepository.findCourtsByComplexId(5)).thenReturn(List.of(court));
-        when(timeSlotRepository.findOverlappingSlots(eq(20), any(), any())).thenReturn(List.of(slot));
-        when(bookingRepository.existsActiveBooking(eq(20), eq(50), any(), any())).thenReturn(false);
+        when(timeSlotRepository.findOverlappingSlotsByStadiumIds(any(), any(), any())).thenReturn(List.of(slot));
+        when(bookingRepository.findActiveBookingKeysByStadiumIds(any(), any(), any())).thenReturn(List.of());
 
         when(matchRequestRepository.existsOverlappingMatchRequest(any(), any(), any(), any())).thenReturn(false);
         when(bookingRepository.existsOverlappingBooking(any(), any(), any(), any(), any())).thenReturn(false);
@@ -771,7 +772,7 @@ class MatchRequestServiceImplTest {
         when(stadiumComplexRepository.findById(5)).thenReturn(Optional.of(complex));
         when(sportTypeRepository.findById(1)).thenReturn(Optional.of(sportType));
         when(stadiumRepository.findCourtsByComplexId(5)).thenReturn(List.of(court));
-        when(timeSlotRepository.findOverlappingSlots(eq(20), any(), any())).thenReturn(List.of()); // slot rỗng
+        when(timeSlotRepository.findOverlappingSlotsByStadiumIds(any(), any(), any())).thenReturn(List.of()); // slot rỗng
 
         assertThrows(BadRequestException.class, () ->
                 matchRequestService.createMatch(request, userId));
