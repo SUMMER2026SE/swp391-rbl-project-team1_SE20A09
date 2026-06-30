@@ -41,9 +41,78 @@ export interface StadiumResponse {
   totalReviews?: number;
   imageUrls: string[];
   approvedStatus: string;
+  nodeType?: 'FACILITY' | 'COURT' | null;
+  complexId?: number | null;
+  parentStadiumId?: number | null;
+}
+
+export interface ComplexResponse {
+  complexId: number;
+  ownerId: number;
+  name: string;
+  description?: string | null;
+  address: string;
+  phone?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  coverImageUrl?: string | null;
+  complexStatus: string;
+  approvedStatus: string;
+  rejectionReason?: string | null;
+  averageRating?: number | null;
+  reviewCount?: number;
+  sportTypeIds?: number[];
+  sportNames?: string[];
+  amenityIds?: number[];
+  imageUrls?: string[];
+  createdAt?: string;
+}
+
+export interface CreateFacilityRequest {
+  complexId: number;
+  stadiumName: string;
+  description?: string;
+  sportTypeId: number;
+  openTime: string;  // Format "HH:mm:ss"
+  closeTime: string; // Format "HH:mm:ss"
+  imageUrls?: string[];
+}
+
+export interface CreateCourtRequest {
+  parentStadiumId: number;
+  stadiumName: string;
+  description?: string;
+  pricePerHour: number;
+  imageUrls?: string[];
+}
+
+export interface CreateTimeSlotRequest {
+  startTime: string;  // Format "HH:mm:ss"
+  endTime: string;    // Format "HH:mm:ss"
+  pricePerSlot: number;
+}
+
+export interface BulkTimeSlotRequest {
+  courtIds?: number[];
+  facilityIds?: number[];
+  applyToAllCourts?: boolean;
+  slots: CreateTimeSlotRequest[];
 }
 
 export interface SportType {
   sportTypeId: number;
   sportName: string;
+}
+
+export interface CreateComplexRequest {
+  name: string;
+  description?: string;
+  address: string;
+  phone?: string;
+  latitude: number;
+  longitude: number;
+  coverImageUrl?: string;
+  sportTypeIds?: number[];
+  amenityIds?: number[];
+  imageUrls?: string[];
 }

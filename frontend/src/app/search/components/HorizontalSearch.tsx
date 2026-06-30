@@ -1,11 +1,11 @@
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Navigation, Calendar, Clock, MapPin, Loader2 } from 'lucide-react'
-import { StadiumSearchRequest } from '@/lib/api/stadium'
+import { ComplexSearchParams } from '@/types/complex'
 
 interface HorizontalSearchProps {
-  filters: StadiumSearchRequest
-  onFilterChange: <K extends keyof StadiumSearchRequest>(key: K, value: StadiumSearchRequest[K]) => void
+  filters: ComplexSearchParams
+  onFilterChange: <K extends keyof ComplexSearchParams>(key: K, value: ComplexSearchParams[K]) => void
   onGetLocation: () => void
   isLocating?: boolean
 }

@@ -9,6 +9,7 @@ import com.sportvenue.dto.response.TimeSlotResponse;
 import com.sportvenue.dto.response.WeeklySlotResponse;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.BookingService;
+import com.sportvenue.service.IdempotencyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -26,12 +27,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * UC-CUS-01: Booking controller cho Customer — single booking flow.
@@ -52,6 +54,7 @@ public class BookingController {
 
     private final BookingService bookingService;
     private final PaymentService paymentService;
+    private final IdempotencyService idempotencyService;
 
     @PostMapping("/api/v1/bookings")
     @PreAuthorize("hasRole('Customer')")
@@ -60,12 +63,43 @@ public class BookingController {
             description = "Customer chọn (stadium, slot, reservationDate) và tạo 1 đơn. "
                     + "Server trả về 409 nếu slot đã được đặt active (PENDING_PAYMENT/PENDING/CONFIRMED) "
                     + "trên cùng ngày; 400 nếu slot datetime đã qua hoặc slot không thuộc sân. "
-                    + "Booking mới có status=PENDING_PAYMENT, expiredAt = now+5 phút — scheduler sẽ tự huỷ nếu quá hạn.")
+                    + "Booking mới có status=PENDING_PAYMENT, expiredAt = now+5 phút — scheduler sẽ tự huỷ nếu quá hạn. "
+                    + "Header X-Idempotency-Key (UUID) tùy chọn — nếu gửi, server chặn double-submit và trả booking cũ nếu retry.")
     public ResponseEntity<BookingDetailResponse> createBooking(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
-            @Valid @RequestBody CreateBookingRequest request) {
-        BookingDetailResponse response = bookingService.createBooking(userPrincipal, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            @Valid @RequestBody CreateBookingRequest request,
+            @RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKey) {
+
+        Integer userId = userPrincipal.getUser().getUserId();
+
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            // Nếu key đã tồn tại và có kết quả → trả về booking cũ (idempotent retry)
+            Optional<Integer> existing = idempotencyService.getExistingBookingId(userId, idempotencyKey);
+            if (existing.isPresent()) {
+                log.info("[Idempotency] Retry booking — userId={}, key={}, existingBookingId={}",
+                        userId, idempotencyKey, existing.get());
+                BookingDetailResponse cached = bookingService.getBookingDetail(userPrincipal, existing.get());
+                return ResponseEntity.status(HttpStatus.OK).body(cached);
+            }
+            // Key đang PROCESSING (concurrent duplicate) → từ chối
+            if (!idempotencyService.tryAcquire(userId, idempotencyKey)) {
+                log.warn("[Idempotency] Concurrent duplicate — userId={}, key={}", userId, idempotencyKey);
+                return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            }
+        }
+
+        try {
+            BookingDetailResponse response = bookingService.createBooking(userPrincipal, request);
+            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                idempotencyService.complete(userId, idempotencyKey, response.getBookingId());
+            }
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (RuntimeException ex) {
+            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                idempotencyService.release(userId, idempotencyKey);
+            }
+            throw ex;
+        }
     }
 
     /**

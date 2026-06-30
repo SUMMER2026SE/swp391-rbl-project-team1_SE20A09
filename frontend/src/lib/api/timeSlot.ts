@@ -24,3 +24,35 @@ export async function toggleTimeSlot(slotId: number): Promise<TimeSlot> {
   const res = await api.patch<TimeSlot>(`/stadiums/time-slots/${slotId}/toggle`)
   return res.data
 }
+
+export interface TimeSlotException {
+  exceptionId: number
+  slotId: number
+  exceptionDate: string
+  priceOverride?: number
+  startTimeOverride?: string
+  endTimeOverride?: string
+  closed: boolean
+  hidden: boolean
+}
+
+export interface CreateExceptionRequest {
+  priceOverride?: number
+  startTimeOverride?: string
+  endTimeOverride?: string
+  closed?: boolean
+  hidden?: boolean
+}
+
+export async function createOrUpdateException(
+  slotId: number,
+  date: string,
+  data: CreateExceptionRequest
+): Promise<TimeSlotException> {
+  const res = await api.post<TimeSlotException>(`/stadiums/time-slots/${slotId}/exceptions/${date}`, data)
+  return res.data
+}
+
+export async function deleteException(slotId: number, date: string): Promise<void> {
+  await api.delete(`/stadiums/time-slots/${slotId}/exceptions/${date}`)
+}
