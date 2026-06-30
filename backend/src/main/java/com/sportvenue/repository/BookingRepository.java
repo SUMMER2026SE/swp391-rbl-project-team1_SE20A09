@@ -405,6 +405,46 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     List<Booking> findCompletedUnreviewedBookings(
             @Param("userId") Integer userId,
             @Param("stadiumId") Integer stadiumId);
+
+    /**
+     * Lấy các booking CONFIRMED có reservation_date <= hôm nay.
+     * Lọc thô theo ngày — scheduler sẽ lọc chính xác theo endTime ở Java.
+     *
+     * <p>Lý do không so sánh date+time trong JPQL: reservationDate là LocalDate,
+     * slot.endTime là LocalTime — không thể combine thành LocalDateTime trong JPQL.
+     *
+     * <p>Dùng bởi {@code BookingCompletionScheduler}.
+     */
+    @EntityGraph(attributePaths = {"slot"})
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED
+            AND b.reservationDate <= :today
+            """)
+    List<Booking> findConfirmedPastPlayTime(@Param("today") java.time.LocalDate today);
+
+    /**
+     * Lấy các booking CONFIRMED, chưa nhắc (reminderSentAt IS NULL),
+     * có reservation_date trong khoảng [startDate, endDate].
+     *
+     * <p>Query lọc thô theo ngày. Scheduler sẽ lọc chính xác theo startTime
+     * để đảm bảo chỉ nhắc booking trong đúng 24h tới.
+     *
+     * <p>endDate nên được tính là {@code now.plusHours(24).toLocalDate()} (không phải
+     * {@code now.plusDays(1)}) để tránh bỏ sót booking ở biên ngày.
+     *
+     * <p>Dùng bởi {@code BookingReminderScheduler}.
+     */
+    @EntityGraph(attributePaths = {"user", "stadium", "slot"})
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED
+            AND b.reminderSentAt IS NULL
+            AND b.reservationDate BETWEEN :startDate AND :endDate
+            """)
+    List<Booking> findUpcomingUnremindedBookings(
+            @Param("startDate") java.time.LocalDate startDate,
+            @Param("endDate") java.time.LocalDate endDate);
 }
 
 
