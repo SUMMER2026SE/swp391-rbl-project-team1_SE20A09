@@ -75,7 +75,9 @@ public class ChatWebSocketController {
     public void typingIndicator(@Payload Map<String, Object> payload,
                                 SimpMessageHeaderAccessor headerAccessor) {
         UserPrincipal principal = extractPrincipal(headerAccessor);
-        if (principal == null) return;
+        if (principal == null) {
+            return;
+        }
 
         Integer recipientId = (Integer) payload.get("recipientId");
         Boolean isTyping = (Boolean) payload.getOrDefault("isTyping", false);

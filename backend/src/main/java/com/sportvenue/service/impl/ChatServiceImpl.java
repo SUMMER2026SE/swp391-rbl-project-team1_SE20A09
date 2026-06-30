@@ -28,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -81,56 +80,7 @@ public class ChatServiceImpl implements ChatService {
     public ChatMessageDto sendMessage(Integer senderId, SendMessageRequest request) {
         User sender = userRepo.findById(senderId)
                 .orElseThrow(() -> new IllegalArgumentException("Sender not found"));
-        ChatConversation conversation;
-        if (request.getConversationId() != null) {
-            conversation = conversationRepo.findById(request.getConversationId())
-                    .orElseThrow(() -> new IllegalArgumentException("Conversation not found"));
-
-            // BLOCK VALIDATION: Reject messages in blocked conversations
-            if (!Boolean.TRUE.equals(conversation.getIsGroup()) && 
-                (Boolean.TRUE.equals(conversation.getIsMutualBlock()) || conversation.getBlockedBy() != null)) {
-                throw new IllegalArgumentException("USER_BLOCKED: Cannot send message in a blocked conversation");
-            }
-            
-            // MEMBERSHIP VALIDATION: Ensure user is still in the group
-            if (Boolean.TRUE.equals(conversation.getIsGroup())) {
-                boolean isParticipant = conversation.getParticipants().stream()
-                        .anyMatch(u -> u.getUserId().equals(senderId));
-                if (!isParticipant) {
-                    throw new SecurityException("You are no longer a participant of this group");
-                }
-            }
-        } else {
-            if (request.getRecipientId() == null) {
-                throw new IllegalArgumentException("Recipient ID is required for 1-on-1 chat");
-            }
-            User recipient = userRepo.findById(request.getRecipientId())
-                    .orElseThrow(() -> new IllegalArgumentException("Recipient not found"));
-            
-            if (senderId.equals(request.getRecipientId())) {
-                throw new IllegalArgumentException("Cannot send message to yourself");
-            }
-            
-            Integer u1 = Math.min(senderId, request.getRecipientId());
-            Integer u2 = Math.max(senderId, request.getRecipientId());
-
-            conversation = conversationRepo.findByUserPair(u1, u2)
-                    .orElseGet(() -> {
-                        User user1 = u1.equals(senderId) ? sender : recipient;
-                        User user2 = u2.equals(senderId) ? sender : recipient;
-                        ChatConversation newConv = ChatConversation.builder()
-                                .user1(user1)
-                                .user2(user2)
-                                .isGroup(false)
-                                .build();
-                        return conversationRepo.save(newConv);
-                    });
-
-            // BLOCK VALIDATION for recipient-based messages
-            if (Boolean.TRUE.equals(conversation.getIsMutualBlock()) || conversation.getBlockedBy() != null) {
-                throw new IllegalArgumentException("USER_BLOCKED: Cannot send message in a blocked conversation");
-            }
-        }
+        ChatConversation conversation = resolveConversation(senderId, sender, request);
 
         // Determine message type
         MessageType type = MessageType.TEXT;
@@ -180,14 +130,72 @@ public class ChatServiceImpl implements ChatService {
         return messageDto;
     }
 
+    private ChatConversation resolveConversation(Integer senderId, User sender, SendMessageRequest request) {
+        if (request.getConversationId() != null) {
+            ChatConversation conversation = conversationRepo.findById(request.getConversationId())
+                    .orElseThrow(() -> new IllegalArgumentException("Conversation not found"));
+
+            // BLOCK VALIDATION: Reject messages in blocked conversations
+            if (!Boolean.TRUE.equals(conversation.getIsGroup())
+                    && (Boolean.TRUE.equals(conversation.getIsMutualBlock()) || conversation.getBlockedBy() != null)) {
+                throw new IllegalArgumentException("USER_BLOCKED: Cannot send message in a blocked conversation");
+            }
+
+            // MEMBERSHIP VALIDATION: Ensure user is still in the group
+            if (Boolean.TRUE.equals(conversation.getIsGroup())) {
+                boolean isParticipant = conversation.getParticipants().stream()
+                        .anyMatch(u -> u.getUserId().equals(senderId));
+                if (!isParticipant) {
+                    throw new SecurityException("You are no longer a participant of this group");
+                }
+            }
+            return conversation;
+        }
+
+        if (request.getRecipientId() == null) {
+            throw new IllegalArgumentException("Recipient ID is required for 1-on-1 chat");
+        }
+        User recipient = userRepo.findById(request.getRecipientId())
+                .orElseThrow(() -> new IllegalArgumentException("Recipient not found"));
+
+        if (senderId.equals(request.getRecipientId())) {
+            throw new IllegalArgumentException("Cannot send message to yourself");
+        }
+
+        Integer u1 = Math.min(senderId, request.getRecipientId());
+        Integer u2 = Math.max(senderId, request.getRecipientId());
+
+        ChatConversation conversation = conversationRepo.findByUserPair(u1, u2)
+                .orElseGet(() -> {
+                    User user1 = u1.equals(senderId) ? sender : recipient;
+                    User user2 = u2.equals(senderId) ? sender : recipient;
+                    ChatConversation newConv = ChatConversation.builder()
+                            .user1(user1)
+                            .user2(user2)
+                            .isGroup(false)
+                            .build();
+                    return conversationRepo.save(newConv);
+                });
+
+        // BLOCK VALIDATION for recipient-based messages
+        if (Boolean.TRUE.equals(conversation.getIsMutualBlock()) || conversation.getBlockedBy() != null) {
+            throw new IllegalArgumentException("USER_BLOCKED: Cannot send message in a blocked conversation");
+        }
+        return conversation;
+    }
+
     @Override
     @Transactional
     public void markAsRead(Long conversationId, Integer userId) {
         ChatConversation conv = conversationRepo.findById(conversationId).orElse(null);
-        if (conv == null) return;
+        if (conv == null) {
+            return;
+        }
 
         User user = userRepo.findById(userId).orElse(null);
-        if (user == null) return;
+        if (user == null) {
+            return;
+        }
 
         boolean didUpdate = false;
         if (Boolean.TRUE.equals(conv.getIsGroup())) {
@@ -389,10 +397,12 @@ public class ChatServiceImpl implements ChatService {
                 messagingTemplate.convertAndSend("/topic/chat/user/" + p.getUserId() + "/message-recalled", dto);
             }
         } else {
-            if (conv.getUser1() != null)
+            if (conv.getUser1() != null) {
                 messagingTemplate.convertAndSend("/topic/chat/user/" + conv.getUser1().getUserId() + "/message-recalled", dto);
-            if (conv.getUser2() != null)
+            }
+            if (conv.getUser2() != null) {
                 messagingTemplate.convertAndSend("/topic/chat/user/" + conv.getUser2().getUserId() + "/message-recalled", dto);
+            }
         }
 
         log.info("Message {} recalled by user {}", messageId, userId);
@@ -558,7 +568,10 @@ public class ChatServiceImpl implements ChatService {
                     + "Hoặc bạn có thể mô tả vấn đề, tôi sẽ cố gắng giúp!";
         }
 
-        // Default response
+        return defaultSmartReply();
+    }
+
+    private String defaultSmartReply() {
         return "🤖 Cảm ơn bạn đã liên hệ! Tôi là trợ lý AI của SportHub.\n\n"
                 + "Tôi có thể giúp bạn với:\n"
                 + "• 🏟️ Đặt sân thể thao\n"
