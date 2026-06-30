@@ -83,4 +83,17 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     void markAllAdminNotificationsAsRead(
             @Param("userId") Integer userId,
             @Param("types") List<NotificationType> types);
+
+    /**
+     * Đếm số thông báo chưa đọc của Admin tại tầng DB — tránh load toàn bộ records vào memory.
+     */
+    @Query("""
+            SELECT COUNT(n) FROM Notification n
+            WHERE n.user.userId = :userId
+            AND n.notificationType IN :types
+            AND n.isRead = false
+            """)
+    long countUnreadAdminNotifications(
+            @Param("userId") Integer userId,
+            @Param("types") List<NotificationType> types);
 }

@@ -60,11 +60,7 @@ public class AdminNotificationServiceImpl implements AdminNotificationService {
     @Override
     @Transactional(readOnly = true)
     public long countUnread(Integer adminUserId) {
-        return notificationRepository
-                .findByUserUserIdAndNotificationTypeIn(adminUserId, ADMIN_TYPES)
-                .stream()
-                .filter(n -> Boolean.FALSE.equals(n.getIsRead()))
-                .count();
+        return notificationRepository.countUnreadAdminNotifications(adminUserId, ADMIN_TYPES);
     }
 
     @Override
@@ -84,9 +80,10 @@ public class AdminNotificationServiceImpl implements AdminNotificationService {
     }
 
     /**
-     * Đánh dấu đã đọc bằng notificationId — dùng từ controller khi frontend
+     * Đánh dấu đã đọc bằng resourceId — dùng từ controller khi frontend
      * đã có notificationId (trường hợp item đã có record từ trước).
      */
+    @Override
     @Transactional
     public Long markAsReadByResourceId(Integer adminUserId, String resourceId,
                                        String title, String description, NotificationType type) {

@@ -9,4 +9,7 @@ public interface AdminDashboardService {
     AdminDashboardResponse getDashboardData();
 
     AdminDashboardResponse getDashboardData(LocalDate startDate, LocalDate endDate);
+
+    /** Xóa cache dashboard — gọi sau khi dữ liệu nguồn thay đổi. */
+    void evictDashboardCache();
 }

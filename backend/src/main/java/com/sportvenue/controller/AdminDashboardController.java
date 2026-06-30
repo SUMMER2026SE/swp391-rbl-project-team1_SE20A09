@@ -7,7 +7,6 @@ import com.sportvenue.dto.response.ApiResponse;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.AdminDashboardService;
 import com.sportvenue.service.AdminNotificationService;
-import com.sportvenue.service.impl.AdminNotificationServiceImpl;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -120,7 +119,7 @@ public class AdminDashboardController {
         }
 
         // Chưa có notificationId → tìm / tạo mới bằng resourceId
-        Long notificationId = ((AdminNotificationServiceImpl) adminNotificationService)
+        Long notificationId = adminNotificationService
                 .markAsReadByResourceId(
                         adminUserId,
                         request.getResourceId(),

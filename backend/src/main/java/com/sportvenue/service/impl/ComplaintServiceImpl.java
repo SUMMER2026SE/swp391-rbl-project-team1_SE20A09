@@ -48,6 +48,7 @@ public class ComplaintServiceImpl implements ComplaintService {
     private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
     private final SimpMessagingTemplate messagingTemplate;
+    private final com.sportvenue.service.AdminDashboardService adminDashboardService;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -124,7 +125,10 @@ public class ComplaintServiceImpl implements ComplaintService {
                 adminResourceId
             )
         );
-        
+
+        // Xóa cache dashboard — số liệu khiếu nại mở thay đổi
+        adminDashboardService.evictDashboardCache();
+
         return mapToResponse(saved);
     }
 
@@ -272,6 +276,9 @@ public class ComplaintServiceImpl implements ComplaintService {
                         .build()
         );
 
+        // Xóa cache dashboard — số liệu khiếu nại mở thay đổi (OPEN → RESOLVED)
+        adminDashboardService.evictDashboardCache();
+
         return mapToResponse(saved);
     }
 
@@ -324,6 +331,9 @@ public class ComplaintServiceImpl implements ComplaintService {
                         .newStatus("resolved")
                         .build()
         );
+
+        // Xóa cache dashboard — số liệu khiếu nại mở thay đổi (OPEN → RESOLVED)
+        adminDashboardService.evictDashboardCache();
 
         return mapToResponse(saved);
     }
@@ -385,6 +395,9 @@ public class ComplaintServiceImpl implements ComplaintService {
                         .newStatus("resolved")
                         .build()
         );
+
+        // Xóa cache dashboard — số liệu khiếu nại mở thay đổi (OPEN → RESOLVED)
+        adminDashboardService.evictDashboardCache();
 
         return mapToResponse(saved);
     }

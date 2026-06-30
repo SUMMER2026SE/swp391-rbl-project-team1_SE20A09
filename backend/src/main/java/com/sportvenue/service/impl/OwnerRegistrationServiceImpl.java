@@ -41,6 +41,7 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
     private final PasswordEncoder passwordEncoder;
     private final OtpService otpService;
     private final NotificationService notificationService;
+    private final com.sportvenue.service.AdminDashboardService adminDashboardService;
 
     @Override
     @Transactional
@@ -256,6 +257,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         }
 
         Owner savedOwner = ownerRepository.save(owner);
+        // Xóa cache dashboard — số liệu chủ sân / duyệt chờ thay đổi
+        adminDashboardService.evictDashboardCache();
         return mapToOwnerDetailResponse(savedOwner);
     }
 
