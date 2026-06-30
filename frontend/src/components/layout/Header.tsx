@@ -19,11 +19,13 @@ import {
   ArrowLeft,
   Crown,
 } from "lucide-react";
+import { IconBrandMessenger } from "@tabler/icons-react";
 import { Button } from "../ui/button";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { NotificationBell } from "../notifications/NotificationBell";
+import { ChatBadge } from "../chat/ChatBadge";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import {
   DropdownMenu,
@@ -424,6 +426,8 @@ export function Header() {
                       <span>Role: Owner</span>
                     </div>
                   )}
+                  {/* Chat Badge */}
+                  <ChatBadge userId={(user as any)?.userId} />
                   {/* Notification Bell */}
                   {isOwnerArea && user.roleName === "Owner" && <NotificationBell />}
                   {/* User Avatar */}

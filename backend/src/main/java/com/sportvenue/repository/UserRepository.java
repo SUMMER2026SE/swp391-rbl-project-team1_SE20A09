@@ -13,6 +13,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -56,5 +57,19 @@ public interface UserRepository extends JpaRepository<User, Integer> {
 
     @Query("SELECT COUNT(u) FROM User u WHERE u.role.roleName = :roleName")
     long countByRoleName(@Param("roleName") String roleName);
+
+    /**
+     * Search users by first/last name for starting new chat conversations.
+     * Limited to 20 results, only returns ACTIVE users.
+     */
+    @Query("""
+        SELECT u FROM User u
+        WHERE u.accountStatus = com.sportvenue.entity.enums.AccountStatus.ACTIVE
+          AND (LOWER(u.firstName) LIKE LOWER(CONCAT('%', :query, '%'))
+               OR LOWER(u.lastName) LIKE LOWER(CONCAT('%', :query, '%'))
+               OR LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%')))
+        ORDER BY u.firstName, u.lastName
+    """)
+    List<User> searchByName(@Param("query") String query);
 }
 
