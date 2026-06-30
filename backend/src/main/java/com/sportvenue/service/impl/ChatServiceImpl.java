@@ -9,6 +9,7 @@ import com.sportvenue.entity.ChatConversation;
 import com.sportvenue.entity.ChatConversationHiddenState;
 import com.sportvenue.entity.ChatMessage;
 import com.sportvenue.entity.ChatbotLog;
+import com.sportvenue.entity.MatchRequest;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.MessageType;
 import com.sportvenue.repository.ChatConversationRepository;
@@ -291,7 +292,7 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     @Transactional
-    public void createOrUpdateMatchGroupChat(com.sportvenue.entity.MatchRequest match, Integer newUserId) {
+    public void createOrUpdateMatchGroupChat(MatchRequest match, Integer newUserId) {
         // Find existing match group chat or create
         ChatConversation group = conversationRepo.findAll().stream()
                 .filter(c -> Boolean.TRUE.equals(c.getIsGroup()) && c.getMatch() != null && c.getMatch().getMatchId().equals(match.getMatchId()))
@@ -378,7 +379,7 @@ public class ChatServiceImpl implements ChatService {
 
         // Replace content with recall placeholder
         message.setContent("Tin nhắn đã được thu hồi");
-        message.setMessageType(com.sportvenue.entity.enums.MessageType.SYSTEM);
+        message.setMessageType(MessageType.SYSTEM);
         messageRepo.save(message);
 
         ChatMessageDto dto = toMessageDto(message);

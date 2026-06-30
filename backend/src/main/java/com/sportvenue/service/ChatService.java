@@ -5,6 +5,7 @@ import com.sportvenue.dto.chat.ChatbotRequest;
 import com.sportvenue.dto.chat.ChatbotResponse;
 import com.sportvenue.dto.chat.ConversationDto;
 import com.sportvenue.dto.chat.SendMessageRequest;
+import com.sportvenue.entity.MatchRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -62,7 +63,7 @@ public interface ChatService {
     /**
      * Create or update a group chat for a match and add a new user.
      */
-    void createOrUpdateMatchGroupChat(com.sportvenue.entity.MatchRequest match, Integer newUserId);
+    void createOrUpdateMatchGroupChat(MatchRequest match, Integer newUserId);
 
     /**
      * Rename a group chat. Only participants can rename.
