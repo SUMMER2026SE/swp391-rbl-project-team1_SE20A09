@@ -57,9 +57,11 @@ public class AccessoryServiceImpl implements AccessoryService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân thể thao với ID: " + stadiumId));
 
         // 4. Kiểm tra xem sân này có thuộc về Owner hiện tại không (Bảo mật chéo)
-        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || !resolvedOwner.getOwnerId().equals(owner.getOwnerId())) {
             log.warn("Security alert! Owner ID {} with email {} tried to add accessory to stadium ID {} owned by Owner ID {}",
-                    owner.getOwnerId(), ownerEmail, stadiumId, stadium.getOwner().getOwnerId());
+                    owner.getOwnerId(), ownerEmail, stadiumId,
+                    resolvedOwner != null ? resolvedOwner.getOwnerId() : null);
             throw new BadRequestException("Bạn không có quyền quản lý sân thể thao này!");
         }
 
@@ -98,9 +100,11 @@ public class AccessoryServiceImpl implements AccessoryService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân thể thao với ID: " + stadiumId));
 
         // 4. Kiểm tra xem sân này có thuộc về Owner hiện tại không (Bảo mật chéo)
-        if (!stadium.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || !resolvedOwner.getOwnerId().equals(owner.getOwnerId())) {
             log.warn("Security alert! Owner ID {} with email {} tried to access stadium ID {} owned by Owner ID {}",
-                    owner.getOwnerId(), ownerEmail, stadiumId, stadium.getOwner().getOwnerId());
+                    owner.getOwnerId(), ownerEmail, stadiumId,
+                    resolvedOwner != null ? resolvedOwner.getOwnerId() : null);
             throw new BadRequestException("Bạn không có quyền quản lý sân thể thao này!");
         }
 

@@ -8,8 +8,13 @@ import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.AccountStatus;
 import com.sportvenue.entity.enums.ApprovedStatus;
+import com.sportvenue.entity.enums.ComplexStatus;
 import com.sportvenue.entity.enums.MatchStatus;
 import com.sportvenue.entity.enums.StadiumStatus;
+import com.sportvenue.entity.enums.StadiumNodeType;
+import com.sportvenue.entity.enums.BookingStatus;
+import com.sportvenue.entity.StadiumComplex;
+import com.sportvenue.entity.TimeSlot;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
@@ -17,6 +22,8 @@ import com.sportvenue.repository.JoinRequestRepository;
 import com.sportvenue.repository.MatchRequestRepository;
 import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.repository.StadiumRepository;
+import com.sportvenue.repository.StadiumComplexRepository;
+import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.entity.JoinRequest;
 import com.sportvenue.entity.enums.JoinRequestStatus;
@@ -36,6 +43,7 @@ import java.time.LocalTime;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -54,6 +62,8 @@ public class MatchRequestServiceImpl implements MatchRequestService {
     private final BookingRepository bookingRepository;
     private final JoinRequestRepository joinRequestRepository;
     private final ChatService chatService;
+    private final StadiumComplexRepository stadiumComplexRepository;
+    private final TimeSlotRepository timeSlotRepository;
 
     @Override
     @Transactional
@@ -68,40 +78,102 @@ public class MatchRequestServiceImpl implements MatchRequestService {
             throw new BadRequestException("User account is not active");
         }
 
-        // 2. Kiểm tra Stadium tồn tại, hoạt động và đã được duyệt
-        Stadium stadium = stadiumRepository.findById(request.getStadiumId())
-                .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + request.getStadiumId()));
-        
-        if (stadium.getStadiumStatus() != StadiumStatus.AVAILABLE) {
-            throw new BadRequestException("Stadium is currently not available (e.g. CLOSED or under MAINTENANCE)");
-        }
-        
-        if (stadium.getApprovedStatus() != ApprovedStatus.APPROVED) {
-            throw new BadRequestException("Stadium is not approved yet");
-        }
+        // 2. Phân giải Complex ID và thiết lập các thông tin ưu tiên (hỗ trợ tương thích ngược)
+        ResolvedTargetComplex resolved = resolveTargetComplex(request);
+        final Integer targetComplexId = resolved.targetComplexId();
+        final StadiumComplex complex = resolved.complex();
+        final Stadium legacyStadium = resolved.legacyStadium();
 
-        // 3. Kiểm tra Sport Type tồn tại
+        // 3. Kiểm tra trạng thái hoạt động của Complex (nếu có) hoặc Stadium legacy
+        validateComplexOrStadiumAvailability(complex, legacyStadium);
+
+        // 4 & 5. Nếu truyền preferredFacilityId / preferredCourtId, kiểm tra tính hợp lệ
+        final Stadium preferredFacility = request.getPreferredFacilityId() != null
+                ? validatePreferredFacility(request.getPreferredFacilityId(), targetComplexId)
+                : resolved.preferredFacility();
+        final Stadium preferredCourt = request.getPreferredCourtId() != null
+                ? validatePreferredCourt(request.getPreferredCourtId(), targetComplexId, preferredFacility)
+                : resolved.preferredCourt();
+
+        // 6. Kiểm tra Sport Type tồn tại
         SportType sportType = sportTypeRepository.findById(request.getSportTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException("Sport Type not found with ID: " + request.getSportTypeId()));
 
-        // 4. Đảm bảo Sân hỗ trợ đúng môn thể thao của kèo ghép
-        if (!stadium.getSportType().getSportTypeId().equals(sportType.getSportTypeId())) {
-            throw new BadRequestException("The selected stadium does not support the sport type: " + sportType.getSportName());
-        }
+        // 7. Đảm bảo Tổ hợp (hoặc Sân/Khu vực ưu tiên) hỗ trợ đúng môn thể thao
+        validateSportTypeSupport(complex, legacyStadium, preferredFacility, preferredCourt, sportType);
 
-        // 5. Validate không tạo kèo với giờ đã qua (kể cả ngày hôm nay)
+        // 8. Validate không tạo kèo với giờ đã qua
         LocalDateTime slotStart = LocalDateTime.of(request.getPlayDate(), request.getStartTime());
         if (!slotStart.isAfter(LocalDateTime.now())) {
-            throw new BadRequestException("Không thể tạo kèo ghép cho thời điểm đã qua");
+            throw new BadRequestException("Cannot create matchmaking request for a past time");
         }
 
-        // 6. Kiểm tra trùng lịch kèo ghép và Booking của Host
+        // 9. Kiểm tra trùng lịch kèo ghép và Booking của Host
         validateOverlappingSchedule(userId, request);
 
-        // 7. Tạo và lưu MatchRequest
+        // 10. Kiểm tra conflict sân trống ở cấp Complex (chỉ áp dụng cho luồng mới chọn Complex)
+        if (request.getComplexId() != null) {
+            validateComplexCourtAvailability(request);
+        }
+
+        // 11. Tạo và lưu MatchRequest
+        return createAndSaveMatch(request, user, complex, legacyStadium, preferredFacility, preferredCourt, sportType);
+    }
+
+    private ResolvedTargetComplex resolveTargetComplex(CreateMatchRequest request) {
+        Integer targetComplexIdOpt = request.getComplexId();
+        StadiumComplex resolvedComplex = null;
+        Stadium resolvedPreferredFacility = null;
+        Stadium resolvedPreferredCourt = null;
+        Stadium resolvedLegacyStadium = null;
+
+        if (targetComplexIdOpt == null) {
+            if (request.getStadiumId() == null) {
+                throw new BadRequestException("Either Complex ID or Stadium ID must be provided");
+            }
+            resolvedLegacyStadium = stadiumRepository.findByIdWithComplexAndParent(request.getStadiumId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + request.getStadiumId()));
+            
+            if (resolvedLegacyStadium.getNodeType() != StadiumNodeType.COURT) {
+                throw new BadRequestException("The provided legacy Stadium ID must be of node type COURT");
+            }
+            
+            resolvedComplex = resolvedLegacyStadium.getComplex();
+            if (resolvedComplex != null) {
+                targetComplexIdOpt = resolvedComplex.getComplexId();
+                resolvedPreferredCourt = resolvedLegacyStadium;
+                resolvedPreferredFacility = resolvedLegacyStadium.getParentStadium();
+            }
+        } else {
+            final Integer finalComplexIdLookup = targetComplexIdOpt;
+            resolvedComplex = stadiumComplexRepository.findById(finalComplexIdLookup)
+                    .orElseThrow(() -> new ResourceNotFoundException("Complex not found with ID: " + finalComplexIdLookup));
+        }
+
+        return new ResolvedTargetComplex(targetComplexIdOpt, resolvedComplex, resolvedPreferredFacility, resolvedPreferredCourt, resolvedLegacyStadium);
+    }
+
+    private record ResolvedTargetComplex(
+            Integer targetComplexId,
+            StadiumComplex complex,
+            Stadium preferredFacility,
+            Stadium preferredCourt,
+            Stadium legacyStadium) { }
+
+    private MatchResponse createAndSaveMatch(
+            CreateMatchRequest request,
+            User user,
+            StadiumComplex complex,
+            Stadium legacyStadium,
+            Stadium preferredFacility,
+            Stadium preferredCourt,
+            SportType sportType) {
         MatchRequest matchRequest = MatchRequest.builder()
                 .user(user)
-                .stadium(stadium)
+                .stadium(legacyStadium != null ? legacyStadium : preferredCourt)
+                .complex(complex)
+                .preferredFacility(preferredFacility)
+                .preferredCourt(preferredCourt)
                 .sportType(sportType)
                 .title(request.getTitle())
                 .description(request.getDescription())
@@ -109,7 +181,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
                 .maxPlayers(request.getMaxPlayers())
-                .currentPlayers(1) // Host là thành viên đầu tiên
+                .currentPlayers(1)
                 .skillLevel(request.getSkillLevel())
                 .splitPrice(request.getSplitPrice())
                 .pricePerPlayer(request.getPricePerPlayer() != null ? request.getPricePerPlayer() : BigDecimal.ZERO)
@@ -125,6 +197,127 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         chatService.createOrUpdateMatchGroupChat(savedMatch, userId);
 
         return mapToResponse(savedMatch);
+    }
+
+    private void validateComplexOrStadiumAvailability(StadiumComplex complex, Stadium legacyStadium) {
+        if (complex != null) {
+            if (complex.getComplexStatus() != ComplexStatus.AVAILABLE) {
+                throw new BadRequestException("Complex is currently not available (CLOSED or under MAINTENANCE)");
+            }
+            if (complex.getApprovedStatus() != ApprovedStatus.APPROVED) {
+                throw new BadRequestException("Complex is not approved yet");
+            }
+        } else if (legacyStadium != null) {
+            if (legacyStadium.getStadiumStatus() != StadiumStatus.AVAILABLE) {
+                throw new BadRequestException("Stadium is currently not available (e.g. CLOSED or under MAINTENANCE)");
+            }
+            if (legacyStadium.getApprovedStatus() != ApprovedStatus.APPROVED) {
+                throw new BadRequestException("Stadium is not approved yet");
+            }
+        }
+    }
+
+    private Stadium validatePreferredFacility(Integer preferredFacilityId, Integer targetComplexId) {
+        if (preferredFacilityId == null) {
+            return null;
+        }
+        Stadium facility = stadiumRepository.findById(preferredFacilityId)
+                .orElseThrow(() -> new ResourceNotFoundException("Preferred Facility not found with ID: " + preferredFacilityId));
+        if (facility.getNodeType() != StadiumNodeType.FACILITY) {
+            throw new BadRequestException("Preferred Facility ID must refer to a FACILITY node type");
+        }
+        if (facility.getComplex() == null || !facility.getComplex().getComplexId().equals(targetComplexId)) {
+            throw new BadRequestException("Preferred Facility does not belong to the selected Complex");
+        }
+        return facility;
+    }
+
+    private Stadium validatePreferredCourt(Integer preferredCourtId, Integer targetComplexId, Stadium preferredFacility) {
+        if (preferredCourtId == null) {
+            return null;
+        }
+        Stadium court = stadiumRepository.findById(preferredCourtId)
+                .orElseThrow(() -> new ResourceNotFoundException("Preferred Court not found with ID: " + preferredCourtId));
+        if (court.getNodeType() != StadiumNodeType.COURT) {
+            throw new BadRequestException("Preferred Court ID must refer to a COURT node type");
+        }
+        if (court.getComplex() == null || !court.getComplex().getComplexId().equals(targetComplexId)) {
+            throw new BadRequestException("Preferred Court does not belong to the selected Complex");
+        }
+        if (preferredFacility != null && (court.getParentStadium() == null || !court.getParentStadium().getStadiumId().equals(preferredFacility.getStadiumId()))) {
+            throw new BadRequestException("Preferred Court does not belong to the selected Facility");
+        }
+        return court;
+    }
+
+    private void validateSportTypeSupport(StadiumComplex complex, Stadium legacyStadium, Stadium preferredFacility, Stadium preferredCourt, SportType sportType) {
+        if (complex != null) {
+            if (preferredCourt != null) {
+                Stadium facilityOfCourt = preferredCourt.getParentStadium();
+                SportType courtSportType = preferredCourt.getSportType() != null ? preferredCourt.getSportType() :
+                        (facilityOfCourt != null ? facilityOfCourt.getSportType() : null);
+                if (courtSportType == null || !courtSportType.getSportTypeId().equals(sportType.getSportTypeId())) {
+                    throw new BadRequestException("Preferred Court does not support the sport type: " + sportType.getSportName());
+                }
+            } else if (preferredFacility != null) {
+                if (preferredFacility.getSportType() == null || !preferredFacility.getSportType().getSportTypeId().equals(sportType.getSportTypeId())) {
+                    throw new BadRequestException("Preferred Facility does not support the sport type: " + sportType.getSportName());
+                }
+            } else {
+                boolean complexSupportsSport = complex.getSportTypes().stream()
+                        .anyMatch(st -> st.getSportTypeId().equals(sportType.getSportTypeId()));
+                if (!complexSupportsSport) {
+                    throw new BadRequestException("Selected Complex does not support the sport type: " + sportType.getSportName());
+                }
+            }
+        } else {
+            if (!legacyStadium.getSportType().getSportTypeId().equals(sportType.getSportTypeId())) {
+                throw new BadRequestException("The selected stadium does not support the sport type: " + sportType.getSportName());
+            }
+        }
+    }
+
+    private void validateComplexCourtAvailability(CreateMatchRequest request) {
+        List<Stadium> candidateCourts;
+        if (request.getPreferredCourtId() != null) {
+            Stadium court = stadiumRepository.findById(request.getPreferredCourtId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Court not found"));
+            candidateCourts = List.of(court);
+        } else if (request.getPreferredFacilityId() != null) {
+            Stadium facility = stadiumRepository.findById(request.getPreferredFacilityId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Facility not found"));
+            candidateCourts = stadiumRepository.findCourtsByFacilityId(request.getPreferredFacilityId());
+        } else {
+            candidateCourts = stadiumRepository.findCourtsByComplexId(request.getComplexId());
+        }
+
+        if (candidateCourts.isEmpty()) {
+            throw new BadRequestException("No courts found in the selected range");
+        }
+
+        List<Integer> courtIds = candidateCourts.stream()
+                .map(Stadium::getStadiumId)
+                .collect(Collectors.toList());
+
+        List<TimeSlot> allSlots = timeSlotRepository.findOverlappingSlotsByStadiumIds(
+                courtIds, request.getStartTime(), request.getEndTime());
+
+        List<BookingStatus> activeStatuses = Arrays.asList(
+                BookingStatus.PENDING_PAYMENT, BookingStatus.PENDING, BookingStatus.CONFIRMED);
+        Set<String> bookedKeys = bookingRepository.findActiveBookingKeysByStadiumIds(
+                courtIds, request.getPlayDate(), activeStatuses)
+                .stream()
+                .map(row -> row[0] + "-" + row[1])
+                .collect(Collectors.toSet());
+
+        boolean hasAvailableCourt = allSlots.stream()
+                .filter(slot -> slot.getSlotStatus() == com.sportvenue.entity.enums.SlotStatus.AVAILABLE)
+                .anyMatch(slot -> !bookedKeys.contains(
+                        slot.getStadium().getStadiumId() + "-" + slot.getSlotId()));
+
+        if (!hasAvailableCourt) {
+            throw new BadRequestException("No available court in the selected complex/facility during the requested time slot");
+        }
     }
 
     @Override
@@ -273,7 +466,10 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                         .message(req.getMessage())
                         .createdAt(req.getCreatedAt())
                         .matchTitle(req.getMatchRequest().getTitle())
-                        .stadiumName(req.getMatchRequest().getStadium().getStadiumName())
+                        .stadiumName(req.getMatchRequest().getStadium() != null ? req.getMatchRequest().getStadium().getStadiumName() :
+                                (req.getMatchRequest().getPreferredCourt() != null ? req.getMatchRequest().getPreferredCourt().getStadiumName() :
+                                        (req.getMatchRequest().getPreferredFacility() != null ? req.getMatchRequest().getPreferredFacility().getStadiumName() :
+                                                (req.getMatchRequest().getComplex() != null ? req.getMatchRequest().getComplex().getName() : null))))
                         .sportName(req.getMatchRequest().getSportType().getSportName())
                         .playDate(req.getMatchRequest().getPlayDate())
                         .startTime(req.getMatchRequest().getStartTime())
@@ -399,7 +595,10 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                         .message(req.getMessage())
                         .createdAt(req.getCreatedAt())
                         .matchTitle(req.getMatchRequest().getTitle())
-                        .stadiumName(req.getMatchRequest().getStadium().getStadiumName())
+                        .stadiumName(req.getMatchRequest().getStadium() != null ? req.getMatchRequest().getStadium().getStadiumName() :
+                                (req.getMatchRequest().getPreferredCourt() != null ? req.getMatchRequest().getPreferredCourt().getStadiumName() :
+                                        (req.getMatchRequest().getPreferredFacility() != null ? req.getMatchRequest().getPreferredFacility().getStadiumName() :
+                                                (req.getMatchRequest().getComplex() != null ? req.getMatchRequest().getComplex().getName() : null))))
                         .sportName(req.getMatchRequest().getSportType().getSportName())
                         .playDate(req.getMatchRequest().getPlayDate())
                         .startTime(req.getMatchRequest().getStartTime())
@@ -457,8 +656,12 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                 .matchId(match.getMatchId())
                 .hostName(match.getUser().getFullName())
                 .hostUserId(match.getUser().getUserId())
-                .stadiumName(match.getStadium().getStadiumName())
-                .stadiumAddress(match.getStadium().getAddress())
+                .stadiumName(match.getStadium() != null ? match.getStadium().getStadiumName() :
+                        (match.getPreferredCourt() != null ? match.getPreferredCourt().getStadiumName() :
+                                (match.getPreferredFacility() != null ? match.getPreferredFacility().getStadiumName() :
+                                        (match.getComplex() != null ? match.getComplex().getName() : null))))
+                .stadiumAddress(match.getStadium() != null && match.getStadium().getAddress() != null ? match.getStadium().getAddress() :
+                        (match.getComplex() != null ? match.getComplex().getAddress() : null))
                 .sportName(match.getSportType().getSportName())
                 .title(match.getTitle())
                 .description(match.getDescription())

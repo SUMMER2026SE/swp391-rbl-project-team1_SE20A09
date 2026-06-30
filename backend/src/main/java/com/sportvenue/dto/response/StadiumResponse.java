@@ -36,5 +36,10 @@ public class StadiumResponse {
     private String stadiumStatus; 
     private String approvedStatus;
     
+    // Hierarchy fields
+    private String nodeType;
+    private Integer complexId;
+    private Integer parentStadiumId;
+    
     private List<AmenityResponse> amenities;
 }

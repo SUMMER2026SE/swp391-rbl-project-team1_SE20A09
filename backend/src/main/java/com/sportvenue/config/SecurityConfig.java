@@ -42,6 +42,8 @@ public class SecurityConfig {
             "/api/v1/ping",
             "/api/v1/auth/**",
             "/api/v1/public/stadiums/**",
+            "/api/v1/public/complexes/**",
+            "/api/v1/public/facilities/**",
             "/api/v1/public/amenities/**",
             "/api/v1/sport-types/**",
             // UC-CUS-01: weekly grid endpoint — guest xem trước lịch tuần khi chưa login.

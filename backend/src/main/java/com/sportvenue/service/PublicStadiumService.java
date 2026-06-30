@@ -12,4 +12,6 @@ public interface PublicStadiumService {
     StadiumDetailResponse getStadiumDetail(Integer stadiumId);
 
     PageResponse<StadiumDetailResponse.ReviewDto> getStadiumReviews(Integer stadiumId, int page, int size);
+
+    com.sportvenue.dto.response.ComplexRefResponse getComplexRef(Integer stadiumId);
 }

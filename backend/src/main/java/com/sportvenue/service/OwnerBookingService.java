@@ -162,7 +162,8 @@ public class OwnerBookingService {
         Stadium stadium = stadiumRepository.findById(stadiumId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy sân: " + stadiumId));
-        if (!stadium.getOwner().getOwnerId().equals(ownerId)) {
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || !resolvedOwner.getOwnerId().equals(ownerId)) {
             throw new BadRequestException(
                     "Bạn không có quyền quản lý sân này.");
         }

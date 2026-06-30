@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 
@@ -80,5 +81,15 @@ public class TimeSlotController {
             @PathVariable Integer slotId,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
         return ResponseEntity.ok(timeSlotService.toggleSlotStatus(slotId, userPrincipal.getUser().getUserId()));
+    }
+
+    @PutMapping("/time-slots/{slotId}")
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(summary = "Update a single time slot details")
+    public ResponseEntity<TimeSlotResponse> updateSlot(
+            @PathVariable Integer slotId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @Valid @RequestBody CreateTimeSlotRequest request) {
+        return ResponseEntity.ok(timeSlotService.updateSlot(slotId, request, userPrincipal.getUser().getUserId()));
     }
 }

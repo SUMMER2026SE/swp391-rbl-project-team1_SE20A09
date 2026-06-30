@@ -15,4 +15,6 @@ public interface TimeSlotService {
     void deleteSlot(Integer slotId, Integer userId);
 
     TimeSlotResponse toggleSlotStatus(Integer slotId, Integer userId);
+
+    TimeSlotResponse updateSlot(Integer slotId, CreateTimeSlotRequest request, Integer userId);
 }

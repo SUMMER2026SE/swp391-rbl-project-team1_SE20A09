@@ -1,6 +1,7 @@
 package com.sportvenue.controller;
 
 import com.sportvenue.dto.request.StadiumSearchRequest;
+import com.sportvenue.dto.response.ComplexRefResponse;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.dto.response.StadiumDetailResponse;
 import com.sportvenue.dto.response.StadiumResponse;
@@ -47,6 +48,13 @@ public class PublicStadiumController {
             @RequestParam(defaultValue = "5") @Min(value = 1, message = "size tối thiểu là 1") @Max(value = 50, message = "size tối đa là 50") Integer size) {
         PageResponse<StadiumDetailResponse.ReviewDto> response =
                 publicStadiumService.getStadiumReviews(id, page, size);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/complex-ref")
+    public ResponseEntity<ComplexRefResponse> getComplexRef(
+            @PathVariable @Positive(message = "ID sân phải là số dương") Integer id) {
+        ComplexRefResponse response = publicStadiumService.getComplexRef(id);
         return ResponseEntity.ok(response);
     }
 }

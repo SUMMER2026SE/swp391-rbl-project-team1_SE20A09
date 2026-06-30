@@ -10,6 +10,7 @@ import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.Role;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.TimeSlot;
+import com.sportvenue.entity.TimeSlotException;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.entity.enums.PaymentStatus;
@@ -24,6 +25,7 @@ import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.repository.TimeSlotExceptionRepository;
 import com.sportvenue.security.UserPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -76,6 +78,7 @@ class BookingServiceImplTest {
     @Mock private PaymentRepository paymentRepository;
     @Mock private AccessoryRepository accessoryRepository;
     @Mock private BookingAccessoryRepository bookingAccessoryRepository;
+    @Mock private TimeSlotExceptionRepository timeSlotExceptionRepository;
 
     @InjectMocks private BookingServiceImpl bookingService;
 
@@ -631,5 +634,70 @@ class BookingServiceImplTest {
         assertThrows(ResourceNotFoundException.class,
                 () -> bookingService.cancelBooking(principal, 999, "Not exists"));
         verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createBooking: slot closed by exception -> throws BadRequestException")
+    void createBooking_slotClosedByException_throwsBadRequest() {
+        // Arrange
+        CreateBookingRequest req = CreateBookingRequest.builder()
+                .stadiumId(stadium.getStadiumId())
+                .slotId(slot.getSlotId())
+                .reservationDate(LocalDate.of(2026, 7, 6))
+                .accessories(List.of())
+                .build();
+
+        TimeSlotException exception = TimeSlotException.builder()
+                .slot(slot)
+                .exceptionDate(req.getReservationDate())
+                .closed(true)
+                .build();
+
+        when(userRepository.findById(customer.getUserId())).thenReturn(Optional.of(customer));
+        when(stadiumRepository.findById(stadium.getStadiumId())).thenReturn(Optional.of(stadium));
+        when(timeSlotRepository.findByIdForUpdate(slot.getSlotId())).thenReturn(Optional.of(slot));
+        when(bookingRepository.existsActiveBooking(any(), any(), any(), any())).thenReturn(false);
+        when(timeSlotExceptionRepository.findBySlotSlotIdAndExceptionDate(slot.getSlotId(), req.getReservationDate())).thenReturn(Optional.of(exception));
+
+        // Act & Assert
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> bookingService.createBooking(principal, req));
+        assertTrue(ex.getMessage().contains("tạm đóng"));
+    }
+
+    @Test
+    @DisplayName("createBooking: slot price overridden by exception -> calculates correct totalPrice")
+    void createBooking_slotPriceOverridden_calculatesCorrectTotalPrice() {
+        // Arrange
+        CreateBookingRequest req = CreateBookingRequest.builder()
+                .stadiumId(stadium.getStadiumId())
+                .slotId(slot.getSlotId())
+                .reservationDate(LocalDate.of(2026, 7, 6))
+                .accessories(List.of())
+                .build();
+
+        TimeSlotException exception = TimeSlotException.builder()
+                .slot(slot)
+                .exceptionDate(req.getReservationDate())
+                .closed(false)
+                .priceOverride(new BigDecimal("200000"))
+                .build();
+
+        when(userRepository.findById(customer.getUserId())).thenReturn(Optional.of(customer));
+        when(stadiumRepository.findById(stadium.getStadiumId())).thenReturn(Optional.of(stadium));
+        when(timeSlotRepository.findByIdForUpdate(slot.getSlotId())).thenReturn(Optional.of(slot));
+        when(bookingRepository.existsActiveBooking(any(), any(), any(), any())).thenReturn(false);
+        when(timeSlotExceptionRepository.findBySlotSlotIdAndExceptionDate(slot.getSlotId(), req.getReservationDate())).thenReturn(Optional.of(exception));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> {
+            Booking b = invocation.getArgument(0);
+            b.setBookingId(200);
+            return b;
+        });
+
+        // Act
+        BookingDetailResponse res = bookingService.createBooking(principal, req);
+
+        // Assert: priceOverride (200000) + serviceFee (20000) = 220000
+        assertEquals(new BigDecimal("220000"), res.getTotalPrice());
     }
 }
