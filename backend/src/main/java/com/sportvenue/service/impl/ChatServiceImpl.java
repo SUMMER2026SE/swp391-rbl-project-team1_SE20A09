@@ -295,9 +295,7 @@ public class ChatServiceImpl implements ChatService {
     @Transactional
     public void createOrUpdateMatchGroupChat(MatchRequest match, Integer newUserId) {
         // Find existing match group chat or create
-        ChatConversation group = conversationRepo.findAll().stream()
-                .filter(c -> Boolean.TRUE.equals(c.getIsGroup()) && c.getMatch() != null && c.getMatch().getMatchId().equals(match.getMatchId()))
-                .findFirst()
+        ChatConversation group = conversationRepo.findByMatchId(match.getMatchId())
                 .orElseGet(() -> {
                     String groupName = match.getSportType().getSportName() + " " + match.getPlayDate().toString() + " - Kèo " + match.getUser().getFirstName();
                     ChatConversation newGroup = ChatConversation.builder()

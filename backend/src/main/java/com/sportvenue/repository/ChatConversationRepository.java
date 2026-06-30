@@ -23,7 +23,8 @@ public interface ChatConversationRepository extends JpaRepository<ChatConversati
     /**
      * Find the group conversation associated with a specific match.
      */
-    Optional<ChatConversation> findByMatch_MatchId(Integer matchId);
+    @Query("SELECT c FROM ChatConversation c WHERE c.match.matchId = :matchId")
+    Optional<ChatConversation> findByMatchId(@Param("matchId") Integer matchId);
 
     /**
      * Get all conversations for a user, ordered by most recent message.
