@@ -18,6 +18,7 @@ import com.sportvenue.repository.MatchRequestRepository;
 import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.entity.JoinRequest;
 import com.sportvenue.entity.enums.JoinRequestStatus;
 import com.sportvenue.dto.response.JoinRequestResponse;
 import com.sportvenue.service.MatchRequestService;
@@ -119,6 +120,9 @@ public class MatchRequestServiceImpl implements MatchRequestService {
 
         MatchRequest savedMatch = matchRequestRepository.save(matchRequest);
         log.info("Successfully created match request with ID: {}", savedMatch.getMatchId());
+
+        // Create empty group chat for the host immediately upon match creation
+        chatService.createOrUpdateMatchGroupChat(savedMatch, userId);
 
         return mapToResponse(savedMatch);
     }

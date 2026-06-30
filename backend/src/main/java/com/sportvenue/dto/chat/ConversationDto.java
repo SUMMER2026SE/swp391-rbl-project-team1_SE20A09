@@ -31,4 +31,11 @@ public class ConversationDto {
     private String lastMessagePreview;
     private LocalDateTime lastMessageAt;
     private long unreadCount;
+
+    /** True if the current user blocked the other user in this conversation */
+    private boolean blocked;
+    /** True if the other user blocked the current user */
+    private boolean blockedByThem;
+    /** The userId of whoever initiated the block (null if not blocked) */
+    private Integer blockedByUserId;
 }

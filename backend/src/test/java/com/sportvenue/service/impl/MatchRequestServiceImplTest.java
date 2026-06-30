@@ -66,6 +66,9 @@ class MatchRequestServiceImplTest {
     @Mock
     private JoinRequestRepository joinRequestRepository;
 
+    @Mock
+    private com.sportvenue.service.ChatService chatService;
+
     private MatchRequestServiceImpl matchRequestService;
 
     @BeforeEach
@@ -76,7 +79,8 @@ class MatchRequestServiceImplTest {
                 stadiumRepository,
                 sportTypeRepository,
                 bookingRepository,
-                joinRequestRepository
+                joinRequestRepository,
+                chatService
         );
     }
 

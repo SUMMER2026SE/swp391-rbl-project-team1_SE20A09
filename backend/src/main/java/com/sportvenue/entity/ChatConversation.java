@@ -89,4 +89,16 @@ public class ChatConversation {
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    /** The user who initiated the block (2-way mutual block). Null means not blocked. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "blocked_by")
+    private User blockedBy;
+
+    @Column(name = "blocked_at")
+    private LocalDateTime blockedAt;
+
+    @Column(name = "is_mutual_block")
+    @Builder.Default
+    private Boolean isMutualBlock = false;
 }

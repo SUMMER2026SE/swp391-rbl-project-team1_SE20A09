@@ -1,4 +1,4 @@
-import { get, post } from '@/lib/api'
+import { get, post, put, del } from '@/lib/api'
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -12,6 +12,10 @@ export interface ConversationDto {
   lastMessagePreview: string | null
   lastMessageAt: string | null
   unreadCount: number
+  blocked?: boolean
+  blockedByThem?: boolean
+  blockedByUserId?: number | null
+  leftGroup?: boolean
 }
 
 export interface ChatMessageDto {
@@ -21,9 +25,17 @@ export interface ChatMessageDto {
   senderName: string
   senderAvatar: string | null
   content: string
-  messageType: string
+  timestamp: string
   isRead: boolean
-  sentAt: string
+  messageType: 'TEXT' | 'IMAGE' | 'FILE' | 'SYSTEM'
+  action?: 'left_group'
+  // New fields for advanced features (UI only for now)
+  reactions?: Record<string, number[]> // Map emoji to array of userIds
+  pinnedBy?: number[] // Array of user IDs who pinned this message
+  quotedMessageId?: number
+  quotedMessageContent?: string
+  readByAvatars?: string[]
+  forwarded?: boolean
 }
 
 export interface SendMessageRequest {
@@ -87,3 +99,34 @@ export async function searchUsers(query: string): Promise<ConversationDto[]> {
 export async function sendChatbotQuery(message: string): Promise<ChatbotResponse> {
   return post<ChatbotResponse>('/chat/chatbot', { message })
 }
+
+export async function renameGroupChat(conversationId: number, name: string): Promise<ConversationDto> {
+  return put<ConversationDto>(`/chat/conversations/${conversationId}/rename`, { name })
+}
+
+export async function recallMessage(messageId: number): Promise<ChatMessageDto> {
+  return del<ChatMessageDto>(`/chat/messages/${messageId}/recall`)
+}
+
+export async function hideMessage(messageId: number): Promise<void> {
+  return del<void>(`/chat/messages/${messageId}/hide`)
+}
+
+export async function blockUser(userId: number): Promise<void> {
+  return post<void>(`/chat/users/${userId}/block`, {})
+}
+
+export async function unblockUser(userId: number): Promise<void> {
+  // The backend uses /block as a toggle for both block and unblock
+  return post<void>(`/chat/users/${userId}/block`, {})
+}
+
+export async function leaveGroupChat(conversationId: number): Promise<void> {
+  return post<void>(`/chat/conversations/${conversationId}/leave`, {})
+}
+
+export async function deleteConversation(conversationId: number): Promise<void> {
+  return del<void>(`/chat/conversations/${conversationId}`)
+}
+
+

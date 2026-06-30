@@ -11,6 +11,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -60,10 +62,28 @@ public class ChatMessage {
     @Builder.Default
     private MessageType messageType = MessageType.TEXT;
 
-    /** Whether the recipient has read this message. */
+    /** Whether the recipient has read this message (legacy for 1-on-1). */
     @Column(name = "is_read", nullable = false)
     @Builder.Default
     private Boolean isRead = false;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "chat_message_read_by",
+        joinColumns = @JoinColumn(name = "message_id"),
+        inverseJoinColumns = @JoinColumn(name = "user_id")
+    )
+    @Builder.Default
+    private java.util.Set<User> readBy = new java.util.HashSet<>();
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "chat_message_hidden_by",
+        joinColumns = @JoinColumn(name = "message_id"),
+        inverseJoinColumns = @JoinColumn(name = "user_id")
+    )
+    @Builder.Default
+    private java.util.Set<User> hiddenBy = new java.util.HashSet<>();
 
     @Column(name = "sent_at", nullable = false, updatable = false)
     @Builder.Default

@@ -18,9 +18,11 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -83,19 +85,6 @@ public class ChatController {
             @Valid @RequestBody SendMessageRequest request) {
 
         ChatMessageDto message = chatService.sendMessage(principal.getUserId(), request);
-
-        // Broadcast via WebSocket to the recipient's personal topic
-        messagingTemplate.convertAndSend(
-                "/topic/chat/user/" + request.getRecipientId(),
-                message
-        );
-        // Also send to sender's topic (for multi-tab sync)
-        messagingTemplate.convertAndSend(
-                "/topic/chat/user/" + principal.getUserId(),
-                message
-        );
-
-        log.info("Chat message sent and broadcast: {} -> {}", principal.getUserId(), request.getRecipientId());
         return ResponseEntity.ok(message);
     }
 
@@ -139,5 +128,69 @@ public class ChatController {
         ChatbotResponse response = chatService.processChatbotQuery(
                 principal.getUserId(), request);
         return ResponseEntity.ok(response);
+    }
+
+    // ── Group Rename ─────────────────────────────────────────────
+
+    @PutMapping("/conversations/{conversationId}/rename")
+    @Operation(summary = "Rename a group chat")
+    public ResponseEntity<ConversationDto> renameGroupChat(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long conversationId,
+            @RequestBody Map<String, String> body) {
+        String newName = body.get("name");
+        if (newName == null || newName.trim().isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        ConversationDto result = chatService.renameGroupChat(
+                conversationId, principal.getUserId(), newName);
+        return ResponseEntity.ok(result);
+    }
+
+    // ── Message Recall ───────────────────────────────────────────
+
+    @DeleteMapping("/messages/{messageId}/recall")
+    @Operation(summary = "Recall (soft-delete) a message")
+    public ResponseEntity<ChatMessageDto> recallMessage(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long messageId) {
+        ChatMessageDto result = chatService.recallMessage(messageId, principal.getUserId());
+        return ResponseEntity.ok(result);
+    }
+
+    @DeleteMapping("/messages/{messageId}/hide")
+    @Operation(summary = "Hide a message for the current user only")
+    public ResponseEntity<Void> hideMessage(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long messageId) {
+        chatService.hideMessage(messageId, principal.getUserId());
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/conversations/{conversationId}")
+    @Operation(summary = "Delete a conversation")
+    public ResponseEntity<Void> deleteConversation(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long conversationId) {
+        chatService.deleteConversation(conversationId, principal.getUserId());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/users/{userId}/block")
+    @Operation(summary = "Block a user")
+    public ResponseEntity<Void> blockUser(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Integer userId) {
+        chatService.blockUser(userId, principal.getUserId());
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/conversations/{conversationId}/leave")
+    @Operation(summary = "Leave a group chat")
+    public ResponseEntity<Void> leaveGroupChat(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long conversationId) {
+        chatService.leaveGroupChat(conversationId, principal.getUserId());
+        return ResponseEntity.ok().build();
     }
 }

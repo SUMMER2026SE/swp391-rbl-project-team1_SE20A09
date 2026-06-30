@@ -27,4 +27,12 @@ public class ChatMessageDto {
     private String messageType;
     private boolean isRead;
     private LocalDateTime sentAt;
+    
+    // Legacy fields for UI compatibility
+    private String quotedMessageContent;
+    private boolean forwarded;
+    private Object reactions;
+    
+    // Seen-by indicator
+    private java.util.List<String> readByAvatars;
 }

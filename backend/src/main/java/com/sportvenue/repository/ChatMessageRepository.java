@@ -18,10 +18,14 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
      */
     @Query("SELECT m FROM ChatMessage m " +
            "JOIN FETCH m.sender " +
+           "LEFT JOIN ChatConversationHiddenState h ON h.conversationId = m.conversation.conversationId AND h.userId = :userId " +
            "WHERE m.conversation.conversationId = :conversationId " +
+           "AND :userId NOT IN (SELECT hb.userId FROM m.hiddenBy hb) " +
+           "AND (h IS NULL OR m.sentAt > h.hiddenAt) " +
            "ORDER BY m.sentAt DESC")
     Page<ChatMessage> findByConversationId(
             @Param("conversationId") Long conversationId,
+            @Param("userId") Integer userId,
             Pageable pageable
     );
 
@@ -29,10 +33,11 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
      * Count unread messages for a user across all conversations.
      */
     @Query("SELECT COUNT(m) FROM ChatMessage m " +
-           "WHERE m.conversation.conversationId IN (" +
-           "  SELECT c.conversationId FROM ChatConversation c " +
-           "  WHERE c.user1.userId = :userId OR c.user2.userId = :userId" +
-           ") AND m.sender.userId <> :userId AND m.isRead = false")
+           "LEFT JOIN m.conversation.participants p " +
+           "WHERE ((m.conversation.isGroup = false AND (m.conversation.user1.userId = :userId OR m.conversation.user2.userId = :userId)) " +
+           "   OR (m.conversation.isGroup = true AND p.userId = :userId)) " +
+           "AND m.sender.userId <> :userId " +
+           "AND (m.isRead = false AND :userId NOT IN (SELECT r.userId FROM m.readBy r))")
     long countUnreadForUser(@Param("userId") Integer userId);
 
     /**
@@ -40,18 +45,34 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
      */
     @Query("SELECT COUNT(m) FROM ChatMessage m " +
            "WHERE m.conversation.conversationId = :convId " +
-           "AND m.sender.userId <> :userId AND m.isRead = false")
+           "AND m.sender.userId <> :userId " +
+           "AND (m.isRead = false AND :userId NOT IN (SELECT r.userId FROM m.readBy r))")
     long countUnreadInConversation(
             @Param("convId") Long convId,
             @Param("userId") Integer userId
     );
 
     /**
-     * Mark all messages in a conversation as read for the given recipient.
+     * Mark all messages in a 1-on-1 conversation as read.
      */
     @Modifying
     @Query("UPDATE ChatMessage m SET m.isRead = true " +
            "WHERE m.conversation.conversationId = :convId " +
            "AND m.sender.userId <> :userId AND m.isRead = false")
     void markAllAsRead(@Param("convId") Long convId, @Param("userId") Integer userId);
+
+    /**
+     * Find unread messages for a specific recipient in a conversation.
+     * Used for adding the recipient to readBy.
+     */
+    @Query("SELECT m FROM ChatMessage m " +
+           "WHERE m.conversation.conversationId = :convId " +
+           "AND m.sender.userId <> :userId " +
+           "AND (m.isRead = false AND :userId NOT IN (SELECT r.userId FROM m.readBy r))")
+    java.util.List<ChatMessage> findUnreadMessagesInConversation(
+            @Param("convId") Long convId,
+            @Param("userId") Integer userId
+    );
+
+    void deleteByConversation(com.sportvenue.entity.ChatConversation conversation);
 }

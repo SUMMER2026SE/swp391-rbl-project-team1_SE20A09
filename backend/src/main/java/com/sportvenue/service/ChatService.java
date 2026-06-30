@@ -63,4 +63,33 @@ public interface ChatService {
      * Create or update a group chat for a match and add a new user.
      */
     void createOrUpdateMatchGroupChat(com.sportvenue.entity.MatchRequest match, Integer newUserId);
+
+    /**
+     * Rename a group chat. Only participants can rename.
+     */
+    ConversationDto renameGroupChat(Long conversationId, Integer userId, String newName);
+
+    /**
+     * Recall (soft-delete) a message. Only the sender can recall their own messages.
+     * The message content is replaced with a placeholder.
+     */
+    ChatMessageDto recallMessage(Long messageId, Integer userId);
+    
+    // Xóa tin nhắn khỏi góc nhìn của 1 người (các người khác vẫn thấy)
+    void hideMessage(Long messageId, Integer userId);
+
+    /**
+     * Delete a conversation for the given user.
+     */
+    void deleteConversation(Long conversationId, Integer userId);
+
+    /**
+     * Block or unblock a user.
+     */
+    void blockUser(Integer blockedUserId, Integer currentUserId);
+
+    /**
+     * Leave a group chat.
+     */
+    void leaveGroupChat(Long conversationId, Integer userId);
 }

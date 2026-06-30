@@ -6,6 +6,7 @@ import com.sportvenue.dto.chat.ChatbotResponse;
 import com.sportvenue.dto.chat.ConversationDto;
 import com.sportvenue.dto.chat.SendMessageRequest;
 import com.sportvenue.entity.ChatConversation;
+import com.sportvenue.entity.ChatConversationHiddenState;
 import com.sportvenue.entity.ChatMessage;
 import com.sportvenue.entity.ChatbotLog;
 import com.sportvenue.entity.User;
@@ -13,8 +14,10 @@ import com.sportvenue.entity.enums.MessageType;
 import com.sportvenue.repository.ChatConversationRepository;
 import com.sportvenue.repository.ChatMessageRepository;
 import com.sportvenue.repository.ChatbotLogRepository;
+import com.sportvenue.repository.ChatConversationHiddenStateRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.ChatService;
+import com.sportvenue.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -37,6 +40,7 @@ public class ChatServiceImpl implements ChatService {
     private final ChatMessageRepository messageRepo;
     private final ChatbotLogRepository chatbotLogRepo;
     private final UserRepository userRepo;
+    private final ChatConversationHiddenStateRepository hiddenStateRepo;
     private final SimpMessagingTemplate messagingTemplate;
 
     @Override
@@ -67,7 +71,7 @@ public class ChatServiceImpl implements ChatService {
             throw new SecurityException("You are not a participant of this conversation");
         }
 
-        return messageRepo.findByConversationId(conversationId, pageable)
+        return messageRepo.findByConversationId(conversationId, userId, pageable)
                 .map(this::toMessageDto);
     }
 
@@ -80,6 +84,21 @@ public class ChatServiceImpl implements ChatService {
         if (request.getConversationId() != null) {
             conversation = conversationRepo.findById(request.getConversationId())
                     .orElseThrow(() -> new IllegalArgumentException("Conversation not found"));
+
+            // BLOCK VALIDATION: Reject messages in blocked conversations
+            if (!Boolean.TRUE.equals(conversation.getIsGroup()) && 
+                (Boolean.TRUE.equals(conversation.getIsMutualBlock()) || conversation.getBlockedBy() != null)) {
+                throw new IllegalArgumentException("USER_BLOCKED: Cannot send message in a blocked conversation");
+            }
+            
+            // MEMBERSHIP VALIDATION: Ensure user is still in the group
+            if (Boolean.TRUE.equals(conversation.getIsGroup())) {
+                boolean isParticipant = conversation.getParticipants().stream()
+                        .anyMatch(u -> u.getUserId().equals(senderId));
+                if (!isParticipant) {
+                    throw new SecurityException("You are no longer a participant of this group");
+                }
+            }
         } else {
             if (request.getRecipientId() == null) {
                 throw new IllegalArgumentException("Recipient ID is required for 1-on-1 chat");
@@ -105,6 +124,11 @@ public class ChatServiceImpl implements ChatService {
                                 .build();
                         return conversationRepo.save(newConv);
                     });
+
+            // BLOCK VALIDATION for recipient-based messages
+            if (Boolean.TRUE.equals(conversation.getIsMutualBlock()) || conversation.getBlockedBy() != null) {
+                throw new IllegalArgumentException("USER_BLOCKED: Cannot send message in a blocked conversation");
+            }
         }
 
         // Determine message type
@@ -137,16 +161,61 @@ public class ChatServiceImpl implements ChatService {
         conversation.setLastMessageAt(now);
         conversationRepo.save(conversation);
 
-        log.info("Message sent from user {} to user {} in conversation {}",
-                senderId, request.getRecipientId(), conversation.getConversationId());
+        log.info("Message sent from user {} to conversation {}",
+                senderId, conversation.getConversationId());
 
-        return toMessageDto(message);
+        ChatMessageDto messageDto = toMessageDto(message);
+
+        // Broadcast to all participants
+        if (Boolean.TRUE.equals(conversation.getIsGroup())) {
+            for (User participant : conversation.getParticipants()) {
+                messagingTemplate.convertAndSend("/topic/chat/user/" + participant.getUserId(), messageDto);
+            }
+        } else {
+            messagingTemplate.convertAndSend("/topic/chat/user/" + conversation.getUser1().getUserId(), messageDto);
+            messagingTemplate.convertAndSend("/topic/chat/user/" + conversation.getUser2().getUserId(), messageDto);
+        }
+
+        return messageDto;
     }
 
     @Override
     @Transactional
     public void markAsRead(Long conversationId, Integer userId) {
-        messageRepo.markAllAsRead(conversationId, userId);
+        ChatConversation conv = conversationRepo.findById(conversationId).orElse(null);
+        if (conv == null) return;
+
+        User user = userRepo.findById(userId).orElse(null);
+        if (user == null) return;
+
+        boolean didUpdate = false;
+        if (Boolean.TRUE.equals(conv.getIsGroup())) {
+            List<ChatMessage> unreadMessages = messageRepo.findUnreadMessagesInConversation(conversationId, userId);
+            for (ChatMessage msg : unreadMessages) {
+                msg.getReadBy().add(user);
+                didUpdate = true;
+            }
+            messageRepo.saveAll(unreadMessages);
+        } else {
+            // Check if there are actually unread messages before broadcasting
+            if (messageRepo.countUnreadForUser(userId) > 0) {
+                messageRepo.markAllAsRead(conversationId, userId);
+                didUpdate = true;
+            }
+        }
+        
+        if (didUpdate) {
+            String readPayload = "{\"type\":\"message_read\",\"conversationId\":" + conversationId + ",\"readByUserId\":" + userId + ",\"readByUserAvatar\":\"" + (user.getAvatarUrl() != null ? user.getAvatarUrl() : "") + "\"}";
+            
+            if (Boolean.TRUE.equals(conv.getIsGroup())) {
+                for (User participant : conv.getParticipants()) {
+                    messagingTemplate.convertAndSend("/topic/chat/user/" + participant.getUserId(), readPayload);
+                }
+            } else {
+                messagingTemplate.convertAndSend("/topic/chat/user/" + conv.getUser1().getUserId(), readPayload);
+                messagingTemplate.convertAndSend("/topic/chat/user/" + conv.getUser2().getUserId(), readPayload);
+            }
+        }
     }
 
     @Override
@@ -258,10 +327,77 @@ public class ChatServiceImpl implements ChatService {
         group.setLastMessageAt(now);
         conversationRepo.save(group);
         
-        ConversationDto payload = toConversationDto(group, null);
+        ChatMessageDto msgDto = toMessageDto(msg);
+
         for (User p : group.getParticipants()) {
+            ConversationDto payload = toConversationDto(group, p.getUserId());
             messagingTemplate.convertAndSend("/topic/chat/user/" + p.getUserId() + "/new-group", payload);
+            messagingTemplate.convertAndSend("/topic/chat/user/" + p.getUserId(), msgDto);
         }
+    }
+
+    @Override
+    @Transactional
+    public ConversationDto renameGroupChat(Long conversationId, Integer userId, String newName) {
+        ChatConversation conv = conversationRepo.findById(conversationId)
+                .orElseThrow(() -> new IllegalArgumentException("Conversation not found"));
+
+        if (!Boolean.TRUE.equals(conv.getIsGroup())) {
+            throw new IllegalArgumentException("Only group chats can be renamed");
+        }
+
+        boolean isParticipant = conv.getParticipants().stream()
+                .anyMatch(u -> u.getUserId().equals(userId));
+        if (!isParticipant) {
+            throw new SecurityException("You are not a participant of this group");
+        }
+
+        conv.setName(newName.trim());
+        conversationRepo.save(conv);
+
+        log.info("Group chat {} renamed to '{}' by user {}", conversationId, newName, userId);
+
+        // Broadcast the rename to all participants
+        for (User p : conv.getParticipants()) {
+            ConversationDto payload = toConversationDto(conv, p.getUserId());
+            messagingTemplate.convertAndSend("/topic/chat/user/" + p.getUserId() + "/group-renamed", payload);
+        }
+
+        return toConversationDto(conv, userId);
+    }
+
+    @Override
+    @Transactional
+    public ChatMessageDto recallMessage(Long messageId, Integer userId) {
+        ChatMessage message = messageRepo.findById(messageId)
+                .orElseThrow(() -> new IllegalArgumentException("Message not found"));
+
+        if (!message.getSender().getUserId().equals(userId)) {
+            throw new SecurityException("You can only recall your own messages");
+        }
+
+        // Replace content with recall placeholder
+        message.setContent("Tin nhắn đã được thu hồi");
+        message.setMessageType(com.sportvenue.entity.enums.MessageType.SYSTEM);
+        messageRepo.save(message);
+
+        ChatMessageDto dto = toMessageDto(message);
+        ChatConversation conv = message.getConversation();
+
+        // Broadcast the recall to all participants
+        if (Boolean.TRUE.equals(conv.getIsGroup())) {
+            for (User p : conv.getParticipants()) {
+                messagingTemplate.convertAndSend("/topic/chat/user/" + p.getUserId() + "/message-recalled", dto);
+            }
+        } else {
+            if (conv.getUser1() != null)
+                messagingTemplate.convertAndSend("/topic/chat/user/" + conv.getUser1().getUserId() + "/message-recalled", dto);
+            if (conv.getUser2() != null)
+                messagingTemplate.convertAndSend("/topic/chat/user/" + conv.getUser2().getUserId() + "/message-recalled", dto);
+        }
+
+        log.info("Message {} recalled by user {}", messageId, userId);
+        return dto;
     }
 
     // ── Private helpers ──────────────────────────────────────────
@@ -281,11 +417,30 @@ public class ChatServiceImpl implements ChatService {
                     .lastMessagePreview(conv.getLastMessagePreview())
                     .lastMessageAt(conv.getLastMessageAt())
                     .unreadCount(unread)
+                    .blocked(false)
+                    .blockedByThem(false)
                     .build();
         } else {
             User otherUser = (conv.getUser1() != null && conv.getUser1().getUserId().equals(currentUserId))
                     ? conv.getUser2()
                     : conv.getUser1();
+
+            // Determine block status
+            boolean isBlocked = false;
+            boolean isBlockedByThem = false;
+            Integer blockedByUserId = null;
+            
+            if (Boolean.TRUE.equals(conv.getIsMutualBlock())) {
+                isBlocked = true;
+                isBlockedByThem = true;
+            } else if (conv.getBlockedBy() != null) {
+                blockedByUserId = conv.getBlockedBy().getUserId();
+                if (blockedByUserId.equals(currentUserId)) {
+                    isBlocked = true; // I blocked them
+                } else {
+                    isBlockedByThem = true; // They blocked me
+                }
+            }
 
             return ConversationDto.builder()
                     .conversationId(conv.getConversationId())
@@ -294,15 +449,27 @@ public class ChatServiceImpl implements ChatService {
                     .otherUserName(otherUser.getFullName())
                     .otherUserAvatar(otherUser.getAvatarUrl())
                     .otherUserOnline(false) // Will be updated by WebSocket presence
-                    .lastMessagePreview(conv.getLastMessagePreview())
+                    .lastMessagePreview(isBlockedByThem ? "Bạn đã bị chặn bởi người này" : conv.getLastMessagePreview())
                     .lastMessageAt(conv.getLastMessageAt())
                     .unreadCount(unread)
+                    .blocked(isBlocked)
+                    .blockedByThem(isBlockedByThem)
+                    .blockedByUserId(blockedByUserId)
                     .build();
         }
     }
 
     private ChatMessageDto toMessageDto(ChatMessage msg) {
         User sender = msg.getSender();
+        
+        java.util.List<String> readAvatars = new java.util.ArrayList<>();
+        if (msg.getReadBy() != null) {
+            readAvatars = msg.getReadBy().stream()
+                .filter(u -> u.getAvatarUrl() != null && !u.getUserId().equals(sender.getUserId()))
+                .map(User::getAvatarUrl)
+                .collect(java.util.stream.Collectors.toList());
+        }
+        
         return ChatMessageDto.builder()
                 .messageId(msg.getMessageId())
                 .conversationId(msg.getConversation().getConversationId())
@@ -311,7 +478,8 @@ public class ChatServiceImpl implements ChatService {
                 .senderAvatar(sender.getAvatarUrl())
                 .content(msg.getContent())
                 .messageType(msg.getMessageType().name())
-                .isRead(msg.getIsRead())
+                .isRead(msg.getIsRead() || !msg.getReadBy().isEmpty())
+                .readByAvatars(readAvatars)
                 .sentAt(msg.getSentAt())
                 .build();
     }
@@ -401,5 +569,141 @@ public class ChatServiceImpl implements ChatService {
                 + "• ⚽ Ghép kèo\n"
                 + "• ⭐ Đánh giá sân\n\n"
                 + "Hãy hỏi tôi bất cứ điều gì bạn cần!";
+    }
+
+    @Override
+    @Transactional
+    public void hideMessage(Long messageId, Integer userId) {
+        ChatMessage message = messageRepo.findById(messageId)
+                .orElseThrow(() -> new ResourceNotFoundException("Message not found"));
+        User user = userRepo.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        
+        // Add the user to the hidden list
+        message.getHiddenBy().add(user);
+        messageRepo.save(message);
+
+        // Broadcast to this user only so their UI instantly drops the message
+        String payload = "{\"type\":\"message_hidden\",\"messageId\":" + messageId + "}";
+        messagingTemplate.convertAndSend("/topic/chat/user/" + userId + "/message-status", payload);
+    }
+
+    @Override
+    @Transactional
+    public void deleteConversation(Long conversationId, Integer userId) {
+        ChatConversation conversation = conversationRepo.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found"));
+                
+        // Verify user is part of the conversation
+        if (Boolean.TRUE.equals(conversation.getIsGroup())) {
+            boolean isMember = conversation.getParticipants().stream()
+                    .anyMatch(u -> u.getUserId().equals(userId));
+            if (!isMember) {
+                throw new IllegalArgumentException("You are not part of this group conversation");
+            }
+        } else {
+            if (!conversation.getUser1().getUserId().equals(userId) && 
+                !conversation.getUser2().getUserId().equals(userId)) {
+                throw new IllegalArgumentException("You are not part of this conversation");
+            }
+        }
+        
+        // Hide conversation for this user by upserting the state
+        ChatConversationHiddenState state = hiddenStateRepo
+                .findByConversationIdAndUserId(conversationId, userId)
+                .orElse(new ChatConversationHiddenState(conversationId, userId, conversation, userRepo.findById(userId).orElseThrow(), null));
+                
+        state.setHiddenAt(LocalDateTime.now());
+        hiddenStateRepo.save(state);
+        
+        // Broadcast to this user only so their UI instantly drops the conversation
+        String payload = "{\"type\":\"conversation_hidden\",\"conversationId\":" + conversationId + "}";
+        messagingTemplate.convertAndSend("/topic/chat/user/" + userId + "/conversation-status", payload);
+    }
+
+    @Override
+    @Transactional
+    public void leaveGroupChat(Long conversationId, Integer userId) {
+        ChatConversation conversation = conversationRepo.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found"));
+                
+        if (Boolean.TRUE.equals(conversation.getIsGroup())) {
+            conversation.getParticipants().removeIf(p -> p.getUserId().equals(userId));
+            conversationRepo.save(conversation);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void blockUser(Integer blockedUserId, Integer currentUserId) {
+        // Find the 1-on-1 conversation between these two users
+        Integer u1 = Math.min(currentUserId, blockedUserId);
+        Integer u2 = Math.max(currentUserId, blockedUserId);
+        
+        ChatConversation conv = conversationRepo.findByUserPair(u1, u2).orElse(null);
+        if (conv == null) {
+            log.warn("No conversation found between user {} and user {}", currentUserId, blockedUserId);
+            return;
+        }
+
+        User blocker = userRepo.findById(currentUserId).orElseThrow();
+        boolean isCurrentlyBlocked = conv.getBlockedBy() != null;
+        
+        if (Boolean.TRUE.equals(conv.getIsMutualBlock())) {
+            // It's a mutual block
+            if (conv.getBlockedBy().getUserId().equals(currentUserId)) {
+                // I was the original blocker. Remove my block, leave the other person's block.
+                conv.setIsMutualBlock(false);
+                User otherUser = userRepo.findById(blockedUserId).orElseThrow();
+                conv.setBlockedBy(otherUser);
+                conversationRepo.save(conv);
+                log.info("User {} unblocked user {}, reverting mutual block to single block by {}", currentUserId, blockedUserId, blockedUserId);
+                
+                String unblockPayload = "{\"type\":\"user_unblocked\",\"userId\":" + blockedUserId + ",\"blockedBy\":" + currentUserId + ",\"blocked\":false,\"isMutual\":false}";
+                messagingTemplate.convertAndSend("/topic/chat/user/" + currentUserId + "/block-status", unblockPayload);
+                messagingTemplate.convertAndSend("/topic/chat/user/" + blockedUserId + "/block-status", unblockPayload);
+            } else {
+                // I was the second blocker. Remove my block, leave the original person's block.
+                conv.setIsMutualBlock(false);
+                // getBlockedBy already holds the other user, so we leave it as is!
+                conversationRepo.save(conv);
+                log.info("User {} unblocked user {}, reverting mutual block to single block by {}", currentUserId, blockedUserId, conv.getBlockedBy().getUserId());
+                
+                String unblockPayload = "{\"type\":\"user_unblocked\",\"userId\":" + blockedUserId + ",\"blockedBy\":" + currentUserId + ",\"blocked\":false,\"isMutual\":false}";
+                messagingTemplate.convertAndSend("/topic/chat/user/" + currentUserId + "/block-status", unblockPayload);
+                messagingTemplate.convertAndSend("/topic/chat/user/" + blockedUserId + "/block-status", unblockPayload);
+            }
+        } else if (isCurrentlyBlocked && conv.getBlockedBy().getUserId().equals(currentUserId)) {
+            // Unblock: current user is the sole blocker, remove block
+            conv.setBlockedBy(null);
+            conv.setBlockedAt(null);
+            conversationRepo.save(conv);
+            log.info("User {} unblocked user {}", currentUserId, blockedUserId);
+            
+            String unblockPayload = "{\"type\":\"user_unblocked\",\"userId\":" + blockedUserId + ",\"blockedBy\":" + currentUserId + ",\"blocked\":false}";
+            messagingTemplate.convertAndSend("/topic/chat/user/" + currentUserId + "/block-status", unblockPayload);
+            messagingTemplate.convertAndSend("/topic/chat/user/" + blockedUserId + "/block-status", unblockPayload);
+        } else if (isCurrentlyBlocked && !conv.getBlockedBy().getUserId().equals(currentUserId)) {
+            // The other person already blocked current user, and now current user is blocking them -> MUTUAL BLOCK
+            conv.setIsMutualBlock(true);
+            conv.setBlockedAt(LocalDateTime.now());
+            conversationRepo.save(conv);
+            log.info("Mutual block established between user {} and user {}", currentUserId, blockedUserId);
+
+            String blockPayload = "{\"type\":\"user_blocked\",\"userId\":" + blockedUserId + ",\"blockedBy\":" + currentUserId + ",\"blocked\":true,\"isMutual\":true}";
+            messagingTemplate.convertAndSend("/topic/chat/user/" + currentUserId + "/block-status", blockPayload);
+            messagingTemplate.convertAndSend("/topic/chat/user/" + blockedUserId + "/block-status", blockPayload);
+        } else if (!isCurrentlyBlocked) {
+            // Block: set blockedBy
+            conv.setBlockedBy(blocker);
+            conv.setBlockedAt(LocalDateTime.now());
+            conversationRepo.save(conv);
+            log.info("User {} blocked user {}", currentUserId, blockedUserId);
+            
+            // Broadcast block to both users via WebSocket
+            String blockPayload = "{\"type\":\"user_blocked\",\"userId\":" + blockedUserId + ",\"blockedBy\":" + currentUserId + ",\"blocked\":true}";
+            messagingTemplate.convertAndSend("/topic/chat/user/" + currentUserId + "/block-status", blockPayload);
+            messagingTemplate.convertAndSend("/topic/chat/user/" + blockedUserId + "/block-status", blockPayload);
+        }
     }
 }

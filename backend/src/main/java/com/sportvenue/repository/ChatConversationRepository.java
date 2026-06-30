@@ -28,8 +28,10 @@ public interface ChatConversationRepository extends JpaRepository<ChatConversati
            "LEFT JOIN FETCH c.user1 " +
            "LEFT JOIN FETCH c.user2 " +
            "LEFT JOIN FETCH c.participants p " +
-           "WHERE (c.isGroup = false AND (c.user1.userId = :userId OR c.user2.userId = :userId)) " +
-           "OR (c.isGroup = true AND p.userId = :userId) " +
+           "LEFT JOIN ChatConversationHiddenState h ON h.conversationId = c.conversationId AND h.userId = :userId " +
+           "WHERE ((c.isGroup = false AND (c.user1.userId = :userId OR c.user2.userId = :userId)) " +
+           "       OR (c.isGroup = true AND p.userId = :userId)) " +
+           "AND (h IS NULL OR c.lastMessageAt > h.hiddenAt) " +
            "ORDER BY c.lastMessageAt DESC NULLS LAST")
     List<ChatConversation> findAllByUserId(@Param("userId") Integer userId);
 }

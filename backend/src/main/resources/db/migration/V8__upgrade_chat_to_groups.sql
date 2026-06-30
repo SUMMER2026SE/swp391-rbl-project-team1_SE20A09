@@ -8,7 +8,7 @@ ADD COLUMN is_group BOOLEAN DEFAULT FALSE,
 ADD COLUMN match_id INTEGER NULL;
 
 ALTER TABLE chat_conversations
-ADD CONSTRAINT fk_chat_match FOREIGN KEY (match_id) REFERENCES match_requests(id) ON DELETE SET NULL;
+ADD CONSTRAINT fk_chat_match FOREIGN KEY (match_id) REFERENCES match_requests(match_id) ON DELETE SET NULL;
 
 -- 3. Create a bridging table for group chat members
 CREATE TABLE chat_group_members (
