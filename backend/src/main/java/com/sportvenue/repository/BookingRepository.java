@@ -387,6 +387,23 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
 
 
     /**
+     * Booking đang chiếm chỗ (theo {@code statuses}) của 1 hoặc nhiều sân trong khoảng
+     * ngày {@code [rangeStart, rangeEnd]} — dùng để check conflict khi Owner tạo
+     * MaintenanceSchedule mới (bao gồm cả court con khi bảo trì đặt ở FACILITY).
+     */
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.stadium.stadiumId IN :stadiumIds
+            AND b.reservationDate BETWEEN :rangeStart AND :rangeEnd
+            AND b.bookingStatus IN :statuses
+            """)
+    List<Booking> findByStadiumIdsAndDateRangeAndStatuses(
+            @Param("stadiumIds") List<Integer> stadiumIds,
+            @Param("rangeStart") LocalDate rangeStart,
+            @Param("rangeEnd") LocalDate rangeEnd,
+            @Param("statuses") List<BookingStatus> statuses);
+
+    /**
      * UC-CUS-07: Lấy booking COMPLETED của user tại sân cụ thể mà chưa được review.
      * FE dùng để xác định customer có đủ điều kiện viết đánh giá không.
      */
