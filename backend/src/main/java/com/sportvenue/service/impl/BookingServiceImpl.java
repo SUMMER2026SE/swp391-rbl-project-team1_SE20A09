@@ -274,6 +274,19 @@ public class BookingServiceImpl implements BookingService {
                             + "Hiện tại: " + booking.getBookingStatus());
         }
 
+        // Chỉ CẢNH BÁO, không chặn: tại thời điểm này khách đã thanh toán thật qua cổng thanh toán
+        // (confirmPayment không tự capture tiền — chỉ đồng bộ trạng thái nội bộ sau khi cổng đã báo
+        // thành công). Chặn ở đây sẽ khiến khách mất tiền mà không có booking — tệ hơn hiện trạng.
+        // createSchedule chỉ conflict-check với booking CONFIRMED (không tính PENDING_PAYMENT) nên
+        // vẫn còn khe hở hẹp (~5 phút) nếu Owner đặt bảo trì đúng lúc khách đang thanh toán — log lại
+        // rõ ràng để Owner/Admin chủ động xử lý thay vì âm thầm trôi qua.
+        if (booking.getStadium() != null
+                && maintenanceScheduleService.isStadiumUnderMaintenance(booking.getStadium(), booking.getReservationDate())) {
+            log.warn("⚠️ Booking #{} được xác nhận thanh toán trong lúc sân {} đang bảo trì ngày {} — "
+                            + "cần Owner/Admin kiểm tra và liên hệ khách để xử lý (đổi lịch/hoàn tiền) nếu cần.",
+                    booking.getBookingId(), booking.getStadium().getStadiumId(), booking.getReservationDate());
+        }
+
         booking.setBookingStatus(BookingStatus.CONFIRMED);
         booking.setPaymentStatus(PaymentStatus.PAID);
         booking.setExpiredAt(null);
@@ -451,12 +464,16 @@ public class BookingServiceImpl implements BookingService {
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter hhmm = DateTimeFormatter.ofPattern("HH:mm");
 
+        // Batch — 1 query cho cả tuần thay vì gọi isStadiumUnderMaintenance (1-2 query/lần) 7 lần, 1 lần/ngày.
+        Map<LocalDate, Boolean> underMaintenanceByDate =
+                maintenanceScheduleService.isUnderMaintenanceForDateRange(stadium, monday, sunday);
+
         List<WeeklySlotDayDto> days = new ArrayList<>(7);
         for (int i = 0; i < 7; i++) {
             LocalDate date = monday.plusDays(i);
             Set<Integer> bookedSlotIds = bookedByDate.getOrDefault(date, Set.of());
             Map<Integer, TimeSlotException> dayExceptions = exceptionsByDate.getOrDefault(date, Map.of());
-            boolean underMaintenance = maintenanceScheduleService.isStadiumUnderMaintenance(stadium, date);
+            boolean underMaintenance = underMaintenanceByDate.getOrDefault(date, false);
             days.add(buildWeeklySlotDay(date, stadium, slots, bookedSlotIds, dayExceptions, underMaintenance, now, hhmm));
         }
 
