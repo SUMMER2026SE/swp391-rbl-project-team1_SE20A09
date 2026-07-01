@@ -273,6 +273,23 @@ class BookingServiceImplTest {
     }
 
     @Test
+    @DisplayName("createBooking: sân đang bảo trì (isStadiumUnderMaintenance=true) → BadRequestException")
+    void createBooking_stadiumUnderMaintenance_throwsBadRequest() {
+        CreateBookingRequest request = CreateBookingRequest.builder()
+                .stadiumId(10).slotId(20).reservationDate(futureDate()).build();
+
+        when(userRepository.findById(1)).thenReturn(Optional.of(customer));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(timeSlotRepository.findByIdForUpdate(20)).thenReturn(Optional.of(slot));
+        when(maintenanceScheduleService.isStadiumUnderMaintenance(eq(stadium), any(LocalDate.class)))
+                .thenReturn(true);
+
+        assertThrows(BadRequestException.class,
+                () -> bookingService.createBooking(principal, request));
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("createBooking: slot không thuộc sân → BadRequestException")
     void createBooking_slotNotInStadium_throwsBadRequest() {
         Stadium otherStadium = Stadium.builder().stadiumId(99).build();
@@ -428,6 +445,43 @@ class BookingServiceImplTest {
         assertEquals("2026-06-22", result.getWeekStart());
         assertEquals("2026-06-28", result.getWeekEnd());
         assertEquals(7, result.getDays().size());
+    }
+
+    @Test
+    @DisplayName("getWeeklySlots: sân đang bảo trì → slot tương lai được đánh dấu MAINTENANCE")
+    void getWeeklySlots_stadiumUnderMaintenance_marksFutureSlotsAsMaintenance() {
+        LocalDate weekStart = LocalDate.now().plusWeeks(2);
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(timeSlotRepository.findByStadiumStadiumIdAndSlotStatus(10, SlotStatus.AVAILABLE))
+                .thenReturn(List.of(slot));
+        when(bookingRepository.findWeeklyBookings(eq(10), any(LocalDate.class), any(LocalDate.class), anyList()))
+                .thenReturn(List.of());
+        when(maintenanceScheduleService.isStadiumUnderMaintenance(eq(stadium), any(LocalDate.class)))
+                .thenReturn(true);
+
+        var result = bookingService.getWeeklySlots(10, weekStart);
+
+        result.getDays().forEach(day -> day.getSlots().forEach(item ->
+                assertEquals("MAINTENANCE", item.getStatus(),
+                        "Ngày " + day.getDate() + " phải là MAINTENANCE khi isStadiumUnderMaintenance=true")));
+    }
+
+    @Test
+    @DisplayName("getWeeklySlots: không bảo trì → slot tương lai vẫn AVAILABLE")
+    void getWeeklySlots_notUnderMaintenance_slotsStayAvailable() {
+        LocalDate weekStart = LocalDate.now().plusWeeks(2);
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(timeSlotRepository.findByStadiumStadiumIdAndSlotStatus(10, SlotStatus.AVAILABLE))
+                .thenReturn(List.of(slot));
+        when(bookingRepository.findWeeklyBookings(eq(10), any(LocalDate.class), any(LocalDate.class), anyList()))
+                .thenReturn(List.of());
+        when(maintenanceScheduleService.isStadiumUnderMaintenance(eq(stadium), any(LocalDate.class)))
+                .thenReturn(false);
+
+        var result = bookingService.getWeeklySlots(10, weekStart);
+
+        result.getDays().forEach(day -> day.getSlots().forEach(item ->
+                assertEquals("AVAILABLE", item.getStatus())));
     }
 
     @Test
