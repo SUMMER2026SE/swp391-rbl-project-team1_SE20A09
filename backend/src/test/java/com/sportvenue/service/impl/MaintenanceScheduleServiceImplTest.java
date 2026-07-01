@@ -24,6 +24,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDate;
@@ -250,6 +254,43 @@ class MaintenanceScheduleServiceImplTest {
     }
 
     @Test
+    void createSchedule_pastStartDate_throwsBadRequest() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        when(stadiumRepository.findById(court.getStadiumId())).thenReturn(Optional.of(court));
+
+        CreateMaintenanceScheduleRequest request = CreateMaintenanceScheduleRequest.builder()
+                .startDate(LocalDate.now().minusDays(1))
+                .endDate(LocalDate.now().plusDays(1))
+                .build();
+
+        assertThrows(BadRequestException.class,
+                () -> service.createSchedule(court.getStadiumId(), request, OWNER_USER_ID));
+        verify(maintenanceScheduleRepository, never()).save(any());
+    }
+
+    /** Regression test — cùng 1 sân không được có 2 lịch bảo trì chồng khung ngày. */
+    @Test
+    void createSchedule_overlapsExistingStadiumSchedule_throwsBadRequest() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        when(stadiumRepository.findById(court.getStadiumId())).thenReturn(Optional.of(court));
+        when(bookingRepository.findByStadiumIdsAndDateRangeAndStatuses(anyList(), any(), any(), anyList()))
+                .thenReturn(List.of());
+
+        CreateMaintenanceScheduleRequest request = validRequest();
+        when(maintenanceScheduleRepository.findActiveForStadiumsInRange(
+                eq(List.of(court.getStadiumId())), eq(request.getStartDate()), any()))
+                .thenReturn(List.of(MaintenanceSchedule.builder().maintenanceId(999).stadium(court).build()));
+
+        assertThrows(BadRequestException.class,
+                () -> service.createSchedule(court.getStadiumId(), request, OWNER_USER_ID));
+        verify(maintenanceScheduleRepository, never()).save(any());
+    }
+
+    @Test
     void createSchedule_facilityCascadesToChildCourts_conflictBlocksCreation() {
         StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
         Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
@@ -392,6 +433,33 @@ class MaintenanceScheduleServiceImplTest {
         assertThrows(AccessDeniedException.class, () -> service.endSchedule(1, OTHER_USER_ID));
     }
 
+    /**
+     * Regression test — bug thật phát hiện qua review: gọi end trên 1 lịch ĐÃ elapsed từ lâu
+     * (endDate < hôm nay) trước đây sẽ tính targetEnd = today-1, có thể MUỘN HƠN endDate cũ,
+     * vô tình đẩy endDate về tương lai và "hồi sinh" lịch bảo trì đã kết thúc từ lâu. Giờ phải
+     * là no-op hoàn toàn.
+     */
+    @Test
+    void endSchedule_alreadyElapsed_isNoOp() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        LocalDate originalEndDate = LocalDate.now().minusDays(30);
+        MaintenanceSchedule schedule = MaintenanceSchedule.builder()
+                .maintenanceId(1)
+                .stadium(court)
+                .startDate(LocalDate.now().minusDays(35))
+                .endDate(originalEndDate)
+                .build();
+        when(maintenanceScheduleRepository.findById(1)).thenReturn(Optional.of(schedule));
+
+        service.endSchedule(1, OWNER_USER_ID);
+
+        assertEquals(originalEndDate, schedule.getEndDate(), "endDate không được đổi khi lịch đã elapsed từ trước");
+        verify(maintenanceScheduleRepository, never()).save(any());
+        verify(maintenanceScheduleRepository, never()).delete(any());
+    }
+
     @Test
     void endSchedule_startedBeforeToday_shrinksEndDateToYesterday() {
         StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
@@ -454,10 +522,23 @@ class MaintenanceScheduleServiceImplTest {
     // ── listSchedules / listComplexSchedules ───────────────────────────────
 
     @Test
+    void listSchedules_notOwner_throwsAccessDenied() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        when(stadiumRepository.findById(court.getStadiumId())).thenReturn(Optional.of(court));
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.listSchedules(court.getStadiumId(), OTHER_USER_ID, Pageable.unpaged()));
+    }
+
+    @Test
     void listSchedules_mapsIndefiniteAndActiveCorrectly() {
         StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
         Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
         Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        when(stadiumRepository.findById(court.getStadiumId())).thenReturn(Optional.of(court));
+
         MaintenanceSchedule indefiniteActive = MaintenanceSchedule.builder()
                 .maintenanceId(1).stadium(court)
                 .startDate(LocalDate.now().minusDays(1)).endDate(null)
@@ -466,28 +547,41 @@ class MaintenanceScheduleServiceImplTest {
                 .maintenanceId(2).stadium(court)
                 .startDate(LocalDate.now().plusDays(10)).endDate(LocalDate.now().plusDays(12))
                 .build();
-        when(maintenanceScheduleRepository.findByStadiumStadiumIdOrderByStartDateDesc(court.getStadiumId()))
-                .thenReturn(List.of(indefiniteActive, datedFuture));
+        Pageable pageable = PageRequest.of(0, 20);
+        when(maintenanceScheduleRepository.findByStadiumStadiumIdOrderByStartDateDesc(court.getStadiumId(), pageable))
+                .thenReturn(new PageImpl<>(List.of(indefiniteActive, datedFuture)));
 
-        List<MaintenanceScheduleResponse> result = service.listSchedules(court.getStadiumId());
+        Page<MaintenanceScheduleResponse> result = service.listSchedules(court.getStadiumId(), OWNER_USER_ID, pageable);
 
-        assertEquals(2, result.size());
-        assertTrue(result.get(0).getIndefinite());
-        assertTrue(result.get(0).getActive());
-        assertFalse(result.get(1).getIndefinite());
-        assertFalse(result.get(1).getActive());
+        assertEquals(2, result.getContent().size());
+        assertTrue(result.getContent().get(0).getIndefinite());
+        assertTrue(result.getContent().get(0).getActive());
+        assertFalse(result.getContent().get(1).getIndefinite());
+        assertFalse(result.getContent().get(1).getActive());
+    }
+
+    @Test
+    void listComplexSchedules_notOwner_throwsAccessDenied() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        when(stadiumComplexRepository.findById(complex.getComplexId())).thenReturn(Optional.of(complex));
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.listComplexSchedules(complex.getComplexId(), OTHER_USER_ID, Pageable.unpaged()));
     }
 
     @Test
     void listComplexSchedules_delegatesToComplexRepositoryQuery() {
         StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
-        when(maintenanceScheduleRepository.findByComplexComplexIdOrderByStartDateDesc(complex.getComplexId()))
-                .thenReturn(List.of());
+        when(stadiumComplexRepository.findById(complex.getComplexId())).thenReturn(Optional.of(complex));
+        Pageable pageable = PageRequest.of(0, 20);
+        when(maintenanceScheduleRepository.findByComplexComplexIdOrderByStartDateDesc(complex.getComplexId(), pageable))
+                .thenReturn(Page.empty());
 
-        List<MaintenanceScheduleResponse> result = service.listComplexSchedules(complex.getComplexId());
+        Page<MaintenanceScheduleResponse> result =
+                service.listComplexSchedules(complex.getComplexId(), OWNER_USER_ID, pageable);
 
         assertTrue(result.isEmpty());
         verify(maintenanceScheduleRepository, times(1))
-                .findByComplexComplexIdOrderByStartDateDesc(complex.getComplexId());
+                .findByComplexComplexIdOrderByStartDateDesc(complex.getComplexId(), pageable);
     }
 }
