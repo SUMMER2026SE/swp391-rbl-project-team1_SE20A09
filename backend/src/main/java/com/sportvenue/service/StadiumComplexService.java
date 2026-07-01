@@ -22,4 +22,9 @@ public interface StadiumComplexService {
     ComplexResponse rejectComplex(Integer complexId, String reason);
 
     ComplexResponse updateComplex(Integer complexId, CreateComplexRequest request, Integer userId);
+
+    /** Bảo trì vô thời hạn — set complexStatus = MAINTENANCE, cascade áp dụng qua {@code isStadiumUnderMaintenance}. */
+    void suspendComplex(Integer complexId, Integer userId);
+
+    void activateComplex(Integer complexId, Integer userId);
 }
