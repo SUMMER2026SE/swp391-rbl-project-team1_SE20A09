@@ -44,6 +44,8 @@ export interface StadiumResponse {
   nodeType?: 'FACILITY' | 'COURT' | null;
   complexId?: number | null;
   parentStadiumId?: number | null;
+  /** True nếu sân đang bị chặn đặt HÔM NAY do bất kỳ cơ chế bảo trì nào (kể cả khung ngày, dù stadiumStatus vẫn AVAILABLE). Chỉ có ở API dành cho Owner. */
+  underMaintenanceToday?: boolean | null;
 }
 
 export interface ComplexResponse {
@@ -115,4 +117,22 @@ export interface CreateComplexRequest {
   sportTypeIds?: number[];
   amenityIds?: number[];
   imageUrls?: string[];
+}
+
+export interface CreateMaintenanceScheduleRequest {
+  startDate: string; // Format "yyyy-MM-dd"
+  endDate?: string;  // Format "yyyy-MM-dd" — bỏ trống = vô thời hạn
+  reason?: string;
+}
+
+export interface MaintenanceScheduleResponse {
+  maintenanceId: number;
+  stadiumId: number | null;
+  complexId: number | null;
+  startDate: string;
+  endDate: string | null;
+  reason: string | null;
+  indefinite: boolean;
+  active: boolean;
+  createdAt: string;
 }
