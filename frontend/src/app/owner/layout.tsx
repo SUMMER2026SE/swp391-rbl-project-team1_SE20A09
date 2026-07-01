@@ -15,6 +15,7 @@ import {
   Menu,
   Calendar as CalendarIcon,
 } from "lucide-react";
+import { OwnerNotificationBell } from "@/components/notifications/OwnerNotificationBell";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { useState } from "react";
@@ -130,13 +131,7 @@ export default function OwnerLayout({
               <span className="capitalize">{format(new Date(), "EEEE, dd MMM yyyy", { locale: vi })}</span>
             </div>
 
-            <button
-              className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
-              aria-label="Thông báo"
-            >
-              <Bell className="h-5 w-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
-            </button>
+            <OwnerNotificationBell />
 
             <div className="h-8 w-px bg-slate-200 hidden md:block"></div>
 
