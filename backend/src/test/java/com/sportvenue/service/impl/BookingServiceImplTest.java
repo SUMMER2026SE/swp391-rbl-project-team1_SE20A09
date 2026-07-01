@@ -79,6 +79,7 @@ class BookingServiceImplTest {
     @Mock private AccessoryRepository accessoryRepository;
     @Mock private BookingAccessoryRepository bookingAccessoryRepository;
     @Mock private TimeSlotExceptionRepository timeSlotExceptionRepository;
+    @Mock private com.sportvenue.service.MaintenanceScheduleService maintenanceScheduleService;
 
     @InjectMocks private BookingServiceImpl bookingService;
 
