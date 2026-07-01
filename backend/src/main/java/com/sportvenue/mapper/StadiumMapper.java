@@ -31,5 +31,8 @@ public interface StadiumMapper {
     @Mapping(target = "imageUrls", expression = "java(stadium.getImages() == null ? java.util.Collections.emptyList() : stadium.getImages().stream().map(img -> img.getImageUrl()).toList())")
     @Mapping(target = "firstImageUrl", expression = "java(stadium.getImages() == null || stadium.getImages().isEmpty() ? null : stadium.getImages().stream().findFirst().map(img -> img.getImageUrl()).orElse(null))")
     @Mapping(target = "distanceInKm", ignore = true)
+    @Mapping(target = "nodeType", expression = "java(stadium.getNodeType() != null ? stadium.getNodeType().name() : null)")
+    @Mapping(target = "complexId", expression = "java(stadium.getComplex() != null ? stadium.getComplex().getComplexId() : null)")
+    @Mapping(target = "parentStadiumId", expression = "java(stadium.getParentStadium() != null ? stadium.getParentStadium().getStadiumId() : null)")
     StadiumResponse toResponse(Stadium stadium);
 }

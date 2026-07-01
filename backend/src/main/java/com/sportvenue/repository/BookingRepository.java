@@ -257,11 +257,12 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             WHERE b.stadium.stadiumId = :stadiumId
             AND b.bookingStatus IN (com.sportvenue.entity.enums.BookingStatus.PENDING,
                                     com.sportvenue.entity.enums.BookingStatus.CONFIRMED)
-            AND b.slot.endTime >= :now
+            AND (b.reservationDate > :today OR (b.reservationDate = :today AND b.slot.endTime >= :nowTime))
             """)
     List<Booking> findFutureBookingsByStadiumId(
             @Param("stadiumId") Integer stadiumId,
-            @Param("now") LocalDateTime now);
+            @Param("today") java.time.LocalDate today,
+            @Param("nowTime") java.time.LocalTime nowTime);
 
     @Query("""
             SELECT COUNT(b) > 0 FROM Booking b
@@ -299,6 +300,17 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     boolean existsActiveBooking(
             @Param("stadiumId") Integer stadiumId,
             @Param("slotId") Integer slotId,
+            @Param("reservationDate") LocalDate reservationDate,
+            @Param("statuses") List<BookingStatus> statuses);
+
+    @Query("""
+            SELECT b.stadium.stadiumId, b.slot.slotId FROM Booking b
+            WHERE b.stadium.stadiumId IN :stadiumIds
+            AND b.reservationDate = :reservationDate
+            AND b.bookingStatus IN :statuses
+            """)
+    List<Object[]> findActiveBookingKeysByStadiumIds(
+            @Param("stadiumIds") List<Integer> stadiumIds,
             @Param("reservationDate") LocalDate reservationDate,
             @Param("statuses") List<BookingStatus> statuses);
 

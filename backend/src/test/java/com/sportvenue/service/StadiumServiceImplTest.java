@@ -3,10 +3,14 @@ package com.sportvenue.service;
 import com.sportvenue.config.FileStorageProperties;
 import com.sportvenue.dto.request.CreateStadiumRequest;
 import com.sportvenue.dto.request.UpdateStadiumRequest;
+import com.sportvenue.dto.request.CreateFacilityRequest;
+import com.sportvenue.dto.request.CreateCourtRequest;
 import com.sportvenue.dto.response.StadiumResponse;
 import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.SportType;
 import com.sportvenue.entity.Stadium;
+import com.sportvenue.entity.StadiumComplex;
+import com.sportvenue.entity.enums.StadiumNodeType;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.entity.enums.StadiumStatus;
@@ -19,6 +23,7 @@ import com.sportvenue.mapper.StadiumMapper;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.repository.StadiumRepository;
+import com.sportvenue.repository.StadiumComplexRepository;
 import com.sportvenue.repository.AmenityRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -68,6 +73,9 @@ class StadiumServiceImplTest {
     @Mock
     private org.springframework.core.env.Environment env;
 
+    @Mock
+    private StadiumComplexRepository stadiumComplexRepository;
+
     private StadiumServiceImpl stadiumService;
 
     @BeforeEach
@@ -83,7 +91,8 @@ class StadiumServiceImplTest {
                 stadiumMapper,
                 fileStorageProperties,
                 notificationService,
-                env);
+                env,
+                stadiumComplexRepository);
     }
 
     @Test
@@ -498,7 +507,7 @@ class StadiumServiceImplTest {
 
         when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
         when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
-        when(bookingRepository.findFutureBookingsByStadiumId(org.mockito.ArgumentMatchers.eq(10), any()))
+        when(bookingRepository.findFutureBookingsByStadiumId(org.mockito.ArgumentMatchers.eq(10), any(), any()))
                 .thenReturn(List.of(booking1));
 
         stadiumService.deleteStadium(10, 1);
@@ -518,5 +527,93 @@ class StadiumServiceImplTest {
                 any(),
                 any()
         );
+    }
+
+    @Test
+    void createFacility_Success() {
+        CreateFacilityRequest request = CreateFacilityRequest.builder()
+                .complexId(5)
+                .stadiumName("Khu sân Badminton")
+                .description("Mô tả")
+                .sportTypeId(1)
+                .openTime(LocalTime.of(8, 0))
+                .closeTime(LocalTime.of(22, 0))
+                .build();
+
+        Owner owner = approvedOwner();
+        SportType sportType = SportType.builder().sportTypeId(1).sportName("Badminton").build();
+        StadiumComplex complex = StadiumComplex.builder()
+                .complexId(5)
+                .owner(owner)
+                .sportTypes(java.util.Set.of(sportType))
+                .build();
+
+        StadiumResponse expectedResponse = StadiumResponse.builder()
+                .stadiumId(20)
+                .stadiumName("Khu sân Badminton")
+                .nodeType("FACILITY")
+                .build();
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(stadiumComplexRepository.findById(5)).thenReturn(Optional.of(complex));
+        when(sportTypeRepository.findById(1)).thenReturn(Optional.of(sportType));
+        when(stadiumRepository.save(any(Stadium.class))).thenAnswer(invocation -> {
+            Stadium s = invocation.getArgument(0);
+            s.setStadiumId(20);
+            return s;
+        });
+        when(stadiumMapper.toResponse(any(Stadium.class))).thenReturn(expectedResponse);
+
+        StadiumResponse response = stadiumService.createFacility(request, 1);
+
+        org.junit.jupiter.api.Assertions.assertNotNull(response);
+        assertEquals(20, response.getStadiumId());
+        assertEquals("Khu sân Badminton", response.getStadiumName());
+    }
+
+    @Test
+    void createCourt_Success() {
+        CreateCourtRequest request = CreateCourtRequest.builder()
+                .parentStadiumId(20)
+                .stadiumName("Sân số 1")
+                .pricePerHour(BigDecimal.valueOf(100000))
+                .build();
+
+        Owner owner = approvedOwner();
+        SportType sportType = SportType.builder().sportTypeId(1).sportName("Badminton").build();
+        StadiumComplex complex = StadiumComplex.builder()
+                .complexId(5)
+                .owner(owner)
+                .build();
+
+        Stadium parent = Stadium.builder()
+                .stadiumId(20)
+                .nodeType(StadiumNodeType.FACILITY)
+                .complex(complex)
+                .sportType(sportType)
+                .openTime(LocalTime.of(8, 0))
+                .closeTime(LocalTime.of(22, 0))
+                .build();
+
+        StadiumResponse expectedResponse = StadiumResponse.builder()
+                .stadiumId(30)
+                .stadiumName("Sân số 1")
+                .nodeType("COURT")
+                .build();
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(stadiumRepository.findById(20)).thenReturn(Optional.of(parent));
+        when(stadiumRepository.save(any(Stadium.class))).thenAnswer(invocation -> {
+            Stadium s = invocation.getArgument(0);
+            s.setStadiumId(30);
+            return s;
+        });
+        when(stadiumMapper.toResponse(any(Stadium.class))).thenReturn(expectedResponse);
+
+        StadiumResponse response = stadiumService.createCourt(request, 1);
+
+        org.junit.jupiter.api.Assertions.assertNotNull(response);
+        assertEquals(30, response.getStadiumId());
+        assertEquals("Sân số 1", response.getStadiumName());
     }
 }

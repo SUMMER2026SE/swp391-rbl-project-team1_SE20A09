@@ -2,6 +2,8 @@ package com.sportvenue.controller;
 
 import com.sportvenue.dto.request.CreateStadiumRequest;
 import com.sportvenue.dto.request.UpdateStadiumRequest;
+import com.sportvenue.dto.request.CreateFacilityRequest;
+import com.sportvenue.dto.request.CreateCourtRequest;
 import com.sportvenue.dto.response.StadiumResponse;
 import com.sportvenue.security.RequireApprovedOwner;
 import com.sportvenue.security.UserPrincipal;
@@ -45,6 +47,30 @@ public class StadiumController {
             @Valid @RequestBody CreateStadiumRequest request) {
         log.info("Received request to create stadium: {} from owner: {}", request.getStadiumName(), userPrincipal.getUsername());
         StadiumResponse response = stadiumService.createStadium(request, userPrincipal.getUser().getUserId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/facilities")
+    @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
+    @Operation(summary = "Add new facility under Complex", description = "Allows an owner to add a new facility (L2) under a complex.")
+    public ResponseEntity<StadiumResponse> createFacility(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @Valid @RequestBody CreateFacilityRequest request) {
+        log.info("Received request to create facility: {} from owner: {}", request.getStadiumName(), userPrincipal.getUsername());
+        StadiumResponse response = stadiumService.createFacility(request, userPrincipal.getUser().getUserId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/courts")
+    @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
+    @Operation(summary = "Add new court under Facility", description = "Allows an owner to add a new court (L3) under a facility.")
+    public ResponseEntity<StadiumResponse> createCourt(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @Valid @RequestBody CreateCourtRequest request) {
+        log.info("Received request to create court: {} from owner: {}", request.getStadiumName(), userPrincipal.getUsername());
+        StadiumResponse response = stadiumService.createCourt(request, userPrincipal.getUser().getUserId());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

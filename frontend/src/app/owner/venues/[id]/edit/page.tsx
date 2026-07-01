@@ -119,7 +119,7 @@ export default function EditVenuePage() {
           };
           form.reset({
             stadiumName: stadiumData.stadiumName,
-            address: stadiumData.address,
+            address: stadiumData.address || "Địa chỉ mặc định theo Tổ hợp",
             latitude: stadiumData.latitude ?? 16.0544,
             longitude: stadiumData.longitude ?? 108.2022,
             sportTypeId: stadiumData.sportTypeId,
@@ -228,27 +228,29 @@ export default function EditVenuePage() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <AddressPicker
-                  initialAddress={stadium.address}
-                  initialLat={stadium.latitude}
-                  initialLng={stadium.longitude}
-                  onAddressChange={(data) => {
-                    form.setValue("address", data.addressText, { shouldValidate: true });
-                    form.setValue("latitude", data.lat, { shouldValidate: true });
-                    form.setValue("longitude", data.lng, { shouldValidate: true });
-                  }}
-                />
-                {form.formState.errors.address && (
-                  <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>
-                )}
-                {form.formState.errors.latitude && (
-                  <p className="text-sm text-destructive">{form.formState.errors.latitude.message}</p>
-                )}
-                {form.formState.errors.longitude && (
-                  <p className="text-sm text-destructive">{form.formState.errors.longitude.message}</p>
-                )}
-              </div>
+              {stadium?.nodeType !== 'COURT' && (
+                <div className="space-y-2">
+                  <AddressPicker
+                    initialAddress={stadium.address}
+                    initialLat={stadium.latitude}
+                    initialLng={stadium.longitude}
+                    onAddressChange={(data) => {
+                      form.setValue("address", data.addressText, { shouldValidate: true });
+                      form.setValue("latitude", data.lat, { shouldValidate: true });
+                      form.setValue("longitude", data.lng, { shouldValidate: true });
+                    }}
+                  />
+                  {form.formState.errors.address && (
+                    <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>
+                  )}
+                  {form.formState.errors.latitude && (
+                    <p className="text-sm text-destructive">{form.formState.errors.latitude.message}</p>
+                  )}
+                  {form.formState.errors.longitude && (
+                    <p className="text-sm text-destructive">{form.formState.errors.longitude.message}</p>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="description">Mô tả</Label>

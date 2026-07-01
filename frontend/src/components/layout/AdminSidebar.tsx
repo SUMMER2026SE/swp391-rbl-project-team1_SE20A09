@@ -25,7 +25,7 @@ export function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
     { id: 'dashboard', href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'customers', href: '/admin/customers', label: 'Khách hàng', icon: Users },
     { id: 'owners', href: '/admin/owner-approvals', label: 'Chủ sân', icon: Building2 },
-    { id: 'venues', href: '/admin/stadium-approvals', label: 'Sân', icon: MapPin },
+    { id: 'complexes', href: '/admin/complex-approvals', label: 'Tổ hợp', icon: MapPin },
     { id: 'categories', href: '/admin/sport-categories', label: 'Danh mục', icon: LayoutList },
     { id: 'complaints', href: '/admin/complaints', label: 'Khiếu nại', icon: AlertCircle },
   ];
