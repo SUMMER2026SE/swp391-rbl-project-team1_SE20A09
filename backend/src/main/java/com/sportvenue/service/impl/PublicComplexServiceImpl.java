@@ -15,6 +15,7 @@ import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.StadiumComplexRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.specification.StadiumComplexSpecification;
+import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.PublicComplexService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -25,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -36,6 +38,7 @@ public class PublicComplexServiceImpl implements PublicComplexService {
 
     private final StadiumComplexRepository stadiumComplexRepository;
     private final StadiumRepository stadiumRepository;
+    private final MaintenanceScheduleService maintenanceScheduleService;
 
     @Override
     @Transactional(readOnly = true)
@@ -161,6 +164,7 @@ public class PublicComplexServiceImpl implements PublicComplexService {
                 .openTime(s.getOpenTime())
                 .closeTime(s.getCloseTime())
                 .stadiumStatus(s.getStadiumStatus().name())
+                .underMaintenanceToday(maintenanceScheduleService.isStadiumUnderMaintenance(s, LocalDate.now()))
                 .imageUrls(imageUrls)
                 .build();
     }
@@ -179,6 +183,7 @@ public class PublicComplexServiceImpl implements PublicComplexService {
                 .pricePerHour(s.getPricePerHour())
                 .parentStadiumId(parentId)
                 .stadiumStatus(s.getStadiumStatus().name())
+                .underMaintenanceToday(maintenanceScheduleService.isStadiumUnderMaintenance(s, LocalDate.now()))
                 .imageUrls(imageUrls)
                 .build();
     }

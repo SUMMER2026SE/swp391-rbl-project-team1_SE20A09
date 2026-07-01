@@ -34,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -44,6 +45,7 @@ public class StadiumServiceImpl implements StadiumService {
 
     private final StadiumRepository stadiumRepository;
     private final OwnerRepository ownerRepository;
+    private final MaintenanceScheduleService maintenanceScheduleService;
     private final SportTypeRepository sportTypeRepository;
     private final BookingRepository bookingRepository;
     private final AmenityRepository amenityRepository;
@@ -145,9 +147,14 @@ public class StadiumServiceImpl implements StadiumService {
             return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
         };
 
+        LocalDate today = LocalDate.now();
         return stadiumRepository.findAll(spec)
                 .stream()
-                .map(stadiumMapper::toResponse)
+                .map(stadium -> {
+                    StadiumResponse response = stadiumMapper.toResponse(stadium);
+                    response.setUnderMaintenanceToday(maintenanceScheduleService.isStadiumUnderMaintenance(stadium, today));
+                    return response;
+                })
                 .toList();
     }
 
@@ -165,7 +172,9 @@ public class StadiumServiceImpl implements StadiumService {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
-        return stadiumMapper.toResponse(stadium);
+        StadiumResponse response = stadiumMapper.toResponse(stadium);
+        response.setUnderMaintenanceToday(maintenanceScheduleService.isStadiumUnderMaintenance(stadium, LocalDate.now()));
+        return response;
     }
 
     @Override

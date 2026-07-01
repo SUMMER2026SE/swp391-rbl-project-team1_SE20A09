@@ -19,5 +19,7 @@ public class CourtResponse {
     private BigDecimal pricePerHour;
     private Integer parentStadiumId;
     private String stadiumStatus;
+    /** True nếu Court bị chặn đặt HÔM NAY do bảo trì (kể cả cascade từ Facility/Complex cha) — dù stadiumStatus vẫn AVAILABLE. */
+    private Boolean underMaintenanceToday;
     private List<String> imageUrls;
 }
