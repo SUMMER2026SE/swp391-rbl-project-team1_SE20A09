@@ -120,8 +120,12 @@ public class PublicComplexServiceImpl implements PublicComplexService {
         }
 
         List<Stadium> facilities = stadiumRepository.findFacilitiesByComplexId(complexId);
+        // Batch — tối đa 2 query bất kể danh sách dài bao nhiêu, thay vì gọi isStadiumUnderMaintenance lặp lại
+        // cho từng facility (endpoint public không auth, cần tránh N+1 trên đường traffic cao).
+        java.util.Map<Integer, Boolean> maintenanceMap =
+                maintenanceScheduleService.isUnderMaintenanceToday(facilities, LocalDate.now());
         return facilities.stream()
-                .map(this::mapToFacilityResponse)
+                .map(s -> mapToFacilityResponse(s, maintenanceMap.getOrDefault(s.getStadiumId(), false)))
                 .collect(Collectors.toList());
     }
 
@@ -136,14 +140,16 @@ public class PublicComplexServiceImpl implements PublicComplexService {
         if (facility.getNodeType() != StadiumNodeType.FACILITY) {
             throw new BadRequestException("Provided ID is not a facility");
         }
-        
+
         List<Stadium> courts = stadiumRepository.findCourtsByFacilityId(facilityId);
+        java.util.Map<Integer, Boolean> maintenanceMap =
+                maintenanceScheduleService.isUnderMaintenanceToday(courts, LocalDate.now());
         return courts.stream()
-                .map(this::mapToCourtResponse)
+                .map(s -> mapToCourtResponse(s, maintenanceMap.getOrDefault(s.getStadiumId(), false)))
                 .collect(Collectors.toList());
     }
 
-    private FacilityResponse mapToFacilityResponse(Stadium s) {
+    private FacilityResponse mapToFacilityResponse(Stadium s, boolean underMaintenanceToday) {
         FacilityResponse.SportTypeInfo sportTypeInfo = null;
         if (s.getSportType() != null) {
             sportTypeInfo = FacilityResponse.SportTypeInfo.builder()
@@ -164,12 +170,12 @@ public class PublicComplexServiceImpl implements PublicComplexService {
                 .openTime(s.getOpenTime())
                 .closeTime(s.getCloseTime())
                 .stadiumStatus(s.getStadiumStatus().name())
-                .underMaintenanceToday(maintenanceScheduleService.isStadiumUnderMaintenance(s, LocalDate.now()))
+                .underMaintenanceToday(underMaintenanceToday)
                 .imageUrls(imageUrls)
                 .build();
     }
 
-    private CourtResponse mapToCourtResponse(Stadium s) {
+    private CourtResponse mapToCourtResponse(Stadium s, boolean underMaintenanceToday) {
         List<String> imageUrls = s.getImages() != null
                 ? s.getImages().stream().map(img -> img.getImageUrl()).collect(Collectors.toList())
                 : Collections.emptyList();
@@ -183,7 +189,7 @@ public class PublicComplexServiceImpl implements PublicComplexService {
                 .pricePerHour(s.getPricePerHour())
                 .parentStadiumId(parentId)
                 .stadiumStatus(s.getStadiumStatus().name())
-                .underMaintenanceToday(maintenanceScheduleService.isStadiumUnderMaintenance(s, LocalDate.now()))
+                .underMaintenanceToday(underMaintenanceToday)
                 .imageUrls(imageUrls)
                 .build();
     }

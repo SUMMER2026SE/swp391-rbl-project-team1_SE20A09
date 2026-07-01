@@ -9,6 +9,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -20,8 +24,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
+/**
+ * Bảo trì theo khung ngày ở cấp Stadium (Facility/Court). Có 1 sibling controller
+ * {@link ComplexMaintenanceScheduleController} cho cấp Complex — 2 controller tách riêng vì base
+ * path khác nhau ({@code /stadiums} vs {@code /complexes}), nhưng TOÀN BỘ business logic (ownership,
+ * conflict-check, cascade...) đã tập trung ở {@link MaintenanceScheduleService} — 2 controller chỉ là
+ * lớp routing mỏng. Khi sửa 1 trong 2 (VD thêm field request, đổi response), kiểm tra sibling controller
+ * xem có cần đổi tương ứng không (đặc biệt phần {@code @PreAuthorize}/ownership).
+ */
 @RestController
 @RequestMapping("/api/v1/stadiums")
 @RequiredArgsConstructor
@@ -46,9 +56,14 @@ public class MaintenanceScheduleController {
     }
 
     @GetMapping("/{stadiumId}/maintenance-schedules")
-    @Operation(summary = "List maintenance schedule history for a stadium")
-    public ResponseEntity<List<MaintenanceScheduleResponse>> listSchedules(@PathVariable Integer stadiumId) {
-        return ResponseEntity.ok(maintenanceScheduleService.listSchedules(stadiumId));
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(summary = "List maintenance schedule history for a stadium (owner-only, paginated)")
+    public ResponseEntity<Page<MaintenanceScheduleResponse>> listSchedules(
+            @PathVariable Integer stadiumId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PageableDefault(size = 20, sort = "startDate", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(maintenanceScheduleService.listSchedules(
+                stadiumId, userPrincipal.getUser().getUserId(), pageable));
     }
 
     @PatchMapping("/maintenance-schedules/{maintenanceId}/end")

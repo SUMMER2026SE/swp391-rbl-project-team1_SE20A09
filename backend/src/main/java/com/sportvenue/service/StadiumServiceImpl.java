@@ -148,11 +148,14 @@ public class StadiumServiceImpl implements StadiumService {
         };
 
         LocalDate today = LocalDate.now();
-        return stadiumRepository.findAll(spec)
-                .stream()
+        List<Stadium> stadiums = stadiumRepository.findAll(spec);
+        // Batch — tối đa 2 query bất kể danh sách dài bao nhiêu, thay vì gọi isStadiumUnderMaintenance
+        // (1-2 query/lần) lặp lại cho từng sân.
+        java.util.Map<Integer, Boolean> maintenanceByStadiumId = maintenanceScheduleService.isUnderMaintenanceToday(stadiums, today);
+        return stadiums.stream()
                 .map(stadium -> {
                     StadiumResponse response = stadiumMapper.toResponse(stadium);
-                    response.setUnderMaintenanceToday(maintenanceScheduleService.isStadiumUnderMaintenance(stadium, today));
+                    response.setUnderMaintenanceToday(maintenanceByStadiumId.getOrDefault(stadium.getStadiumId(), false));
                     return response;
                 })
                 .toList();

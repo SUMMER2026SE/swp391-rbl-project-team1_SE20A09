@@ -21,13 +21,19 @@ import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.service.MaintenanceScheduleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * UC-OWN: Quản lý lịch bảo trì theo khung ngày ({@link MaintenanceSchedule}) — gắn được ở
@@ -56,28 +62,92 @@ public class MaintenanceScheduleServiceImpl implements MaintenanceScheduleServic
     @Override
     @Transactional(readOnly = true)
     public boolean isStadiumUnderMaintenance(Stadium stadium, LocalDate date) {
-        if (stadium.getStadiumStatus() != StadiumStatus.AVAILABLE) {
+        if (staticallyUnderMaintenance(stadium)) {
             return true;
         }
-        Stadium parent = stadium.getParentStadium();
-        if (parent != null && parent.getStadiumStatus() != StadiumStatus.AVAILABLE) {
+        StadiumComplex complex = stadium.getComplex();
+        if (complex != null
+                && !maintenanceScheduleRepository.findActiveForComplexAndDate(complex.getComplexId(), date).isEmpty()) {
             return true;
+        }
+        return !maintenanceScheduleRepository.findActiveForStadiumsAndDate(stadiumAndParentIds(stadium), date).isEmpty();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isComplexUnderMaintenance(StadiumComplex complex, LocalDate date) {
+        if (complex.getComplexStatus() != ComplexStatus.AVAILABLE) {
+            return true;
+        }
+        return !maintenanceScheduleRepository.findActiveForComplexAndDate(complex.getComplexId(), date).isEmpty();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Integer, Boolean> isUnderMaintenanceToday(List<Stadium> stadiums, LocalDate date) {
+        Map<Integer, Boolean> result = new LinkedHashMap<>();
+        List<Stadium> needsScheduleLookup = new ArrayList<>();
+        for (Stadium stadium : stadiums) {
+            if (staticallyUnderMaintenance(stadium)) {
+                result.put(stadium.getStadiumId(), true);
+            } else {
+                needsScheduleLookup.add(stadium);
+            }
+        }
+        if (needsScheduleLookup.isEmpty()) {
+            return result;
+        }
+
+        Set<Integer> complexIds = new HashSet<>();
+        Set<Integer> stadiumIds = new HashSet<>();
+        for (Stadium stadium : needsScheduleLookup) {
+            if (stadium.getComplex() != null) {
+                complexIds.add(stadium.getComplex().getComplexId());
+            }
+            stadiumIds.addAll(stadiumAndParentIds(stadium));
+        }
+
+        Set<Integer> complexesUnderMaintenance = complexIds.isEmpty() ? Set.of()
+                : toComplexIdSet(maintenanceScheduleRepository.findActiveForComplexesInRange(
+                        List.copyOf(complexIds), date, date));
+        Set<Integer> stadiumsUnderMaintenance = toStadiumIdSet(
+                maintenanceScheduleRepository.findActiveForStadiumsInRange(List.copyOf(stadiumIds), date, date));
+
+        for (Stadium stadium : needsScheduleLookup) {
+            boolean underComplexSchedule = stadium.getComplex() != null
+                    && complexesUnderMaintenance.contains(stadium.getComplex().getComplexId());
+            boolean underStadiumSchedule = stadiumAndParentIds(stadium).stream().anyMatch(stadiumsUnderMaintenance::contains);
+            result.put(stadium.getStadiumId(), underComplexSchedule || underStadiumSchedule);
+        }
+        return result;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<LocalDate, Boolean> isUnderMaintenanceForDateRange(Stadium stadium, LocalDate rangeStart, LocalDate rangeEnd) {
+        Map<LocalDate, Boolean> result = new LinkedHashMap<>();
+
+        if (staticallyUnderMaintenance(stadium)) {
+            for (LocalDate d = rangeStart; !d.isAfter(rangeEnd); d = d.plusDays(1)) {
+                result.put(d, true);
+            }
+            return result;
         }
 
         StadiumComplex complex = stadium.getComplex();
-        if (complex != null) {
-            if (complex.getComplexStatus() != ComplexStatus.AVAILABLE) {
-                return true;
-            }
-            if (!maintenanceScheduleRepository.findActiveForComplexAndDate(complex.getComplexId(), date).isEmpty()) {
-                return true;
-            }
-        }
+        List<MaintenanceSchedule> complexSchedules = complex != null
+                ? maintenanceScheduleRepository.findActiveForComplexesInRange(List.of(complex.getComplexId()), rangeStart, rangeEnd)
+                : List.of();
+        List<MaintenanceSchedule> stadiumSchedules = maintenanceScheduleRepository.findActiveForStadiumsInRange(
+                stadiumAndParentIds(stadium), rangeStart, rangeEnd);
 
-        List<Integer> ids = parent != null
-                ? List.of(stadium.getStadiumId(), parent.getStadiumId())
-                : List.of(stadium.getStadiumId());
-        return !maintenanceScheduleRepository.findActiveForStadiumsAndDate(ids, date).isEmpty();
+        for (LocalDate d = rangeStart; !d.isAfter(rangeEnd); d = d.plusDays(1)) {
+            LocalDate date = d;
+            boolean under = complexSchedules.stream().anyMatch(s -> covers(s, date))
+                    || stadiumSchedules.stream().anyMatch(s -> covers(s, date));
+            result.put(date, under);
+        }
+        return result;
     }
 
     @Override
@@ -92,6 +162,7 @@ public class MaintenanceScheduleServiceImpl implements MaintenanceScheduleServic
         List<Integer> affectedStadiumIds = resolveAffectedStadiumIds(stadium);
         LocalDate rangeEnd = request.getEndDate() != null ? request.getEndDate() : FAR_FUTURE;
         rejectIfConflictingBookings(affectedStadiumIds, request.getStartDate(), rangeEnd);
+        rejectIfOverlappingStadiumSchedule(stadiumId, request.getStartDate(), rangeEnd);
 
         MaintenanceSchedule schedule = MaintenanceSchedule.builder()
                 .stadium(stadium)
@@ -121,6 +192,7 @@ public class MaintenanceScheduleServiceImpl implements MaintenanceScheduleServic
         if (!affectedCourtIds.isEmpty()) {
             rejectIfConflictingBookings(affectedCourtIds, request.getStartDate(), rangeEnd);
         }
+        rejectIfOverlappingComplexSchedule(complexId, request.getStartDate(), rangeEnd);
 
         MaintenanceSchedule schedule = MaintenanceSchedule.builder()
                 .complex(complex)
@@ -148,10 +220,19 @@ public class MaintenanceScheduleServiceImpl implements MaintenanceScheduleServic
             validateComplexOwnership(schedule.getComplex(), userId, "kết thúc lịch bảo trì này");
         }
 
+        LocalDate today = LocalDate.now();
+        if (schedule.getEndDate() != null && schedule.getEndDate().isBefore(today)) {
+            // Đã kết thúc tự nhiên từ trước (endDate < hôm nay) — "kết thúc sớm" không còn ý nghĩa gì,
+            // và nếu cứ chạy tiếp logic bên dưới sẽ ĐẨY endDate về tương lai (today - 1 > endDate cũ),
+            // vô tình hồi sinh 1 lịch bảo trì đã elapsed từ lâu. Coi như no-op.
+            log.info("🔧 Owner {} gọi end trên lịch bảo trì #{} đã elapsed từ trước (endDate={}) — bỏ qua",
+                    userId, maintenanceId, schedule.getEndDate());
+            return;
+        }
+
         // "Kết thúc ngay" nghĩa là giải phóng TỪ HÔM NAY trở đi -> endDate mục tiêu = hôm qua.
         // endDate là inclusive trong isStadiumUnderMaintenance (endDate >= date), nên set endDate = today
         // KHÔNG giải phóng được hôm nay — đây là bug đã phát hiện qua feedback thực tế, sửa lại cho đúng.
-        LocalDate today = LocalDate.now();
         LocalDate targetEnd = today.minusDays(1);
         if (targetEnd.isBefore(schedule.getStartDate())) {
             // Không còn ngày nào hợp lệ để giữ lại (chưa bắt đầu, hoặc bắt đầu đúng hôm nay)
@@ -169,23 +250,76 @@ public class MaintenanceScheduleServiceImpl implements MaintenanceScheduleServic
 
     @Override
     @Transactional(readOnly = true)
-    public List<MaintenanceScheduleResponse> listSchedules(Integer stadiumId) {
-        return maintenanceScheduleRepository.findByStadiumStadiumIdOrderByStartDateDesc(stadiumId).stream()
-                .map(this::toResponseWithComputedFields)
-                .toList();
+    public Page<MaintenanceScheduleResponse> listSchedules(Integer stadiumId, Integer userId, Pageable pageable) {
+        Stadium stadium = stadiumRepository.findById(stadiumId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân với ID " + stadiumId));
+        validateStadiumOwnership(stadium, userId, "xem lịch sử bảo trì của sân này");
+
+        return maintenanceScheduleRepository.findByStadiumStadiumIdOrderByStartDateDesc(stadiumId, pageable)
+                .map(this::toResponseWithComputedFields);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<MaintenanceScheduleResponse> listComplexSchedules(Integer complexId) {
-        return maintenanceScheduleRepository.findByComplexComplexIdOrderByStartDateDesc(complexId).stream()
-                .map(this::toResponseWithComputedFields)
-                .toList();
+    public Page<MaintenanceScheduleResponse> listComplexSchedules(Integer complexId, Integer userId, Pageable pageable) {
+        StadiumComplex complex = stadiumComplexRepository.findById(complexId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tổ hợp với ID " + complexId));
+        validateComplexOwnership(complex, userId, "xem lịch sử bảo trì của tổ hợp này");
+
+        return maintenanceScheduleRepository.findByComplexComplexIdOrderByStartDateDesc(complexId, pageable)
+                .map(this::toResponseWithComputedFields);
+    }
+
+    private boolean staticallyUnderMaintenance(Stadium stadium) {
+        if (stadium.getStadiumStatus() != StadiumStatus.AVAILABLE) {
+            return true;
+        }
+        Stadium parent = stadium.getParentStadium();
+        if (parent != null && parent.getStadiumStatus() != StadiumStatus.AVAILABLE) {
+            return true;
+        }
+        StadiumComplex complex = stadium.getComplex();
+        return complex != null && complex.getComplexStatus() != ComplexStatus.AVAILABLE;
+    }
+
+    private List<Integer> stadiumAndParentIds(Stadium stadium) {
+        Stadium parent = stadium.getParentStadium();
+        return parent != null
+                ? List.of(stadium.getStadiumId(), parent.getStadiumId())
+                : List.of(stadium.getStadiumId());
+    }
+
+    private boolean covers(MaintenanceSchedule schedule, LocalDate date) {
+        return !schedule.getStartDate().isAfter(date)
+                && (schedule.getEndDate() == null || !schedule.getEndDate().isBefore(date));
+    }
+
+    private Set<Integer> toComplexIdSet(List<MaintenanceSchedule> schedules) {
+        Set<Integer> ids = new HashSet<>();
+        for (MaintenanceSchedule s : schedules) {
+            if (s.getComplex() != null) {
+                ids.add(s.getComplex().getComplexId());
+            }
+        }
+        return ids;
+    }
+
+    private Set<Integer> toStadiumIdSet(List<MaintenanceSchedule> schedules) {
+        Set<Integer> ids = new HashSet<>();
+        for (MaintenanceSchedule s : schedules) {
+            if (s.getStadium() != null) {
+                ids.add(s.getStadium().getStadiumId());
+            }
+        }
+        return ids;
     }
 
     private void validateDateRange(CreateMaintenanceScheduleRequest request) {
         if (request.getEndDate() != null && request.getEndDate().isBefore(request.getStartDate())) {
             throw new BadRequestException("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu");
+        }
+        if (request.getStartDate().isBefore(LocalDate.now())) {
+            throw new BadRequestException("Ngày bắt đầu không được ở trong quá khứ");
         }
     }
 
@@ -197,6 +331,26 @@ public class MaintenanceScheduleServiceImpl implements MaintenanceScheduleServic
                     "Không thể tạo lịch bảo trì: có " + conflicts.size()
                             + " booking đã xác nhận (CONFIRMED) rơi vào khung này. "
                             + "Vui lòng tự xử lý các booking đó trước khi đặt bảo trì.");
+        }
+    }
+
+    /** Chặn tạo lịch bảo trì mới nếu đã có 1 lịch khác (chưa kết thúc) trùng khung ngày cho ĐÚNG sân này. */
+    private void rejectIfOverlappingStadiumSchedule(Integer stadiumId, LocalDate startDate, LocalDate rangeEnd) {
+        List<MaintenanceSchedule> overlapping = maintenanceScheduleRepository.findActiveForStadiumsInRange(
+                List.of(stadiumId), startDate, rangeEnd);
+        if (!overlapping.isEmpty()) {
+            throw new BadRequestException(
+                    "Sân này đã có lịch bảo trì khác trùng khung ngày — vui lòng kết thúc lịch cũ trước khi tạo mới.");
+        }
+    }
+
+    /** Tương tự {@link #rejectIfOverlappingStadiumSchedule} nhưng cho lịch bảo trì gắn trực tiếp ở cấp Complex. */
+    private void rejectIfOverlappingComplexSchedule(Integer complexId, LocalDate startDate, LocalDate rangeEnd) {
+        List<MaintenanceSchedule> overlapping = maintenanceScheduleRepository.findActiveForComplexesInRange(
+                List.of(complexId), startDate, rangeEnd);
+        if (!overlapping.isEmpty()) {
+            throw new BadRequestException(
+                    "Tổ hợp này đã có lịch bảo trì khác trùng khung ngày — vui lòng kết thúc lịch cũ trước khi tạo mới.");
         }
     }
 
