@@ -48,10 +48,7 @@ import {
   Building,
   CheckCircle2,
   ShieldCheck,
-  KeyRound,
-  Monitor,
   Bell,
-  LogIn,
   ToggleRight,
 } from "lucide-react";
 
@@ -578,7 +575,7 @@ function UserProfilePage() {
                 <CardContent>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-                    {/* ── LEFT COLUMN ─────────────────────────────────── */}
+                    {/* ── LEFT COLUMN — Tài khoản & Xác thực ─────────── */}
                     <div className="space-y-6">
 
                       {/* Section: Tài khoản & Xác thực */}
@@ -666,88 +663,10 @@ function UserProfilePage() {
                         )}
                       </div>
 
-                      {/* Section: 2FA */}
-                      <div>
-                        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                          Xác thực hai yếu tố (2FA)
-                        </h4>
-                        <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-white rounded-lg border border-slate-200">
-                              <KeyRound className="h-5 w-5 text-slate-500" />
-                            </div>
-                            <div>
-                              <div className="font-semibold text-sm text-slate-800">Xác thực hai bước</div>
-                              <div className="text-xs text-slate-400">Bảo vệ tài khoản quản trị bằng mã OTP</div>
-                            </div>
-                          </div>
-                          <Badge className="bg-slate-100 text-slate-500 border border-slate-200 text-xs">
-                            Sắp có
-                          </Badge>
-                        </div>
-                      </div>
-
-                      {/* Section: Active sessions */}
-                      <div>
-                        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                          Phiên đăng nhập đang hoạt động
-                        </h4>
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-slate-50">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 bg-white rounded-lg border border-slate-200">
-                                <Monitor className="h-5 w-5 text-slate-500" />
-                              </div>
-                              <div>
-                                <div className="font-semibold text-sm text-slate-800">Thiết bị hiện tại</div>
-                                <div className="text-xs text-slate-400">Phiên đăng nhập này</div>
-                              </div>
-                            </div>
-                            <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs">
-                              Đang hoạt động
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-slate-400 text-center sr-only" aria-hidden="true" />
-                        </div>
-                      </div>
                     </div>
 
-                    {/* ── RIGHT COLUMN ─────────────────────────────────── */}
+                    {/* ── RIGHT COLUMN — Thông báo hệ thống ──────────── */}
                     <div className="space-y-6">
-
-                      {/* Section: Hoạt động tài khoản */}
-                      <div>
-                        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                          Hoạt động tài khoản
-                        </h4>
-                        <div className="space-y-3">
-                          {/* Last login card */}
-                          <div className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 bg-slate-50">
-                            <div className="p-2 bg-white rounded-lg border border-slate-200 shrink-0">
-                              <LogIn className="h-5 w-5 text-slate-500" />
-                            </div>
-                            <div className="min-w-0">
-                              <div className="font-semibold text-sm text-slate-800">Đăng nhập gần nhất</div>
-                              <div className="text-xs text-slate-500 mt-0.5 truncate">
-                                {profile.createdAt
-                                  ? (() => {
-                                      const d = new Date();
-                                      const dd = String(d.getDate()).padStart(2, "0");
-                                      const mo = String(d.getMonth() + 1).padStart(2, "0");
-                                      const yyyy = d.getFullYear();
-                                      const hh = String(d.getHours()).padStart(2, "0");
-                                      const mm = String(d.getMinutes()).padStart(2, "0");
-                                      return `${dd}/${mo}/${yyyy} lúc ${hh}:${mm} · Phiên hiện tại`;
-                                    })()
-                                  : "—"}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Login count card — removed */}
-
-                        </div>
-                      </div>
 
                       {/* Section: Thông báo hệ thống */}
                       <div>
