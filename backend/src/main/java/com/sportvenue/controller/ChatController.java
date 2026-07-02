@@ -147,6 +147,17 @@ public class ChatController {
         return ResponseEntity.ok(result);
     }
 
+    // ── Group Leave ──────────────────────────────────────────────
+
+    @PostMapping("/conversations/{conversationId}/leave")
+    @Operation(summary = "Leave a group chat")
+    public ResponseEntity<Void> leaveGroupChat(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long conversationId) {
+        chatService.leaveGroupChat(conversationId, principal.getUserId());
+        return ResponseEntity.ok().build();
+    }
+
     // ── Message Recall ───────────────────────────────────────────
 
     @DeleteMapping("/messages/{messageId}/recall")
@@ -185,12 +196,5 @@ public class ChatController {
         return ResponseEntity.ok().build();
     }
 
-    @PostMapping("/conversations/{conversationId}/leave")
-    @Operation(summary = "Leave a group chat")
-    public ResponseEntity<Void> leaveGroupChat(
-            @AuthenticationPrincipal UserPrincipal principal,
-            @PathVariable Long conversationId) {
-        chatService.leaveGroupChat(conversationId, principal.getUserId());
-        return ResponseEntity.ok().build();
-    }
+
 }

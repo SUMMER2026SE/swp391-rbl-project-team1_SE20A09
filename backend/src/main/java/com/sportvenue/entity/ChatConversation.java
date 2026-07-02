@@ -64,6 +64,12 @@ public class ChatConversation {
     @Column(name = "name")
     private String name;
 
+    @Column(name = "user1_nickname", length = 100)
+    private String user1Nickname;
+
+    @Column(name = "user2_nickname", length = 100)
+    private String user2Nickname;
+
     @Column(name = "is_group")
     @Builder.Default
     private Boolean isGroup = false;

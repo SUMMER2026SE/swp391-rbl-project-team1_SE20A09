@@ -34,9 +34,11 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
      */
     @Query("SELECT COUNT(m) FROM ChatMessage m " +
            "LEFT JOIN m.conversation.participants p " +
+           "LEFT JOIN ChatConversationHiddenState h ON h.conversationId = m.conversation.conversationId AND h.userId = :userId " +
            "WHERE ((m.conversation.isGroup = false AND (m.conversation.user1.userId = :userId OR m.conversation.user2.userId = :userId)) " +
            "   OR (m.conversation.isGroup = true AND p.userId = :userId)) " +
            "AND m.sender.userId <> :userId " +
+           "AND (h IS NULL OR m.sentAt > h.hiddenAt) " +
            "AND (m.isRead = false AND :userId NOT IN (SELECT r.userId FROM m.readBy r))")
     long countUnreadForUser(@Param("userId") Integer userId);
 

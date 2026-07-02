@@ -12,15 +12,18 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import {
   Send, Search, MoreVertical, MessageSquare,
-  ArrowLeft, Loader2, CheckCheck, Users, Ban, Trash2, LogOut, EyeOff
+  ArrowLeft, Loader2, CheckCheck, Users, Ban, Trash2, LogOut, EyeOff,
+  Smile, Reply, Forward, MoreHorizontal, Pin, AlertTriangle, Plus, X, Edit3
 } from "lucide-react"
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   getConversations, getMessages, sendMessage, markConversationAsRead,
   getUnreadCount, searchUsers, deleteConversation, blockUser, unblockUser,
-  type ConversationDto, type ChatMessageDto
+  renameGroupChat, leaveGroupChat, type ConversationDto, type ChatMessageDto
 } from "@/lib/chat-api"
 import { useChatWebSocket, type TypingEvent, type BlockEvent } from "@/hooks/useChatWebSocket"
 
@@ -37,19 +40,71 @@ function formatRelativeTime(dateStr: string | null): string {
   return d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })
 }
 
+function formatMessagePreview(content: string | undefined | null): string {
+  if (!content) return ''
+  if (content.startsWith('{"action"')) {
+    try {
+      const parsed = JSON.parse(content)
+      if (parsed.action === 'RECALL') return 'Tin nhắn đã thu hồi'
+      if (parsed.action === 'REACT') return 'Đã thả cảm xúc'
+      if (parsed.action === 'REACT_REMOVE') return 'Đã gỡ cảm xúc'
+      if (parsed.action === 'PIN') return 'Đã ghim tin nhắn'
+      if (parsed.action === 'UNPIN') return 'Đã bỏ ghim tin nhắn'
+    } catch {}
+  }
+  const replyRegex = /^\[REPLY:.*?\]([\s\S]*?)\[\/REPLY\]([\s\S]*)$/
+  const match = content.match(replyRegex)
+  if (match) return match[2].trim()
+  
+  const oldReplyRegex = /^> Đang trả lời (.*?):\n> ([\s\S]*?)\n\n([\s\S]*)$/
+  const oldMatch = content.match(oldReplyRegex)
+  if (oldMatch) return oldMatch[3].trim()
+  
+  return content
+}
+
 function ChatPage() {
   const { data: session } = useSession()
   const currentUserId = (session?.user as any)?.userId as number | undefined
+  const currentUserName = session?.user?.name || 'Bạn'
   const queryClient = useQueryClient()
 
   // ── State ──────────────────────────────────────────────────
   const [conversations, setConversations] = useState<ConversationDto[]>([])
   const [selectedConv, setSelectedConv] = useState<ConversationDto | null>(null)
   const [messages, setMessages] = useState<ChatMessageDto[]>([])
+  const [recalledMessages, setRecalledMessages] = useState<Set<number>>(new Set())
+  const [reactions, setReactions] = useState<Record<number, string>>({})
+  const [replyingTo, setReplyingTo] = useState<ChatMessageDto | null>(null)
+  const [pinnedMessage, setPinnedMessage] = useState<{messageId: number, content: string} | null>(null)
+  const [forwardingMessage, setForwardingMessage] = useState<ChatMessageDto | null>(null)
+  const [forwardSearch, setForwardSearch] = useState("")
+  const [sentForwards, setSentForwards] = useState<Set<number>>(new Set())
   const [messageInput, setMessageInput] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<ConversationDto[]>([])
   const [isSearching, setIsSearching] = useState(false)
+  const [unreadOverrides, setUnreadOverrides] = useState<Record<number, boolean>>({})
+
+  useEffect(() => {
+    if (currentUserId) {
+      try {
+        const stored = localStorage.getItem(`chat_unread_overrides_${currentUserId}`)
+        if (stored) setUnreadOverrides(JSON.parse(stored))
+      } catch {}
+    }
+  }, [currentUserId])
+
+  const toggleUnreadOverride = useCallback((convId: number, value: boolean) => {
+    setUnreadOverrides(prev => {
+      const next = { ...prev }
+      if (value) next[convId] = true
+      else delete next[convId]
+      if (currentUserId) localStorage.setItem(`chat_unread_overrides_${currentUserId}`, JSON.stringify(next))
+      return next
+    })
+  }, [currentUserId])
+
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [sendingMessage, setSendingMessage] = useState(false)
   const [totalUnread, setTotalUnread] = useState(0)
@@ -61,17 +116,50 @@ function ChatPage() {
 
   // ── WebSocket ──────────────────────────────────────────────
   const handleWsMessage = useCallback((msg: ChatMessageDto) => {
+    // Intercept SYSTEM action messages
+    if (msg.messageType === 'SYSTEM' && msg.content.includes('"action"')) {
+      try {
+        const data = JSON.parse(msg.content)
+        if (data.action === 'RECALL') {
+          setRecalledMessages(prev => new Set(prev).add(data.messageId))
+        } else if (data.action === 'REACT') {
+          setReactions(prev => ({ ...prev, [data.messageId]: data.emoji }))
+        } else if (data.action === 'REACT_REMOVE') {
+          setReactions(prev => {
+            const next = { ...prev }
+            delete next[data.messageId]
+            return next
+          })
+        } else if (data.action === 'PIN') {
+          setPinnedMessage({ messageId: data.messageId, content: data.contentStr })
+        } else if (data.action === 'UNPIN') {
+          setPinnedMessage(prev => prev?.messageId === data.messageId ? null : prev)
+        }
+      } catch {}
+      return // Do not add to visible messages
+    }
+
     if (selectedConv && msg.conversationId === selectedConv.conversationId) {
       setMessages(prev => {
         if (prev.some(m => m.messageId === msg.messageId)) return prev
         return [...prev, msg]
       })
       if (msg.senderId !== currentUserId && selectedConv.conversationId) {
-        markConversationAsRead(selectedConv.conversationId).catch(() => { })
+        const cid = selectedConv.conversationId;
+        setTimeout(() => {
+          markConversationAsRead(cid).then(() => refreshUnread()).catch(() => { })
+        }, 1000)
       }
     }
     // Update conversation list
     setConversations(prev => {
+      const exists = prev.some(c => c.conversationId === msg.conversationId)
+      if (!exists) {
+        // Unknown conversation (e.g. first time chatting), fetch from API
+        loadConversations()
+        return prev
+      }
+      
       const updated = prev.map(c => {
         if (c.conversationId === msg.conversationId) {
           return {
@@ -107,11 +195,20 @@ function ChatPage() {
     }))
   }, [selectedConv])
 
+  const handleGroupRenamed = useCallback((event: any) => {
+    if (!event || !event.otherUserName) return;
+    setConversations(prev => prev.map(c => 
+      c.conversationId === event.conversationId ? { ...c, otherUserName: event.otherUserName } : c
+    ))
+    setSelectedConv(prev => (prev?.conversationId === event.conversationId) ? { ...prev, otherUserName: event.otherUserName } : prev)
+  }, [])
+
   const { sendTypingIndicator } = useChatWebSocket({
     userId: currentUserId ?? null,
     onMessage: handleWsMessage,
     onTyping: handleTyping,
-    onBlockStatus: handleBlockStatus
+    onBlockStatus: handleBlockStatus,
+    onGroupRenamed: handleGroupRenamed
   })
 
   useEffect(() => {
@@ -148,7 +245,33 @@ function ChatPage() {
     setLoadingMessages(true)
     try {
       const data = await getMessages(convId)
-      setMessages([...data.content].reverse())
+      const rawMessages = [...data.content].reverse()
+
+      const recalls = new Set<number>()
+      const reacts: Record<number, string> = {}
+      let pinnedMsg: {messageId: number, content: string} | null = null
+      const validMessages: ChatMessageDto[] = []
+
+      for (const m of rawMessages) {
+        if (m.messageType === 'SYSTEM' && m.content.includes('"action"')) {
+          try {
+            const parsed = JSON.parse(m.content)
+            if (parsed.action === 'RECALL') recalls.add(parsed.messageId)
+            if (parsed.action === 'REACT') reacts[parsed.messageId] = parsed.emoji
+            if (parsed.action === 'REACT_REMOVE') delete reacts[parsed.messageId]
+            if (parsed.action === 'PIN') pinnedMsg = { messageId: parsed.messageId, content: parsed.contentStr }
+            if (parsed.action === 'UNPIN' && pinnedMsg?.messageId === parsed.messageId) pinnedMsg = null
+          } catch {}
+        } else {
+          validMessages.push(m)
+        }
+      }
+
+      setRecalledMessages(recalls)
+      setReactions(reacts)
+      setPinnedMessage(pinnedMsg)
+      setMessages(validMessages)
+      
       await markConversationAsRead(convId)
       refreshUnread()
       setConversations(prev => prev.map(c => c.conversationId === convId ? { ...c, unreadCount: 0 } : c))
@@ -156,6 +279,9 @@ function ChatPage() {
   }
 
   function selectConversation(conv: ConversationDto) {
+    if (conv.conversationId && unreadOverrides[conv.conversationId]) {
+      toggleUnreadOverride(conv.conversationId, false)
+    }
     setSelectedConv(conv)
     setShowMobileChat(true)
 
@@ -191,7 +317,12 @@ function ChatPage() {
     if (!messageInput.trim() || !selectedConv || !currentUserId) return
     setSendingMessage(true)
     try {
-      const payload: any = { content: messageInput.trim() }
+      let finalContent = messageInput.trim()
+      if (replyingTo) {
+        finalContent = `[REPLY:${replyingTo.senderName || currentUserName}]${replyingTo.content.replace(/^\[REPLY:.*?\][\s\S]*?\[\/REPLY\]/, '')}[/REPLY]${finalContent}`
+      }
+
+      const payload: any = { content: finalContent }
       if (selectedConv.isGroup || !selectedConv.otherUserId) {
         payload.conversationId = selectedConv.conversationId
       } else {
@@ -205,6 +336,17 @@ function ChatPage() {
         return [...prev, msg]
       })
       setMessageInput("")
+      
+      // Force clear unread state when sending a message
+      if (selectedConv.conversationId) {
+        setConversations(prev => prev.map(c => 
+          c.conversationId === selectedConv.conversationId ? { ...c, unreadCount: 0 } : c
+        ))
+        if (unreadOverrides[selectedConv.conversationId]) {
+          toggleUnreadOverride(selectedConv.conversationId, false)
+        }
+      }
+
       if (!selectedConv.conversationId) {
         setSelectedConv(prev => prev ? { ...prev, conversationId: msg.conversationId } : prev)
         loadConversations()
@@ -227,6 +369,23 @@ function ChatPage() {
     } finally { 
       setSendingMessage(false) 
     }
+  }
+
+  async function handleSendSystemAction(action: 'RECALL' | 'REACT' | 'REACT_REMOVE' | 'PIN' | 'UNPIN', msgId: number, extraData?: any) {
+    if (!selectedConv || !currentUserId) return
+    try {
+      const payload: any = { 
+        content: JSON.stringify({ action, messageId: msgId, ...extraData }),
+        messageType: 'SYSTEM'
+      }
+      if (selectedConv.isGroup || !selectedConv.otherUserId) {
+        payload.conversationId = selectedConv.conversationId
+      } else {
+        payload.recipientId = selectedConv.otherUserId
+        if (selectedConv.conversationId) payload.conversationId = selectedConv.conversationId
+      }
+      await sendMessage(payload)
+    } catch {}
   }
 
   // ── Typing Indicator ──────────────────────────────────────
@@ -299,7 +458,11 @@ function ChatPage() {
                   <p className="text-sm text-muted-foreground">{searchQuery ? 'Không tìm thấy người dùng' : 'Chưa có cuộc trò chuyện nào'}</p>
                 </div>
               )}
-              {displayedList.map((conv, i) => (
+              {displayedList.map((conv, i) => {
+                const isOverride = conv.conversationId ? unreadOverrides[conv.conversationId] : false;
+                const displayUnread = isOverride ? Math.max(1, conv.unreadCount) : conv.unreadCount;
+
+                return (
                 <button key={(conv.otherUserId || conv.conversationId) + '-' + i} onClick={() => selectConversation(conv)}
                   className={`w-full p-3.5 flex gap-3 hover:bg-muted/60 transition-all duration-150 ${selectedConv?.conversationId === conv.conversationId ? 'bg-primary/5 border-l-2 border-l-primary' : 'border-l-2 border-l-transparent'}`}>
                   <div className="relative flex-shrink-0">
@@ -317,12 +480,12 @@ function ChatPage() {
                       {conv.lastMessageAt && <span className="text-[11px] text-muted-foreground flex-shrink-0 ml-2">{formatRelativeTime(conv.lastMessageAt)}</span>}
                     </div>
                     <div className="flex items-center justify-between">
-                      <p className={`text-xs truncate pr-2 ${conv.unreadCount > 0 ? 'text-foreground font-bold' : 'text-muted-foreground'}`}>{conv.lastMessagePreview || 'Bắt đầu trò chuyện...'}</p>
-                      {conv.unreadCount > 0 && <span className="bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">{conv.unreadCount}</span>}
+                      <p className={`text-xs truncate pr-2 ${displayUnread > 0 ? 'text-foreground font-bold' : 'text-muted-foreground'}`}>{formatMessagePreview(conv.lastMessagePreview) || 'Bắt đầu trò chuyện...'}</p>
+                      {displayUnread > 0 && <span className="bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">{displayUnread}</span>}
                     </div>
                   </div>
                 </button>
-              ))}
+              )})}
             </ScrollArea>
           </div>
 
@@ -359,17 +522,56 @@ function ChatPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-56">
-                      <DropdownMenuItem className="cursor-pointer" onClick={() => {
-                        // Mark as unread placeholder
+                      <DropdownMenuItem className="cursor-pointer" onClick={(e) => {
+                        e.stopPropagation()
                         if (selectedConv?.conversationId) {
-                          setConversations(prev => prev.map(c =>
-                            c.conversationId === selectedConv.conversationId ? { ...c, unreadCount: 1 } : c
-                          ))
+                          const isUnread = unreadOverrides[selectedConv.conversationId]
+                          if (isUnread) {
+                            toggleUnreadOverride(selectedConv.conversationId, false)
+                            setConversations(prev => prev.map(c =>
+                              c.conversationId === selectedConv.conversationId ? { ...c, unreadCount: 0 } : c
+                            ))
+                          } else {
+                            toggleUnreadOverride(selectedConv.conversationId, true)
+                            setConversations(prev => prev.map(c =>
+                              c.conversationId === selectedConv.conversationId ? { ...c, unreadCount: 1 } : c
+                            ))
+                          }
                         }
                       }}>
-                        <EyeOff className="h-4 w-4 mr-2" /> Đánh dấu chưa đọc
+                        {selectedConv?.conversationId && unreadOverrides[selectedConv.conversationId] ? (
+                          <CheckCheck className="h-4 w-4 mr-2" />
+                        ) : (
+                          <EyeOff className="h-4 w-4 mr-2" />
+                        )}
+                        {selectedConv?.conversationId && unreadOverrides[selectedConv.conversationId] ? 'Đánh dấu là đã đọc' : 'Đánh dấu là chưa đọc'}
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
+                      <DropdownMenuItem className="cursor-pointer" onClick={async () => {
+                        if (selectedConv?.conversationId) {
+                          const isGroup = selectedConv.isGroup;
+                          const promptMsg = isGroup ? 'Nhập tên nhóm mới:' : 'Nhập biệt danh mới cho người này (chỉ mình bạn thấy):';
+                          const newName = window.prompt(promptMsg, selectedConv.otherUserName || '');
+                          if (newName !== null && newName.trim() !== '' && newName.trim() !== selectedConv.otherUserName) {
+                            try {
+                              await renameGroupChat(selectedConv.conversationId, newName.trim());
+                              setConversations(prev => prev.map(c =>
+                                c.conversationId === selectedConv.conversationId ? { ...c, otherUserName: newName.trim() } : c
+                              ))
+                              setSelectedConv(prev => prev ? { ...prev, otherUserName: newName.trim() } : prev)
+                            } catch (err: any) {
+                              const isNetworkError = !err.response && err.message?.includes('Network');
+                              if (isNetworkError) {
+                                alert("Lỗi mạng: Không thể kết nối đến máy chủ. Vui lòng kiểm tra xem Backend đã chạy chưa.");
+                              } else {
+                                alert(isGroup ? "Không thể đổi tên nhóm. Bạn có thể không phải là thành viên của nhóm này." : "Không thể đặt biệt danh. Vui lòng thử lại sau.");
+                              }
+                            }
+                          }
+                        }
+                      }}>
+                        <Edit3 className="h-4 w-4 mr-2" /> {selectedConv?.isGroup ? 'Đổi tên nhóm' : 'Đổi biệt danh'}
+                      </DropdownMenuItem>
                       {!selectedConv?.isGroup && (
                         selectedConv?.blocked ? (
                           <DropdownMenuItem className="cursor-pointer text-primary focus:text-primary" onClick={async () => {
@@ -423,6 +625,22 @@ function ChatPage() {
                           </DropdownMenuItem>
                         )
                       )}
+                      {selectedConv?.isGroup && (
+                        <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive" onClick={async () => {
+                          if (selectedConv?.conversationId) {
+                            if (!window.confirm(`Bạn có chắc chắn muốn rời khỏi nhóm ${selectedConv.otherUserName}?`)) return;
+                            try {
+                              await leaveGroupChat(selectedConv.conversationId)
+                              setConversations(prev => prev.filter(c => c.conversationId !== selectedConv.conversationId))
+                              setSelectedConv(null)
+                            } catch {
+                              alert("Không thể rời khỏi nhóm. Vui lòng thử lại sau.")
+                            }
+                          }
+                        }}>
+                          <LogOut className="h-4 w-4 mr-2" /> Rời khỏi nhóm
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive" onClick={async () => {
                         if (selectedConv?.conversationId) {
                           try {
@@ -438,6 +656,21 @@ function ChatPage() {
                   </DropdownMenu>
                 </div>
 
+                {pinnedMessage && (
+                  <div className="bg-muted/30 px-4 py-2 border-b flex items-center justify-between shadow-sm cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => {
+                    const el = document.getElementById(`msg-${pinnedMessage.messageId}`)
+                    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    el?.classList.add('animate-pulse')
+                    setTimeout(() => el?.classList.remove('animate-pulse'), 2000)
+                  }}>
+                    <div className="flex flex-col min-w-0 pr-4">
+                      <span className="text-[10px] font-bold text-primary uppercase flex items-center gap-1 mb-0.5"><Pin className="h-3 w-3 fill-primary text-primary" /> Tin nhắn đã ghim</span>
+                      <span className="text-xs truncate text-muted-foreground">{pinnedMessage.content}</span>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleSendSystemAction('UNPIN', pinnedMessage.messageId); setPinnedMessage(null) }} className="h-6 w-6 p-0 rounded-full shrink-0"><X className="h-3 w-3" /></Button>
+                  </div>
+                )}
+
                 {/* Messages Area */}
                 <ScrollArea className="flex-1 min-h-0 p-4">
                   {loadingMessages ? (
@@ -450,41 +683,198 @@ function ChatPage() {
                   ) : (
                     <div className="space-y-2">
                       {messages.map((msg, index) => {
-                        const isMe = msg.senderId === currentUserId
-                        const isLast = index === messages.length - 1
-                        const showStatus = isLast
+                          const isMe = msg.senderId === currentUserId
+                          const isLast = index === messages.length - 1
+                          const showStatus = isLast
+
+                        const quickEmojis = ["❤️", "😆", "😮", "😢", "😡", "👍"]
+
+                        let replyName = null;
+                        let replyContent = null;
+                        let mainContent = msg.content;
+                        const replyRegex = /^\[REPLY:(.*?)\]([\s\S]*?)\[\/REPLY\]([\s\S]*)$/;
+                        const match = msg.content.match(replyRegex);
+                        if (match) {
+                          replyName = match[1];
+                          replyContent = match[2];
+                          mainContent = match[3];
+                        }
+                        
+                        if (recalledMessages.has(msg.messageId)) {
+                          return (
+                            <div key={msg.messageId} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in-up my-1`}>
+                              <div className={`px-3.5 py-2 border border-muted text-muted-foreground italic rounded-2xl ${isMe ? 'rounded-br-md' : 'rounded-bl-md'} text-sm`}>
+                                Tin nhắn đã được thu hồi
+                              </div>
+                            </div>
+                          )
+                        }
+                        
+                        if (msg.messageType === 'SYSTEM') {
+                          return (
+                            <div key={msg.messageId} className="flex justify-center my-2 animate-fade-in-up">
+                              <div className="bg-muted/50 px-4 py-1.5 rounded-full text-xs text-muted-foreground font-medium border shadow-sm">
+                                {mainContent}
+                              </div>
+                            </div>
+                          )
+                        }
 
                         return (
-                          <div key={msg.messageId} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
-                            <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[75%] sm:max-w-sm md:max-w-md`}>
-                              <div className={`${isMe ? 'bg-primary text-primary-foreground rounded-2xl rounded-br-md' : 'bg-muted rounded-2xl rounded-bl-md'} px-3.5 py-2`}>
+                          <div key={msg.messageId} className={`flex group items-center ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in-up ${reactions[msg.messageId] ? 'mb-4 z-10' : 'mb-2'}`}>
+                            {isMe && (
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity mr-2">
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-muted" onClick={() => setReplyingTo(msg)}><Reply className="h-4 w-4 text-muted-foreground" /></Button>
+                                
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-muted"><Smile className="h-4 w-4 text-muted-foreground" /></Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent side="top" align="end" className="w-auto p-1.5 rounded-full flex items-center gap-1 bg-card shadow-md border">
+                                    {quickEmojis.map(emoji => (
+                                      <button key={emoji} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted text-lg transition-transform hover:scale-125" onClick={() => {
+                                        setReactions(prev => ({ ...prev, [msg.messageId]: emoji }))
+                                        handleSendSystemAction('REACT', msg.messageId, { emoji })
+                                      }}>
+                                        {emoji}
+                                      </button>
+                                    ))}
+                                  </PopoverContent>
+                                </Popover>
+
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-muted"><MoreHorizontal className="h-4 w-4 text-muted-foreground" /></Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-40 rounded-xl">
+                                    <DropdownMenuItem className="cursor-pointer" onClick={() => {
+                                      setRecalledMessages(prev => new Set(prev).add(msg.messageId))
+                                      handleSendSystemAction('RECALL', msg.messageId)
+                                    }}>Thu hồi</DropdownMenuItem>
+                                    <DropdownMenuItem className="cursor-pointer" onClick={() => setForwardingMessage(msg)}>Chuyển tiếp</DropdownMenuItem>
+                                    <DropdownMenuItem className="cursor-pointer" onClick={() => {
+                                      if (pinnedMessage?.messageId === msg.messageId) {
+                                        setPinnedMessage(null)
+                                        handleSendSystemAction('UNPIN', msg.messageId)
+                                      } else {
+                                        setPinnedMessage({ messageId: msg.messageId, content: mainContent })
+                                        handleSendSystemAction('PIN', msg.messageId, { contentStr: mainContent })
+                                      }
+                                    }}>{pinnedMessage?.messageId === msg.messageId ? 'Bỏ ghim' : 'Ghim'}</DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            )}
+                            <div id={`msg-${msg.messageId}`} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[75%] sm:max-w-sm md:max-w-md`}>
+                              {replyContent && (
+                                <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} mb-1 w-full`}>
+                                  <div className="text-xs text-muted-foreground flex items-center gap-1 mb-1 font-medium ml-1 mr-1">
+                                    <Reply className="h-3 w-3" />
+                                    {isMe ? (replyName === currentUserName ? 'Bạn đã trả lời chính mình' : `Bạn đã trả lời ${replyName}`) : `${msg.senderName} đã trả lời ${replyName}`}
+                                  </div>
+                                  <div className="bg-muted/60 text-muted-foreground px-3 py-1.5 rounded-2xl text-xs max-w-[85%] truncate opacity-80">
+                                    {replyContent}
+                                  </div>
+                                </div>
+                              )}
+                              <div className={`relative ${isMe ? 'bg-primary text-primary-foreground rounded-2xl rounded-br-md' : 'bg-muted rounded-2xl rounded-bl-md'} px-3.5 py-2 ${reactions[msg.messageId] ? 'mb-3' : ''}`}>
                                 {selectedConv.isGroup && !isMe && (
                                   <p className="text-xs font-semibold text-primary mb-1">{msg.senderName}</p>
                                 )}
-                                <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                                <p className="text-sm whitespace-pre-wrap break-words">{mainContent}</p>
+                                
+                                {/* Reaction Badge */}
+                                {reactions[msg.messageId] && (
+                                  <button 
+                                    className={`absolute -bottom-2.5 ${isMe ? 'right-0' : '-right-2'} bg-background border shadow-sm rounded-full px-1 py-0 text-[11px] animate-in zoom-in hover:bg-muted cursor-pointer transition-transform hover:scale-110 z-20`}
+                                    onClick={() => {
+                                      setReactions(prev => {
+                                        const next = { ...prev }
+                                        delete next[msg.messageId]
+                                        return next
+                                      })
+                                      handleSendSystemAction('REACT_REMOVE', msg.messageId)
+                                    }}
+                                  >
+                                    {reactions[msg.messageId]}
+                                  </button>
+                                )}
                               </div>
                               {showStatus && (
                                 <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                                   <span className="text-[10px] text-muted-foreground">
                                     {isMe
-                                      ? (msg.isRead ? 'Đã xem' : `Đã gửi ${formatRelativeTime(msg.timestamp)}`)
-                                      : formatRelativeTime(msg.timestamp)}
+                                      ? (msg.isRead ? 'Đã xem' : (isLast ? `Đã gửi ${formatRelativeTime(msg.timestamp || msg.sentAt)}` : ''))
+                                      : (isLast ? formatRelativeTime(msg.timestamp || msg.sentAt) : '')}
                                   </span>
-                                  {isMe && msg.isRead && !selectedConv.isGroup && (
-                                    <div className="w-3.5 h-3.5 rounded-full overflow-hidden border border-background ml-1 shrink-0">
-                                      {selectedConv.otherUserAvatar ? (
-                                        <img src={selectedConv.otherUserAvatar} className="w-full h-full object-cover" alt="Seen" />
+                                  {isMe && msg.isRead && (
+                                    <div className="flex -space-x-1 ml-1">
+                                      {selectedConv.isGroup ? (
+                                        msg.readByNames?.slice(0, 3).map((name, idx) => {
+                                          const avatar = msg.readByAvatars?.[idx]
+                                          return (
+                                            <div key={idx} className="w-3.5 h-3.5 rounded-full overflow-hidden border border-background shrink-0 z-10 bg-card" style={{ zIndex: 10 - idx }} title={name}>
+                                              {avatar ? (
+                                                <img src={avatar} className="w-full h-full object-cover" alt="Seen" />
+                                              ) : (
+                                                <div className="w-full h-full bg-emerald-100 flex items-center justify-center text-[7px] text-emerald-600 font-bold">{name?.[0]?.toUpperCase()}</div>
+                                              )}
+                                            </div>
+                                          )
+                                        })
                                       ) : (
-                                        <div className="w-full h-full bg-emerald-100 flex items-center justify-center text-[7px] text-emerald-600 font-bold">{selectedConv.otherUserName?.[0]?.toUpperCase()}</div>
+                                        <div className="w-3.5 h-3.5 rounded-full overflow-hidden border border-background shrink-0 bg-card">
+                                          {selectedConv.otherUserAvatar ? (
+                                            <img src={selectedConv.otherUserAvatar} className="w-full h-full object-cover" alt="Seen" />
+                                          ) : (
+                                            <div className="w-full h-full bg-emerald-100 flex items-center justify-center text-[7px] text-emerald-600 font-bold">{selectedConv.otherUserName?.[0]?.toUpperCase()}</div>
+                                          )}
+                                        </div>
                                       )}
                                     </div>
-                                  )}
-                                  {isMe && !msg.isRead && !selectedConv.isGroup && (
-                                    <div className="w-2.5 h-2.5 rounded-full bg-muted-foreground/40 ml-1 shrink-0" />
                                   )}
                                 </div>
                               )}
                             </div>
+                            {!isMe && (
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-muted"><Smile className="h-4 w-4 text-muted-foreground" /></Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent side="top" align="start" className="w-auto p-1.5 rounded-full flex items-center gap-1 bg-card shadow-md border">
+                                    {quickEmojis.map(emoji => (
+                                      <button key={emoji} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted text-lg transition-transform hover:scale-125" onClick={() => {
+                                        setReactions(prev => ({ ...prev, [msg.messageId]: emoji }))
+                                        handleSendSystemAction('REACT', msg.messageId, { emoji })
+                                      }}>
+                                        {emoji}
+                                      </button>
+                                    ))}
+                                  </PopoverContent>
+                                </Popover>
+
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-muted" onClick={() => setReplyingTo(msg)}><Reply className="h-4 w-4 text-muted-foreground" /></Button>
+
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-muted"><MoreHorizontal className="h-4 w-4 text-muted-foreground" /></Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="start" className="w-40 rounded-xl">
+                                    <DropdownMenuItem className="cursor-pointer" onClick={() => setForwardingMessage(msg)}>Chuyển tiếp</DropdownMenuItem>
+                                    <DropdownMenuItem className="cursor-pointer" onClick={() => {
+                                      if (pinnedMessage?.messageId === msg.messageId) {
+                                        setPinnedMessage(null)
+                                        handleSendSystemAction('UNPIN', msg.messageId)
+                                      } else {
+                                        setPinnedMessage({ messageId: msg.messageId, content: mainContent })
+                                        handleSendSystemAction('PIN', msg.messageId, { contentStr: mainContent })
+                                      }
+                                    }}>{pinnedMessage?.messageId === msg.messageId ? 'Bỏ ghim' : 'Ghim'}</DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            )}
                           </div>
                         )
                       })}
@@ -505,22 +895,32 @@ function ChatPage() {
                 </ScrollArea>
 
                 {/* Message Input */}
-                <div className="shrink-0 px-4 py-3 border-t bg-card/80 backdrop-blur-sm">
-                  {selectedConv.blocked ? (
-                    <div className="text-center py-2 text-sm text-destructive font-medium bg-destructive/10 rounded-lg">Bạn đã chặn người dùng này</div>
-                  ) : selectedConv.blockedByThem ? (
-                    <div className="text-center py-2 text-sm text-muted-foreground bg-muted rounded-lg">Bạn không thể trả lời cuộc trò chuyện này</div>
-                  ) : (
-                    <div className="flex gap-2 items-end">
-                      <Input placeholder="Nhập tin nhắn..." value={messageInput}
-                        onChange={(e) => handleInputChange(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && messageInput.trim()) { e.preventDefault(); handleSendMessage() } }}
-                        className="h-10" disabled={sendingMessage} />
-                      <Button className="h-10 px-4" disabled={!messageInput.trim() || sendingMessage} onClick={handleSendMessage}>
-                        {sendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      </Button>
+                <div className="shrink-0 flex flex-col border-t bg-card/80 backdrop-blur-sm">
+                  {replyingTo && (
+                    <div className="flex items-center justify-between bg-muted/30 px-4 py-2 border-b">
+                      <div className="text-xs text-muted-foreground truncate border-l-2 border-primary pl-2">
+                        Đang trả lời <span className="font-semibold">{replyingTo.senderName || currentUserName}</span>: {replyingTo.content.replace(/^\[REPLY:.*?\][\s\S]*?\[\/REPLY\]/, '')}
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => setReplyingTo(null)} className="h-6 w-6 p-0 rounded-full hover:bg-muted-foreground/20"><X className="h-3 w-3" /></Button>
                     </div>
                   )}
+                  <div className="px-4 py-3">
+                    {selectedConv.blocked ? (
+                      <div className="text-center py-2 text-sm text-destructive font-medium bg-destructive/10 rounded-lg">Bạn đã chặn người dùng này</div>
+                    ) : selectedConv.blockedByThem ? (
+                      <div className="text-center py-2 text-sm text-muted-foreground bg-muted rounded-lg">Bạn không thể trả lời cuộc trò chuyện này</div>
+                    ) : (
+                      <div className="flex gap-2 items-end">
+                        <Input placeholder="Nhập tin nhắn..." value={messageInput}
+                          onChange={(e) => handleInputChange(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && messageInput.trim()) { e.preventDefault(); handleSendMessage() } }}
+                          className="h-10 rounded-full px-4 bg-muted/50 border-none focus-visible:ring-1" disabled={sendingMessage} />
+                        <Button className="h-10 w-10 rounded-full p-0 flex-shrink-0" disabled={!messageInput.trim() || sendingMessage} onClick={handleSendMessage}>
+                          {sendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </>
             ) : (
@@ -538,6 +938,64 @@ function ChatPage() {
           </div>
         </div>
       </div>
+
+      <Dialog open={!!forwardingMessage} onOpenChange={(open) => {
+        if (!open) { setForwardingMessage(null); setSentForwards(new Set()) }
+      }}>
+        <DialogContent className="sm:max-w-md bg-card border-none shadow-2xl rounded-2xl">
+          <DialogHeader className="border-b pb-3 mb-2">
+            <DialogTitle className="text-center text-lg font-bold">Chuyển tiếp</DialogTitle>
+          </DialogHeader>
+          <div className="px-1">
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Tìm kiếm người và nhóm" className="pl-9 h-10 bg-muted/50 rounded-full border-none focus-visible:ring-0" value={forwardSearch} onChange={e => setForwardSearch(e.target.value)} />
+            </div>
+            <h4 className="text-sm font-semibold mb-3">Mới đây</h4>
+            <ScrollArea className="h-[300px] pr-2">
+              <div className="space-y-4">
+                {conversations.filter(c => c.otherUserName?.toLowerCase().includes(forwardSearch.toLowerCase())).map(conv => (
+                  <div key={conv.conversationId || conv.otherUserId} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-11 w-11">
+                        <AvatarImage src={conv.otherUserAvatar || ''} />
+                        <AvatarFallback>{conv.otherUserName?.[0]?.toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <span className="font-semibold text-[15px]">{conv.otherUserName}</span>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      disabled={sentForwards.has(conv.otherUserId || 0)}
+                      onClick={async () => {
+                        if (!currentUserId || !forwardingMessage || !conv.otherUserId) return
+                        try {
+                          const payload: any = { content: forwardingMessage.content }
+                          if (conv.isGroup || !conv.otherUserId) payload.conversationId = conv.conversationId
+                          else { payload.recipientId = conv.otherUserId; if (conv.conversationId) payload.conversationId = conv.conversationId }
+                          
+                          const sentMsg = await sendMessage(payload)
+                          setSentForwards(prev => new Set(prev).add(conv.otherUserId!))
+                          
+                          if (selectedConv?.conversationId === conv.conversationId) setMessages(prev => [...prev, sentMsg])
+                          setConversations(prev => prev.map(c => 
+                            c.conversationId === conv.conversationId || c.otherUserId === conv.otherUserId ? { ...c, lastMessagePreview: sentMsg.content, lastMessageAt: sentMsg.sentAt } : c
+                          ).sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime()))
+                        } catch {}
+                      }} 
+                      className={`rounded-lg px-5 py-4 font-semibold shadow-none transition-colors ${sentForwards.has(conv.otherUserId || 0) ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-primary/10 text-primary hover:bg-primary/20'}`}
+                    >
+                      {sentForwards.has(conv.otherUserId || 0) ? 'Đã gửi' : 'Gửi'}
+                    </Button>
+                  </div>
+                ))}
+                {conversations.filter(c => c.otherUserName?.toLowerCase().includes(forwardSearch.toLowerCase())).length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground text-sm">Không tìm thấy kết quả</div>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -26,6 +26,7 @@ export interface ChatMessageDto {
   senderAvatar: string | null
   content: string
   timestamp: string
+  sentAt?: string
   isRead: boolean
   messageType: 'TEXT' | 'IMAGE' | 'FILE' | 'SYSTEM'
   action?: 'left_group'
@@ -35,6 +36,7 @@ export interface ChatMessageDto {
   quotedMessageId?: number
   quotedMessageContent?: string
   readByAvatars?: string[]
+  readByNames?: string[]
   forwarded?: boolean
 }
 
@@ -128,5 +130,3 @@ export async function leaveGroupChat(conversationId: number): Promise<void> {
 export async function deleteConversation(conversationId: number): Promise<void> {
   return del<void>(`/chat/conversations/${conversationId}`)
 }
-
-

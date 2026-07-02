@@ -35,4 +35,5 @@ public class ChatMessageDto {
     
     // Seen-by indicator
     private java.util.List<String> readByAvatars;
+    private java.util.List<String> readByNames;
 }
