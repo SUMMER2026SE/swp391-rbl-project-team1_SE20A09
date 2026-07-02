@@ -56,3 +56,4 @@ CLAUDE.md
 .claude/CLAUDE.md
 .claude/settings.json
 .gemini/settings.json
+*.txt

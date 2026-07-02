@@ -61,7 +61,7 @@ function formatMessagePreview(content: string | undefined | null): string {
 
 function ChatPage() {
   const { data: session } = useSession()
-  const currentUserId = (session?.user as any)?.userId as number | undefined
+  const currentUserId = (session?.user as { userId?: number })?.userId
   const currentUserName = session?.user?.name || 'Bạn'
   const queryClient = useQueryClient()
 
@@ -963,7 +963,7 @@ function ChatPage() {
                       onClick={async () => {
                         if (!currentUserId || !forwardingMessage || !conv.otherUserId) return
                         try {
-                          const payload: any = { content: forwardingMessage.content }
+                          const payload: { content: string; conversationId?: number; recipientId?: number } = { content: forwardingMessage.content }
                           if (conv.isGroup || !conv.otherUserId) payload.conversationId = conv.conversationId
                           else { payload.recipientId = conv.otherUserId; if (conv.conversationId) payload.conversationId = conv.conversationId }
                           
