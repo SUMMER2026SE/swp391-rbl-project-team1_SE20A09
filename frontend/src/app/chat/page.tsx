@@ -7,23 +7,19 @@ import { Header } from "@/components/layout/Header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
 import {
-  Send, Search, MoreVertical, MessageSquare,
-  ArrowLeft, Loader2, CheckCheck, Users, Ban, Trash2, LogOut, EyeOff,
-  Smile, Reply, Forward, MoreHorizontal, Pin, AlertTriangle, Plus, X, Edit3
+  Send, Search, MessageSquare, Loader2,
+  Smile, Reply, MoreHorizontal, Pin, X
 } from "lucide-react"
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   getConversations, getMessages, sendMessage, markConversationAsRead,
-  getUnreadCount, searchUsers, deleteConversation, blockUser, unblockUser,
-  renameGroupChat, leaveGroupChat, type ConversationDto, type ChatMessageDto
+  getUnreadCount, type ConversationDto, type ChatMessageDto
 } from "@/lib/chat-api"
 import { useChatWebSocket, type TypingEvent, type BlockEvent } from "@/hooks/useChatWebSocket"
 
@@ -82,8 +78,6 @@ function ChatPage() {
   const [sentForwards, setSentForwards] = useState<Set<number>>(new Set())
   const [messageInput, setMessageInput] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
-  const [searchResults, setSearchResults] = useState<ConversationDto[]>([])
-  const [isSearching, setIsSearching] = useState(false)
   const [unreadOverrides, setUnreadOverrides] = useState<Record<number, boolean>>({})
 
   useEffect(() => {
