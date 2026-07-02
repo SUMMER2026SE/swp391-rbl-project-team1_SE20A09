@@ -18,6 +18,7 @@ import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.ComplaintRepository;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.service.AdminDashboardService;
 import com.sportvenue.service.NotificationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -62,6 +63,9 @@ class ComplaintServiceImplTest {
 
     @Mock
     private SimpMessagingTemplate messagingTemplate;
+
+    @Mock
+    private AdminDashboardService adminDashboardService;
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();

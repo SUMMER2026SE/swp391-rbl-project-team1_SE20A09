@@ -41,6 +41,7 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
     private final PasswordEncoder passwordEncoder;
     private final OtpService otpService;
     private final NotificationService notificationService;
+    private final com.sportvenue.service.AdminDashboardService adminDashboardService;
 
     @Override
     @Transactional
@@ -87,9 +88,13 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                 .identityCardUrl(request.getIdentityCardUrl())
                 .approvedStatus(ApprovedStatus.PENDING)
                 .build();
-        ownerRepository.save(owner);
-
+        Owner savedOwner = ownerRepository.save(owner);
         otpService.createAndSendOtp(savedUser);
+
+        // Thông báo cho Admin: dùng 'owner' (pre-save) để tránh NPE nếu save() trả null trong test.
+        // Trong production, savedOwner luôn non-null vì DB generate ID.
+        Owner ownerForNotif = savedOwner != null ? savedOwner : owner;
+        notifyAdminsNewOwner(ownerForNotif);
 
         return new MessageResponse("Đăng ký thành công. Vui lòng kiểm tra email để nhận mã xác thực OTP.");
     }
@@ -131,7 +136,11 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         }
 
         Owner savedOwner = ownerRepository.save(owner);
-        return mapToOwnerDetailResponse(savedOwner);
+
+        // Thông báo cho Admin: có chủ sân mới/tái nộp hồ sơ chờ duyệt
+        notifyAdminsNewOwner(savedOwner != null ? savedOwner : owner);
+
+        return mapToOwnerDetailResponse(savedOwner != null ? savedOwner : owner);
     }
 
     @Override
@@ -248,6 +257,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         }
 
         Owner savedOwner = ownerRepository.save(owner);
+        // Xóa cache dashboard — số liệu chủ sân / duyệt chờ thay đổi
+        adminDashboardService.evictDashboardCache();
         return mapToOwnerDetailResponse(savedOwner);
     }
 
@@ -269,5 +280,24 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                 .approvedByEmail(owner.getApprovedBy() != null ? owner.getApprovedBy().getEmail() : null)
                 .approvedAt(owner.getApprovedAt())
                 .build();
+    }
+
+    /** Gửi thông báo cho tất cả Admin khi có chủ sân mới đăng ký / tái nộp hồ sơ. */
+    private void notifyAdminsNewOwner(Owner owner) {
+        if (owner == null) {
+            return;
+        }
+        String ownerName = owner.getUser() != null ? owner.getUser().getFullName() : "N/A";
+        String bizName = owner.getBusinessName() != null ? owner.getBusinessName() : "Chưa có tên";
+        String resourceId = "OWNER-" + owner.getOwnerId();
+        userRepository.findAllAdmins().forEach(admin ->
+            notificationService.createNotification(
+                admin.getUserId(),
+                "Chủ sân mới đăng ký",
+                ownerName + " (" + bizName + ") đang chờ phê duyệt",
+                NotificationType.OWNER_APPROVAL,
+                resourceId
+            )
+        );
     }
 }

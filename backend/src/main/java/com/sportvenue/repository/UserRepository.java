@@ -56,5 +56,9 @@ public interface UserRepository extends JpaRepository<User, Integer> {
 
     @Query("SELECT COUNT(u) FROM User u WHERE u.role.roleName = :roleName")
     long countByRoleName(@Param("roleName") String roleName);
+
+    /** Lấy danh sách tất cả Admin user — dùng để gửi notification cho admin. */
+    @Query("SELECT u FROM User u WHERE u.role.roleName = 'Admin'")
+    java.util.List<User> findAllAdmins();
 }
 
