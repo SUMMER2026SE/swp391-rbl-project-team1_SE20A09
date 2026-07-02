@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════════
--- V7.4__seed_real_stadiums_osm.sql — Seed sân thật từ OpenStreetMap
+-- V7.6__seed_real_stadiums_osm.sql — Seed sân thật từ OpenStreetMap
 -- Nguồn: scripts/fetch-overpass-stadiums.mjs (Overpass API, dữ liệu OSM/ODbL)
 -- Sinh tự động bởi scripts/generate-seed-sql-from-osm.mjs — 161 địa điểm
 -- Giá thuê/giờ, giờ mở cửa, rating là dữ liệu GIẢ LẬP (OSM không có) — chỉ

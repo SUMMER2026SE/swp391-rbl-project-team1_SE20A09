@@ -16,10 +16,15 @@ import path from "node:path";
 
 const INPUT_FILE = path.join(process.cwd(), "scripts", "output", "overpass-all.json");
 const PEXELS_FILE = path.join(process.cwd(), "scripts", "output", "pexels-images.json");
+// LƯU Ý: số version Flyway (V7.6) không tự động — mỗi lần regenerate, hãy
+// kiểm tra lại trong backend/.../db/migration/ (và các branch khác đang mở
+// PR) xem version này có bị trùng không trước khi chạy migrate. Từng bị vỡ
+// vì trùng V7.4/V7.5 với 1 branch khác (feature/stadium/maintenance-schedule)
+// đã áp lên chung 1 DB dev — Flyway coi version đã chạy nên bỏ qua file mới.
 const OUTPUT_FILE = path.join(
   process.cwd(),
   "backend", "src", "main", "resources", "db", "migration",
-  "V7.4__seed_real_stadiums_osm.sql"
+  "V7.6__seed_real_stadiums_osm.sql"
 );
 
 // 2 owner đã APPROVED sẵn có trong V2__seed_data.sql — luân phiên gán chủ sân.
@@ -162,7 +167,7 @@ async function main() {
 
   const header = [
     "-- ══════════════════════════════════════════════════════════════════════════",
-    "-- V7.4__seed_real_stadiums_osm.sql — Seed sân thật từ OpenStreetMap",
+    "-- V7.6__seed_real_stadiums_osm.sql — Seed sân thật từ OpenStreetMap",
     "-- Nguồn: scripts/fetch-overpass-stadiums.mjs (Overpass API, dữ liệu OSM/ODbL)",
     `-- Sinh tự động bởi scripts/generate-seed-sql-from-osm.mjs — ${venues.length} địa điểm`,
     "-- Giá thuê/giờ, giờ mở cửa, rating là dữ liệu GIẢ LẬP (OSM không có) — chỉ",

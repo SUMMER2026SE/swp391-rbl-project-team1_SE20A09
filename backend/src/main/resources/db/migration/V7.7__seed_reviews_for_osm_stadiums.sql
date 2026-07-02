@@ -1,12 +1,12 @@
 -- ══════════════════════════════════════════════════════════════════════════
--- V7.5__seed_reviews_for_osm_stadiums.sql
+-- V7.7__seed_reviews_for_osm_stadiums.sql
 -- Seed review/rating thực tế (nội dung giả lập tiếng Việt) cho các sân được
--- thêm bởi V7.4 (dữ liệu OSM). Mỗi review đi kèm 1 booking COMPLETED hợp lệ
+-- thêm bởi V7.6 (dữ liệu OSM). Mỗi review đi kèm 1 booking COMPLETED hợp lệ
 -- (đúng luồng nghiệp vụ: reviews.booking_id NOT NULL UNIQUE).
 --
 -- Phạm vi: CHỈ áp dụng cho COURT thuộc complex có cover_image_url bắt đầu
 -- bằng 'https://images.pexels.com' — đây là dấu hiệu duy nhất phân biệt các
--- complex được sinh bởi V7.4 với 6 complex cũ đã có review từ trước (V2,
+-- complex được sinh bởi V7.6 với 6 complex cũ đã có review từ trước (V2,
 -- V2.2, V4_8, V6). Không đụng tới dữ liệu review/rating đã có sẵn.
 --
 -- ~80% số sân con (COURT) đủ điều kiện sẽ nhận 1-4 review từ các khách hàng
