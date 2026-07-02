@@ -78,8 +78,12 @@ function buildComplexBlock(venue, index, imagePool) {
   const cfg = SPORT_CONFIG[venue.sportTypeMapped];
   const basePrice = roundToThousand(randInt(cfg.priceMin, cfg.priceMax));
   const courtCount = randInt(cfg.courtsMin, cfg.courtsMax);
-  const rating = (3.5 + Math.random() * 1.5).toFixed(2);
-  const reviewCount = randInt(0, 120);
+  // KHÔNG random average_rating/review_count ở đây — để mặc định (5.0 / 0).
+  // V7.7 (seed review) là nguồn duy nhất được phép ghi đè 2 field này, dựa
+  // trên review thật. Random ở bước tạo complex từng gây bug: complex nào
+  // không có court được chọn review ở V7.7 (~20% theo thiết kế) vẫn giữ
+  // nguyên rating/review_count GIẢ — hiển thị "4.3 sao" trong khi có 0 review
+  // thật, gây khó hiểu cho người dùng.
   const pickedImages = pickImages(imagePool, venue.sportTypeMapped, 3);
   const coverImage = pickedImages[0] ?? `https://picsum.photos/seed/${encodeURIComponent(venue.osmId)}/800/600`;
   const galleryImages = pickedImages.slice(1);
@@ -98,7 +102,7 @@ function buildComplexBlock(venue, index, imagePool) {
   lines.push(`        ${sqlString(venue.address)},`);
   lines.push(`        ${sqlString(venue.phone)},`);
   lines.push(`        ${venue.latitude ?? "NULL"}, ${venue.longitude ?? "NULL"},`);
-  lines.push(`        ${sqlString(coverImage)}, 'AVAILABLE', 'APPROVED', ${rating}, ${reviewCount}, NOW()`);
+  lines.push(`        ${sqlString(coverImage)}, 'AVAILABLE', 'APPROVED', 5.0, 0, NOW()`);
   lines.push(`    ) RETURNING complex_id`);
   lines.push(`),`);
   if (galleryImages.length > 0) {
