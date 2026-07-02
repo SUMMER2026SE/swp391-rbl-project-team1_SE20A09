@@ -33,9 +33,18 @@ public class StadiumResponse {
     private LocalTime openTime; 
     private LocalTime closeTime; 
     private BigDecimal pricePerHour;
-    private String stadiumStatus; 
+    private String stadiumStatus;
     private String approvedStatus;
-    
+
+    /**
+     * True nếu sân đang bị chặn đặt HÔM NAY do bất kỳ cơ chế bảo trì nào (stadiumStatus,
+     * complexStatus, hoặc MaintenanceSchedule có khung ngày đang active) — kể cả khi
+     * {@code stadiumStatus} vẫn là "AVAILABLE" (bảo trì có khung ngày cố tình không đổi
+     * stadiumStatus). Chỉ được populate ở các endpoint dành cho Owner (getMyStadiums,
+     * getStadiumByIdAndOwner) — null ở các response public/search.
+     */
+    private Boolean underMaintenanceToday;
+
     // Hierarchy fields
     private String nodeType;
     private Integer complexId;

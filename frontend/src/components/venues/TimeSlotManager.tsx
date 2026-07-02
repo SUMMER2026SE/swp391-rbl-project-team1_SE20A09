@@ -634,10 +634,17 @@ export function TimeSlotManager({
                               )
                             }
 
-                            const label = slot.status === "MAINTENANCE" ? "Bảo trì" : "Đã qua";
+                            const isMaintenance = slot.status === "MAINTENANCE";
+                            const label = isMaintenance ? "Bảo trì" : "Đã qua";
                             return (
                               <td key={day.date} className="p-0">
-                                <div className="min-h-[48px] h-[48px] rounded-[6px] bg-slate-50 border-[0.5px] border-slate-200 flex items-center justify-center px-3 text-[13px] font-medium text-slate-400 select-none cursor-not-allowed">
+                                <div
+                                  className={`min-h-[48px] h-[48px] rounded-[6px] border-[0.5px] flex items-center justify-center px-3 text-[13px] font-medium select-none cursor-not-allowed ${
+                                    isMaintenance
+                                      ? "bg-amber-50 border-amber-200 text-amber-600"
+                                      : "bg-slate-50 border-slate-200 text-slate-400"
+                                  }`}
+                                >
                                   {label}
                                 </div>
                               </td>

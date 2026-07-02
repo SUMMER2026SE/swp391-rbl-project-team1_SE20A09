@@ -465,8 +465,10 @@ export default function ComplexDetail({
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {courts.map((court) => {
-                          const isAvailable = court.stadiumStatus === 'AVAILABLE'
-                          const isMaintenance = court.stadiumStatus === 'MAINTENANCE'
+                          // stadiumStatus riêng vẫn AVAILABLE khi bảo trì đến từ Facility/Complex cha
+                          // (cascade) hoặc MaintenanceSchedule theo khung ngày.
+                          const isAvailable = court.stadiumStatus === 'AVAILABLE' && !court.underMaintenanceToday
+                          const isMaintenance = court.stadiumStatus === 'MAINTENANCE' || (court.stadiumStatus === 'AVAILABLE' && !!court.underMaintenanceToday)
                           return (
                             <div
                               key={court.stadiumId}
@@ -506,7 +508,7 @@ export default function ComplexDetail({
                                     disabled
                                     className="w-full flex items-center justify-center bg-gray-100 text-gray-400 text-[12px] font-semibold py-2 rounded-[8px] cursor-not-allowed"
                                   >
-                                    Tạm đóng
+                                    {isMaintenance ? 'Đang bảo trì' : 'Tạm đóng'}
                                   </button>
                                 )}
                               </div>

@@ -36,6 +36,7 @@ import com.sportvenue.repository.TimeSlotExceptionRepository;
 import com.sportvenue.entity.TimeSlotException;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.BookingService;
+import com.sportvenue.service.MaintenanceScheduleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -91,6 +92,7 @@ public class BookingServiceImpl implements BookingService {
     private final AccessoryRepository accessoryRepository;
     private final BookingAccessoryRepository bookingAccessoryRepository;
     private final TimeSlotExceptionRepository timeSlotExceptionRepository;
+    private final MaintenanceScheduleService maintenanceScheduleService;
 
     @Override
     @Transactional
@@ -170,6 +172,10 @@ public class BookingServiceImpl implements BookingService {
         if (slot.getSlotStatus() == SlotStatus.MAINTENANCE) {
             throw new BadRequestException(
                     "Khung giờ #" + slot.getSlotId() + " đang bảo trì, không thể đặt");
+        }
+        if (maintenanceScheduleService.isStadiumUnderMaintenance(stadium, reservationDate)) {
+            throw new BadRequestException(
+                    "Sân đang trong lịch bảo trì ngày " + reservationDate + ", không thể đặt");
         }
         LocalDateTime slotStart = LocalDateTime.of(reservationDate, effectiveStart);
         if (!slotStart.isAfter(LocalDateTime.now())) {
@@ -266,6 +272,19 @@ public class BookingServiceImpl implements BookingService {
             throw new BadRequestException(
                     "Booking #" + bookingId + " không ở trạng thái chờ thanh toán. "
                             + "Hiện tại: " + booking.getBookingStatus());
+        }
+
+        // Chỉ CẢNH BÁO, không chặn: tại thời điểm này khách đã thanh toán thật qua cổng thanh toán
+        // (confirmPayment không tự capture tiền — chỉ đồng bộ trạng thái nội bộ sau khi cổng đã báo
+        // thành công). Chặn ở đây sẽ khiến khách mất tiền mà không có booking — tệ hơn hiện trạng.
+        // createSchedule chỉ conflict-check với booking CONFIRMED (không tính PENDING_PAYMENT) nên
+        // vẫn còn khe hở hẹp (~5 phút) nếu Owner đặt bảo trì đúng lúc khách đang thanh toán — log lại
+        // rõ ràng để Owner/Admin chủ động xử lý thay vì âm thầm trôi qua.
+        if (booking.getStadium() != null
+                && maintenanceScheduleService.isStadiumUnderMaintenance(booking.getStadium(), booking.getReservationDate())) {
+            log.warn("⚠️ Booking #{} được xác nhận thanh toán trong lúc sân {} đang bảo trì ngày {} — "
+                            + "cần Owner/Admin kiểm tra và liên hệ khách để xử lý (đổi lịch/hoàn tiền) nếu cần.",
+                    booking.getBookingId(), booking.getStadium().getStadiumId(), booking.getReservationDate());
         }
 
         booking.setBookingStatus(BookingStatus.CONFIRMED);
@@ -445,12 +464,17 @@ public class BookingServiceImpl implements BookingService {
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter hhmm = DateTimeFormatter.ofPattern("HH:mm");
 
+        // Batch — 1 query cho cả tuần thay vì gọi isStadiumUnderMaintenance (1-2 query/lần) 7 lần, 1 lần/ngày.
+        Map<LocalDate, Boolean> underMaintenanceByDate =
+                maintenanceScheduleService.isUnderMaintenanceForDateRange(stadium, monday, sunday);
+
         List<WeeklySlotDayDto> days = new ArrayList<>(7);
         for (int i = 0; i < 7; i++) {
             LocalDate date = monday.plusDays(i);
             Set<Integer> bookedSlotIds = bookedByDate.getOrDefault(date, Set.of());
             Map<Integer, TimeSlotException> dayExceptions = exceptionsByDate.getOrDefault(date, Map.of());
-            days.add(buildWeeklySlotDay(date, stadium, slots, bookedSlotIds, dayExceptions, now, hhmm));
+            boolean underMaintenance = underMaintenanceByDate.getOrDefault(date, false);
+            days.add(buildWeeklySlotDay(date, stadium, slots, bookedSlotIds, dayExceptions, underMaintenance, now, hhmm));
         }
 
         log.info("📅 UC-CUS-01: Stadium {} weekly slots — {}..{} ({} bookings)",
@@ -469,6 +493,7 @@ public class BookingServiceImpl implements BookingService {
             List<TimeSlot> slots,
             Set<Integer> bookedSlotIds,
             Map<Integer, TimeSlotException> dayExceptions,
+            boolean underMaintenance,
             LocalDateTime now,
             DateTimeFormatter hhmm) {
         java.time.LocalTime openT = stadium.getOpenTime() != null ? stadium.getOpenTime() : java.time.LocalTime.MIN;
@@ -506,6 +531,8 @@ public class BookingServiceImpl implements BookingService {
                         status = "BOOKED";
                     } else if (!slotStart.isAfter(now)) {
                         status = "PAST";
+                    } else if (underMaintenance) {
+                        status = "MAINTENANCE";
                     } else {
                         status = "AVAILABLE";
                     }

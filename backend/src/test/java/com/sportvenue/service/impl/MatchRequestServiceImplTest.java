@@ -78,6 +78,9 @@ class MatchRequestServiceImplTest {
     @Mock
     private TimeSlotRepository timeSlotRepository;
 
+    @Mock
+    private com.sportvenue.service.MaintenanceScheduleService maintenanceScheduleService;
+
     private MatchRequestServiceImpl matchRequestService;
 
     @BeforeEach
@@ -90,7 +93,8 @@ class MatchRequestServiceImplTest {
                 bookingRepository,
                 joinRequestRepository,
                 stadiumComplexRepository,
-                timeSlotRepository
+                timeSlotRepository,
+                maintenanceScheduleService
         );
     }
 
