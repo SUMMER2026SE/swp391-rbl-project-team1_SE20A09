@@ -26,6 +26,18 @@ public interface ReviewRepository extends JpaRepository<Review, Integer> {
     @EntityGraph(attributePaths = {"user", "booking", "stadium"})
     Page<Review> findByStadiumStadiumIdOrderByCreatedAtDesc(Integer stadiumId, Pageable pageable);
 
+    /**
+     * Lấy danh sách review của TẤT CẢ các COURT thuộc một Complex — dùng cho
+     * trang chi tiết tổ hợp. Review chỉ được lưu ở cấp COURT (stadium_id trỏ
+     * tới sân con cụ thể), nên trang Complex/Facility không thể dùng
+     * findByStadiumStadiumId trực tiếp (complex_id và facility_id khác hẳn
+     * dải ID của COURT) — phải gộp qua stadium.complex.complexId.
+     */
+    @EntityGraph(attributePaths = {"user", "booking", "stadium"})
+    Page<Review> findByStadiumComplexComplexIdOrderByCreatedAtDesc(Integer complexId, Pageable pageable);
+
+    long countByStadiumComplexComplexId(Integer complexId);
+
     /** Lấy danh sách review của một user. */
     @EntityGraph(attributePaths = {"stadium", "user", "booking"})
     Page<Review> findByUserEmailOrderByCreatedAtDesc(String email, Pageable pageable);
