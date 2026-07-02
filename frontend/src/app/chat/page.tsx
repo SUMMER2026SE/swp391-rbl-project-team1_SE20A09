@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
 import {
-  Send, MessageSquare, Loader2,
+  Send, MessageSquare, Loader2, Search, Users, ArrowLeft, LogOut, Trash2,
   Smile, Reply, Pin, X, MoreHorizontal, MoreVertical, CheckCheck, EyeOff, Edit3, Ban
 } from "lucide-react"
 import {
@@ -19,11 +20,12 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   getConversations, getMessages, sendMessage, markConversationAsRead,
-  getUnreadCount, type ConversationDto, type ChatMessageDto
+  getUnreadCount, searchUsers, renameGroupChat, blockUser, unblockUser,
+  leaveGroupChat, deleteConversation, type ConversationDto, type ChatMessageDto
 } from "@/lib/chat-api"
 import { useChatWebSocket, type TypingEvent, type BlockEvent } from "@/hooks/useChatWebSocket"
 
-function formatRelativeTime(dateStr: string | null): string {
+function formatRelativeTime(dateStr: string | null | undefined): string {
   if (!dateStr) return ''
   const d = new Date(dateStr)
   const now = new Date()
@@ -78,6 +80,8 @@ function ChatPage() {
   const [sentForwards, setSentForwards] = useState<Set<number>>(new Set())
   const [messageInput, setMessageInput] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<ConversationDto[]>([])
+  const [isSearching, setIsSearching] = useState(false)
   const [unreadOverrides, setUnreadOverrides] = useState<Record<number, boolean>>({})
 
   useEffect(() => {
@@ -189,8 +193,8 @@ function ChatPage() {
     }))
   }, [selectedConv])
 
-  const handleGroupRenamed = useCallback((event: { conversationId: number; otherUserName: string }) => {
-    if (!event || !event.otherUserName) return;
+  const handleGroupRenamed = useCallback((event: ConversationDto) => {
+    if (!event?.conversationId || !event.otherUserName) return;
     setConversations(prev => prev.map(c => 
       c.conversationId === event.conversationId ? { ...c, otherUserName: event.otherUserName } : c
     ))
@@ -297,7 +301,32 @@ function ChatPage() {
   }
 
   // ── Search ─────────────────────────────────────────────────
+  useEffect(() => {
+    const query = searchQuery.trim()
+    if (query.length < 2) {
+      setSearchResults([])
+      setIsSearching(false)
+      return
+    }
 
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      setIsSearching(true)
+      try {
+        const results = await searchUsers(query)
+        if (!cancelled) setSearchResults(results)
+      } catch {
+        if (!cancelled) setSearchResults([])
+      } finally {
+        if (!cancelled) setIsSearching(false)
+      }
+    }, 300)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [searchQuery])
 
   // ── Send Message ───────────────────────────────────────────
   async function handleSendMessage() {
@@ -310,11 +339,14 @@ function ChatPage() {
       }
 
       const payload: { content: string; conversationId?: number; recipientId?: number } = { content: finalContent }
-      if (selectedConv.isGroup || !selectedConv.otherUserId) {
+      if (selectedConv.isGroup) {
+        if (!selectedConv.conversationId) return
         payload.conversationId = selectedConv.conversationId
-      } else {
+      } else if (selectedConv.otherUserId) {
         payload.recipientId = selectedConv.otherUserId
         if (selectedConv.conversationId) payload.conversationId = selectedConv.conversationId
+      } else {
+        return
       }
 
       const msg = await sendMessage(payload)
@@ -366,11 +398,14 @@ function ChatPage() {
         content: JSON.stringify({ action, messageId: msgId, ...extraData }),
         messageType: 'SYSTEM'
       }
-      if (selectedConv.isGroup || !selectedConv.otherUserId) {
+      if (selectedConv.isGroup) {
+        if (!selectedConv.conversationId) return
         payload.conversationId = selectedConv.conversationId
-      } else {
+      } else if (selectedConv.otherUserId) {
         payload.recipientId = selectedConv.otherUserId
         if (selectedConv.conversationId) payload.conversationId = selectedConv.conversationId
+      } else {
+        return
       }
       await sendMessage(payload)
     } catch {}
@@ -953,26 +988,35 @@ function ChatPage() {
                     </div>
                     <Button 
                       size="sm" 
-                      disabled={sentForwards.has(conv.otherUserId || 0)}
+                      disabled={sentForwards.has(conv.conversationId ?? conv.otherUserId ?? 0)}
                       onClick={async () => {
-                        if (!currentUserId || !forwardingMessage || !conv.otherUserId) return
+                        const targetId = conv.conversationId ?? conv.otherUserId
+                        if (!currentUserId || !forwardingMessage || !targetId || (!conv.isGroup && !conv.otherUserId)) return
                         try {
                           const payload: { content: string; conversationId?: number; recipientId?: number } = { content: forwardingMessage.content }
-                          if (conv.isGroup || !conv.otherUserId) payload.conversationId = conv.conversationId
-                          else { payload.recipientId = conv.otherUserId; if (conv.conversationId) payload.conversationId = conv.conversationId }
+                          if (conv.isGroup) {
+                            if (!conv.conversationId) return
+                            payload.conversationId = conv.conversationId
+                          }
+                          else if (conv.otherUserId) {
+                            payload.recipientId = conv.otherUserId
+                            if (conv.conversationId) payload.conversationId = conv.conversationId
+                          } else {
+                            return
+                          }
                           
                           const sentMsg = await sendMessage(payload)
-                          setSentForwards(prev => new Set(prev).add(conv.otherUserId!))
+                          setSentForwards(prev => new Set(prev).add(targetId))
                           
                           if (selectedConv?.conversationId === conv.conversationId) setMessages(prev => [...prev, sentMsg])
                           setConversations(prev => prev.map(c => 
-                            c.conversationId === conv.conversationId || c.otherUserId === conv.otherUserId ? { ...c, lastMessagePreview: sentMsg.content, lastMessageAt: sentMsg.sentAt } : c
+                            c.conversationId === conv.conversationId || c.otherUserId === conv.otherUserId ? { ...c, lastMessagePreview: sentMsg.content, lastMessageAt: sentMsg.sentAt ?? sentMsg.timestamp } : c
                           ).sort((a, b) => new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime()))
                         } catch {}
                       }} 
-                      className={`rounded-lg px-5 py-4 font-semibold shadow-none transition-colors ${sentForwards.has(conv.otherUserId || 0) ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-primary/10 text-primary hover:bg-primary/20'}`}
+                      className={`rounded-lg px-5 py-4 font-semibold shadow-none transition-colors ${sentForwards.has(conv.conversationId ?? conv.otherUserId ?? 0) ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-primary/10 text-primary hover:bg-primary/20'}`}
                     >
-                      {sentForwards.has(conv.otherUserId || 0) ? 'Đã gửi' : 'Gửi'}
+                      {sentForwards.has(conv.conversationId ?? conv.otherUserId ?? 0) ? 'Đã gửi' : 'Gửi'}
                     </Button>
                   </div>
                 ))}
