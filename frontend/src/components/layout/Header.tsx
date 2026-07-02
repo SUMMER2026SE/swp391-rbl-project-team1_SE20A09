@@ -23,7 +23,7 @@ import { Button } from "../ui/button";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { NotificationBell } from "../notifications/NotificationBell";
+import { OwnerNotificationBell } from "../notifications/OwnerNotificationBell";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import {
   DropdownMenu,
@@ -427,7 +427,7 @@ export function Header() {
                     </div>
                   )}
                   {/* Notification Bell */}
-                  {isOwnerArea && user.roleName === "Owner" && <NotificationBell />}
+                  {isOwnerArea && user.roleName === "Owner" && <OwnerNotificationBell />}
                   {/* User Avatar */}
                   <UserAccountMenu user={user} />
                 </div>
