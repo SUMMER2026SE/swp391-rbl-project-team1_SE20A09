@@ -110,11 +110,18 @@ function buildComplexBlock(venue, index, imagePool) {
   }
   lines.push(`new_facility AS (`);
   lines.push(`    INSERT INTO stadiums (`);
-  lines.push(`        sport_type_id, stadium_name, description, node_type, complex_id,`);
+  lines.push(`        owner_id, sport_type_id, stadium_name, description, node_type, complex_id,`);
   lines.push(`        open_time, close_time, price_per_hour, stadium_status, approved_status,`);
   lines.push(`        average_rating, review_count, created_at`);
   lines.push(`    )`);
-  lines.push(`    SELECT (SELECT sport_type_id FROM sport_types WHERE sport_name = ${sqlString(venue.sportTypeMapped)}),`);
+  // owner_id PHẢI được set trực tiếp trên Stadium (không chỉ ở complex) — đúng
+  // như StadiumServiceImpl.java thật đang làm khi tạo Facility/Court. Nhiều
+  // repository (ReviewRepository, BookingRepository, ComplaintRepository,
+  // PaymentRepository, OwnerBookingService.validateStadiumOwnership) query
+  // trực tiếp qua "stadium.owner", KHÔNG dùng resolveOwner() — để NULL sẽ
+  // khiến Owner không thấy booking/review/complaint/payment của sân này.
+  lines.push(`    SELECT (SELECT owner_id FROM owners WHERE business_name = ${sqlString(owner)}),`);
+  lines.push(`        (SELECT sport_type_id FROM sport_types WHERE sport_name = ${sqlString(venue.sportTypeMapped)}),`);
   lines.push(`        ${sqlString(venue.name)}, ${sqlString(description)}, 'FACILITY', complex_id,`);
   lines.push(`        '${OPEN_TIME}', '${CLOSE_TIME}', ${basePrice}.00, 'AVAILABLE', 'APPROVED', 5.0, 0, NOW()`);
   lines.push(`    FROM new_complex`);
@@ -122,11 +129,12 @@ function buildComplexBlock(venue, index, imagePool) {
   lines.push(`),`);
   lines.push(`new_courts AS (`);
   lines.push(`    INSERT INTO stadiums (`);
-  lines.push(`        stadium_name, node_type, complex_id, parent_stadium_id, open_time, close_time,`);
+  lines.push(`        owner_id, stadium_name, node_type, complex_id, parent_stadium_id, open_time, close_time,`);
   lines.push(`        price_per_hour, football_field_type, stadium_status, approved_status,`);
   lines.push(`        average_rating, review_count, created_at`);
   lines.push(`    )`);
-  lines.push(`    SELECT 'Sân ' || court_no, 'COURT', f.complex_id, f.stadium_id, '${OPEN_TIME}', '${CLOSE_TIME}',`);
+  lines.push(`    SELECT (SELECT owner_id FROM owners WHERE business_name = ${sqlString(owner)}),`);
+  lines.push(`        'Sân ' || court_no, 'COURT', f.complex_id, f.stadium_id, '${OPEN_TIME}', '${CLOSE_TIME}',`);
   lines.push(`        ${basePrice}.00 + (court_no * 10000),`);
   if (venue.sportTypeMapped === "Football") {
     lines.push(`        (ARRAY['${FOOTBALL_FIELD_TYPES.join("','")}'])[1 + floor(random() * ${FOOTBALL_FIELD_TYPES.length})::int],`);
