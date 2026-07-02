@@ -79,7 +79,7 @@ export default function WeeklyAgendaGrid({
         </div>
 
         {/* Trục giờ + 7 cột ngày — cuộn dọc riêng bên trong, header ngày ở trên luôn cố định. */}
-        <div className="max-h-[560px] overflow-y-auto">
+        <div className="max-h-[560px] overflow-y-auto pt-2">
           <div className="flex relative" style={{ height: axis.totalHeight }}>
             <div className="w-14 shrink-0 sticky left-0 z-20 bg-background relative">
               {axis.lines.map((line) => (
