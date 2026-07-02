@@ -15,13 +15,13 @@ import {
   Wallet,
   Bell,
   AlertTriangle,
-  Clock,
   ChevronRight,
+  Crown,
 } from "lucide-react";
-import { IconBrandMessenger } from "@tabler/icons-react";
 import { Button } from "../ui/button";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { OwnerNotificationBell } from "../notifications/OwnerNotificationBell";
 import { ChatBadge } from "../chat/ChatBadge";

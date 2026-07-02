@@ -9,11 +9,11 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
-  Send, Search, MessageSquare, Loader2,
-  Smile, Reply, MoreHorizontal, Pin, X
+  Send, MessageSquare, Loader2,
+  Smile, Reply, Pin, X, MoreHorizontal, MoreVertical, CheckCheck, EyeOff, Edit3, Ban
 } from "lucide-react"
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -189,7 +189,7 @@ function ChatPage() {
     }))
   }, [selectedConv])
 
-  const handleGroupRenamed = useCallback((event: any) => {
+  const handleGroupRenamed = useCallback((event: { conversationId: number; otherUserName: string }) => {
     if (!event || !event.otherUserName) return;
     setConversations(prev => prev.map(c => 
       c.conversationId === event.conversationId ? { ...c, otherUserName: event.otherUserName } : c
@@ -206,8 +206,8 @@ function ChatPage() {
   })
 
   useEffect(() => {
-    const handleMessageRead = (e: any) => {
-      const detail = e.detail;
+    const handleMessageRead = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
       if (selectedConv && detail.conversationId === selectedConv.conversationId) {
         setMessages(prev => prev.map(m => ({ ...m, isRead: true })))
       }
@@ -297,14 +297,7 @@ function ChatPage() {
   }
 
   // ── Search ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (searchQuery.length < 2) { setSearchResults([]); return }
-    const timer = setTimeout(async () => {
-      setIsSearching(true)
-      try { const r = await searchUsers(searchQuery); setSearchResults(r) } catch { } finally { setIsSearching(false) }
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [searchQuery])
+
 
   // ── Send Message ───────────────────────────────────────────
   async function handleSendMessage() {
@@ -316,7 +309,7 @@ function ChatPage() {
         finalContent = `[REPLY:${replyingTo.senderName || currentUserName}]${replyingTo.content.replace(/^\[REPLY:.*?\][\s\S]*?\[\/REPLY\]/, '')}[/REPLY]${finalContent}`
       }
 
-      const payload: any = { content: finalContent }
+      const payload: { content: string; conversationId?: number; recipientId?: number } = { content: finalContent }
       if (selectedConv.isGroup || !selectedConv.otherUserId) {
         payload.conversationId = selectedConv.conversationId
       } else {
@@ -348,7 +341,8 @@ function ChatPage() {
       if (selectedConv.otherUserId) {
         sendTypingIndicator(selectedConv.otherUserId, false)
       }
-    } catch (error: any) { 
+    } catch (err) { 
+      const error = err as { message?: string; status?: number };
       const errorMsg = error?.message || "Lỗi không xác định";
       if (errorMsg.includes("BLOCKED") || error.status === 400 || error.status === 403) {
         alert("Không thể gửi tin nhắn: Bạn hoặc người dùng này đang bị chặn.");
@@ -365,10 +359,10 @@ function ChatPage() {
     }
   }
 
-  async function handleSendSystemAction(action: 'RECALL' | 'REACT' | 'REACT_REMOVE' | 'PIN' | 'UNPIN', msgId: number, extraData?: any) {
+  async function handleSendSystemAction(action: 'RECALL' | 'REACT' | 'REACT_REMOVE' | 'PIN' | 'UNPIN', msgId: number, extraData?: Record<string, unknown>) {
     if (!selectedConv || !currentUserId) return
     try {
-      const payload: any = { 
+      const payload: { content: string; messageType: string; conversationId?: number; recipientId?: number } = { 
         content: JSON.stringify({ action, messageId: msgId, ...extraData }),
         messageType: 'SYSTEM'
       }
