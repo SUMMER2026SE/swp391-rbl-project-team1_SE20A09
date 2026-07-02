@@ -1,6 +1,6 @@
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Navigation, Calendar, Clock, MapPin, Loader2 } from 'lucide-react'
+import { Navigation, Loader2, Search } from 'lucide-react'
 import { ComplexSearchParams } from '@/types/complex'
 
 interface HorizontalSearchProps {
@@ -12,82 +12,59 @@ interface HorizontalSearchProps {
 
 export function HorizontalSearch({ filters, onFilterChange, onGetLocation, isLocating = false }: HorizontalSearchProps) {
   return (
-    <div className="bg-white dark:bg-card p-4 rounded-full shadow-2xl border border-gray-100 dark:border-border max-w-5xl mx-auto flex flex-col md:flex-row items-center gap-4 relative z-10 -mt-16 mb-8 w-[95%]">
-
-      {/* Keyword Search */}
-      <div className="flex-1 flex items-center px-4 py-2 border-b md:border-b-0 md:border-r border-gray-200 dark:border-border w-full">
-        <MapPin className="text-gray-400 mr-3 h-5 w-5 shrink-0" />
+    <div className="bg-white dark:bg-card p-3 md:p-4 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-gray-100 dark:border-border max-w-4xl mx-auto flex flex-col md:flex-row items-center gap-3 relative z-10 -mt-10 mb-8 w-[95%]">
+      
+      {/* 1. Keyword Search (Chiếm phần lớn diện tích, thoáng đãng) */}
+      <div className="flex-1 flex items-center px-6 py-2 w-full group">
+        <Search className="text-gray-400 group-focus-within:text-primary transition-colors mr-4 h-6 w-6 shrink-0" />
         <div className="flex-1">
-          <label className="text-xs font-bold text-gray-800 dark:text-gray-300 uppercase tracking-wider block mb-1">Địa điểm / Tên sân</label>
+          <label className="text-[11px] font-extrabold text-gray-800 dark:text-gray-300 uppercase tracking-widest block mb-0.5">
+            Địa điểm / Tên sân
+          </label>
           <Input
-            placeholder="Bạn muốn tìm sân ở đâu?"
+            placeholder="Tìm kiếm khu vực, tên tổ hợp sân..."
             value={filters.keyword || ''}
             onChange={(e) => onFilterChange('keyword', e.target.value)}
-            className="border-0 shadow-none focus-visible:ring-0 p-0 text-sm placeholder:text-gray-400 h-auto bg-transparent"
+            className="border-0 shadow-none focus-visible:ring-0 p-0 text-base font-medium text-gray-900 dark:text-white placeholder:text-gray-300 h-auto bg-transparent w-full"
           />
         </div>
       </div>
 
-      {/* Date */}
-      <div className="flex-1 flex items-center px-4 py-2 border-b md:border-b-0 md:border-r border-gray-200 dark:border-border w-full">
-        <Calendar className="text-gray-400 mr-3 h-5 w-5 shrink-0" />
-        <div className="flex-1">
-          <label className="text-xs font-bold text-gray-800 dark:text-gray-300 uppercase tracking-wider block mb-1">Ngày đá</label>
-          <Input
-            type="date"
-            value={filters.targetDate || ''}
-            onChange={(e) => onFilterChange('targetDate', e.target.value)}
-            className="border-0 shadow-none focus-visible:ring-0 p-0 text-sm h-auto bg-transparent"
-          />
-        </div>
-      </div>
+      {/* Khoảng phân cách mềm (Divider) */}
+      <div className="hidden md:block w-[1px] h-10 bg-gray-200 dark:bg-border mx-2"></div>
 
-      {/* Time */}
-      <div className="flex-1 flex items-center px-4 py-2 w-full">
-        <Clock className="text-gray-400 mr-3 h-5 w-5 shrink-0" />
-        <div className="flex-1 flex gap-2 items-center">
-          <div className="flex-1">
-            <label className="text-xs font-bold text-gray-800 dark:text-gray-300 uppercase tracking-wider block mb-1">Từ giờ</label>
-            <Input
-              type="time"
-              value={filters.startTime || ''}
-              onChange={(e) => onFilterChange('startTime', e.target.value)}
-              className="border-0 shadow-none focus-visible:ring-0 p-0 text-sm h-auto bg-transparent"
-            />
-          </div>
-          <span className="text-gray-300">-</span>
-          <div className="flex-1">
-            <label className="text-xs font-bold text-gray-800 dark:text-gray-300 uppercase tracking-wider block mb-1">Đến giờ</label>
-            <Input
-              type="time"
-              value={filters.endTime || ''}
-              onChange={(e) => onFilterChange('endTime', e.target.value)}
-              className="border-0 shadow-none focus-visible:ring-0 p-0 text-sm h-auto bg-transparent"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Search Button (Location) */}
-      <div className="md:pl-2 w-full md:w-auto">
+      {/* 2. Action Buttons Area */}
+      <div className="flex items-center gap-3 w-full md:w-auto px-4 md:px-0 pb-2 md:pb-0">
+        
+        {/* Nút Tìm quanh đây (Định vị) */}
         <Button
+          type="button"
+          variant="outline"
           onClick={onGetLocation}
           disabled={isLocating}
-          className={`w-full md:w-auto rounded-full px-6 py-6 font-bold shadow-lg transition-all duration-300 active:scale-95
+          title="Tìm sân gần tôi"
+          className={`rounded-full h-14 w-14 p-0 flex items-center justify-center font-semibold shadow-sm border-gray-200 transition-all duration-300
             ${isLocating 
-              ? 'bg-gray-400 cursor-not-allowed shadow-none' 
+              ? 'bg-gray-100 cursor-not-allowed' 
               : filters.userLat 
-                ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/30 hover:scale-105' 
-                : 'bg-primary hover:bg-primary/90 shadow-primary/30 hover:scale-105'
+                ? 'bg-blue-50 text-blue-600 border-blue-200 shadow-inner' 
+                : 'hover:bg-gray-50 text-gray-600'
             }
           `}
         >
           {isLocating ? (
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
           ) : (
-            <Navigation className={`mr-2 h-5 w-5 ${filters.userLat ? 'animate-pulse' : ''}`} />
+            <Navigation className={`h-5 w-5 ${filters.userLat ? 'animate-pulse' : ''}`} />
           )}
-          {isLocating ? 'Đang định vị...' : filters.userLat ? 'Gần bạn (15km)' : 'Gần tôi'}
+        </Button>
+
+        {/* Nút Tìm kiếm chính */}
+        <Button
+          type="button"
+          className="w-full md:w-auto rounded-full px-8 h-14 font-bold shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 hover:scale-105 active:scale-95 transition-all duration-300 text-white text-base tracking-wide"
+        >
+          Tìm Kiếm
         </Button>
       </div>
     </div>
