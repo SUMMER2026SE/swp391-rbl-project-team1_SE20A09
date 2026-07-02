@@ -38,16 +38,18 @@ public class RevenueServiceImpl implements RevenueService {
     private final BookingRepository bookingRepository;
     private final StadiumRepository stadiumRepository;
 
-
     @Transactional(readOnly = true)
     @Override
-    public RevenueReportResponse getRevenueReport(String ownerEmail, Integer stadiumId, LocalDateTime startDate, LocalDateTime endDate) {
+    public RevenueReportResponse getRevenueReport(String ownerEmail, Integer stadiumId, LocalDateTime startDate,
+            LocalDateTime endDate) {
         long days = validateDateRange(startDate, endDate);
 
-        log.info("Fetching revenue report for owner: {}, stadiumId: {}, start: {}, end: {}", ownerEmail, stadiumId, startDate, endDate);
+        log.info("Fetching revenue report for owner: {}, stadiumId: {}, start: {}, end: {}", ownerEmail, stadiumId,
+                startDate, endDate);
 
         // Lấy doanh thu theo ngày từ Payment table
-        List<DailyRevenueProjection> projections = paymentRepository.getDailyRevenue(ownerEmail, stadiumId, startDate, endDate);
+        List<DailyRevenueProjection> projections = paymentRepository.getDailyRevenue(ownerEmail, stadiumId, startDate,
+                endDate);
 
         List<RevenueDetailDto> details = projections.stream()
                 .map(p -> RevenueDetailDto.builder()
@@ -61,14 +63,17 @@ public class RevenueServiceImpl implements RevenueService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // Lấy breakdown theo sân từ cùng nguồn Payment table (BUG-02 fix)
-        List<VenueRevenueProjection> venueProjections = paymentRepository.getVenueRevenueBreakdown(ownerEmail, stadiumId, startDate, endDate);
+        List<VenueRevenueProjection> venueProjections = paymentRepository.getVenueRevenueBreakdown(ownerEmail,
+                stadiumId, startDate, endDate);
 
-        // BUG-02 Fix: Tính totalBookings từ cùng nguồn Payment để nhất quán với totalRevenue
+        // BUG-02 Fix: Tính totalBookings từ cùng nguồn Payment để nhất quán với
+        // totalRevenue
         Long totalBookings = venueProjections.stream()
                 .mapToLong(VenueRevenueProjection::getTotalBookings)
                 .sum();
 
-        Map<Integer, BigDecimal> previousRevenueMap = getPreviousRevenueMap(ownerEmail, stadiumId, startDate, endDate, days);
+        Map<Integer, BigDecimal> previousRevenueMap = getPreviousRevenueMap(ownerEmail, stadiumId, startDate, endDate,
+                days);
 
         List<VenueRevenueDto> venueRevenues = buildVenueRevenueDtos(venueProjections, previousRevenueMap, days);
 
@@ -91,10 +96,12 @@ public class RevenueServiceImpl implements RevenueService {
         return days < 1 ? 1 : days;
     }
 
-    private Map<Integer, BigDecimal> getPreviousRevenueMap(String ownerEmail, Integer stadiumId, LocalDateTime startDate, LocalDateTime endDate, long days) {
+    private Map<Integer, BigDecimal> getPreviousRevenueMap(String ownerEmail, Integer stadiumId,
+            LocalDateTime startDate, LocalDateTime endDate, long days) {
         LocalDateTime previousStartDate = startDate.minusDays(days);
         LocalDateTime previousEndDate = endDate.minusDays(days);
-        List<VenueRevenueProjection> previousProjections = paymentRepository.getVenueRevenueBreakdown(ownerEmail, stadiumId, previousStartDate, previousEndDate);
+        List<VenueRevenueProjection> previousProjections = paymentRepository.getVenueRevenueBreakdown(ownerEmail,
+                stadiumId, previousStartDate, previousEndDate);
 
         return previousProjections.stream()
                 .collect(Collectors.toMap(
@@ -102,7 +109,8 @@ public class RevenueServiceImpl implements RevenueService {
                         p -> p.getTotalRevenue() != null ? p.getTotalRevenue() : BigDecimal.ZERO));
     }
 
-    private List<VenueRevenueDto> buildVenueRevenueDtos(List<VenueRevenueProjection> venueProjections, Map<Integer, BigDecimal> previousRevenueMap, long days) {
+    private List<VenueRevenueDto> buildVenueRevenueDtos(List<VenueRevenueProjection> venueProjections,
+            Map<Integer, BigDecimal> previousRevenueMap, long days) {
         double totalAvailableHoursPerVenue = days * OPERATIONAL_HOURS_PER_DAY;
 
         return venueProjections.stream()
@@ -149,9 +157,11 @@ public class RevenueServiceImpl implements RevenueService {
         LocalDateTime endOfToday = now.toLocalDate().atTime(LocalTime.MAX);
 
         LocalDateTime startOfMonth = now.toLocalDate().withDayOfMonth(1).atStartOfDay();
-        LocalDateTime endOfMonth = now.toLocalDate().with(java.time.temporal.TemporalAdjusters.lastDayOfMonth()).atTime(LocalTime.MAX);
+        LocalDateTime endOfMonth = now.toLocalDate().with(java.time.temporal.TemporalAdjusters.lastDayOfMonth())
+                .atTime(LocalTime.MAX);
 
-        long todayBookingsCount = bookingRepository.countTodayBookingsByOwnerEmail(ownerEmail, startOfToday, endOfToday);
+        long todayBookingsCount = bookingRepository.countTodayBookingsByOwnerEmail(ownerEmail, startOfToday,
+                endOfToday);
         BigDecimal currentMonthRevenue = paymentRepository.sumCurrentMonthRevenue(ownerEmail, startOfMonth, endOfMonth);
         long pendingBookingsCount = bookingRepository.countPendingBookingsByOwnerEmail(ownerEmail);
 
@@ -178,4 +188,3 @@ public class RevenueServiceImpl implements RevenueService {
                 .build();
     }
 }
-

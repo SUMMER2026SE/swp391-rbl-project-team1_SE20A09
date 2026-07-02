@@ -66,6 +66,9 @@ function SearchPageContent() {
   const [totalPages, setTotalPages] = useState(0)
   const [totalElements, setTotalElements] = useState(0)
 
+  // Map Hover State
+  const [hoveredComplexId, setHoveredComplexId] = useState<number | null>(null)
+
   // Local state for UI inputs (initialized safely to avoid SSR Hydration mismatch)
   const [filters, setFilters] = useState<ComplexSearchParams>({
     keyword: '',
@@ -324,10 +327,14 @@ function SearchPageContent() {
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {complexes.map((complex) => (
-                    <ComplexCard
+                    <div 
                       key={complex.complexId}
-                      complex={complex}
-                    />
+                      onMouseEnter={() => setHoveredComplexId(complex.complexId)}
+                      onMouseLeave={() => setHoveredComplexId(null)}
+                      className="h-full"
+                    >
+                      <ComplexCard complex={complex} />
+                    </div>
                   ))}
                 </div>
 
@@ -387,7 +394,7 @@ function SearchPageContent() {
 
           {/* Right Column: Sticky Map */}
           <div className="w-full lg:w-[45%] xl:w-[40%] h-[500px] lg:h-[calc(100vh-140px)] lg:sticky lg:top-24 mb-10 lg:mb-0 rounded-2xl overflow-hidden shadow-sm border border-gray-100">
-            <ComplexMap complexes={complexes} />
+            <ComplexMap complexes={complexes} hoveredComplexId={hoveredComplexId} />
           </div>
 
         </div>

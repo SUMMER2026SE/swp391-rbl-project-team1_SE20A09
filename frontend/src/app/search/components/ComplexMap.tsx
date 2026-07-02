@@ -10,27 +10,30 @@ import Image from 'next/image'
 import Link from 'next/link'
 import 'leaflet/dist/leaflet.css'
 
-const getSportEmoji = (sportName?: string) => {
-  switch (sportName?.toLowerCase()) {
-    case 'football': return '⚽';
-    case 'badminton': return '🏸';
-    case 'basketball': return '🏀';
-    case 'tennis': return '🎾';
-    case 'volleyball': return '🏐';
-    default: return '🏢';
-  }
-}
+const getUnifiedIcon = (isHovered: boolean = false) => {
+  if (typeof window === 'undefined') return undefined as any;
+  
+  const bgColor = isHovered ? 'bg-gray-900 border-yellow-400' : 'bg-primary border-white';
+  const svgColor = isHovered ? 'text-yellow-400' : 'text-white';
+  const transform = isHovered ? 'scale-125 -translate-y-2' : 'hover:scale-110 hover:-translate-y-1';
+  const shadow = isHovered ? '-bottom-2 w-7 h-2 bg-black/40' : '-bottom-1.5 w-5 h-1.5 bg-black/30 group-hover:w-6 group-hover:h-2 group-hover:bg-black/20';
 
-const getCustomIcon = (sportName?: string) => {
-  if (typeof window === 'undefined') return undefined;
   return L.divIcon({
-    className: 'custom-leaflet-marker',
-    html: `<div class="w-10 h-10 bg-primary text-white rounded-full border-2 border-white flex items-center justify-center shadow-xl transform transition-all duration-200 hover:scale-110 hover:bg-primary/90">
-             <span class="text-lg">${getSportEmoji(sportName)}</span>
-           </div>`,
+    className: 'bg-transparent border-0',
+    html: `
+      <div class="relative flex items-center justify-center w-10 h-10 transform transition-all duration-300 ${transform} group cursor-pointer">
+        <div class="absolute inset-0 ${bgColor} rounded-full shadow-lg border-[3px] flex items-center justify-center z-10 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="${svgColor} drop-shadow-sm">
+            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+          </svg>
+        </div>
+        <div class="absolute ${shadow} rounded-[100%] blur-[2px] transition-all duration-300"></div>
+      </div>
+    `,
     iconSize: [40, 40],
     iconAnchor: [20, 40],
-    popupAnchor: [0, -40],
+    popupAnchor: [0, -45],
   })
 }
 
@@ -38,16 +41,30 @@ const getCustomIcon = (sportName?: string) => {
 function MapRecenter({ center }: { center: [number, number] }) {
   const map = useMap()
   useEffect(() => {
-    map.setView(center)
+    if (map) {
+      map.setView(center, map.getZoom(), { animate: false })
+    }
+  }, [center, map])
+  return null
+}
+
+// Component to fly to hovered complex
+function MapFlyToHandler({ center }: { center: [number, number] | null }) {
+  const map = useMap()
+  useEffect(() => {
+    if (map && center) {
+      map.flyTo(center, map.getZoom(), { animate: true, duration: 1.0 })
+    }
   }, [center, map])
   return null
 }
 
 interface ComplexMapProps {
   complexes: StadiumComplexDto[]
+  hoveredComplexId?: number | null
 }
 
-export default function ComplexMap({ complexes }: ComplexMapProps) {
+export default function ComplexMap({ complexes, hoveredComplexId }: ComplexMapProps) {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -67,6 +84,11 @@ export default function ComplexMap({ complexes }: ComplexMapProps) {
       ]
     : [10.7769, 106.7009]
 
+  const hoveredComplex = hoveredComplexId ? validComplexes.find(c => c.complexId === hoveredComplexId) : null;
+  const hoveredCenter: [number, number] | null = hoveredComplex && hoveredComplex.latitude && hoveredComplex.longitude 
+    ? [hoveredComplex.latitude, hoveredComplex.longitude] 
+    : null;
+
   return (
     <div className="w-full h-full relative bg-muted rounded-2xl overflow-hidden z-10 border border-gray-100 shadow-inner">
       <MapContainer
@@ -80,8 +102,8 @@ export default function ComplexMap({ complexes }: ComplexMapProps) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <MapRecenter center={mapCenter} />
+        <MapFlyToHandler center={hoveredCenter} />
         {validComplexes.map((complex) => {
-          const primarySport = complex.sportTypes?.[0]?.sportName
           const formattedPrice = (() => {
             if (complex.minPrice !== undefined && complex.minPrice !== null) {
               if (complex.maxPrice !== undefined && complex.maxPrice !== null && complex.minPrice !== complex.maxPrice) {
@@ -92,11 +114,14 @@ export default function ComplexMap({ complexes }: ComplexMapProps) {
             return 'Chưa cập nhật'
           })()
 
+          const isHovered = hoveredComplexId === complex.complexId;
+
           return (
             <Marker
               key={complex.complexId}
               position={[complex.latitude!, complex.longitude!]}
-              icon={getCustomIcon(primarySport)}
+              icon={getUnifiedIcon(isHovered)}
+              zIndexOffset={isHovered ? 1000 : 0}
             >
               <Popup className="custom-popup">
                 <div className="w-60 overflow-hidden font-sans p-1">
