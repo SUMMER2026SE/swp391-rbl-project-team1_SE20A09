@@ -32,6 +32,9 @@ import {
   IconChevronRight
 } from '@tabler/icons-react'
 import type { StadiumComplexDto, FacilityDto, CourtWithSlotsDto } from '@/types/complex'
+import type { ReviewDto } from '@/lib/api/venue'
+import { getComplexReviews } from '@/lib/api/complex'
+import { Skeleton } from '@/components/ui/skeleton'
 import FacilityTabs from './FacilityTabs'
 
 // Lazy load map component to prevent SSR issue
@@ -67,6 +70,56 @@ export default function ComplexDetail({
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const [mapLoaded, setMapLoaded] = useState(false)
+  const [reviews, setReviews] = useState<ReviewDto[]>([])
+  const [reviewsLoading, setReviewsLoading] = useState(false)
+  const [reviewsLoadingMore, setReviewsLoadingMore] = useState(false)
+  const [reviewsError, setReviewsError] = useState(false)
+  const [reviewPage, setReviewPage] = useState(0)
+  const [reviewHasMore, setReviewHasMore] = useState(false)
+  const [reviewsFetched, setReviewsFetched] = useState(false)
+
+  // Load review list the first time the "Đánh giá" tab is opened.
+  useEffect(() => {
+    if (activeTab !== 'reviews' || reviewsFetched) return
+
+    let cancelled = false
+    setReviewsLoading(true)
+    setReviewsError(false)
+
+    getComplexReviews(complex.complexId, 0, 5)
+      .then((res) => {
+        if (cancelled) return
+        setReviews(res.content)
+        setReviewPage(0)
+        setReviewHasMore(!res.last)
+        setReviewsFetched(true)
+      })
+      .catch(() => {
+        if (!cancelled) setReviewsError(true)
+      })
+      .finally(() => {
+        if (!cancelled) setReviewsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, complex.complexId, reviewsFetched])
+
+  const loadMoreReviews = async () => {
+    setReviewsLoadingMore(true)
+    try {
+      const nextPage = reviewPage + 1
+      const res = await getComplexReviews(complex.complexId, nextPage, 5)
+      setReviews((prev) => [...prev, ...res.content])
+      setReviewPage(nextPage)
+      setReviewHasMore(!res.last)
+    } catch {
+      setReviewHasMore(false)
+    } finally {
+      setReviewsLoadingMore(false)
+    }
+  }
 
   // Collect all images
   const allImages: string[] = []
@@ -548,7 +601,7 @@ export default function ComplexDetail({
                         {renderStars(complex.averageRating || 5.0, 14)}
                       </div>
                       <span className="block text-[11px] text-gray-400 font-normal mt-1.5">
-                        {complex.totalReviews || 0} lượt đánh giá
+                        {complex.reviewCount || 0} lượt đánh giá
                       </span>
                     </div>
                     <div className="flex-1 text-[13px] text-gray-500 font-normal leading-relaxed">
@@ -556,6 +609,73 @@ export default function ComplexDetail({
                       Chúng tôi cam kết hiển thị phản hồi thực tế và minh bạch nhất từ phía khách hàng.
                     </div>
                   </div>
+
+                  {reviewsLoading ? (
+                    <div className="space-y-3">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <Skeleton key={i} className="h-[92px] rounded-[8px]" />
+                      ))}
+                    </div>
+                  ) : reviewsError ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-center">
+                      <p className="text-gray-400 text-[13px]">Không tải được đánh giá, vui lòng thử lại sau.</p>
+                    </div>
+                  ) : reviews.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-center">
+                      <IconMessageCircle className="w-9 h-9 text-gray-300 mb-2" />
+                      <p className="text-gray-400 text-[13px]">Chưa có đánh giá nào cho tổ hợp này</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {reviews.map((review) => (
+                        <div key={review.reviewId} className="bg-white border-[0.5px] border-gray-200 rounded-[8px] p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              {review.userAvatar ? (
+                                <img
+                                  src={review.userAvatar}
+                                  alt={review.userName}
+                                  className="w-9 h-9 rounded-full object-cover shrink-0"
+                                />
+                              ) : (
+                                <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-[13px] font-semibold text-gray-500 shrink-0">
+                                  {review.userName.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="text-[13px] font-semibold text-gray-800 truncate">{review.userName}</p>
+                                <p className="text-[11px] text-gray-400">
+                                  {new Date(review.createdAt).toLocaleDateString('vi-VN')}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              {renderStars(review.ratingScore, 13)}
+                            </div>
+                          </div>
+                          {review.comment && (
+                            <p className="text-[13px] text-gray-600 mt-2.5 leading-relaxed">{review.comment}</p>
+                          )}
+                          {review.ownerResponse && (
+                            <div className="mt-2.5 bg-gray-50 rounded-[6px] p-2.5">
+                              <p className="text-[11px] font-semibold text-gray-500 mb-0.5">Phản hồi từ chủ sân</p>
+                              <p className="text-[12px] text-gray-600">{review.ownerResponse}</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {reviewHasMore && (
+                        <button
+                          type="button"
+                          onClick={loadMoreReviews}
+                          disabled={reviewsLoadingMore}
+                          className="w-full text-center text-[13px] text-primary font-semibold py-2 transition-opacity disabled:opacity-50"
+                        >
+                          {reviewsLoadingMore ? 'Đang tải...' : 'Xem thêm đánh giá'}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

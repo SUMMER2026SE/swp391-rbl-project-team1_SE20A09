@@ -149,7 +149,7 @@ export default function ComplexMapModal({ isOpen, onClose, complexes }: ComplexM
                       <div className="flex items-center gap-1 mb-1.5">
                         <Star className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
                         <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                          {complex.totalReviews && complex.totalReviews > 0 ? (complex.averageRating || 5.0).toFixed(1) : '—'}
+                          {complex.reviewCount && complex.reviewCount > 0 ? (complex.averageRating || 5.0).toFixed(1) : '—'}
                         </span>
                       </div>
                       <p className="text-[11px] text-gray-500 dark:text-gray-400 flex gap-1 items-start mb-3">
