@@ -50,6 +50,7 @@ public class StadiumServiceImpl implements StadiumService {
     private final StadiumMapper stadiumMapper;
     private final FileStorageProperties fileStorageProperties;
     private final NotificationService notificationService;
+    private final com.sportvenue.repository.UserRepository userRepository;
     private final Environment env;
     private final StadiumComplexRepository stadiumComplexRepository;
 
@@ -102,6 +103,19 @@ public class StadiumServiceImpl implements StadiumService {
 
         Stadium savedStadium = stadiumRepository.save(stadium);
         log.info("Successfully created stadium with ID: {}", savedStadium.getStadiumId());
+
+        // Thông báo cho tất cả Admin: có sân mới chờ duyệt
+        String ownerName = owner.getUser() != null ? owner.getUser().getFullName() : "N/A";
+        String resourceId = "STADIUM-" + savedStadium.getStadiumId();
+        userRepository.findAllAdmins().forEach(admin ->
+            notificationService.createNotification(
+                admin.getUserId(),
+                "Sân mới chờ duyệt",
+                "\"" + savedStadium.getStadiumName() + "\" của " + ownerName + " đang chờ phê duyệt",
+                com.sportvenue.entity.enums.NotificationType.STADIUM_APPROVAL,
+                resourceId
+            )
+        );
 
         return stadiumMapper.toResponse(savedStadium);
     }

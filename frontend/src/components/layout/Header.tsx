@@ -24,7 +24,7 @@ import { Button } from "../ui/button";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { NotificationBell } from "../notifications/NotificationBell";
+import { OwnerNotificationBell } from "../notifications/OwnerNotificationBell";
 import { ChatBadge } from "../chat/ChatBadge";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import {
@@ -126,12 +126,14 @@ export function UserAccountMenu({ user }: { user: NonNullable<Session["user"]> }
           </Link>
         </DropdownMenuItem>
 
-        <DropdownMenuItem asChild>
-          <Link href="/profile?tab=bookings" className="cursor-pointer">
-            <Clock className="mr-2 h-4 w-4" />
-            <span>Lịch sử đặt sân</span>
-          </Link>
-        </DropdownMenuItem>
+        {user.roleName !== "Admin" && (
+          <DropdownMenuItem asChild>
+            <Link href="/profile?tab=bookings" className="cursor-pointer">
+              <Clock className="mr-2 h-4 w-4" />
+              <span>Lịch sử đặt sân</span>
+            </Link>
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -429,7 +431,7 @@ export function Header() {
                   {/* Chat Badge */}
                   <ChatBadge userId={(user as any)?.userId} />
                   {/* Notification Bell */}
-                  {isOwnerArea && user.roleName === "Owner" && <NotificationBell />}
+                  {isOwnerArea && user.roleName === "Owner" && <OwnerNotificationBell />}
                   {/* User Avatar */}
                   <UserAccountMenu user={user} />
                 </div>

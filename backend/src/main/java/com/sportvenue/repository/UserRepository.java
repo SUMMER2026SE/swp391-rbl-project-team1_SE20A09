@@ -71,5 +71,9 @@ public interface UserRepository extends JpaRepository<User, Integer> {
         ORDER BY u.firstName, u.lastName
     """)
     List<User> searchByName(@Param("query") String query);
+
+    /** Lấy danh sách tất cả Admin user — dùng để gửi notification cho admin. */
+    @Query("SELECT u FROM User u WHERE u.role.roleName = 'Admin'")
+    List<User> findAllAdmins();
 }
 
