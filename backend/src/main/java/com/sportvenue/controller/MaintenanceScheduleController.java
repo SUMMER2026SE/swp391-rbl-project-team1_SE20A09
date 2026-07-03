@@ -2,6 +2,7 @@ package com.sportvenue.controller;
 
 import com.sportvenue.dto.request.CreateMaintenanceScheduleRequest;
 import com.sportvenue.dto.response.MaintenanceScheduleResponse;
+import com.sportvenue.security.RequireApprovedOwner;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.MaintenanceScheduleService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,6 +44,7 @@ public class MaintenanceScheduleController {
 
     @PostMapping("/{stadiumId}/maintenance-schedules")
     @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
     @Operation(summary = "Create a dated maintenance schedule for a stadium (cascades FACILITY -> child courts)")
     public ResponseEntity<MaintenanceScheduleResponse> createSchedule(
             @PathVariable Integer stadiumId,
@@ -57,6 +59,7 @@ public class MaintenanceScheduleController {
 
     @GetMapping("/{stadiumId}/maintenance-schedules")
     @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
     @Operation(summary = "List maintenance schedule history for a stadium (owner-only, paginated)")
     public ResponseEntity<Page<MaintenanceScheduleResponse>> listSchedules(
             @PathVariable Integer stadiumId,
@@ -68,6 +71,7 @@ public class MaintenanceScheduleController {
 
     @PatchMapping("/maintenance-schedules/{maintenanceId}/end")
     @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
     @Operation(summary = "End an active maintenance schedule immediately")
     public ResponseEntity<Void> endSchedule(
             @PathVariable Integer maintenanceId,

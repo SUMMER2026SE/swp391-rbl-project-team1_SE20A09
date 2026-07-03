@@ -35,24 +35,34 @@ export function MaintenanceScheduleDialog({ isOpen, onClose, targetType, targetI
   const [loadingSchedules, setLoadingSchedules] = useState(false)
   const [endingId, setEndingId] = useState<number | null>(null)
 
-  const loadSchedules = () => {
+  const loadSchedules = (cancelled?: { current: boolean }) => {
     setLoadingSchedules(true)
     const request = targetType === 'complex'
       ? stadiumService.listComplexMaintenanceSchedules(targetId)
       : stadiumService.listMaintenanceSchedules(targetId)
     request
-      .then(setSchedules)
-      .catch(() => toast.error('Không thể tải lịch sử bảo trì'))
-      .finally(() => setLoadingSchedules(false))
+      .then((data) => {
+        if (!cancelled?.current) setSchedules(data)
+      })
+      .catch(() => {
+        if (!cancelled?.current) toast.error('Không thể tải lịch sử bảo trì')
+      })
+      .finally(() => {
+        if (!cancelled?.current) setLoadingSchedules(false)
+      })
   }
 
   useEffect(() => {
+    const cancelled = { current: false }
     if (isOpen) {
       setStartDate(undefined)
       setEndDate(undefined)
       setIndefinite(false)
       setReason('')
-      loadSchedules()
+      loadSchedules(cancelled)
+    }
+    return () => {
+      cancelled.current = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, targetType, targetId])
@@ -119,9 +129,9 @@ export function MaintenanceScheduleDialog({ isOpen, onClose, targetType, targetI
   const todayStr = format(new Date(), 'yyyy-MM-dd')
 
   const scheduleBadge = (s: MaintenanceScheduleResponse) => {
-    if (s.active) return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Đang bảo trì</Badge>
+    if (s.active) return <Badge variant="destructive">Đang bảo trì</Badge>
     if (s.endDate && s.endDate < todayStr) return <Badge variant="outline" className="text-muted-foreground">Đã kết thúc</Badge>
-    return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Sắp tới</Badge>
+    return <Badge variant="secondary">Sắp tới</Badge>
   }
 
   return (

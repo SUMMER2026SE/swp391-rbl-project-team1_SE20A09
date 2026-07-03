@@ -2,6 +2,7 @@ package com.sportvenue.controller;
 
 import com.sportvenue.dto.request.CreateMaintenanceScheduleRequest;
 import com.sportvenue.dto.response.MaintenanceScheduleResponse;
+import com.sportvenue.security.RequireApprovedOwner;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.MaintenanceScheduleService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,6 +43,7 @@ public class ComplexMaintenanceScheduleController {
 
     @PostMapping("/{complexId}/maintenance-schedules")
     @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
     @Operation(summary = "Create a dated maintenance schedule for a complex (cascades to all facilities/courts)")
     public ResponseEntity<MaintenanceScheduleResponse> createComplexSchedule(
             @PathVariable Integer complexId,
@@ -56,6 +58,7 @@ public class ComplexMaintenanceScheduleController {
 
     @GetMapping("/{complexId}/maintenance-schedules")
     @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
     @Operation(summary = "List maintenance schedule history for a complex (owner-only, paginated)")
     public ResponseEntity<Page<MaintenanceScheduleResponse>> listComplexSchedules(
             @PathVariable Integer complexId,

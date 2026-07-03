@@ -136,3 +136,9 @@ export interface MaintenanceScheduleResponse {
   active: boolean;
   createdAt: string;
 }
+
+export interface MaintenanceSchedulePage {
+  content: MaintenanceScheduleResponse[];
+  totalElements: number;
+  totalPages: number;
+}

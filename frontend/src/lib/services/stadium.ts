@@ -11,7 +11,8 @@ import {
   CreateTimeSlotRequest,
   CreateComplexRequest,
   CreateMaintenanceScheduleRequest,
-  MaintenanceScheduleResponse
+  MaintenanceScheduleResponse,
+  MaintenanceSchedulePage
 } from '@/types/stadium';
 import { TimeSlotDto } from '@/types/complex';
 
@@ -129,16 +130,18 @@ export const stadiumService = {
     return post<MaintenanceScheduleResponse>(`/stadiums/${stadiumId}/maintenance-schedules`, data);
   },
 
-  listMaintenanceSchedules: (stadiumId: number) => {
-    return get<MaintenanceScheduleResponse[]>(`/stadiums/${stadiumId}/maintenance-schedules`);
+  listMaintenanceSchedules: async (stadiumId: number) => {
+    const page = await get<MaintenanceSchedulePage>(`/stadiums/${stadiumId}/maintenance-schedules`);
+    return page.content;
   },
 
   createComplexMaintenanceSchedule: (complexId: number, data: CreateMaintenanceScheduleRequest) => {
     return post<MaintenanceScheduleResponse>(`/complexes/${complexId}/maintenance-schedules`, data);
   },
 
-  listComplexMaintenanceSchedules: (complexId: number) => {
-    return get<MaintenanceScheduleResponse[]>(`/complexes/${complexId}/maintenance-schedules`);
+  listComplexMaintenanceSchedules: async (complexId: number) => {
+    const page = await get<MaintenanceSchedulePage>(`/complexes/${complexId}/maintenance-schedules`);
+    return page.content;
   },
 
   endMaintenanceSchedule: (maintenanceId: number) => {
