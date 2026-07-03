@@ -16,14 +16,15 @@ import {
   Bell,
   AlertTriangle,
   ChevronRight,
-  ArrowLeft,
   Crown,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+
 import { OwnerNotificationBell } from "../notifications/OwnerNotificationBell";
+import { ChatBadge } from "../chat/ChatBadge";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import {
   DropdownMenu,
@@ -426,6 +427,8 @@ export function Header() {
                       <span>Role: Owner</span>
                     </div>
                   )}
+                  {/* Chat Badge */}
+                  <ChatBadge userId={(user as any)?.userId} />
                   {/* Notification Bell */}
                   {isOwnerArea && user.roleName === "Owner" && <OwnerNotificationBell />}
                   {/* User Avatar */}

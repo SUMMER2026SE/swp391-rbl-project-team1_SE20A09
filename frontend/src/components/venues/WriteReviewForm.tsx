@@ -91,8 +91,8 @@ export default function WriteReviewForm({ stadiumId, onReviewCreated }: WriteRev
       setRating(0)
       setComment('')
       onReviewCreated?.()
-    } catch (err: any) {
-      toast.error(err?.message || 'Gửi đánh giá thất bại. Vui lòng thử lại.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Gửi đánh giá thất bại. Vui lòng thử lại.')
     } finally {
       setSubmitting(false)
     }
