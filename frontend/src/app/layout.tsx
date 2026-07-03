@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 import NextAuthProvider from "@/components/providers/NextAuthProvider";
 import QueryProvider from "@/components/providers/QueryProvider";
 import { RouteGuard } from "@/components/shared/RouteGuard";
+import AIAssistantWidget from "@/components/ai/AIAssistantWidget";
 
 const inter = Inter({
   subsets: ["latin", "vietnamese"],
@@ -31,6 +32,7 @@ export default function RootLayout({
               {children}
             </RouteGuard>
             <Toaster position="top-right" richColors />
+            <AIAssistantWidget />
           </QueryProvider>
         </NextAuthProvider>
       </body>
