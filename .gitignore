@@ -31,6 +31,7 @@ swp391-rbl-project-team1_SE20A09/
 .codegraph/
 
 # ── Node.js / Next.js ───────────────────────────
+node_modules/
 frontend/node_modules/
 frontend/.next/
 frontend/out/
@@ -56,3 +57,4 @@ CLAUDE.md
 .claude/CLAUDE.md
 .claude/settings.json
 .gemini/settings.json
+PROMPT_*.md
