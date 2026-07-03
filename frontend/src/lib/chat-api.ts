@@ -18,6 +18,13 @@ export interface ConversationDto {
   leftGroup?: boolean
 }
 
+export interface BlockStatus {
+  userId: number
+  blocked: boolean
+  blockedByThem: boolean
+  mutual: boolean
+}
+
 export interface ChatMessageDto {
   messageId: number
   conversationId: number
@@ -114,13 +121,12 @@ export async function hideMessage(messageId: number): Promise<void> {
   return del<void>(`/chat/messages/${messageId}/hide`)
 }
 
-export async function blockUser(userId: number): Promise<void> {
-  return post<void>(`/chat/users/${userId}/block`, {})
+export async function blockUser(userId: number): Promise<BlockStatus> {
+  return post<BlockStatus>(`/chat/users/${userId}/block`, {})
 }
 
-export async function unblockUser(userId: number): Promise<void> {
-  // The backend uses /block as a toggle for both block and unblock
-  return post<void>(`/chat/users/${userId}/block`, {})
+export async function unblockUser(userId: number): Promise<BlockStatus> {
+  return del<BlockStatus>(`/chat/users/${userId}/block`)
 }
 
 export async function leaveGroupChat(conversationId: number): Promise<void> {

@@ -1,6 +1,7 @@
 package com.sportvenue.service.impl;
 
 import com.sportvenue.dto.chat.ChatMessageDto;
+import com.sportvenue.dto.chat.BlockStatusDto;
 import com.sportvenue.dto.chat.ChatbotRequest;
 import com.sportvenue.dto.chat.ChatbotResponse;
 import com.sportvenue.dto.chat.ConversationDto;
@@ -734,83 +735,99 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     @Transactional
-    public void blockUser(Integer blockedUserId, Integer currentUserId) {
-        // Find the 1-on-1 conversation between these two users
-        Integer u1 = Math.min(currentUserId, blockedUserId);
-        Integer u2 = Math.max(currentUserId, blockedUserId);
+    public BlockStatusDto blockUser(Integer blockedUserId, Integer currentUserId) {
+        validateBlockUsers(blockedUserId, currentUserId);
+        User currentUser = getUser(currentUserId);
+        User blockedUser = getUser(blockedUserId);
+        ChatConversation conv = getOrCreateDirectConversation(currentUser, blockedUser);
 
-        ChatConversation conv = conversationRepo.findByUserPair(u1, u2).orElse(null);
-        if (conv == null) {
-            log.warn("No conversation found between user {} and user {}", currentUserId, blockedUserId);
-            return;
+        if (conv.getBlockedBy() == null) {
+            conv.setBlockedBy(currentUser);
+            conv.setBlockedAt(LocalDateTime.now());
+        } else if (!conv.getBlockedBy().getUserId().equals(currentUserId)
+                && !Boolean.TRUE.equals(conv.getIsMutualBlock())) {
+            conv.setIsMutualBlock(true);
+            conv.setBlockedAt(LocalDateTime.now());
         }
 
-        User blocker = userRepo.findById(currentUserId).orElseThrow();
-        boolean isCurrentlyBlocked = conv.getBlockedBy() != null;
+        conversationRepo.save(conv);
+        log.info("User {} blocked user {}", currentUserId, blockedUserId);
+        return publishBlockState(conv, currentUserId, blockedUserId);
+    }
+
+    @Override
+    @Transactional
+    public BlockStatusDto unblockUser(Integer blockedUserId, Integer currentUserId) {
+        validateBlockUsers(blockedUserId, currentUserId);
+        ChatConversation conv = conversationRepo.findByUserPair(
+                        Math.min(currentUserId, blockedUserId), Math.max(currentUserId, blockedUserId))
+                .orElse(null);
+
+        if (conv == null) {
+            return BlockStatusDto.builder().userId(blockedUserId).build();
+        }
 
         if (Boolean.TRUE.equals(conv.getIsMutualBlock())) {
-            // It's a mutual block
+            conv.setIsMutualBlock(false);
             if (conv.getBlockedBy().getUserId().equals(currentUserId)) {
-                // I was the original blocker. Remove my block, leave the other person's block.
-                conv.setIsMutualBlock(false);
-                User otherUser = userRepo.findById(blockedUserId).orElseThrow();
-                conv.setBlockedBy(otherUser);
-                conversationRepo.save(conv);
-                log.info("User {} unblocked user {}, reverting mutual block to single block by {}", currentUserId,
-                        blockedUserId, blockedUserId);
-
-                String unblockPayload = "{\"type\":\"user_unblocked\",\"userId\":" + blockedUserId + ",\"blockedBy\":"
-                        + currentUserId + ",\"blocked\":false,\"isMutual\":false}";
-                messagingTemplate.convertAndSend("/topic/chat/user/" + currentUserId + "/block-status", unblockPayload);
-                messagingTemplate.convertAndSend("/topic/chat/user/" + blockedUserId + "/block-status", unblockPayload);
-            } else {
-                // I was the second blocker. Remove my block, leave the original person's block.
-                conv.setIsMutualBlock(false);
-                // getBlockedBy already holds the other user, so we leave it as is!
-                conversationRepo.save(conv);
-                log.info("User {} unblocked user {}, reverting mutual block to single block by {}", currentUserId,
-                        blockedUserId, conv.getBlockedBy().getUserId());
-
-                String unblockPayload = "{\"type\":\"user_unblocked\",\"userId\":" + blockedUserId + ",\"blockedBy\":"
-                        + currentUserId + ",\"blocked\":false,\"isMutual\":false}";
-                messagingTemplate.convertAndSend("/topic/chat/user/" + currentUserId + "/block-status", unblockPayload);
-                messagingTemplate.convertAndSend("/topic/chat/user/" + blockedUserId + "/block-status", unblockPayload);
+                conv.setBlockedBy(getUser(blockedUserId));
             }
-        } else if (isCurrentlyBlocked && conv.getBlockedBy().getUserId().equals(currentUserId)) {
-            // Unblock: current user is the sole blocker, remove block
+            conversationRepo.save(conv);
+        } else if (conv.getBlockedBy() != null && conv.getBlockedBy().getUserId().equals(currentUserId)) {
             conv.setBlockedBy(null);
             conv.setBlockedAt(null);
             conversationRepo.save(conv);
-            log.info("User {} unblocked user {}", currentUserId, blockedUserId);
-
-            String unblockPayload = "{\"type\":\"user_unblocked\",\"userId\":" + blockedUserId + ",\"blockedBy\":"
-                    + currentUserId + ",\"blocked\":false}";
-            messagingTemplate.convertAndSend("/topic/chat/user/" + currentUserId + "/block-status", unblockPayload);
-            messagingTemplate.convertAndSend("/topic/chat/user/" + blockedUserId + "/block-status", unblockPayload);
-        } else if (isCurrentlyBlocked && !conv.getBlockedBy().getUserId().equals(currentUserId)) {
-            // The other person already blocked current user, and now current user is
-            // blocking them -> MUTUAL BLOCK
-            conv.setIsMutualBlock(true);
-            conv.setBlockedAt(LocalDateTime.now());
-            conversationRepo.save(conv);
-            log.info("Mutual block established between user {} and user {}", currentUserId, blockedUserId);
-
-            String blockPayload = "{\"type\":\"user_blocked\",\"userId\":" + blockedUserId + ",\"blockedBy\":"
-                    + currentUserId + ",\"blocked\":true,\"isMutual\":true}";
-            messagingTemplate.convertAndSend("/topic/chat/user/" + currentUserId + "/block-status", blockPayload);
-            messagingTemplate.convertAndSend("/topic/chat/user/" + blockedUserId + "/block-status", blockPayload);
-        } else if (!isCurrentlyBlocked) {
-            // Block: set blockedBy
-            conv.setBlockedBy(blocker);
-            conv.setBlockedAt(LocalDateTime.now());
-            conversationRepo.save(conv);
-            log.info("User {} blocked user {}", currentUserId, blockedUserId);
-
-            // Broadcast block to both users via WebSocket
-            String blockPayload = "{\"type\":\"user_blocked\",\"userId\":" + blockedUserId + ",\"blockedBy\":"
-                    + currentUserId + ",\"blocked\":true}";
-            messagingTemplate.convertAndSend("/topic/chat/user/" + currentUserId + "/block-status", blockPayload);
-            messagingTemplate.convertAndSend("/topic/chat/user/" + blockedUserId + "/block-status", blockPayload);
         }
+
+        log.info("User {} unblocked user {}", currentUserId, blockedUserId);
+        return publishBlockState(conv, currentUserId, blockedUserId);
+    }
+
+    private void validateBlockUsers(Integer otherUserId, Integer currentUserId) {
+        if (otherUserId == null || currentUserId == null) {
+            throw new IllegalArgumentException("User ID is required");
+        }
+        if (otherUserId.equals(currentUserId)) {
+            throw new IllegalArgumentException("Cannot block yourself");
+        }
+    }
+
+    private User getUser(Integer userId) {
+        return userRepo.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+    }
+
+    private ChatConversation getOrCreateDirectConversation(User currentUser, User otherUser) {
+        Integer currentUserId = currentUser.getUserId();
+        Integer otherUserId = otherUser.getUserId();
+        Integer u1 = Math.min(currentUserId, otherUserId);
+        Integer u2 = Math.max(currentUserId, otherUserId);
+        return conversationRepo.findByUserPair(u1, u2).orElseGet(() -> conversationRepo.save(
+                ChatConversation.builder()
+                        .user1(u1.equals(currentUserId) ? currentUser : otherUser)
+                        .user2(u2.equals(currentUserId) ? currentUser : otherUser)
+                        .isGroup(false)
+                        .build()));
+    }
+
+    private BlockStatusDto publishBlockState(ChatConversation conv, Integer currentUserId, Integer otherUserId) {
+        BlockStatusDto currentState = blockStateFor(conv, currentUserId, otherUserId);
+        BlockStatusDto otherState = blockStateFor(conv, otherUserId, currentUserId);
+        messagingTemplate.convertAndSend("/topic/chat/user/" + currentUserId + "/block-status", currentState);
+        messagingTemplate.convertAndSend("/topic/chat/user/" + otherUserId + "/block-status", otherState);
+        return currentState;
+    }
+
+    private BlockStatusDto blockStateFor(ChatConversation conv, Integer viewerId, Integer otherUserId) {
+        boolean mutual = Boolean.TRUE.equals(conv.getIsMutualBlock());
+        Integer blockerId = conv.getBlockedBy() == null ? null : conv.getBlockedBy().getUserId();
+        boolean blocked = mutual || viewerId.equals(blockerId);
+        boolean blockedByThem = mutual || otherUserId.equals(blockerId);
+        return BlockStatusDto.builder()
+                .userId(otherUserId)
+                .blocked(blocked)
+                .blockedByThem(blockedByThem)
+                .mutual(mutual)
+                .build();
     }
 }

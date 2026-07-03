@@ -12,11 +12,10 @@ export interface TypingEvent {
 }
 
 export interface BlockEvent {
-  type: string
   userId: number
-  blockedBy: number
   blocked: boolean
-  isMutual?: boolean
+  blockedByThem: boolean
+  mutual: boolean
 }
 
 interface UseChatWebSocketOptions {

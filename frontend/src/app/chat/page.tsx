@@ -183,15 +183,15 @@ function ChatPage() {
 
   const handleBlockStatus = useCallback((event: BlockEvent) => {
     setConversations(prev => prev.map(c => {
-      if (c.otherUserId === event.blockedBy) {
-        if (selectedConv && selectedConv.otherUserId === event.blockedBy) {
-          setSelectedConv(prevSel => prevSel ? { ...prevSel, blockedByThem: event.blocked } : prevSel)
-        }
-        return { ...c, blockedByThem: event.blocked }
+      if (c.otherUserId === event.userId) {
+        return { ...c, blocked: event.blocked, blockedByThem: event.blockedByThem }
       }
       return c
     }))
-  }, [selectedConv])
+    setSelectedConv(prev => prev?.otherUserId === event.userId
+      ? { ...prev, blocked: event.blocked, blockedByThem: event.blockedByThem }
+      : prev)
+  }, [])
 
   const handleGroupRenamed = useCallback((event: ConversationDto) => {
     if (!event?.conversationId || !event.otherUserName) return;
@@ -376,7 +376,7 @@ function ChatPage() {
     } catch (err) { 
       const error = err as { message?: string; status?: number };
       const errorMsg = error?.message || "Lỗi không xác định";
-      if (errorMsg.includes("BLOCKED") || error.status === 400 || error.status === 403) {
+      if (errorMsg.includes("BLOCKED")) {
         alert("Không thể gửi tin nhắn: Bạn hoặc người dùng này đang bị chặn.");
         // Revert UI to blocked state to allow them to unblock properly
         setConversations(prev => prev.map(c => 
@@ -608,7 +608,15 @@ function ChatPage() {
                               setSelectedConv(prev => prev ? { ...prev, blocked: false } : prev)
 
                               try {
-                                await unblockUser(targetUserId)
+                                const status = await unblockUser(targetUserId)
+                                setConversations(prev => prev.map(c =>
+                                  c.otherUserId === targetUserId
+                                    ? { ...c, blocked: status.blocked, blockedByThem: status.blockedByThem }
+                                    : c
+                                ))
+                                setSelectedConv(prev => prev?.otherUserId === targetUserId
+                                  ? { ...prev, blocked: status.blocked, blockedByThem: status.blockedByThem }
+                                  : prev)
                               } catch (err) {
                                 // Revert on failure
                                 setConversations(prev => prev.map(c =>
@@ -633,7 +641,15 @@ function ChatPage() {
                               setSelectedConv(prev => prev ? { ...prev, blocked: true } : prev)
 
                               try {
-                                await blockUser(targetUserId)
+                                const status = await blockUser(targetUserId)
+                                setConversations(prev => prev.map(c =>
+                                  c.otherUserId === targetUserId
+                                    ? { ...c, blocked: status.blocked, blockedByThem: status.blockedByThem }
+                                    : c
+                                ))
+                                setSelectedConv(prev => prev?.otherUserId === targetUserId
+                                  ? { ...prev, blocked: status.blocked, blockedByThem: status.blockedByThem }
+                                  : prev)
                               } catch (err) {
                                 // Revert on failure
                                 setConversations(prev => prev.map(c =>

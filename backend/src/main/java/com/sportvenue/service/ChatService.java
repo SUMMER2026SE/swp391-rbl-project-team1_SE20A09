@@ -1,5 +1,7 @@
 package com.sportvenue.service;
 
+import com.sportvenue.dto.chat.BlockStatusDto;
+
 import com.sportvenue.dto.chat.ChatMessageDto;
 import com.sportvenue.dto.chat.ChatbotRequest;
 import com.sportvenue.dto.chat.ChatbotResponse;
@@ -84,10 +86,11 @@ public interface ChatService {
      */
     void deleteConversation(Long conversationId, Integer userId);
 
-    /**
-     * Block or unblock a user.
-     */
-    void blockUser(Integer blockedUserId, Integer currentUserId);
+    /** Block a user. Repeating the operation is safe and returns the current state. */
+    BlockStatusDto blockUser(Integer blockedUserId, Integer currentUserId);
+
+    /** Unblock a user. Repeating the operation is safe and returns the current state. */
+    BlockStatusDto unblockUser(Integer blockedUserId, Integer currentUserId);
 
     /**
      * Leave a group chat.

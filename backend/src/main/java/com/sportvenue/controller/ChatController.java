@@ -1,6 +1,7 @@
 package com.sportvenue.controller;
 
 import com.sportvenue.dto.chat.ChatMessageDto;
+import com.sportvenue.dto.chat.BlockStatusDto;
 import com.sportvenue.dto.chat.ChatbotRequest;
 import com.sportvenue.dto.chat.ChatbotResponse;
 import com.sportvenue.dto.chat.ConversationDto;
@@ -189,11 +190,18 @@ public class ChatController {
 
     @PostMapping("/users/{userId}/block")
     @Operation(summary = "Block a user")
-    public ResponseEntity<Void> blockUser(
+    public ResponseEntity<BlockStatusDto> blockUser(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Integer userId) {
-        chatService.blockUser(userId, principal.getUserId());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(chatService.blockUser(userId, principal.getUserId()));
+    }
+
+    @DeleteMapping("/users/{userId}/block")
+    @Operation(summary = "Unblock a user")
+    public ResponseEntity<BlockStatusDto> unblockUser(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Integer userId) {
+        return ResponseEntity.ok(chatService.unblockUser(userId, principal.getUserId()));
     }
 
 
