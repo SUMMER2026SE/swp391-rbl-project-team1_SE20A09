@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState } from "react";
 import { useChat, UIMessage } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
@@ -9,15 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Send, Search, Calendar, TrendingUp, Sparkles, AlertCircle } from "lucide-react";
-
-function getMessageText(msg: UIMessage) {
-  return msg.parts
-    .filter(part => part.type === 'text')
-    .map(part => (part as any).text)
-    .join('');
-}
+import { MessageScroller } from "@/components/ai/MessageScroller";
+import { getSession } from 'next-auth/react';
+import { Bot, Send, Search, Calendar, TrendingUp, Sparkles, AlertCircle, StopCircle } from "lucide-react";
 
 function formatMessageContent(content: string) {
   const lines = content.split('\n');
@@ -66,8 +61,49 @@ function formatMessageContent(content: string) {
 }
 
 function AIAssistantPage() {
+  const [token, setToken] = useState<string | null>(null);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
+
+  useEffect(() => {
+    getSession().then((session) => {
+      const accessToken = (session as any)?.accessToken;
+      if (accessToken) {
+        setToken(accessToken);
+      }
+      setSessionLoaded(true);
+    });
+  }, []);
+
+  if (!sessionLoaded) {
+    return (
+      <div className="h-screen flex flex-col bg-background">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  return <AIAssistantPageInner token={token} sessionLoaded={sessionLoaded} />;
+}
+
+interface PageInnerProps {
+  token: string | null;
+  sessionLoaded: boolean;
+}
+
+function AIAssistantPageInner({ token, sessionLoaded }: PageInnerProps) {
   const [inputValue, setInputValue] = useState("");
-  const { messages, sendMessage, status, error } = useChat({
+
+  const { messages, sendMessage, status, error, stop } = useChat({
+    transport: new DefaultChatTransport({
+      api: '/api/v1/ai/chat',
+      headers: token ? {
+        'Authorization': `Bearer ${token}`
+      } : {}
+    }),
     messages: [
       {
         id: "welcome",
@@ -79,31 +115,17 @@ function AIAssistantPage() {
             state: "done"
           }
         ]
-      },
+      }
     ] as UIMessage[],
   });
 
   const isLoading = status === "submitted" || status === "streaming";
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
   const quickActions = [
     { icon: <Search className="h-4 w-4" />, text: "Tìm sân bóng đá gần tôi" },
     { icon: <Calendar className="h-4 w-4" />, text: "Hướng dẫn thanh toán VNPay" },
     { icon: <TrendingUp className="h-4 w-4" />, text: "Chính sách hủy đặt sân" },
   ];
-
-  const venueRecommendation = {
-    name: "Sân Bóng Đá SportHub Thủ Đức",
-    sportType: "Bóng đá 5/7 người",
-    price: 300000,
-    rating: 4.8,
-    location: "Trường Thọ, Thủ Đức, TP.HCM",
-    availableSlots: "Còn nhiều khung giờ trống",
-  };
 
   const handleQuickAction = (text: string) => {
     sendMessage({ text });
@@ -133,47 +155,125 @@ function AIAssistantPage() {
         </div>
 
         <Card className="flex-1 flex flex-col overflow-hidden border border-border/80 shadow-md">
-          <ScrollArea className="flex-1 p-6">
+          <MessageScroller dependencies={[messages, isLoading]}>
             <div className="space-y-6 pb-4">
               {messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`flex gap-3 ${
-                    msg.role === "user" ? "flex-row-reverse" : ""
-                  }`}
+                  className={`flex flex-col gap-3`}
                 >
-                  <Avatar className="h-10 w-10 flex-shrink-0 border border-border">
-                    {msg.role === "assistant" ? (
-                      <div className="w-full h-full bg-primary/10 flex items-center justify-center">
-                        <Bot className="h-6 w-6 text-primary" />
-                      </div>
-                    ) : (
-                      <AvatarFallback className="bg-secondary text-secondary-foreground font-semibold">U</AvatarFallback>
-                    )}
-                  </Avatar>
+                  <div className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+                    <Avatar className="h-10 w-10 flex-shrink-0 border border-border">
+                      {msg.role === "assistant" ? (
+                        <div className="w-full h-full bg-primary/10 flex items-center justify-center">
+                          <Bot className="h-6 w-6 text-primary" />
+                        </div>
+                      ) : (
+                        <AvatarFallback className="bg-secondary text-secondary-foreground font-semibold">U</AvatarFallback>
+                      )}
+                    </Avatar>
 
-                  <div
-                    className={`flex-1 ${
-                      msg.role === "user" ? "text-right" : ""
-                    }`}
-                  >
-                    <div
-                      className={`inline-block max-w-[85%] text-left ${
-                        msg.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-foreground"
-                      } rounded-lg px-4 py-3 shadow-sm`}
-                    >
-                      <div className="space-y-1">
-                        {formatMessageContent(getMessageText(msg))}
+                    <div className={`flex-1 ${msg.role === "user" ? "text-right" : ""}`}>
+                      <div
+                        className={`inline-block max-w-[85%] text-left ${
+                          msg.role === "user"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-foreground"
+                        } rounded-lg px-4 py-3 shadow-sm`}
+                      >
+                        <div className="space-y-1">
+                          {msg.parts.map((part: any, partIdx: number) => {
+                            if (part.type === 'text') {
+                              return <div key={partIdx}>{formatMessageContent(part.text)}</div>;
+                            }
+                            return null;
+                          })}
+                        </div>
                       </div>
                     </div>
                   </div>
+
+                  {/* Render Tool Invocations inside message context */}
+                  {msg.role === "assistant" && msg.parts && (
+                    <div className="md:pl-12 pl-2 space-y-3">
+                      {msg.parts.map((part: any, partIdx: number) => {
+                        if (part.type === 'tool-call') {
+                          const { toolCallId, toolName } = part.toolCall;
+                          return (
+                            <div key={toolCallId || partIdx} className="text-xs text-muted-foreground italic flex items-center gap-2 my-1">
+                              <span className="animate-spin h-3.5 w-3.5 border-2 border-primary border-t-transparent rounded-full" />
+                              Đang xử lý: {toolName === 'searchStadiums' ? 'Tìm kiếm sân đấu...' : toolName === 'getStadiumSlots' ? 'Tra cứu khung giờ trống...' : 'Tìm kèo ghép thể thao...'}
+                            </div>
+                          );
+                        }
+
+                        if (part.type === 'tool-result') {
+                          const { toolCallId, toolName, result } = part.toolResult;
+                          
+                          if (toolName === 'searchStadiums' && Array.isArray(result)) {
+                            if (result.length === 0) {
+                              return (
+                                <div key={toolCallId || partIdx} className="text-xs text-yellow-600 italic my-1">
+                                  Không tìm thấy sân đấu nào phù hợp với yêu cầu.
+                                </div>
+                              );
+                            }
+                            return (
+                              <div key={toolCallId || partIdx} className="grid gap-3 grid-cols-1 sm:grid-cols-2 mt-2">
+                                {result.map((stadium: any) => (
+                                  <Card key={stadium.stadiumId} className="border border-border/85 shadow-sm bg-card overflow-hidden transition-all hover:shadow-lg">
+                                    <div className="h-20 bg-gradient-to-r from-emerald-500 to-teal-600 flex flex-col justify-center text-white relative p-3">
+                                      <Sparkles className="absolute top-2 right-2 text-yellow-300 h-4.5 w-4.5 animate-pulse" />
+                                      <h4 className="font-bold text-xs leading-tight line-clamp-1">{stadium.stadiumName}</h4>
+                                      <p className="text-[9px] opacity-90 mt-0.5 line-clamp-1">{stadium.address}</p>
+                                    </div>
+                                    <CardContent className="p-3 space-y-2">
+                                      <div className="flex justify-between items-center text-xs">
+                                        <Badge variant="secondary" className="bg-teal-500/10 text-teal-600 dark:text-teal-400 border-none px-1.5 py-0 text-[10px]">
+                                          {stadium.sportName || 'Thể thao'}
+                                        </Badge>
+                                        <span className="text-[10px] font-medium text-emerald-600">
+                                          {stadium.status === 'AVAILABLE' ? 'Đang hoạt động' : 'Bảo trì'}
+                                        </span>
+                                      </div>
+                                      <div className="border-t pt-2 flex items-center justify-between">
+                                        <div>
+                                          <span className="text-xs font-bold text-primary">
+                                            {stadium.pricePerHour?.toLocaleString('vi-VN')}đ<span className="text-[9px] font-normal text-muted-foreground">/h</span>
+                                          </span>
+                                        </div>
+                                        <Button 
+                                          size="sm" 
+                                          className="bg-primary hover:bg-primary/95 text-[10px] h-7 px-3 rounded-full"
+                                          onClick={() => window.location.href = `/stadiums/${stadium.stadiumId}`}
+                                        >
+                                          Đặt ngay
+                                        </Button>
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                ))}
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div key={toolCallId || partIdx} className="text-[11px] text-emerald-600 italic my-1 flex items-center gap-1.5">
+                              <span>✓</span>
+                              <span>Hoàn thành: {toolName === 'searchStadiums' ? 'Tìm sân đấu' : toolName === 'getStadiumSlots' ? 'Tra cứu khung giờ trống' : 'Tìm kèo ghép'}</span>
+                            </div>
+                          );
+                        }
+
+                        return null;
+                      })}
+                    </div>
+                  )}
                 </div>
               ))}
 
               {/* Typing Indicator */}
-              {isLoading && messages[messages.length - 1]?.role === "user" && (
+              {isLoading && messages[messages.length - 1]?.role === 'user' && (
                 <div className="flex gap-3">
                   <Avatar className="h-10 w-10 flex-shrink-0 border border-border">
                     <div className="w-full h-full bg-primary/10 flex items-center justify-center">
@@ -193,7 +293,7 @@ function AIAssistantPage() {
               {error && (
                 <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive text-sm rounded-lg max-w-md mx-auto justify-center">
                   <AlertCircle className="h-4 w-4" />
-                  <span>Đã xảy ra lỗi khi kết nối với máy chủ AI.</span>
+                  <span>{error.message || 'Đã xảy ra lỗi khi kết nối với máy chủ AI.'}</span>
                 </div>
               )}
 
@@ -214,64 +314,34 @@ function AIAssistantPage() {
                   ))}
                 </div>
               )}
-
-              {/* Venue Recommendation Card */}
-              {messages.length > 2 && (
-                <div className="flex justify-start md:pl-12 pl-2">
-                  <Card className="max-w-sm border border-border/80 shadow-md bg-card overflow-hidden transition-all hover:shadow-lg">
-                    <div className="h-32 bg-gradient-to-r from-emerald-500 to-teal-600 flex items-center justify-center text-white relative">
-                      <Sparkles className="absolute top-2 right-2 text-yellow-300 h-5 w-5 animate-pulse" />
-                      <div className="text-center p-4">
-                        <h4 className="font-bold text-lg leading-tight">{venueRecommendation.name}</h4>
-                        <p className="text-xs opacity-90 mt-1">{venueRecommendation.location}</p>
-                      </div>
-                    </div>
-                    <CardContent className="p-4 space-y-3">
-                      <div className="flex justify-between items-center">
-                        <Badge variant="secondary" className="bg-teal-500/10 text-teal-600 dark:text-teal-400 hover:bg-teal-500/20 border-none">
-                          {venueRecommendation.sportType}
-                        </Badge>
-                        <span className="text-sm font-semibold text-yellow-500">
-                          ⭐ {venueRecommendation.rating}
-                        </span>
-                      </div>
-
-                      <div className="text-xs text-muted-foreground flex justify-between">
-                        <span>Trạng thái:</span>
-                        <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                          {venueRecommendation.availableSlots}
-                        </span>
-                      </div>
-
-                      <div className="border-t pt-3 flex items-center justify-between">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Giá từ</p>
-                          <span className="text-lg font-bold text-primary">
-                            {venueRecommendation.price.toLocaleString('vi-VN')}đ<span className="text-xs font-normal text-muted-foreground">/giờ</span>
-                          </span>
-                        </div>
-                        <Button size="sm" className="bg-primary hover:bg-primary/95 text-xs rounded-full">
-                          Đặt sân ngay
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
-              
-              <div ref={messagesEndRef} />
             </div>
-          </ScrollArea>
+          </MessageScroller>
+
+          {/* STOP Button */}
+          {isLoading && (
+            <div className="flex justify-center mb-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2 rounded-full text-xs hover:bg-destructive/10 hover:text-destructive transition-colors"
+                onClick={stop}
+              >
+                <StopCircle className="h-3.5 w-3.5" />
+                Dừng câu trả lời
+              </Button>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="p-4 border-t bg-card">
             <div className="flex gap-2">
               <Input
-                placeholder="Hỏi tôi về sân, giá, hướng dẫn thanh toán..."
+                placeholder={sessionLoaded ? "Hỏi tôi về sân, giá, hướng dẫn thanh toán..." : "Đang tải phiên làm việc..."}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
+                disabled={!sessionLoaded}
                 className="flex-1 focus-visible:ring-primary/50"
               />
-              <Button type="submit" disabled={!inputValue.trim() || isLoading} className="rounded-full h-10 w-10 p-0 flex items-center justify-center shrink-0">
+              <Button type="submit" disabled={!inputValue.trim() || isLoading || !sessionLoaded} className="rounded-full h-10 w-10 p-0 flex items-center justify-center shrink-0">
                 <Send className="h-4 w-4" />
                 <span className="sr-only">Gửi</span>
               </Button>

@@ -3,11 +3,13 @@
 import { useState, useRef, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useChat, UIMessage } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import { getSession } from 'next-auth/react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardFooter, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { MessageScroller } from "./MessageScroller";
 import { Bot, Send, X, MessageSquare, Search, Calendar, TrendingUp, AlertCircle } from "lucide-react";
 
 function getMessageText(msg: UIMessage) {
@@ -66,11 +68,55 @@ function formatMessageContent(content: string) {
 export default function AIAssistantWidget() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
+
+  useEffect(() => {
+    getSession().then((session) => {
+      const accessToken = (session as any)?.accessToken;
+      if (accessToken) {
+        setToken(accessToken);
+      }
+      setSessionLoaded(true);
+    });
+  }, []);
+
+  // Hide the floating widget if user is already on the main AI Assistant page
+  if (pathname === "/ai-assistant") return null;
+
+  if (!sessionLoaded) {
+    return null;
+  }
+
+  return (
+    <AIAssistantWidgetInner
+      token={token}
+      sessionLoaded={sessionLoaded}
+      isOpen={isOpen}
+      setIsOpen={setIsOpen}
+      pathname={pathname}
+    />
+  );
+}
+
+interface WidgetInnerProps {
+  token: string | null;
+  sessionLoaded: boolean;
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+  pathname: string;
+}
+
+function AIAssistantWidgetInner({ token, sessionLoaded, isOpen, setIsOpen, pathname }: WidgetInnerProps) {
   const [inputValue, setInputValue] = useState("");
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { messages, sendMessage, status, error } = useChat({
+    transport: new DefaultChatTransport({
+      api: '/api/v1/ai/chat',
+      headers: token ? {
+        'Authorization': `Bearer ${token}`
+      } : {}
+    }),
     messages: [
       {
         id: "widget-welcome",
@@ -88,17 +134,6 @@ export default function AIAssistantWidget() {
 
   const isLoading = status === "submitted" || status === "streaming";
 
-  useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, 50);
-    }
-  }, [messages, isOpen]);
-
-  // Hide the floating widget if user is already on the main AI Assistant page
-  if (pathname === "/ai-assistant") return null;
-
   const quickActions = [
     { icon: <Search className="h-3 w-3" />, text: "Tìm sân gần đây" },
     { icon: <Calendar className="h-3 w-3" />, text: "Cách đặt lịch" },
@@ -106,12 +141,13 @@ export default function AIAssistantWidget() {
   ];
 
   const handleQuickAction = (text: string) => {
+    if (!token) return;
     sendMessage({ text });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim() || isLoading) return;
+    if (!inputValue.trim() || isLoading || !token) return;
     sendMessage({ text: inputValue });
     setInputValue("");
   };
@@ -120,7 +156,7 @@ export default function AIAssistantWidget() {
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end font-sans">
       {/* Chat Window Panel */}
       {isOpen && (
-        <Card className="mb-4 w-[360px] h-[500px] flex flex-col shadow-2xl border border-border/80 rounded-2xl overflow-hidden animate-in slide-in-from-bottom-5 duration-200 bg-card">
+        <Card className="mb-4 w-[360px] flex flex-col shadow-2xl border border-border/80 rounded-2xl overflow-clip animate-in slide-in-from-bottom-5 duration-200 bg-card" style={{ height: 'min(500px, calc(100vh - 8rem))' }}>
           {/* Header */}
           <CardHeader className="p-4 bg-primary text-primary-foreground flex flex-row items-center justify-between space-y-0 shrink-0">
             <div className="flex items-center gap-3">
@@ -144,8 +180,8 @@ export default function AIAssistantWidget() {
             </Button>
           </CardHeader>
 
-          {/* Messages body */}
-          <ScrollArea ref={scrollAreaRef} className="flex-1 p-4 bg-background">
+          {/* Messages body — flex-1 để chiếm toàn bộ không gian còn lại */}
+          <MessageScroller dependencies={[messages, isLoading]}>
             <div className="space-y-4 pb-2">
               {messages.map((msg) => (
                 <div
@@ -210,7 +246,7 @@ export default function AIAssistantWidget() {
               )}
 
               {/* Quick action buttons */}
-              {messages.length === 1 && !isLoading && (
+              {messages.length === 1 && !isLoading && token && (
                 <div className="flex flex-col gap-1.5 pt-2 pl-10 max-w-[85%]">
                   <p className="text-[10px] text-muted-foreground font-medium mb-0.5">Gợi ý câu hỏi:</p>
                   {quickActions.map((action, idx) => (
@@ -228,20 +264,47 @@ export default function AIAssistantWidget() {
                 </div>
               )}
 
-              <div ref={messagesEndRef} />
+              {/* Login Prompt for Guest */}
+              {sessionLoaded && !token && (
+                <div className="flex flex-col gap-2 p-3 bg-muted rounded-xl border border-border text-center max-w-[85%] mx-auto mt-2">
+                  <div className="flex justify-center">
+                    <AlertCircle className="h-5 w-5 text-primary shrink-0 animate-bounce" />
+                  </div>
+                  <p className="text-xs text-foreground font-medium">Bạn cần đăng nhập để trò chuyện với trợ lý ảo AI.</p>
+                  <Button 
+                    size="sm" 
+                    className="w-full text-xs h-8 bg-primary text-primary-foreground hover:bg-primary/90 mt-1" 
+                    onClick={() => window.location.href = `/login?callbackUrl=${encodeURIComponent(pathname)}`}
+                  >
+                    Đăng nhập ngay
+                  </Button>
+                </div>
+              )}
+
             </div>
-          </ScrollArea>
+          </MessageScroller>
 
           {/* Input Footer */}
           <CardFooter className="p-3 border-t bg-card shrink-0">
             <form onSubmit={handleSubmit} className="flex gap-2 w-full">
               <Input
-                placeholder="Nhập tin nhắn..."
+                placeholder={
+                  !sessionLoaded
+                    ? "Đang kiểm tra phiên làm việc..."
+                    : !token
+                    ? "Đăng nhập để trò chuyện với AI..."
+                    : "Nhập tin nhắn..."
+                }
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
+                disabled={!sessionLoaded || !token}
                 className="flex-1 text-xs h-9 rounded-xl focus-visible:ring-primary/50"
               />
-              <Button type="submit" disabled={!inputValue.trim() || isLoading} className="rounded-xl h-9 w-9 p-0 flex items-center justify-center shrink-0 bg-primary hover:bg-primary/95 text-primary-foreground">
+              <Button 
+                type="submit" 
+                disabled={!inputValue.trim() || isLoading || !token} 
+                className="rounded-xl h-9 w-9 p-0 flex items-center justify-center shrink-0 bg-primary hover:bg-primary/95 text-primary-foreground"
+              >
                 <Send className="h-3.5 w-3.5" />
                 <span className="sr-only">Gửi</span>
               </Button>
