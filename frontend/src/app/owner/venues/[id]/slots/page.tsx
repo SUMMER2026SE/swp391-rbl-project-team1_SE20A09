@@ -4,11 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, Clock } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, Wrench } from "lucide-react";
 import { stadiumService } from "@/lib/services/stadium";
 import { StadiumResponse } from "@/types/stadium";
 import { toast } from "sonner";
 import { TimeSlotManager } from "@/components/venues/TimeSlotManager";
+import { MaintenanceScheduleDialog } from "@/components/venues/MaintenanceScheduleDialog";
 
 export default function VenueSlotsPage() {
   const router = useRouter();
@@ -17,21 +18,32 @@ export default function VenueSlotsPage() {
   const { data: session, status } = useSession();
   const [isLoading, setIsLoading] = useState(true);
   const [stadium, setStadium] = useState<StadiumResponse | null>(null);
+  const [isMaintenanceOpen, setIsMaintenanceOpen] = useState(false);
+  // Bump để force remount TimeSlotManager (tự load lại weekly slots) sau khi bảo trì thay đổi.
+  const [maintenanceRefreshKey, setMaintenanceRefreshKey] = useState(0);
 
+  const fetchStadium = () => {
+    return stadiumService.getStadiumById(stadiumId)
+      .then((data) => {
+        setStadium(data);
+      })
+      .catch((err) => {
+        toast.error(err.message || "Không thể tải thông tin sân");
+        router.push("/owner/venues");
+      });
+  };
 
   useEffect(() => {
     if (status === "authenticated") {
-      stadiumService.getStadiumById(stadiumId)
-        .then((data) => {
-          setStadium(data);
-        })
-        .catch((err) => {
-          toast.error(err.message || "Không thể tải thông tin sân");
-          router.push("/owner/venues");
-        })
-        .finally(() => setIsLoading(false));
+      fetchStadium().finally(() => setIsLoading(false));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, stadiumId, router]);
+
+  const handleMaintenanceSuccess = () => {
+    fetchStadium();
+    setMaintenanceRefreshKey((k) => k + 1);
+  };
 
   if (status === "loading" || isLoading) {
     return (
@@ -64,12 +76,26 @@ export default function VenueSlotsPage() {
               </p>
             </div>
           </div>
+          <Button variant="outline" onClick={() => setIsMaintenanceOpen(true)}>
+            <Wrench className="mr-2 h-4 w-4" />
+            Đặt bảo trì
+          </Button>
         </div>
 
         <TimeSlotManager
+          key={maintenanceRefreshKey}
           stadiumId={stadiumId}
           openTime={stadium.openTime}
           closeTime={stadium.closeTime}
+        />
+
+        <MaintenanceScheduleDialog
+          isOpen={isMaintenanceOpen}
+          onClose={() => setIsMaintenanceOpen(false)}
+          targetType="stadium"
+          targetId={stadiumId}
+          targetName={stadium.stadiumName}
+          onSuccess={handleMaintenanceSuccess}
         />
       </div>
     </div>

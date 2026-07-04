@@ -245,6 +245,40 @@ public class StadiumComplexServiceImpl implements StadiumComplexService {
         return mapToResponse(saved);
     }
 
+    @Override
+    @Transactional
+    public void suspendComplex(Integer complexId, Integer userId) {
+        log.info("Owner {} requesting suspend for complex {}", userId, complexId);
+        StadiumComplex complex = loadOwnedComplex(complexId, userId);
+        complex.setComplexStatus(ComplexStatus.MAINTENANCE);
+        stadiumComplexRepository.save(complex);
+        log.info("Complex {} successfully suspended by owner {}", complexId, userId);
+    }
+
+    @Override
+    @Transactional
+    public void activateComplex(Integer complexId, Integer userId) {
+        log.info("Owner {} requesting activation for complex {}", userId, complexId);
+        StadiumComplex complex = loadOwnedComplex(complexId, userId);
+        complex.setComplexStatus(ComplexStatus.AVAILABLE);
+        stadiumComplexRepository.save(complex);
+        log.info("Complex {} successfully activated by owner {}", complexId, userId);
+    }
+
+    /** Load Complex + xác thực đúng chủ sở hữu — dùng chung cho suspend/activate. */
+    private StadiumComplex loadOwnedComplex(Integer complexId, Integer userId) {
+        Owner owner = ownerRepository.findByUserUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Owner profile not found for user ID: " + userId));
+
+        StadiumComplex complex = stadiumComplexRepository.findById(complexId)
+                .orElseThrow(() -> new ResourceNotFoundException("StadiumComplex not found with ID: " + complexId));
+
+        if (!complex.getOwner().getOwnerId().equals(owner.getOwnerId())) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+        return complex;
+    }
+
     private ComplexResponse mapToResponse(StadiumComplex complex) {
         return ComplexResponse.builder()
                 .complexId(complex.getComplexId())

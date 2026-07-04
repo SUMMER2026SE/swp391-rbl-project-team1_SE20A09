@@ -1,4 +1,4 @@
-import { post, get, put, del } from '../api';
+import { post, get, put, patch, del } from '../api';
 import {
   CreateStadiumRequest,
   UpdateStadiumRequest,
@@ -9,7 +9,10 @@ import {
   CreateCourtRequest,
   BulkTimeSlotRequest,
   CreateTimeSlotRequest,
-  CreateComplexRequest
+  CreateComplexRequest,
+  CreateMaintenanceScheduleRequest,
+  MaintenanceScheduleResponse,
+  MaintenanceSchedulePage
 } from '@/types/stadium';
 import { TimeSlotDto } from '@/types/complex';
 
@@ -113,5 +116,35 @@ export const stadiumService = {
 
   updateTimeSlot: (slotId: number, data: CreateTimeSlotRequest) => {
     return put<any>(`/stadiums/time-slots/${slotId}`, data);
+  },
+
+  suspendComplex: (complexId: number) => {
+    return put<void>(`/complexes/${complexId}/suspend`);
+  },
+
+  activateComplex: (complexId: number) => {
+    return put<void>(`/complexes/${complexId}/activate`);
+  },
+
+  createMaintenanceSchedule: (stadiumId: number, data: CreateMaintenanceScheduleRequest) => {
+    return post<MaintenanceScheduleResponse>(`/stadiums/${stadiumId}/maintenance-schedules`, data);
+  },
+
+  listMaintenanceSchedules: async (stadiumId: number) => {
+    const page = await get<MaintenanceSchedulePage>(`/stadiums/${stadiumId}/maintenance-schedules`);
+    return page.content;
+  },
+
+  createComplexMaintenanceSchedule: (complexId: number, data: CreateMaintenanceScheduleRequest) => {
+    return post<MaintenanceScheduleResponse>(`/complexes/${complexId}/maintenance-schedules`, data);
+  },
+
+  listComplexMaintenanceSchedules: async (complexId: number) => {
+    const page = await get<MaintenanceSchedulePage>(`/complexes/${complexId}/maintenance-schedules`);
+    return page.content;
+  },
+
+  endMaintenanceSchedule: (maintenanceId: number) => {
+    return patch<void>(`/stadiums/maintenance-schedules/${maintenanceId}/end`);
   },
 };

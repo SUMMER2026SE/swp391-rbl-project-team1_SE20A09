@@ -45,6 +45,9 @@ yarn-error.log*
 # ── Docker ──────────────────────────────────────
 docker-data/
 
+# ── Seed data scripts: kết quả cào/tải trung gian, tái tạo được bằng script ──
+scripts/output/
+
 # ── OS ──────────────────────────────────────────
 Thumbs.db
 ehthumbs.db

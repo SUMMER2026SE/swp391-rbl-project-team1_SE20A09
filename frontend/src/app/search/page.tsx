@@ -6,7 +6,7 @@ import { getAmenities, getSportTypes, Amenity } from '@/lib/api/stadium'
 import { searchComplexes } from '@/lib/api/complex'
 import type { StadiumComplexDto, ComplexSearchParams } from '@/types/complex'
 import { Button } from '@/components/ui/button'
-import { Map, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { toast } from 'sonner'
 
@@ -27,8 +27,9 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination"
 
-const ComplexMapModal = dynamic(() => import('./components/ComplexMapModal'), {
+const ComplexMap = dynamic(() => import('./components/ComplexMap'), {
   ssr: false,
+  loading: () => <div className="w-full h-full bg-muted animate-pulse rounded-2xl" />
 })
 
 // Hook debounce
@@ -59,7 +60,6 @@ function SearchPageContent() {
   const [sportTypes, setSportTypes] = useState<{ sportTypeId: number, sportName: string }[]>([])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [isMapOpen, setIsMapOpen] = useState(false)
   const [isLocating, setIsLocating] = useState(false)
 
   // Pagination states
@@ -262,7 +262,7 @@ function SearchPageContent() {
         onSelect={(id) => handleFilterChange('sportTypeId', id)}
       />
 
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-[1600px] mt-6">
 
         {loadError && (
           <div className="mb-6 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -292,109 +292,106 @@ function SearchPageContent() {
               onAmenityToggle={handleAmenityToggle}
               onClearFilters={handleClearFilters}
             />
-
-            <Button
-              variant="outline"
-              onClick={() => setIsMapOpen(true)}
-              className="border-gray-200 dark:border-border font-semibold hover:bg-gray-50 dark:hover:bg-muted shadow-sm"
-            >
-              <Map className="mr-2 h-4 w-4" /> Bản đồ
-            </Button>
           </div>
         </div>
 
-        {/* 5. Complexes Grid Area */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="animate-pulse bg-card rounded-2xl h-[420px] border border-gray-100 dark:border-border"></div>
-            ))}
-          </div>
-        ) : complexes.length === 0 ? (
-          <div className="text-center py-20 bg-white dark:bg-card/50 rounded-3xl border border-dashed border-gray-200 dark:border-border shadow-sm flex flex-col items-center justify-center">
-            <div className="w-40 h-40 mb-6 opacity-50">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-gray-400 w-full h-full">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M12 6v6l4 4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <h3 className="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Không tìm thấy tổ hợp</h3>
-            <p className="text-muted-foreground mb-8 max-w-md">Rất tiếc, chúng tôi không tìm thấy tổ hợp nào khớp với điều kiện lọc của bạn. Vui lòng thử nới lỏng các yêu cầu nhé!</p>
-            <Button onClick={handleClearFilters} className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 rounded-full px-8 py-6 text-base font-bold shadow-lg transition-all hover:scale-105 active:scale-95">
-              Xóa tất cả bộ lọc
-            </Button>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {complexes.map((complex) => (
-                <ComplexCard
-                  key={complex.complexId}
-                  complex={complex}
-                />
-              ))}
-            </div>
-
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="mt-12 flex justify-center">
-                <Pagination>
-                  <PaginationContent>
-                    <PaginationItem>
-                      <PaginationPrevious
-                        href="#"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          if (filters.page && filters.page > 0) {
-                            handleFilterChange('page', filters.page - 1)
-                          }
-                        }}
-                        className={filters.page === 0 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                      />
-                    </PaginationItem>
-                    
-                    {Array.from({ length: totalPages }, (_, idx) => (
-                      <PaginationItem key={idx}>
-                        <PaginationLink
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            handleFilterChange('page', idx)
-                          }}
-                          isActive={filters.page === idx}
-                          className="cursor-pointer"
-                        >
-                          {idx + 1}
-                        </PaginationLink>
-                      </PaginationItem>
-                    ))}
-
-                    <PaginationItem>
-                      <PaginationNext
-                        href="#"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          if (filters.page !== undefined && filters.page < totalPages - 1) {
-                            handleFilterChange('page', filters.page + 1)
-                          }
-                        }}
-                        className={filters.page === totalPages - 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                      />
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
+        {/* 5. Split-Screen Layout: List + Map */}
+        <div className="flex flex-col lg:flex-row gap-6">
+          
+          {/* Left Column: Complex List */}
+          <div className="flex-1 lg:w-[55%] xl:w-[60%] flex flex-col gap-6">
+            {loading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                  <div key={i} className="animate-pulse bg-card rounded-2xl h-[420px] border border-gray-100 dark:border-border"></div>
+                ))}
               </div>
+            ) : complexes.length === 0 ? (
+              <div className="text-center py-20 bg-white dark:bg-card/50 rounded-3xl border border-dashed border-gray-200 dark:border-border shadow-sm flex flex-col items-center justify-center">
+                <div className="w-40 h-40 mb-6 opacity-50">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-gray-400 w-full h-full">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M12 6v6l4 4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <h3 className="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Không tìm thấy tổ hợp</h3>
+                <p className="text-muted-foreground mb-8 max-w-md">Rất tiếc, chúng tôi không tìm thấy tổ hợp nào khớp với điều kiện lọc của bạn. Vui lòng thử nới lỏng các yêu cầu nhé!</p>
+                <Button onClick={handleClearFilters} className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 rounded-full px-8 py-6 text-base font-bold shadow-lg transition-all hover:scale-105 active:scale-95">
+                  Xóa tất cả bộ lọc
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {complexes.map((complex) => (
+                    <ComplexCard
+                      key={complex.complexId}
+                      complex={complex}
+                    />
+                  ))}
+                </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="mt-8 flex justify-center pb-6">
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              if (filters.page && filters.page > 0) {
+                                handleFilterChange('page', filters.page - 1)
+                              }
+                            }}
+                            className={filters.page === 0 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                          />
+                        </PaginationItem>
+                        
+                        {Array.from({ length: totalPages }, (_, idx) => (
+                          <PaginationItem key={idx}>
+                            <PaginationLink
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                handleFilterChange('page', idx)
+                              }}
+                              isActive={filters.page === idx}
+                              className="cursor-pointer"
+                            >
+                              {idx + 1}
+                            </PaginationLink>
+                          </PaginationItem>
+                        ))}
+
+                        <PaginationItem>
+                          <PaginationNext
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              if (filters.page !== undefined && filters.page < totalPages - 1) {
+                                handleFilterChange('page', filters.page + 1)
+                              }
+                            }}
+                            className={filters.page === totalPages - 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
+          </div>
 
+          {/* Right Column: Sticky Map */}
+          <div className="w-full lg:w-[45%] xl:w-[40%] h-[500px] lg:h-[calc(100vh-140px)] lg:sticky lg:top-24 mb-10 lg:mb-0 rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+            <ComplexMap complexes={loading ? [] : complexes} />
+          </div>
+
+        </div>
       </div>
-
-      <ComplexMapModal
-        isOpen={isMapOpen}
-        onClose={() => setIsMapOpen(false)}
-        complexes={complexes}
-      />
     </div>
   )
 }
