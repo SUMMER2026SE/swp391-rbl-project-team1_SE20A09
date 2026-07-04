@@ -32,9 +32,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -219,6 +221,115 @@ class MaintenanceScheduleServiceImplTest {
                 .thenReturn(List.of());
 
         assertFalse(service.isStadiumUnderMaintenance(court, date));
+    }
+
+    // ── isStadiumUnderMaintenanceNow / isUnderMaintenanceNow ────────────────
+    // Dùng khoảng thời gian rộng (±1 ngày hoặc ±1 năm) quanh "now" thay vì cộng/trừ giờ cụ thể,
+    // để test không flaky bất kể chạy vào giờ nào trong ngày (tránh vấn đề lệch nửa đêm).
+
+    @Test
+    void isStadiumUnderMaintenanceNow_stadiumStatusNotAvailable_returnsTrue() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.MAINTENANCE);
+
+        assertTrue(service.isStadiumUnderMaintenanceNow(court));
+        verifyNoInteractions(maintenanceScheduleRepository);
+    }
+
+    @Test
+    void isStadiumUnderMaintenanceNow_scheduleCoversCurrentInstant_returnsTrue() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        LocalDate today = LocalDate.now();
+
+        MaintenanceSchedule activeNow = MaintenanceSchedule.builder()
+                .stadium(court)
+                .startDate(today.minusDays(1)).startTime(LocalTime.MIN)
+                .endDate(today.plusDays(1)).endTime(LocalTime.MAX)
+                .build();
+
+        when(maintenanceScheduleRepository.findActiveForComplexAndDate(eq(complex.getComplexId()), eq(today)))
+                .thenReturn(List.of());
+        when(maintenanceScheduleRepository.findActiveForStadiumsAndDate(anyList(), eq(today)))
+                .thenReturn(List.of(activeNow));
+
+        assertTrue(service.isStadiumUnderMaintenanceNow(court));
+    }
+
+    @Test
+    void isStadiumUnderMaintenanceNow_scheduleNotYetStarted_returnsFalse() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        LocalDate today = LocalDate.now();
+
+        // Chưa bắt đầu — hiệu lực từ 1 năm sau trở đi (dù giả lập là "ứng viên của hôm nay").
+        LocalDate farFuture = today.plusYears(1);
+        MaintenanceSchedule upcoming = MaintenanceSchedule.builder()
+                .stadium(court)
+                .startDate(farFuture).endDate(farFuture.plusDays(1))
+                .build();
+
+        when(maintenanceScheduleRepository.findActiveForComplexAndDate(eq(complex.getComplexId()), eq(today)))
+                .thenReturn(List.of());
+        when(maintenanceScheduleRepository.findActiveForStadiumsAndDate(anyList(), eq(today)))
+                .thenReturn(List.of(upcoming));
+
+        assertFalse(service.isStadiumUnderMaintenanceNow(court));
+    }
+
+    @Test
+    void isStadiumUnderMaintenanceNow_scheduleAlreadyEnded_returnsFalse() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        LocalDate today = LocalDate.now();
+
+        LocalDate longAgo = today.minusYears(1);
+        MaintenanceSchedule ended = MaintenanceSchedule.builder()
+                .stadium(court)
+                .startDate(longAgo).endDate(longAgo.plusDays(1))
+                .build();
+
+        when(maintenanceScheduleRepository.findActiveForComplexAndDate(eq(complex.getComplexId()), eq(today)))
+                .thenReturn(List.of());
+        when(maintenanceScheduleRepository.findActiveForStadiumsAndDate(anyList(), eq(today)))
+                .thenReturn(List.of(ended));
+
+        assertFalse(service.isStadiumUnderMaintenanceNow(court));
+    }
+
+    @Test
+    void isUnderMaintenanceNow_batch_mixesActiveUpcomingAndClean() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium activeCourt = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        Stadium upcomingCourt = newCourt(21, facility, StadiumStatus.AVAILABLE);
+        Stadium cleanCourt = newCourt(22, facility, StadiumStatus.AVAILABLE);
+        LocalDate today = LocalDate.now();
+
+        MaintenanceSchedule activeNow = MaintenanceSchedule.builder()
+                .stadium(activeCourt)
+                .startDate(today.minusDays(1)).startTime(LocalTime.MIN)
+                .endDate(today.plusDays(1)).endTime(LocalTime.MAX)
+                .build();
+        MaintenanceSchedule upcoming = MaintenanceSchedule.builder()
+                .stadium(upcomingCourt)
+                .startDate(today.plusYears(1)).endDate(today.plusYears(1).plusDays(1))
+                .build();
+
+        when(maintenanceScheduleRepository.findActiveForComplexesInRange(anyList(), eq(today), eq(today)))
+                .thenReturn(List.of());
+        when(maintenanceScheduleRepository.findActiveForStadiumsInRange(anyList(), eq(today), eq(today)))
+                .thenReturn(List.of(activeNow, upcoming));
+
+        Map<Integer, Boolean> result = service.isUnderMaintenanceNow(List.of(activeCourt, upcomingCourt, cleanCourt));
+
+        assertTrue(result.get(activeCourt.getStadiumId()));
+        assertFalse(result.get(upcomingCourt.getStadiumId()));
+        assertFalse(result.get(cleanCourt.getStadiumId()));
     }
 
     // ── createSchedule (Stadium level) ─────────────────────────────────────

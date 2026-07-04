@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -30,6 +31,10 @@ export function MaintenanceScheduleDialog({ isOpen, onClose, targetType, targetI
   const [indefinite, setIndefinite] = useState(false)
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  const [hourScoped, setHourScoped] = useState(false)
+  const [startTime, setStartTime] = useState('')
+  const [endTime, setEndTime] = useState('')
 
   const [schedules, setSchedules] = useState<MaintenanceScheduleResponse[]>([])
   const [loadingSchedules, setLoadingSchedules] = useState(false)
@@ -59,6 +64,9 @@ export function MaintenanceScheduleDialog({ isOpen, onClose, targetType, targetI
       setEndDate(undefined)
       setIndefinite(false)
       setReason('')
+      setHourScoped(false)
+      setStartTime('')
+      setEndTime('')
       loadSchedules(cancelled)
     }
     return () => {
@@ -71,6 +79,7 @@ export function MaintenanceScheduleDialog({ isOpen, onClose, targetType, targetI
   const handleIndefiniteChange = (checked: boolean) => {
     setIndefinite(checked)
     setEndDate(undefined)
+    if (checked) setEndTime('')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -83,12 +92,22 @@ export function MaintenanceScheduleDialog({ isOpen, onClose, targetType, targetI
       toast.error('Vui lòng chọn ngày kết thúc, hoặc tick "Bảo trì vô thời hạn"')
       return
     }
+    if (hourScoped && !startTime) {
+      toast.error('Vui lòng chọn giờ bắt đầu bảo trì')
+      return
+    }
+    if (hourScoped && !indefinite && !endTime) {
+      toast.error('Vui lòng chọn giờ kết thúc bảo trì')
+      return
+    }
 
     setSubmitting(true)
     try {
       const payload = {
         startDate: format(startDate, 'yyyy-MM-dd'),
         endDate: indefinite ? undefined : format(endDate as Date, 'yyyy-MM-dd'),
+        startTime: hourScoped && startTime ? `${startTime}:00` : undefined,
+        endTime: hourScoped && !indefinite && endTime ? `${endTime}:00` : undefined,
         reason: reason.trim() || undefined,
       }
       if (targetType === 'complex') {
@@ -101,6 +120,9 @@ export function MaintenanceScheduleDialog({ isOpen, onClose, targetType, targetI
       setEndDate(undefined)
       setIndefinite(false)
       setReason('')
+      setHourScoped(false)
+      setStartTime('')
+      setEndTime('')
       loadSchedules()
       onSuccess?.()
     } catch (err: unknown) {
@@ -190,6 +212,51 @@ export function MaintenanceScheduleDialog({ isOpen, onClose, targetType, targetI
           </div>
 
           <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="maintenance-hour-scoped"
+                checked={hourScoped}
+                onCheckedChange={(checked) => setHourScoped(checked === true)}
+                disabled={submitting}
+              />
+              <Label htmlFor="maintenance-hour-scoped" className="text-sm font-semibold cursor-pointer select-none">
+                Chỉ bảo trì theo khung giờ cụ thể (không phải cả ngày)
+              </Label>
+            </div>
+            {hourScoped && (
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div className="space-y-1">
+                  <Label htmlFor="maintenance-start-time" className="text-xs">Giờ bắt đầu</Label>
+                  <Input
+                    id="maintenance-start-time"
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    disabled={submitting}
+                  />
+                </div>
+                {!indefinite && (
+                  <div className="space-y-1">
+                    <Label htmlFor="maintenance-end-time" className="text-xs">Giờ kết thúc</Label>
+                    <Input
+                      id="maintenance-end-time"
+                      type="time"
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      disabled={submitting}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            {hourScoped && (
+              <p className="text-xs text-muted-foreground">
+                Ví dụ: bảo trì từ 14:00 hôm nay đến 09:00 ngày hôm sau, hoặc chỉ 10:00-12:00 trong ngày.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="maintenance-reason">Lý do bảo trì</Label>
             <Textarea
               id="maintenance-reason"
@@ -239,6 +306,13 @@ export function MaintenanceScheduleDialog({ isOpen, onClose, targetType, targetI
                           {s.indefinite ? 'Vô thời hạn' : s.endDate ? format(parseISO(s.endDate), 'dd/MM/yyyy') : ''}
                         </span>
                       </div>
+                      {(s.startTime || s.endTime) && (
+                        <p className="text-muted-foreground">
+                          Khung giờ: {s.startTime ? s.startTime.slice(0, 5) : '00:00'}
+                          {' - '}
+                          {s.endTime ? s.endTime.slice(0, 5) : '24:00'}
+                        </p>
+                      )}
                       {s.reason && <p className="text-muted-foreground truncate">{s.reason}</p>}
                     </div>
                     {!isEnded && (

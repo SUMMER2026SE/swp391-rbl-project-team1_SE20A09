@@ -96,4 +96,9 @@ public class MaintenanceSchedule implements Serializable {
     public boolean overlaps(LocalDateTime rangeStart, LocalDateTime rangeEndExclusive) {
         return effectiveStart().isBefore(rangeEndExclusive) && rangeStart.isBefore(effectiveEnd());
     }
+
+    /** True nếu {@code instant} nằm trong khoảng hiệu lực — dùng để check "đang bảo trì NGAY BÂY GIỜ". */
+    public boolean covers(LocalDateTime instant) {
+        return !effectiveStart().isAfter(instant) && instant.isBefore(effectiveEnd());
+    }
 }

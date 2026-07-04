@@ -34,7 +34,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -147,11 +146,10 @@ public class StadiumServiceImpl implements StadiumService {
             return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
         };
 
-        LocalDate today = LocalDate.now();
         List<Stadium> stadiums = stadiumRepository.findAll(spec);
-        // Batch — tối đa 2 query bất kể danh sách dài bao nhiêu, thay vì gọi isStadiumUnderMaintenance
+        // Batch — tối đa 2 query bất kể danh sách dài bao nhiêu, thay vì gọi isStadiumUnderMaintenanceNow
         // (1-2 query/lần) lặp lại cho từng sân.
-        java.util.Map<Integer, Boolean> maintenanceByStadiumId = maintenanceScheduleService.isUnderMaintenanceToday(stadiums, today);
+        java.util.Map<Integer, Boolean> maintenanceByStadiumId = maintenanceScheduleService.isUnderMaintenanceNow(stadiums);
         return stadiums.stream()
                 .map(stadium -> {
                     StadiumResponse response = stadiumMapper.toResponse(stadium);
@@ -176,7 +174,7 @@ public class StadiumServiceImpl implements StadiumService {
         }
 
         StadiumResponse response = stadiumMapper.toResponse(stadium);
-        response.setUnderMaintenanceToday(maintenanceScheduleService.isStadiumUnderMaintenance(stadium, LocalDate.now()));
+        response.setUnderMaintenanceToday(maintenanceScheduleService.isStadiumUnderMaintenanceNow(stadium));
         return response;
     }
 

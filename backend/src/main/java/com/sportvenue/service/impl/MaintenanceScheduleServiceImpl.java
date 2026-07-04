@@ -106,7 +106,27 @@ public class MaintenanceScheduleServiceImpl implements MaintenanceScheduleServic
 
     @Override
     @Transactional(readOnly = true)
-    public Map<Integer, Boolean> isUnderMaintenanceToday(List<Stadium> stadiums, LocalDate date) {
+    public boolean isStadiumUnderMaintenanceNow(Stadium stadium) {
+        if (staticallyUnderMaintenance(stadium)) {
+            return true;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        LocalDate today = now.toLocalDate();
+        StadiumComplex complex = stadium.getComplex();
+        if (complex != null
+                && maintenanceScheduleRepository.findActiveForComplexAndDate(complex.getComplexId(), today)
+                        .stream().anyMatch(s -> s.covers(now))) {
+            return true;
+        }
+        return maintenanceScheduleRepository.findActiveForStadiumsAndDate(stadiumAndParentIds(stadium), today)
+                .stream().anyMatch(s -> s.covers(now));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Integer, Boolean> isUnderMaintenanceNow(List<Stadium> stadiums) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDate today = now.toLocalDate();
         Map<Integer, Boolean> result = new LinkedHashMap<>();
         List<Stadium> needsScheduleLookup = new ArrayList<>();
         for (Stadium stadium : stadiums) {
@@ -129,16 +149,20 @@ public class MaintenanceScheduleServiceImpl implements MaintenanceScheduleServic
             stadiumIds.addAll(stadiumAndParentIds(stadium));
         }
 
-        Set<Integer> complexesUnderMaintenance = complexIds.isEmpty() ? Set.of()
-                : toComplexIdSet(maintenanceScheduleRepository.findActiveForComplexesInRange(
-                        List.copyOf(complexIds), date, date));
-        Set<Integer> stadiumsUnderMaintenance = toStadiumIdSet(
-                maintenanceScheduleRepository.findActiveForStadiumsInRange(List.copyOf(stadiumIds), date, date));
+        List<MaintenanceSchedule> complexSchedulesToday = complexIds.isEmpty() ? List.of()
+                : maintenanceScheduleRepository.findActiveForComplexesInRange(List.copyOf(complexIds), today, today);
+        List<MaintenanceSchedule> stadiumSchedulesToday = maintenanceScheduleRepository.findActiveForStadiumsInRange(
+                List.copyOf(stadiumIds), today, today);
+
+        Set<Integer> complexesActiveNow = toComplexIdSet(
+                complexSchedulesToday.stream().filter(s -> s.covers(now)).toList());
+        Set<Integer> stadiumsActiveNow = toStadiumIdSet(
+                stadiumSchedulesToday.stream().filter(s -> s.covers(now)).toList());
 
         for (Stadium stadium : needsScheduleLookup) {
             boolean underComplexSchedule = stadium.getComplex() != null
-                    && complexesUnderMaintenance.contains(stadium.getComplex().getComplexId());
-            boolean underStadiumSchedule = stadiumAndParentIds(stadium).stream().anyMatch(stadiumsUnderMaintenance::contains);
+                    && complexesActiveNow.contains(stadium.getComplex().getComplexId());
+            boolean underStadiumSchedule = stadiumAndParentIds(stadium).stream().anyMatch(stadiumsActiveNow::contains);
             result.put(stadium.getStadiumId(), underComplexSchedule || underStadiumSchedule);
         }
         return result;

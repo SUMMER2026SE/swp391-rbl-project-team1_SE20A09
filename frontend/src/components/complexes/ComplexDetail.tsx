@@ -496,20 +496,27 @@ export default function ComplexDetail({
                                 </p>
                               </div>
                               <div className="flex gap-2 items-center">
-                                {isAvailable ? (
-                                  <Link
-                                    href={`/venues/${court.stadiumId}`}
-                                    className="w-full flex items-center justify-center bg-emerald-50 hover:bg-[#1a8a4a]/10 text-[#1a8a4a] border border-[#1a8a4a]/20 text-[12px] font-semibold py-2 rounded-[8px] transition-all"
-                                  >
-                                    Xem lịch & đặt
-                                  </Link>
-                                ) : (
+                                {/* MAINTENANCE vẫn cho xem lịch tuần — chỉ chặn đặt đúng slot đang
+                                    bảo trì (backend tự chặn), khách vẫn cần xem để đặt slot/ngày khác.
+                                    Chỉ CLOSED (đóng cửa hẳn) mới thực sự không cho vào. */}
+                                {!isAvailable && !isMaintenance ? (
                                   <button
                                     disabled
                                     className="w-full flex items-center justify-center bg-gray-100 text-gray-400 text-[12px] font-semibold py-2 rounded-[8px] cursor-not-allowed"
                                   >
-                                    {isMaintenance ? 'Đang bảo trì' : 'Tạm đóng'}
+                                    Tạm đóng
                                   </button>
+                                ) : (
+                                  <Link
+                                    href={`/venues/${court.stadiumId}`}
+                                    className={
+                                      isAvailable
+                                        ? 'w-full flex items-center justify-center bg-emerald-50 hover:bg-[#1a8a4a]/10 text-[#1a8a4a] border border-[#1a8a4a]/20 text-[12px] font-semibold py-2 rounded-[8px] transition-all'
+                                        : 'w-full flex items-center justify-center bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-[12px] font-semibold py-2 rounded-[8px] transition-all'
+                                    }
+                                  >
+                                    {isAvailable ? 'Xem lịch & đặt' : 'Xem lịch (đang bảo trì)'}
+                                  </Link>
                                 )}
                               </div>
                             </div>

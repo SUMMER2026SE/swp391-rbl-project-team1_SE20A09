@@ -26,7 +26,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -120,10 +119,10 @@ public class PublicComplexServiceImpl implements PublicComplexService {
         }
 
         List<Stadium> facilities = stadiumRepository.findFacilitiesByComplexId(complexId);
-        // Batch — tối đa 2 query bất kể danh sách dài bao nhiêu, thay vì gọi isStadiumUnderMaintenance lặp lại
-        // cho từng facility (endpoint public không auth, cần tránh N+1 trên đường traffic cao).
+        // Batch — tối đa 2 query bất kể danh sách dài bao nhiêu, thay vì gọi isStadiumUnderMaintenanceNow
+        // lặp lại cho từng facility (endpoint public không auth, cần tránh N+1 trên đường traffic cao).
         java.util.Map<Integer, Boolean> maintenanceMap =
-                maintenanceScheduleService.isUnderMaintenanceToday(facilities, LocalDate.now());
+                maintenanceScheduleService.isUnderMaintenanceNow(facilities);
         return facilities.stream()
                 .map(s -> mapToFacilityResponse(s, maintenanceMap.getOrDefault(s.getStadiumId(), false)))
                 .collect(Collectors.toList());
@@ -143,7 +142,7 @@ public class PublicComplexServiceImpl implements PublicComplexService {
 
         List<Stadium> courts = stadiumRepository.findCourtsByFacilityId(facilityId);
         java.util.Map<Integer, Boolean> maintenanceMap =
-                maintenanceScheduleService.isUnderMaintenanceToday(courts, LocalDate.now());
+                maintenanceScheduleService.isUnderMaintenanceNow(courts);
         return courts.stream()
                 .map(s -> mapToCourtResponse(s, maintenanceMap.getOrDefault(s.getStadiumId(), false)))
                 .collect(Collectors.toList());

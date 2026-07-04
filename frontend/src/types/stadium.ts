@@ -122,6 +122,8 @@ export interface CreateComplexRequest {
 export interface CreateMaintenanceScheduleRequest {
   startDate: string; // Format "yyyy-MM-dd"
   endDate?: string;  // Format "yyyy-MM-dd" — bỏ trống = vô thời hạn
+  startTime?: string; // Format "HH:mm" — bỏ trống = tính từ đầu ngày startDate
+  endTime?: string;   // Format "HH:mm" — bỏ trống = tính đến hết ngày endDate. Chỉ hợp lệ khi có endDate
   reason?: string;
 }
 
@@ -131,6 +133,8 @@ export interface MaintenanceScheduleResponse {
   complexId: number | null;
   startDate: string;
   endDate: string | null;
+  startTime: string | null;
+  endTime: string | null;
   reason: string | null;
   indefinite: boolean;
   active: boolean;

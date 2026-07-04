@@ -21,9 +21,9 @@ public interface MaintenanceScheduleService {
      * NGÀY, không phân biệt khung giờ (VD: bảo trì chỉ 10h-12h vẫn coi cả ngày là "có bảo trì").
      * Kiểm tra cả {@code stadium.stadiumStatus} (bảo trì vô thời hạn, cascade từ FACILITY
      * cha nếu {@code stadium} là COURT) lẫn các {@link com.sportvenue.entity.MaintenanceSchedule}
-     * đang active. Dùng cho các chỗ chỉ cần biết "ngày này có đụng bảo trì không" (match request,
-     * cảnh báo confirmPayment, danh sách công khai) — KHÔNG dùng để chặn 1 slot cụ thể, xem
-     * {@link #isSlotUnderMaintenance} cho việc đó.
+     * đang active. Dùng cho các chỗ chỉ cần biết "ngày này có đụng bảo trì không, bất kể giờ nào"
+     * (match request) — KHÔNG dùng để chặn 1 slot cụ thể (xem {@link #isSlotUnderMaintenance}) hoặc
+     * hiển thị badge "đang bảo trì ngay bây giờ" (xem {@link #isStadiumUnderMaintenanceNow}).
      */
     boolean isStadiumUnderMaintenance(Stadium stadium, LocalDate date);
 
@@ -42,11 +42,19 @@ public interface MaintenanceScheduleService {
     boolean isComplexUnderMaintenance(StadiumComplex complex, LocalDate date);
 
     /**
-     * Batch version của {@link #isStadiumUnderMaintenance} cho nhiều sân cùng 1 ngày —
+     * "Sân có đang bảo trì NGAY LÚC NÀY không?" — check theo đúng thời điểm hiện tại
+     * (không phải chỉ "ngày hôm nay có đụng bảo trì"). Dùng cho badge "Đang bảo trì" hiển thị
+     * công khai — lịch bảo trì sắp tới (VD 20h-22h tối nay) mà bây giờ mới 10h sáng thì KHÔNG
+     * được coi là "đang bảo trì". Xem {@link #isStadiumUnderMaintenance} cho check mức ngày.
+     */
+    boolean isStadiumUnderMaintenanceNow(Stadium stadium);
+
+    /**
+     * Batch version của {@link #isStadiumUnderMaintenanceNow} cho nhiều sân —
      * tối đa 2 query bất kể danh sách dài bao nhiêu (thay vì N lần gọi lặp gây N+1).
      * Dùng cho danh sách sân của Owner và danh sách Facility/Court công khai.
      */
-    Map<Integer, Boolean> isUnderMaintenanceToday(List<Stadium> stadiums, LocalDate date);
+    Map<Integer, Boolean> isUnderMaintenanceNow(List<Stadium> stadiums);
 
     /** Bảo trì trong 1 ngày cụ thể — {@code allDay} = true nếu bị chặn cả ngày (không cần xét giờ). */
     record DayMaintenance(boolean allDay, List<MaintenanceSchedule> schedules) {
