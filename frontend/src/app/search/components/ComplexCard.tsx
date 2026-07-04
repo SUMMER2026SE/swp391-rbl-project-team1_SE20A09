@@ -15,8 +15,8 @@ export function ComplexCard({ complex }: ComplexCardProps) {
   const sportTypeId = searchParams.get('sportTypeId')
   
   const href = sportTypeId 
-    ? `/complexes/${complex.complexId}?sportTypeId=${sportTypeId}`
-    : `/complexes/${complex.complexId}`
+    ? `/complexes/${complex.complexId}?sportTypeId=${sportTypeId}&tab=courts`
+    : `/complexes/${complex.complexId}?tab=courts`
 
   const formattedPrice = (() => {
     if (complex.minPrice !== undefined && complex.minPrice !== null) {
