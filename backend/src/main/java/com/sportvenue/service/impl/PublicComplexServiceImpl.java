@@ -15,6 +15,7 @@ import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.StadiumComplexRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.specification.StadiumComplexSpecification;
+import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.PublicComplexService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -36,6 +37,7 @@ public class PublicComplexServiceImpl implements PublicComplexService {
 
     private final StadiumComplexRepository stadiumComplexRepository;
     private final StadiumRepository stadiumRepository;
+    private final MaintenanceScheduleService maintenanceScheduleService;
 
     @Override
     @Transactional(readOnly = true)
@@ -117,8 +119,12 @@ public class PublicComplexServiceImpl implements PublicComplexService {
         }
 
         List<Stadium> facilities = stadiumRepository.findFacilitiesByComplexId(complexId);
+        // Batch — tối đa 2 query bất kể danh sách dài bao nhiêu, thay vì gọi isStadiumUnderMaintenanceNow
+        // lặp lại cho từng facility (endpoint public không auth, cần tránh N+1 trên đường traffic cao).
+        java.util.Map<Integer, Boolean> maintenanceMap =
+                maintenanceScheduleService.isUnderMaintenanceNow(facilities);
         return facilities.stream()
-                .map(this::mapToFacilityResponse)
+                .map(s -> mapToFacilityResponse(s, maintenanceMap.getOrDefault(s.getStadiumId(), false)))
                 .collect(Collectors.toList());
     }
 
@@ -133,14 +139,16 @@ public class PublicComplexServiceImpl implements PublicComplexService {
         if (facility.getNodeType() != StadiumNodeType.FACILITY) {
             throw new BadRequestException("Provided ID is not a facility");
         }
-        
+
         List<Stadium> courts = stadiumRepository.findCourtsByFacilityId(facilityId);
+        java.util.Map<Integer, Boolean> maintenanceMap =
+                maintenanceScheduleService.isUnderMaintenanceNow(courts);
         return courts.stream()
-                .map(this::mapToCourtResponse)
+                .map(s -> mapToCourtResponse(s, maintenanceMap.getOrDefault(s.getStadiumId(), false)))
                 .collect(Collectors.toList());
     }
 
-    private FacilityResponse mapToFacilityResponse(Stadium s) {
+    private FacilityResponse mapToFacilityResponse(Stadium s, boolean underMaintenanceToday) {
         FacilityResponse.SportTypeInfo sportTypeInfo = null;
         if (s.getSportType() != null) {
             sportTypeInfo = FacilityResponse.SportTypeInfo.builder()
@@ -161,11 +169,12 @@ public class PublicComplexServiceImpl implements PublicComplexService {
                 .openTime(s.getOpenTime())
                 .closeTime(s.getCloseTime())
                 .stadiumStatus(s.getStadiumStatus().name())
+                .underMaintenanceToday(underMaintenanceToday)
                 .imageUrls(imageUrls)
                 .build();
     }
 
-    private CourtResponse mapToCourtResponse(Stadium s) {
+    private CourtResponse mapToCourtResponse(Stadium s, boolean underMaintenanceToday) {
         List<String> imageUrls = s.getImages() != null
                 ? s.getImages().stream().map(img -> img.getImageUrl()).collect(Collectors.toList())
                 : Collections.emptyList();
@@ -179,6 +188,7 @@ public class PublicComplexServiceImpl implements PublicComplexService {
                 .pricePerHour(s.getPricePerHour())
                 .parentStadiumId(parentId)
                 .stadiumStatus(s.getStadiumStatus().name())
+                .underMaintenanceToday(underMaintenanceToday)
                 .imageUrls(imageUrls)
                 .build();
     }

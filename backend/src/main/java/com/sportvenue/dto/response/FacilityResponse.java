@@ -20,6 +20,8 @@ public class FacilityResponse {
     private LocalTime openTime;
     private LocalTime closeTime;
     private String stadiumStatus;
+    /** True nếu Facility bị chặn đặt HÔM NAY do bảo trì (kể cả cascade từ Complex cha) — dù stadiumStatus vẫn AVAILABLE. */
+    private Boolean underMaintenanceToday;
     private List<String> imageUrls;
 
     @Data

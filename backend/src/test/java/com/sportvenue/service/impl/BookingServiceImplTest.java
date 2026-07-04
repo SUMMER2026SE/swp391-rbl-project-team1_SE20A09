@@ -27,6 +27,7 @@ import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.repository.TimeSlotExceptionRepository;
 import com.sportvenue.security.UserPrincipal;
+import com.sportvenue.service.MaintenanceScheduleService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,6 +48,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -79,6 +81,7 @@ class BookingServiceImplTest {
     @Mock private AccessoryRepository accessoryRepository;
     @Mock private BookingAccessoryRepository bookingAccessoryRepository;
     @Mock private TimeSlotExceptionRepository timeSlotExceptionRepository;
+    @Mock private com.sportvenue.service.MaintenanceScheduleService maintenanceScheduleService;
 
     @InjectMocks private BookingServiceImpl bookingService;
 
@@ -272,6 +275,23 @@ class BookingServiceImplTest {
     }
 
     @Test
+    @DisplayName("createBooking: slot đang bảo trì (isSlotUnderMaintenance=true) → BadRequestException")
+    void createBooking_stadiumUnderMaintenance_throwsBadRequest() {
+        CreateBookingRequest request = CreateBookingRequest.builder()
+                .stadiumId(10).slotId(20).reservationDate(futureDate()).build();
+
+        when(userRepository.findById(1)).thenReturn(Optional.of(customer));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(timeSlotRepository.findByIdForUpdate(20)).thenReturn(Optional.of(slot));
+        when(maintenanceScheduleService.isSlotUnderMaintenance(eq(stadium), any(LocalDate.class), any(LocalTime.class), any(LocalTime.class)))
+                .thenReturn(true);
+
+        assertThrows(BadRequestException.class,
+                () -> bookingService.createBooking(principal, request));
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("createBooking: slot không thuộc sân → BadRequestException")
     void createBooking_slotNotInStadium_throwsBadRequest() {
         Stadium otherStadium = Stadium.builder().stadiumId(99).build();
@@ -427,6 +447,62 @@ class BookingServiceImplTest {
         assertEquals("2026-06-22", result.getWeekStart());
         assertEquals("2026-06-28", result.getWeekEnd());
         assertEquals(7, result.getDays().size());
+    }
+
+    @Test
+    @DisplayName("getWeeklySlots: sân đang bảo trì → slot tương lai được đánh dấu MAINTENANCE")
+    void getWeeklySlots_stadiumUnderMaintenance_marksFutureSlotsAsMaintenance() {
+        LocalDate weekStart = LocalDate.now().plusWeeks(2);
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(timeSlotRepository.findByStadiumStadiumIdAndSlotStatus(10, SlotStatus.AVAILABLE))
+                .thenReturn(List.of(slot));
+        when(bookingRepository.findWeeklyBookings(eq(10), any(LocalDate.class), any(LocalDate.class), anyList()))
+                .thenReturn(List.of());
+        when(maintenanceScheduleService.getDayMaintenanceForDateRange(eq(stadium), any(LocalDate.class), any(LocalDate.class)))
+                .thenAnswer(invocation -> allDaysInRangeMappedTo(invocation, true));
+
+        var result = bookingService.getWeeklySlots(10, weekStart);
+
+        result.getDays().forEach(day -> day.getSlots().forEach(item ->
+                assertEquals("MAINTENANCE", item.getStatus(),
+                        "Ngày " + day.getDate() + " phải là MAINTENANCE khi cả ngày đang bảo trì")));
+    }
+
+    @Test
+    @DisplayName("getWeeklySlots: không bảo trì → slot tương lai vẫn AVAILABLE")
+    void getWeeklySlots_notUnderMaintenance_slotsStayAvailable() {
+        LocalDate weekStart = LocalDate.now().plusWeeks(2);
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(timeSlotRepository.findByStadiumStadiumIdAndSlotStatus(10, SlotStatus.AVAILABLE))
+                .thenReturn(List.of(slot));
+        when(bookingRepository.findWeeklyBookings(eq(10), any(LocalDate.class), any(LocalDate.class), anyList()))
+                .thenReturn(List.of());
+        when(maintenanceScheduleService.getDayMaintenanceForDateRange(eq(stadium), any(LocalDate.class), any(LocalDate.class)))
+                .thenAnswer(invocation -> allDaysInRangeMappedTo(invocation, false));
+
+        var result = bookingService.getWeeklySlots(10, weekStart);
+
+        result.getDays().forEach(day -> day.getSlots().forEach(item ->
+                assertEquals("AVAILABLE", item.getStatus())));
+    }
+
+    /**
+     * Helper: build 1 {@code Map<LocalDate, DayMaintenance>} phủ đúng [rangeStart, rangeEnd] được
+     * truyền vào mock — dùng cho stub {@code getDayMaintenanceForDateRange}. {@code value=true} ->
+     * cả ngày bảo trì ({@link MaintenanceScheduleService.DayMaintenance#ALL_DAY}).
+     */
+    private static Map<LocalDate, MaintenanceScheduleService.DayMaintenance> allDaysInRangeMappedTo(
+            org.mockito.invocation.InvocationOnMock invocation, boolean value) {
+        LocalDate rangeStart = invocation.getArgument(1);
+        LocalDate rangeEnd = invocation.getArgument(2);
+        Map<LocalDate, MaintenanceScheduleService.DayMaintenance> map = new java.util.LinkedHashMap<>();
+        MaintenanceScheduleService.DayMaintenance dayMaintenance = value
+                ? MaintenanceScheduleService.DayMaintenance.ALL_DAY
+                : MaintenanceScheduleService.DayMaintenance.NONE;
+        for (LocalDate d = rangeStart; !d.isAfter(rangeEnd); d = d.plusDays(1)) {
+            map.put(d, dayMaintenance);
+        }
+        return map;
     }
 
     @Test

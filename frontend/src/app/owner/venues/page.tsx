@@ -45,6 +45,7 @@ import {
   Sliders,
   Building2,
   Trophy,
+  Wrench,
 } from "lucide-react";
 import { stadiumService } from "@/lib/services/stadium";
 import { StadiumResponse, ComplexResponse, SportType } from "@/types/stadium";
@@ -52,6 +53,7 @@ import { toast } from "sonner";
 import { AccessoryManagerDialog } from "@/components/venues/AccessoryManagerDialog";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useConfirm } from "@/hooks/useConfirm";
+import { MaintenanceScheduleDialog } from "@/components/venues/MaintenanceScheduleDialog";
 
 // Quick Dialogs
 import { QuickCreateFacilityDialog } from './components/QuickCreateFacilityDialog'
@@ -63,6 +65,8 @@ import { EditFacilityDialog } from './components/EditFacilityDialog'
 interface VenueModalData {
   id: number;
   name: string;
+  /** Đối tượng bị tác động — mặc định 'stadium' (Facility/Court) nếu không truyền. */
+  type?: 'stadium' | 'complex';
 }
 
 function VenueManagementPage() {
@@ -82,6 +86,7 @@ function VenueManagementPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingComplex, setEditingComplex] = useState<ComplexResponse | null>(null);
   const [editingFacility, setEditingFacility] = useState<StadiumResponse | null>(null);
+  const [maintenanceTarget, setMaintenanceTarget] = useState<{ type: 'stadium' | 'complex'; id: number; name: string } | null>(null);
 
   // Quick action states
   const [activeComplexIdForFacility, setActiveComplexIdForFacility] = useState<number | null>(null);
@@ -135,12 +140,19 @@ function VenueManagementPage() {
     if (!suspendVenue) return;
     setIsSubmitting(true);
     try {
-      await stadiumService.suspendStadium(suspendVenue.id);
-      toast.success("Đã tạm ngưng hoạt động sân thành công.");
-      setVenues(venues.map(v => v.stadiumId === suspendVenue.id ? { ...v, stadiumStatus: "MAINTENANCE" } : v));
+      if (suspendVenue.type === 'complex') {
+        await stadiumService.suspendComplex(suspendVenue.id);
+        toast.success("Đã tạm ngưng hoạt động tổ hợp thành công.");
+      } else {
+        await stadiumService.suspendStadium(suspendVenue.id);
+        toast.success("Đã tạm ngưng hoạt động sân thành công.");
+      }
       setSuspendVenue(null);
+      // Refetch thay vì patch state cục bộ — suspend Complex cascade xuống Facility/Court con,
+      // patch cục bộ sẽ không phản ánh đúng các dòng bị ảnh hưởng gián tiếp.
+      await fetchTreeData();
     } catch (error) {
-      toast.error("Có lỗi xảy ra khi tạm ngưng sân.");
+      toast.error("Có lỗi xảy ra khi tạm ngưng.");
     } finally {
       setIsSubmitting(false);
     }
@@ -150,12 +162,17 @@ function VenueManagementPage() {
     if (!activateVenue) return;
     setIsSubmitting(true);
     try {
-      await stadiumService.activateStadium(activateVenue.id);
-      toast.success("Đã mở lại hoạt động sân thành công.");
-      setVenues(venues.map(v => v.stadiumId === activateVenue.id ? { ...v, stadiumStatus: "AVAILABLE" } : v));
+      if (activateVenue.type === 'complex') {
+        await stadiumService.activateComplex(activateVenue.id);
+        toast.success("Đã mở lại hoạt động tổ hợp thành công.");
+      } else {
+        await stadiumService.activateStadium(activateVenue.id);
+        toast.success("Đã mở lại hoạt động sân thành công.");
+      }
       setActivateVenue(null);
+      await fetchTreeData();
     } catch (error) {
-      toast.error("Có lỗi xảy ra khi mở lại sân.");
+      toast.error("Có lỗi xảy ra khi mở lại.");
     } finally {
       setIsSubmitting(false);
     }
@@ -248,12 +265,15 @@ function VenueManagementPage() {
                       {isComplexCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
                     </button>
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2.5">
+                      <div className="flex items-center gap-2.5">
                         <Building2 className="h-5 w-5 text-primary shrink-0" />
-                        <h3 className="font-extrabold text-xl text-slate-900 dark:text-white leading-tight truncate">
+                        <h3 className="font-extrabold text-xl text-slate-900 dark:text-white leading-tight break-words">
                           {complex.name}
                         </h3>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                         {getApprovedStatusBadge(complex.approvedStatus)}
+                        {getStatusBadge(complex.complexStatus)}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1.5 flex items-start gap-1.5 whitespace-normal break-words">
                         <span className="shrink-0">📍</span>
@@ -296,6 +316,31 @@ function VenueManagementPage() {
                       <Plus className="mr-1.5 h-3.5 w-3.5" />
                       Thêm Khu sân (L2)
                     </Button>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-52">
+                        <DropdownMenuItem onClick={() => setMaintenanceTarget({ type: 'complex', id: complex.complexId, name: complex.name })}>
+                          <Wrench className="mr-2 h-4 w-4" />
+                          Đặt bảo trì
+                        </DropdownMenuItem>
+                        {complex.complexStatus === 'AVAILABLE' ? (
+                          <DropdownMenuItem onClick={() => setSuspendVenue({ id: complex.complexId, name: complex.name, type: 'complex' })}>
+                            <Pause className="mr-2 h-4 w-4" />
+                            Tạm dừng tổ hợp
+                          </DropdownMenuItem>
+                        ) : complex.complexStatus === 'MAINTENANCE' ? (
+                          <DropdownMenuItem onClick={() => setActivateVenue({ id: complex.complexId, name: complex.name, type: 'complex' })}>
+                            <PlayCircle className="mr-2 h-4 w-4" />
+                            Hoạt động tổ hợp
+                          </DropdownMenuItem>
+                        ) : null}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
 
@@ -316,24 +361,33 @@ function VenueManagementPage() {
                             <div key={facility.stadiumId} className="bg-white dark:bg-card">
                               {/* L2: Facility Node Header */}
                               <div className="p-4 pl-8 md:pl-12 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/20">
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-start gap-3 min-w-0 flex-1">
                                   <button
                                     onClick={() => toggleFacility(facility.stadiumId)}
-                                    className="p-1 hover:bg-slate-100 dark:hover:bg-muted rounded text-slate-400"
+                                    className="p-1 hover:bg-slate-100 dark:hover:bg-muted rounded text-slate-400 shrink-0 mt-0.5"
                                   >
                                     {isFacilityCollapsed ? <ChevronRight className="h-4.5 w-4.5" /> : <ChevronDown className="h-4.5 w-4.5" />}
                                   </button>
-                                  <div className="flex items-center gap-2">
-                                    <Trophy className="h-4.5 w-4.5 text-blue-500 shrink-0" />
-                                    <span className="font-bold text-slate-800 dark:text-white">
-                                      {facility.stadiumName}
-                                    </span>
-                                    <Badge variant="secondary" className="text-[10px] font-semibold bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 border-0 uppercase">
-                                      {facility.sportName}
-                                    </Badge>
-                                    <span className="text-xs text-muted-foreground">
-                                      ({facility.openTime?.substring(0, 5)} - {facility.closeTime?.substring(0, 5)})
-                                    </span>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <Trophy className="h-4.5 w-4.5 text-blue-500 shrink-0" />
+                                      <span className="font-bold text-slate-800 dark:text-white break-words">
+                                        {facility.stadiumName}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                      <Badge variant="secondary" className="text-[10px] font-semibold bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 border-0 uppercase">
+                                        {facility.sportName}
+                                      </Badge>
+                                      <span className="text-xs text-muted-foreground">
+                                        ({facility.openTime?.substring(0, 5)} - {facility.closeTime?.substring(0, 5)})
+                                      </span>
+                                      {facility.stadiumStatus === 'AVAILABLE' && facility.underMaintenanceToday && (
+                                        <Badge className="bg-red-100 text-red-700 hover:bg-red-100 text-[10px] font-semibold">
+                                          Đang bảo trì hôm nay
+                                        </Badge>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
 
@@ -381,7 +435,12 @@ function VenueManagementPage() {
                                         <Package className="mr-2 h-4 w-4" />
                                         Quản lý phụ kiện
                                       </DropdownMenuItem>
-                                      
+
+                                      <DropdownMenuItem onClick={() => setMaintenanceTarget({ type: 'stadium', id: facility.stadiumId, name: facility.stadiumName })}>
+                                        <Wrench className="mr-2 h-4 w-4" />
+                                        Đặt bảo trì
+                                      </DropdownMenuItem>
+
                                       {facility.stadiumStatus === 'AVAILABLE' ? (
                                         <DropdownMenuItem onClick={() => setSuspendVenue({ id: facility.stadiumId, name: facility.stadiumName })}>
                                           <Pause className="mr-2 h-4 w-4" />
@@ -420,26 +479,33 @@ function VenueManagementPage() {
                                     </div>
                                   ) : (
                                     <div className="border border-slate-100 dark:border-border rounded-xl overflow-hidden bg-white dark:bg-card">
-                                      <Table>
+                                      <Table className="table-fixed">
                                         <TableHeader className="bg-slate-50/50">
                                           <TableRow>
-                                            <TableHead className="text-xs font-bold uppercase tracking-wider py-2">Tên sân lẻ</TableHead>
-                                            <TableHead className="text-xs font-bold uppercase tracking-wider py-2">Giá thuê / Giờ</TableHead>
-                                            <TableHead className="text-xs font-bold uppercase tracking-wider py-2">Trạng thái hoạt động</TableHead>
-                                            <TableHead className="text-xs font-bold uppercase tracking-wider py-2 text-right">Tác vụ</TableHead>
+                                            <TableHead className="w-2/5 text-xs font-bold uppercase tracking-wider py-2">Tên sân lẻ</TableHead>
+                                            <TableHead className="w-1/5 text-xs font-bold uppercase tracking-wider py-2">Giá thuê / Giờ</TableHead>
+                                            <TableHead className="w-1/4 text-xs font-bold uppercase tracking-wider py-2">Trạng thái hoạt động</TableHead>
+                                            <TableHead className="w-[15%] text-xs font-bold uppercase tracking-wider py-2 text-right">Tác vụ</TableHead>
                                           </TableRow>
                                         </TableHeader>
                                         <TableBody>
                                           {facilityCourts.map(court => (
                                             <TableRow key={court.stadiumId} className="hover:bg-slate-50/30 transition-colors">
-                                              <TableCell className="font-semibold text-slate-800 dark:text-slate-200">
+                                              <TableCell className="font-semibold text-slate-800 dark:text-slate-200 truncate">
                                                 {court.stadiumName}
                                               </TableCell>
                                               <TableCell className="font-extrabold text-slate-900 dark:text-white text-sm">
                                                 {court.pricePerHour.toLocaleString('vi-VN')}₫
                                               </TableCell>
-                                              <TableCell>
-                                                {getStatusBadge(court.stadiumStatus)}
+                                              <TableCell className="whitespace-normal">
+                                                <div className="flex flex-col gap-1 items-start">
+                                                  {getStatusBadge(court.stadiumStatus)}
+                                                  {court.stadiumStatus === 'AVAILABLE' && court.underMaintenanceToday && (
+                                                    <Badge className="bg-red-100 text-red-700 hover:bg-red-100 text-[10px] font-semibold whitespace-nowrap">
+                                                      Đang bảo trì hôm nay
+                                                    </Badge>
+                                                  )}
+                                                </div>
                                               </TableCell>
                                               <TableCell className="text-right">
                                                 <div className="flex justify-end gap-1">
@@ -462,6 +528,10 @@ function VenueManagementPage() {
                                                       <DropdownMenuItem onClick={() => router.push(`/owner/venues/${court.stadiumId}/edit`)}>
                                                         <Edit className="mr-2 h-4 w-4" />
                                                         Chỉnh sửa
+                                                      </DropdownMenuItem>
+                                                      <DropdownMenuItem onClick={() => setMaintenanceTarget({ type: 'stadium', id: court.stadiumId, name: court.stadiumName })}>
+                                                        <Wrench className="mr-2 h-4 w-4" />
+                                                        Đặt bảo trì
                                                       </DropdownMenuItem>
                                                       {court.stadiumStatus === 'AVAILABLE' ? (
                                                         <DropdownMenuItem onClick={() => setSuspendVenue({ id: court.stadiumId, name: court.stadiumName })}>
@@ -524,10 +594,12 @@ function VenueManagementPage() {
       <Dialog open={!!suspendVenue} onOpenChange={(open) => !open && setSuspendVenue(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Xác nhận tạm dừng sân</DialogTitle>
+            <DialogTitle>Xác nhận tạm dừng {suspendVenue?.type === 'complex' ? 'tổ hợp' : 'sân'}</DialogTitle>
             <DialogDescription>
-              Bạn có chắc chắn muốn tạm dừng hoạt động sân <strong>{suspendVenue?.name}</strong> không? 
-              Trạng thái sân sẽ chuyển sang bảo trì và khách hàng không thể đặt sân mới.
+              Bạn có chắc chắn muốn tạm dừng hoạt động {suspendVenue?.type === 'complex' ? 'tổ hợp' : 'sân'} <strong>{suspendVenue?.name}</strong> không?
+              {suspendVenue?.type === 'complex'
+                ? ' Toàn bộ khu sân và sân lẻ bên trong tổ hợp sẽ chuyển sang bảo trì và khách hàng không thể đặt sân mới.'
+                : ' Trạng thái sân sẽ chuyển sang bảo trì và khách hàng không thể đặt sân mới.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -544,9 +616,9 @@ function VenueManagementPage() {
       <Dialog open={!!activateVenue} onOpenChange={(open) => !open && setActivateVenue(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Xác nhận mở lại sân</DialogTitle>
+            <DialogTitle>Xác nhận mở lại {activateVenue?.type === 'complex' ? 'tổ hợp' : 'sân'}</DialogTitle>
             <DialogDescription>
-              Sân <strong>{activateVenue?.name}</strong> sẽ được chuyển sang trạng thái hoạt động và khách hàng có thể tiếp tục đặt sân.
+              {activateVenue?.type === 'complex' ? 'Tổ hợp' : 'Sân'} <strong>{activateVenue?.name}</strong> sẽ được chuyển sang trạng thái hoạt động và khách hàng có thể tiếp tục đặt sân.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -644,6 +716,17 @@ function VenueManagementPage() {
         courts={bulkCourtsList}
         onSuccess={fetchTreeData}
       />
+
+      {maintenanceTarget && (
+        <MaintenanceScheduleDialog
+          isOpen={maintenanceTarget !== null}
+          onClose={() => setMaintenanceTarget(null)}
+          targetType={maintenanceTarget.type}
+          targetId={maintenanceTarget.id}
+          targetName={maintenanceTarget.name}
+          onSuccess={fetchTreeData}
+        />
+      )}
     </div>
   );
 }

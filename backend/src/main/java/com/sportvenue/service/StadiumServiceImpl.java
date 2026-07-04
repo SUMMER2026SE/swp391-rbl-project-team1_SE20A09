@@ -44,6 +44,7 @@ public class StadiumServiceImpl implements StadiumService {
 
     private final StadiumRepository stadiumRepository;
     private final OwnerRepository ownerRepository;
+    private final MaintenanceScheduleService maintenanceScheduleService;
     private final SportTypeRepository sportTypeRepository;
     private final BookingRepository bookingRepository;
     private final AmenityRepository amenityRepository;
@@ -159,9 +160,16 @@ public class StadiumServiceImpl implements StadiumService {
             return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
         };
 
-        return stadiumRepository.findAll(spec)
-                .stream()
-                .map(stadiumMapper::toResponse)
+        List<Stadium> stadiums = stadiumRepository.findAll(spec);
+        // Batch — tối đa 2 query bất kể danh sách dài bao nhiêu, thay vì gọi isStadiumUnderMaintenanceNow
+        // (1-2 query/lần) lặp lại cho từng sân.
+        java.util.Map<Integer, Boolean> maintenanceByStadiumId = maintenanceScheduleService.isUnderMaintenanceNow(stadiums);
+        return stadiums.stream()
+                .map(stadium -> {
+                    StadiumResponse response = stadiumMapper.toResponse(stadium);
+                    response.setUnderMaintenanceToday(maintenanceByStadiumId.getOrDefault(stadium.getStadiumId(), false));
+                    return response;
+                })
                 .toList();
     }
 
@@ -179,7 +187,9 @@ public class StadiumServiceImpl implements StadiumService {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
-        return stadiumMapper.toResponse(stadium);
+        StadiumResponse response = stadiumMapper.toResponse(stadium);
+        response.setUnderMaintenanceToday(maintenanceScheduleService.isStadiumUnderMaintenanceNow(stadium));
+        return response;
     }
 
     @Override

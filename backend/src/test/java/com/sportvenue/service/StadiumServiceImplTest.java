@@ -57,6 +57,9 @@ class StadiumServiceImplTest {
     private OwnerRepository ownerRepository;
 
     @Mock
+    private MaintenanceScheduleService maintenanceScheduleService;
+
+    @Mock
     private SportTypeRepository sportTypeRepository;
 
     @Mock
@@ -89,6 +92,7 @@ class StadiumServiceImplTest {
         stadiumService = new StadiumServiceImpl(
                 stadiumRepository,
                 ownerRepository,
+                maintenanceScheduleService,
                 sportTypeRepository,
                 bookingRepository,
                 amenityRepository,
