@@ -52,6 +52,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final BookingRepository bookingRepository;
     private final PaymentRepository paymentRepository;
     private final VNPayConfig vnPayConfig;
+    private final com.sportvenue.service.AdminDashboardService adminDashboardService;
 
     @Override
     @Transactional
@@ -217,6 +218,8 @@ public class PaymentServiceImpl implements PaymentService {
             }
             log.info("VNPay thanh toán THÀNH CÔNG — txnRef={}, booking={}",
                     txnRef, booking != null ? booking.getBookingId() : null);
+            // Xóa cache dashboard — doanh thu / booking confirmed thay đổi
+            adminDashboardService.evictDashboardCache();
         } else {
             payment.setPaymentStatus(TransactionStatus.FAILED);
             if (booking != null) {

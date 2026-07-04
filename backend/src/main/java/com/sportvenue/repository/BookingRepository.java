@@ -375,6 +375,38 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate);
 
+    /** UC-ADM-01: Đếm booking theo trạng thái trong khoảng ngày (reservationDate). */
+    @Query("""
+            SELECT COUNT(b) FROM Booking b
+            WHERE b.bookingStatus = :status
+            AND b.reservationDate BETWEEN :startDate AND :endDate
+            """)
+    long countByBookingStatusAndDateRange(
+            @Param("status") BookingStatus status,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
+
+    /** UC-ADM-01: Tổng booking trong khoảng ngày — cho KPI card. */
+    @Query("""
+            SELECT COUNT(b) FROM Booking b
+            WHERE b.reservationDate BETWEEN :startDate AND :endDate
+            """)
+    long countByDateRange(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
+
+    /** UC-ADM-01: Top 5 đặt sân gần nhất trong khoảng ngày. */
+    @EntityGraph(attributePaths = {"user", "stadium", "slot"})
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.reservationDate BETWEEN :startDate AND :endDate
+            ORDER BY b.bookingDate DESC
+            """)
+    List<Booking> findTop5ByDateRangeOrderByBookingDateDesc(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            Pageable pageable);
+
     @Query("""
             SELECT b.stadium.stadiumId FROM Booking b
             WHERE b.user.userId = :userId

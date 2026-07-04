@@ -1,6 +1,8 @@
 package com.sportvenue.service.impl;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -8,6 +10,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,29 +73,67 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         // Recent bookings
         List<Booking> recentBookingsList = bookingRepository.findTop5ByOrderByBookingDateDesc();
-        List<AdminDashboardResponse.RecentBookingDto> recentBookingsDto = recentBookingsList.stream()
-                .map(booking -> {
-                    String customerName = booking.getUser() != null ? booking.getUser().getFullName() : "N/A";
-                    String stadiumName = booking.getStadium() != null ? booking.getStadium().getStadiumName() : "N/A";
-                    String timeSlot = booking.getSlot() != null
-                            ? booking.getSlot().getStartTime() + " - " + booking.getSlot().getEndTime()
-                            : "N/A";
-
-                    return AdminDashboardResponse.RecentBookingDto.builder()
-                            .bookingId(booking.getBookingId())
-                            .customerName(customerName)
-                            .stadiumName(stadiumName)
-                            .totalPrice(booking.getTotalPrice())
-                            .bookingStatus(booking.getBookingStatus().name())
-                            .bookingDate(booking.getBookingDate())
-                            .reservationDate(booking.getReservationDate())
-                            .timeSlot(timeSlot)
-                            .build();
-                })
-                .collect(Collectors.toList());
+        List<AdminDashboardResponse.RecentBookingDto> recentBookingsDto = mapRecentBookings(recentBookingsList);
 
         // Booking trend — 7 ngày gần nhất cho biểu đồ (UC-ADM-01)
-        List<AdminDashboardResponse.BookingTrendDto> bookingTrend = buildBookingTrend(7);
+        List<AdminDashboardResponse.BookingTrendDto> bookingTrend = buildBookingTrend(
+                LocalDate.now().minusDays(6), LocalDate.now());
+
+        return AdminDashboardResponse.builder()
+                .totalUsers(totalUsers)
+                .totalOwners(totalOwners)
+                .totalStadiums(totalStadiums)
+                .totalBookings(totalBookings)
+                .totalRevenue(totalRevenue)
+                .pendingBookings(pendingBookings)
+                .confirmedBookings(confirmedBookings)
+                .cancelledBookings(cancelledBookings)
+                .completedBookings(completedBookings)
+                .pendingOwnerApprovals(pendingOwnerApprovals)
+                .openComplaints(openComplaints)
+                .recentBookings(recentBookingsDto)
+                .bookingTrend(bookingTrend)
+                .build();
+    }
+
+    /**
+     * UC-ADM-01: Lấy dữ liệu dashboard được lọc theo khoảng ngày.
+     * Không cache vì date range thay đổi liên tục theo input người dùng.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public AdminDashboardResponse getDashboardData(LocalDate startDate, LocalDate endDate) {
+        log.info("Fetching admin dashboard stats for date range {} → {}", startDate, endDate);
+
+        // Các số liệu tổng quan (totalUsers, totalOwners, totalStadiums) luôn là all-time
+        long totalUsers = userRepository.countByRoleName(ROLE_CUSTOMER);
+        long totalOwners = userRepository.countByRoleName(ROLE_OWNER);
+        long totalStadiums = stadiumRepository.count();
+
+        // Booking stats theo date range
+        long totalBookings = bookingRepository.countByDateRange(startDate, endDate);
+
+        LocalDateTime startDateTime = startDate.atStartOfDay();
+        LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
+        java.math.BigDecimal totalRevenue = paymentRepository.sumTotalRevenueByDateRange(startDateTime, endDateTime);
+
+        long pendingBookings = bookingRepository.countByBookingStatusAndDateRange(BookingStatus.PENDING, startDate, endDate)
+                + bookingRepository.countByBookingStatusAndDateRange(BookingStatus.PENDING_PAYMENT, startDate, endDate);
+        long confirmedBookings = bookingRepository.countByBookingStatusAndDateRange(BookingStatus.CONFIRMED, startDate, endDate);
+        long cancelledBookings = bookingRepository.countByBookingStatusAndDateRange(BookingStatus.CANCELLED, startDate, endDate);
+        long completedBookings = bookingRepository.countByBookingStatusAndDateRange(BookingStatus.COMPLETED, startDate, endDate);
+
+        // Pending approvals và open complaints vẫn là all-time
+        long pendingOwnerApprovals = ownerRepository.countByApprovedStatus(ApprovedStatus.PENDING);
+        long openComplaints = complaintRepository.countByStatus(ComplaintStatus.OPEN);
+
+        // Recent bookings trong khoảng ngày
+        List<Booking> recentBookingsList = bookingRepository.findTop5ByDateRangeOrderByBookingDateDesc(
+                startDate, endDate, PageRequest.of(0, 5));
+        List<AdminDashboardResponse.RecentBookingDto> recentBookingsDto = mapRecentBookings(recentBookingsList);
+
+        // Booking trend theo khoảng ngày được chọn
+        List<AdminDashboardResponse.BookingTrendDto> bookingTrend = buildBookingTrend(startDate, endDate);
 
         return AdminDashboardResponse.builder()
                 .totalUsers(totalUsers)
@@ -120,15 +161,37 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         log.info("Admin dashboard cache evicted");
     }
 
-    /**
-     * Xây dựng danh sách booking trend cho {@code days} ngày gần nhất.
-     * Ngày nào không có booking → trả về count = 0 (không bỏ trống).
-     */
-    private List<AdminDashboardResponse.BookingTrendDto> buildBookingTrend(int days) {
-        LocalDate today = LocalDate.now();
-        LocalDate startDate = today.minusDays(days - 1);
+    /** Map Booking entity list → RecentBookingDto list. */
+    private List<AdminDashboardResponse.RecentBookingDto> mapRecentBookings(List<Booking> bookings) {
+        return bookings.stream()
+                .map(booking -> {
+                    String customerName = booking.getUser() != null ? booking.getUser().getFullName() : "N/A";
+                    String stadiumName = booking.getStadium() != null ? booking.getStadium().getStadiumName() : "N/A";
+                    String timeSlot = booking.getSlot() != null
+                            ? booking.getSlot().getStartTime() + " - " + booking.getSlot().getEndTime()
+                            : "N/A";
 
-        List<Object[]> rawData = bookingRepository.countBookingsByDateRange(startDate, today);
+                    return AdminDashboardResponse.RecentBookingDto.builder()
+                            .bookingId(booking.getBookingId())
+                            .customerName(customerName)
+                            .stadiumName(stadiumName)
+                            .totalPrice(booking.getTotalPrice())
+                            .bookingStatus(booking.getBookingStatus().name())
+                            .bookingDate(booking.getBookingDate())
+                            .reservationDate(booking.getReservationDate())
+                            .timeSlot(timeSlot)
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Xây dựng danh sách booking trend theo khoảng ngày.
+     * Ngày nào không có booking → trả về count = 0 (không bỏ trống).
+     * Nếu khoảng > 60 ngày, gộp theo tuần để tránh quá nhiều điểm dữ liệu.
+     */
+    private List<AdminDashboardResponse.BookingTrendDto> buildBookingTrend(LocalDate startDate, LocalDate endDate) {
+        List<Object[]> rawData = bookingRepository.countBookingsByDateRange(startDate, endDate);
 
         // Map date → count từ query result
         Map<LocalDate, Long> countByDate = rawData.stream()
@@ -138,13 +201,34 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 ));
 
         // Fill đủ mọi ngày trong khoảng, ngày không có booking = 0
+        // Giới hạn tối đa 60 điểm để chart không bị overload
+        long totalDays = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate) + 1;
         List<AdminDashboardResponse.BookingTrendDto> trend = new ArrayList<>();
-        for (int i = 0; i < days; i++) {
-            LocalDate date = startDate.plusDays(i);
-            trend.add(AdminDashboardResponse.BookingTrendDto.builder()
-                    .date(date)
-                    .count(countByDate.getOrDefault(date, 0L))
-                    .build());
+
+        if (totalDays <= 60) {
+            for (long i = 0; i < totalDays; i++) {
+                LocalDate date = startDate.plusDays(i);
+                trend.add(AdminDashboardResponse.BookingTrendDto.builder()
+                        .date(date)
+                        .count(countByDate.getOrDefault(date, 0L))
+                        .build());
+            }
+        } else {
+            // Gộp theo tuần khi khoảng ngày quá dài
+            LocalDate current = startDate;
+            while (!current.isAfter(endDate)) {
+                LocalDate weekEnd = current.plusDays(6).isAfter(endDate) ? endDate : current.plusDays(6);
+                final LocalDate weekStart = current;
+                long weekCount = countByDate.entrySet().stream()
+                        .filter(e -> !e.getKey().isBefore(weekStart) && !e.getKey().isAfter(weekEnd))
+                        .mapToLong(Map.Entry::getValue)
+                        .sum();
+                trend.add(AdminDashboardResponse.BookingTrendDto.builder()
+                        .date(weekStart)
+                        .count(weekCount)
+                        .build());
+                current = weekEnd.plusDays(1);
+            }
         }
         return trend;
     }

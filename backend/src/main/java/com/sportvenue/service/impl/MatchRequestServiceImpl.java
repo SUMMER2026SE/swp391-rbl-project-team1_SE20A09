@@ -30,6 +30,7 @@ import com.sportvenue.entity.enums.JoinRequestStatus;
 import com.sportvenue.dto.response.JoinRequestResponse;
 import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.MatchRequestService;
+import com.sportvenue.service.ChatService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -61,6 +62,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
     private final SportTypeRepository sportTypeRepository;
     private final BookingRepository bookingRepository;
     private final JoinRequestRepository joinRequestRepository;
+    private final ChatService chatService;
     private final StadiumComplexRepository stadiumComplexRepository;
     private final TimeSlotRepository timeSlotRepository;
     private final MaintenanceScheduleService maintenanceScheduleService;
@@ -197,6 +199,9 @@ public class MatchRequestServiceImpl implements MatchRequestService {
 
         MatchRequest savedMatch = matchRequestRepository.save(matchRequest);
         log.info("Successfully created match request with ID: {}", savedMatch.getMatchId());
+
+        // Create empty group chat for the host immediately upon match creation
+        chatService.createOrUpdateMatchGroupChat(savedMatch, user.getUserId());
 
         return mapToResponse(savedMatch);
     }
@@ -565,6 +570,9 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                     Arrays.asList(JoinRequestStatus.PENDING)
             );
         }
+
+        // Create or update group chat
+        chatService.createOrUpdateMatchGroupChat(updatedMatch, joinRequest.getUser().getUserId());
     }
 
     @Override
