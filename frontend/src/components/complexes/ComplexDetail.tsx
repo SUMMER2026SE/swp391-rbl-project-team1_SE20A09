@@ -460,7 +460,7 @@ export default function ComplexDetail({
                     ) : courts.length === 0 ? (
                       <div className="text-center py-10 bg-gray-50 rounded-[12px] border border-dashed border-gray-200">
                         <IconBallFootball className="w-10 h-10 text-gray-350 mx-auto mb-2" />
-                        <p className="text-sm text-gray-400 font-medium">Khu vực này chưa cấu hình sân lẻ.</p>
+                        <p className="text-sm text-gray-400 font-medium">Không có sân lẻ nào phù hợp với loại sân bạn tìm hoặc chưa được cấu hình.</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

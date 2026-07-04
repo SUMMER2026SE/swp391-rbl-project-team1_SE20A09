@@ -42,8 +42,14 @@ export default function ComplexDetailPage() {
     staleTime: 180_000,
   })
 
+  // Filter facilities based on URL param
+  const filterSportTypeId = searchParams.get('sportTypeId') ? parseInt(searchParams.get('sportTypeId')!, 10) : null
+  const filteredFacilities = filterSportTypeId 
+    ? facilities.filter(f => f.sportType?.sportTypeId === filterSportTypeId)
+    : facilities
+
   // Auto-select facility when data arrives
-  const activeFacilityId = selectedFacilityId ?? (facilities[0]?.stadiumId ?? null)
+  const activeFacilityId = selectedFacilityId ?? (filteredFacilities[0]?.stadiumId ?? null)
 
   // 3. Fetch courts under selected facility (L3)
   const { data: courts = [], isLoading: courtsLoading } = useQuery({
@@ -101,7 +107,7 @@ export default function ComplexDetailPage() {
       <Header />
       <ComplexDetail
         complex={complex}
-        facilities={facilities}
+        facilities={filteredFacilities}
         activeFacilityId={activeFacilityId}
         setActiveFacilityId={setSelectedFacilityId}
         courts={courts}
