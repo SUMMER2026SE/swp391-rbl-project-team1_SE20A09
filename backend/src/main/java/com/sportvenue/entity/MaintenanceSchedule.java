@@ -20,6 +20,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.io.Serializable;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Entity
 @Table(name = "maintenance_schedules", indexes = {
@@ -57,6 +58,14 @@ public class MaintenanceSchedule implements Serializable {
     @Column(name = "end_date")
     private LocalDate endDate;
 
+    /** NULL = tính từ đầu ngày {@link #startDate} (00:00). */
+    @Column(name = "start_time")
+    private LocalTime startTime;
+
+    /** NULL = tính đến hết ngày {@link #endDate} (23:59:59), hoặc vô thời hạn nếu endDate cũng NULL. */
+    @Column(name = "end_time")
+    private LocalTime endTime;
+
     @Column(name = "reason", length = 255)
     private String reason;
 
@@ -67,4 +76,24 @@ public class MaintenanceSchedule implements Serializable {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    private static final LocalDateTime FAR_FUTURE = LocalDateTime.of(LocalDate.of(9999, 12, 31), LocalTime.MAX);
+
+    /** Thời điểm bắt đầu hiệu lực — kết hợp startDate + startTime (mặc định 00:00 nếu không set giờ). */
+    public LocalDateTime effectiveStart() {
+        return LocalDateTime.of(startDate, startTime != null ? startTime : LocalTime.MIN);
+    }
+
+    /** Thời điểm kết thúc hiệu lực — kết hợp endDate + endTime (mặc định 23:59:59 nếu không set giờ), hoặc vô thời hạn. */
+    public LocalDateTime effectiveEnd() {
+        if (endDate == null) {
+            return FAR_FUTURE;
+        }
+        return LocalDateTime.of(endDate, endTime != null ? endTime : LocalTime.MAX);
+    }
+
+    /** True nếu khoảng [rangeStart, rangeEndExclusive) chồng lấn với khoảng hiệu lực của lịch bảo trì này. */
+    public boolean overlaps(LocalDateTime rangeStart, LocalDateTime rangeEndExclusive) {
+        return effectiveStart().isBefore(rangeEndExclusive) && rangeStart.isBefore(effectiveEnd());
+    }
 }

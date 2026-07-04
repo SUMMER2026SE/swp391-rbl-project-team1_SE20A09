@@ -390,7 +390,10 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
      * Booking đang chiếm chỗ (theo {@code statuses}) của 1 hoặc nhiều sân trong khoảng
      * ngày {@code [rangeStart, rangeEnd]} — dùng để check conflict khi Owner tạo
      * MaintenanceSchedule mới (bao gồm cả court con khi bảo trì đặt ở FACILITY).
+     * {@code @EntityGraph(slot)} — caller lọc tiếp theo giờ slot (so-trùng khung giờ bảo trì),
+     * cần {@code slot} tránh N+1 khi truy cập {@code booking.getSlot().getStartTime()/getEndTime()}.
      */
+    @EntityGraph(attributePaths = {"slot"})
     @Query("""
             SELECT b FROM Booking b
             WHERE b.stadium.stadiumId IN :stadiumIds

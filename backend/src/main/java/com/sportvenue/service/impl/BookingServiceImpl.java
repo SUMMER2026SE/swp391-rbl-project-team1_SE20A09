@@ -117,8 +117,12 @@ public class BookingServiceImpl implements BookingService {
                 .filter(e -> e.getStartTimeOverride() != null)
                 .map(TimeSlotException::getStartTimeOverride)
                 .orElse(slot.getStartTime());
+        java.time.LocalTime effectiveEnd = exceptionOpt
+                .filter(e -> e.getEndTimeOverride() != null)
+                .map(TimeSlotException::getEndTimeOverride)
+                .orElse(slot.getEndTime());
 
-        validateSlotForBooking(slot, stadium, request.getReservationDate(), effectiveStart);
+        validateSlotForBooking(slot, stadium, request.getReservationDate(), effectiveStart, effectiveEnd);
 
         // Conflict check: 1 slot chỉ có 1 booking active tại một ngày
         if (bookingRepository.existsActiveBooking(
@@ -164,7 +168,7 @@ public class BookingServiceImpl implements BookingService {
      * Tách riêng để giữ createBooking dưới 80 dòng (checkstyle MethodLength).
      */
     private void validateSlotForBooking(TimeSlot slot, Stadium stadium, java.time.LocalDate reservationDate,
-                                        java.time.LocalTime effectiveStart) {
+                                        java.time.LocalTime effectiveStart, java.time.LocalTime effectiveEnd) {
         if (!slot.getStadium().getStadiumId().equals(stadium.getStadiumId())) {
             throw new BadRequestException(
                     "Khung giờ #" + slot.getSlotId() + " không thuộc sân #" + stadium.getStadiumId());
@@ -173,7 +177,7 @@ public class BookingServiceImpl implements BookingService {
             throw new BadRequestException(
                     "Khung giờ #" + slot.getSlotId() + " đang bảo trì, không thể đặt");
         }
-        if (maintenanceScheduleService.isStadiumUnderMaintenance(stadium, reservationDate)) {
+        if (maintenanceScheduleService.isSlotUnderMaintenance(stadium, reservationDate, effectiveStart, effectiveEnd)) {
             throw new BadRequestException(
                     "Sân đang trong lịch bảo trì ngày " + reservationDate + ", không thể đặt");
         }
@@ -279,9 +283,11 @@ public class BookingServiceImpl implements BookingService {
         // thành công). Chặn ở đây sẽ khiến khách mất tiền mà không có booking — tệ hơn hiện trạng.
         // createSchedule chỉ conflict-check với booking CONFIRMED (không tính PENDING_PAYMENT) nên
         // vẫn còn khe hở hẹp (~5 phút) nếu Owner đặt bảo trì đúng lúc khách đang thanh toán — log lại
-        // rõ ràng để Owner/Admin chủ động xử lý thay vì âm thầm trôi qua.
+        // rõ ràng để Owner/Admin chủ động xử lý thay vì âm thầm trôi qua. Check theo đúng khung giờ
+        // của slot (không phải cả ngày) để tránh cảnh báo giả khi bảo trì chỉ chặn 1 khung giờ khác.
         if (booking.getStadium() != null
-                && maintenanceScheduleService.isStadiumUnderMaintenance(booking.getStadium(), booking.getReservationDate())) {
+                && maintenanceScheduleService.isSlotUnderMaintenance(booking.getStadium(), booking.getReservationDate(),
+                        booking.getSlot().getStartTime(), booking.getSlot().getEndTime())) {
             log.warn("⚠️ Booking #{} được xác nhận thanh toán trong lúc sân {} đang bảo trì ngày {} — "
                             + "cần Owner/Admin kiểm tra và liên hệ khách để xử lý (đổi lịch/hoàn tiền) nếu cần.",
                     booking.getBookingId(), booking.getStadium().getStadiumId(), booking.getReservationDate());
@@ -464,17 +470,18 @@ public class BookingServiceImpl implements BookingService {
         LocalDateTime now = LocalDateTime.now();
         DateTimeFormatter hhmm = DateTimeFormatter.ofPattern("HH:mm");
 
-        // Batch — 1 query cho cả tuần thay vì gọi isStadiumUnderMaintenance (1-2 query/lần) 7 lần, 1 lần/ngày.
-        Map<LocalDate, Boolean> underMaintenanceByDate =
-                maintenanceScheduleService.isUnderMaintenanceForDateRange(stadium, monday, sunday);
+        // Batch — 1 query cho cả tuần thay vì gọi isSlotUnderMaintenance (1-2 query/lần) mỗi slot mỗi ngày.
+        Map<LocalDate, MaintenanceScheduleService.DayMaintenance> dayMaintenanceByDate =
+                maintenanceScheduleService.getDayMaintenanceForDateRange(stadium, monday, sunday);
 
         List<WeeklySlotDayDto> days = new ArrayList<>(7);
         for (int i = 0; i < 7; i++) {
             LocalDate date = monday.plusDays(i);
             Set<Integer> bookedSlotIds = bookedByDate.getOrDefault(date, Set.of());
             Map<Integer, TimeSlotException> dayExceptions = exceptionsByDate.getOrDefault(date, Map.of());
-            boolean underMaintenance = underMaintenanceByDate.getOrDefault(date, false);
-            days.add(buildWeeklySlotDay(date, stadium, slots, bookedSlotIds, dayExceptions, underMaintenance, now, hhmm));
+            MaintenanceScheduleService.DayMaintenance dayMaintenance =
+                    dayMaintenanceByDate.getOrDefault(date, MaintenanceScheduleService.DayMaintenance.NONE);
+            days.add(buildWeeklySlotDay(date, stadium, slots, bookedSlotIds, dayExceptions, dayMaintenance, now, hhmm));
         }
 
         log.info("📅 UC-CUS-01: Stadium {} weekly slots — {}..{} ({} bookings)",
@@ -493,7 +500,7 @@ public class BookingServiceImpl implements BookingService {
             List<TimeSlot> slots,
             Set<Integer> bookedSlotIds,
             Map<Integer, TimeSlotException> dayExceptions,
-            boolean underMaintenance,
+            MaintenanceScheduleService.DayMaintenance dayMaintenance,
             LocalDateTime now,
             DateTimeFormatter hhmm) {
         java.time.LocalTime openT = stadium.getOpenTime() != null ? stadium.getOpenTime() : java.time.LocalTime.MIN;
@@ -531,7 +538,7 @@ public class BookingServiceImpl implements BookingService {
                         status = "BOOKED";
                     } else if (!slotStart.isAfter(now)) {
                         status = "PAST";
-                    } else if (underMaintenance) {
+                    } else if (dayMaintenance.overlaps(startT, endT, date)) {
                         status = "MAINTENANCE";
                     } else {
                         status = "AVAILABLE";

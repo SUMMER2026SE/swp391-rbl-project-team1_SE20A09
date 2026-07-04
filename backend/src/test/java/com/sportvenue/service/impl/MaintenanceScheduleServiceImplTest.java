@@ -7,6 +7,7 @@ import com.sportvenue.entity.MaintenanceSchedule;
 import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.StadiumComplex;
+import com.sportvenue.entity.TimeSlot;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.ComplexStatus;
 import com.sportvenue.entity.enums.StadiumNodeType;
@@ -31,6 +32,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -129,6 +131,12 @@ class MaintenanceScheduleServiceImplTest {
                 .parentStadium(facility)
                 .complex(facility.getComplex())
                 .build();
+    }
+
+    /** Booking active giả lập với slot 08:00-09:00 ngày {@code date} — dùng cho conflict-check. */
+    private Booking conflictingBooking(LocalDate date) {
+        TimeSlot slot = TimeSlot.builder().slotId(1).startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(9, 0)).build();
+        return Booking.builder().reservationDate(date).slot(slot).build();
     }
 
     private CreateMaintenanceScheduleRequest validRequest() {
@@ -283,7 +291,9 @@ class MaintenanceScheduleServiceImplTest {
         CreateMaintenanceScheduleRequest request = validRequest();
         when(maintenanceScheduleRepository.findActiveForStadiumsInRange(
                 eq(List.of(court.getStadiumId())), eq(request.getStartDate()), any()))
-                .thenReturn(List.of(MaintenanceSchedule.builder().maintenanceId(999).stadium(court).build()));
+                .thenReturn(List.of(MaintenanceSchedule.builder().maintenanceId(999).stadium(court)
+                        .startDate(request.getStartDate()).endDate(request.getEndDate())
+                        .build()));
 
         assertThrows(BadRequestException.class,
                 () -> service.createSchedule(court.getStadiumId(), request, OWNER_USER_ID));
@@ -302,7 +312,7 @@ class MaintenanceScheduleServiceImplTest {
         CreateMaintenanceScheduleRequest request = validRequest();
         when(bookingRepository.findByStadiumIdsAndDateRangeAndStatuses(
                 anyList(), eq(request.getStartDate()), any(), anyList()))
-                .thenReturn(List.of(Booking.builder().build()));
+                .thenReturn(List.of(conflictingBooking(request.getStartDate())));
 
         BadRequestException ex = assertThrows(BadRequestException.class,
                 () -> service.createSchedule(facility.getStadiumId(), request, OWNER_USER_ID));
@@ -376,7 +386,7 @@ class MaintenanceScheduleServiceImplTest {
         CreateMaintenanceScheduleRequest request = validRequest();
         when(bookingRepository.findByStadiumIdsAndDateRangeAndStatuses(
                 eq(List.of(court.getStadiumId())), any(), any(), anyList()))
-                .thenReturn(List.of(Booking.builder().build()));
+                .thenReturn(List.of(conflictingBooking(request.getStartDate())));
 
         assertThrows(BadRequestException.class,
                 () -> service.createComplexSchedule(complex.getComplexId(), request, OWNER_USER_ID));
@@ -583,5 +593,245 @@ class MaintenanceScheduleServiceImplTest {
         assertTrue(result.isEmpty());
         verify(maintenanceScheduleRepository, times(1))
                 .findByComplexComplexIdOrderByStartDateDesc(complex.getComplexId(), pageable);
+    }
+
+    // ── Mở rộng theo khung giờ (startTime/endTime) ─────────────────────────
+
+    @Test
+    void createSchedule_endTimeWithoutEndDate_throwsBadRequest() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        when(stadiumRepository.findById(court.getStadiumId())).thenReturn(Optional.of(court));
+
+        CreateMaintenanceScheduleRequest request = CreateMaintenanceScheduleRequest.builder()
+                .startDate(LocalDate.now())
+                .endTime(LocalTime.of(10, 0))
+                .build();
+
+        assertThrows(BadRequestException.class,
+                () -> service.createSchedule(court.getStadiumId(), request, OWNER_USER_ID));
+        verify(maintenanceScheduleRepository, never()).save(any());
+    }
+
+    @Test
+    void createSchedule_endTimeBeforeStartTimeSameDay_throwsBadRequest() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        when(stadiumRepository.findById(court.getStadiumId())).thenReturn(Optional.of(court));
+
+        LocalDate today = LocalDate.now();
+        CreateMaintenanceScheduleRequest request = CreateMaintenanceScheduleRequest.builder()
+                .startDate(today).endDate(today)
+                .startTime(LocalTime.of(16, 0)).endTime(LocalTime.of(14, 0))
+                .build();
+
+        assertThrows(BadRequestException.class,
+                () -> service.createSchedule(court.getStadiumId(), request, OWNER_USER_ID));
+        verify(maintenanceScheduleRepository, never()).save(any());
+    }
+
+    @Test
+    void createSchedule_nonOverlappingTimeWindowsSameDay_savesSuccessfully() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        when(stadiumRepository.findById(court.getStadiumId())).thenReturn(Optional.of(court));
+        when(bookingRepository.findByStadiumIdsAndDateRangeAndStatuses(anyList(), any(), any(), anyList()))
+                .thenReturn(List.of());
+        when(maintenanceScheduleRepository.save(any(MaintenanceSchedule.class))).thenAnswer(invocation -> {
+            MaintenanceSchedule s = invocation.getArgument(0);
+            s.setMaintenanceId(700);
+            return s;
+        });
+
+        LocalDate day = LocalDate.now().plusDays(1);
+        // Lịch đã tồn tại: 20h-22h ngày mai — không chồng với lịch mới 14h-16h.
+        when(maintenanceScheduleRepository.findActiveForStadiumsInRange(List.of(court.getStadiumId()), day, day))
+                .thenReturn(List.of(MaintenanceSchedule.builder().maintenanceId(1).stadium(court)
+                        .startDate(day).endDate(day)
+                        .startTime(LocalTime.of(20, 0)).endTime(LocalTime.of(22, 0))
+                        .build()));
+
+        CreateMaintenanceScheduleRequest request = CreateMaintenanceScheduleRequest.builder()
+                .startDate(day).endDate(day)
+                .startTime(LocalTime.of(14, 0)).endTime(LocalTime.of(16, 0))
+                .build();
+
+        MaintenanceScheduleResponse response = service.createSchedule(court.getStadiumId(), request, OWNER_USER_ID);
+
+        assertEquals(700, response.getMaintenanceId());
+        verify(maintenanceScheduleRepository).save(any(MaintenanceSchedule.class));
+    }
+
+    @Test
+    void createSchedule_overlappingTimeWindowsSameDay_throwsBadRequest() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        when(stadiumRepository.findById(court.getStadiumId())).thenReturn(Optional.of(court));
+        when(bookingRepository.findByStadiumIdsAndDateRangeAndStatuses(anyList(), any(), any(), anyList()))
+                .thenReturn(List.of());
+
+        LocalDate day = LocalDate.now().plusDays(1);
+        // Lịch đã tồn tại: 14h-16h ngày mai — chồng với lịch mới 15h-17h.
+        when(maintenanceScheduleRepository.findActiveForStadiumsInRange(List.of(court.getStadiumId()), day, day))
+                .thenReturn(List.of(MaintenanceSchedule.builder().maintenanceId(1).stadium(court)
+                        .startDate(day).endDate(day)
+                        .startTime(LocalTime.of(14, 0)).endTime(LocalTime.of(16, 0))
+                        .build()));
+
+        CreateMaintenanceScheduleRequest request = CreateMaintenanceScheduleRequest.builder()
+                .startDate(day).endDate(day)
+                .startTime(LocalTime.of(15, 0)).endTime(LocalTime.of(17, 0))
+                .build();
+
+        assertThrows(BadRequestException.class,
+                () -> service.createSchedule(court.getStadiumId(), request, OWNER_USER_ID));
+        verify(maintenanceScheduleRepository, never()).save(any());
+    }
+
+    @Test
+    void createSchedule_bookingOutsideTimeWindow_doesNotConflict() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        when(stadiumRepository.findById(court.getStadiumId())).thenReturn(Optional.of(court));
+        when(maintenanceScheduleRepository.findActiveForStadiumsInRange(anyList(), any(), any())).thenReturn(List.of());
+        when(maintenanceScheduleRepository.save(any(MaintenanceSchedule.class))).thenAnswer(invocation -> {
+            MaintenanceSchedule s = invocation.getArgument(0);
+            s.setMaintenanceId(701);
+            return s;
+        });
+
+        LocalDate day = LocalDate.now().plusDays(1);
+        // Booking 08:00-09:00 ngày mai — bảo trì chỉ chặn 14h-16h -> không đụng nhau.
+        when(bookingRepository.findByStadiumIdsAndDateRangeAndStatuses(anyList(), eq(day), eq(day), anyList()))
+                .thenReturn(List.of(conflictingBooking(day)));
+
+        CreateMaintenanceScheduleRequest request = CreateMaintenanceScheduleRequest.builder()
+                .startDate(day).endDate(day)
+                .startTime(LocalTime.of(14, 0)).endTime(LocalTime.of(16, 0))
+                .build();
+
+        MaintenanceScheduleResponse response = service.createSchedule(court.getStadiumId(), request, OWNER_USER_ID);
+        assertEquals(701, response.getMaintenanceId());
+    }
+
+    @Test
+    void createSchedule_bookingInsideTimeWindow_throwsBadRequest() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        when(stadiumRepository.findById(court.getStadiumId())).thenReturn(Optional.of(court));
+
+        LocalDate day = LocalDate.now().plusDays(1);
+        // Booking 08:00-09:00 ngày mai — bảo trì chặn 07:30-08:30 -> chồng lấn 08:00-08:30.
+        // rejectIfConflictingBookings ném exception trước khi tới rejectIfOverlappingStadiumSchedule,
+        // nên không cần stub findActiveForStadiumsInRange (không bao giờ được gọi tới ở nhánh này).
+        when(bookingRepository.findByStadiumIdsAndDateRangeAndStatuses(anyList(), eq(day), eq(day), anyList()))
+                .thenReturn(List.of(conflictingBooking(day)));
+
+        CreateMaintenanceScheduleRequest request = CreateMaintenanceScheduleRequest.builder()
+                .startDate(day).endDate(day)
+                .startTime(LocalTime.of(7, 30)).endTime(LocalTime.of(8, 30))
+                .build();
+
+        assertThrows(BadRequestException.class,
+                () -> service.createSchedule(court.getStadiumId(), request, OWNER_USER_ID));
+        verify(maintenanceScheduleRepository, never()).save(any());
+    }
+
+    @Test
+    void isSlotUnderMaintenance_slotOutsideScheduleWindow_returnsFalse() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        LocalDate date = LocalDate.now();
+
+        MaintenanceSchedule schedule = MaintenanceSchedule.builder().stadium(court)
+                .startDate(date).endDate(date)
+                .startTime(LocalTime.of(14, 0)).endTime(LocalTime.of(16, 0))
+                .build();
+        when(maintenanceScheduleRepository.findActiveForComplexAndDate(complex.getComplexId(), date))
+                .thenReturn(List.of());
+        when(maintenanceScheduleRepository.findActiveForStadiumsAndDate(anyList(), eq(date)))
+                .thenReturn(List.of(schedule));
+
+        assertFalse(service.isSlotUnderMaintenance(court, date, LocalTime.of(9, 0), LocalTime.of(10, 0)));
+    }
+
+    @Test
+    void isSlotUnderMaintenance_slotOverlapsScheduleWindow_returnsTrue() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        LocalDate date = LocalDate.now();
+
+        MaintenanceSchedule schedule = MaintenanceSchedule.builder().stadium(court)
+                .startDate(date).endDate(date)
+                .startTime(LocalTime.of(14, 0)).endTime(LocalTime.of(16, 0))
+                .build();
+        when(maintenanceScheduleRepository.findActiveForComplexAndDate(complex.getComplexId(), date))
+                .thenReturn(List.of());
+        when(maintenanceScheduleRepository.findActiveForStadiumsAndDate(anyList(), eq(date)))
+                .thenReturn(List.of(schedule));
+
+        assertTrue(service.isSlotUnderMaintenance(court, date, LocalTime.of(15, 0), LocalTime.of(16, 30)));
+    }
+
+    @Test
+    void getDayMaintenanceForDateRange_hourScopedSchedule_onlyOverlappingSlotFlagged() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        LocalDate today = LocalDate.now();
+        LocalDate tomorrow = today.plusDays(1);
+
+        MaintenanceSchedule schedule = MaintenanceSchedule.builder().stadium(court)
+                .startDate(today).endDate(today)
+                .startTime(LocalTime.of(14, 0)).endTime(LocalTime.of(16, 0))
+                .build();
+        when(maintenanceScheduleRepository.findActiveForComplexesInRange(anyList(), eq(today), eq(tomorrow)))
+                .thenReturn(List.of());
+        when(maintenanceScheduleRepository.findActiveForStadiumsInRange(anyList(), eq(today), eq(tomorrow)))
+                .thenReturn(List.of(schedule));
+
+        var result = service.getDayMaintenanceForDateRange(court, today, tomorrow);
+
+        assertFalse(result.get(today).overlaps(LocalTime.of(9, 0), LocalTime.of(10, 0), today));
+        assertTrue(result.get(today).overlaps(LocalTime.of(15, 0), LocalTime.of(16, 30), today));
+        assertFalse(result.get(tomorrow).overlaps(LocalTime.of(15, 0), LocalTime.of(16, 30), tomorrow));
+    }
+
+    @Test
+    void listSchedules_hourScopedSchedule_activeReflectsCurrentInstant() {
+        StadiumComplex complex = newComplex(ComplexStatus.AVAILABLE);
+        Stadium facility = newFacility(10, complex, StadiumStatus.AVAILABLE);
+        Stadium court = newCourt(20, facility, StadiumStatus.AVAILABLE);
+        when(stadiumRepository.findById(court.getStadiumId())).thenReturn(Optional.of(court));
+
+        LocalDate today = LocalDate.now();
+        // Khung giờ bao trùm cả ngày hôm nay [00:00, 23:59:59] -> chắc chắn active bất kể giờ chạy test.
+        MaintenanceSchedule allDayToday = MaintenanceSchedule.builder()
+                .maintenanceId(1).stadium(court)
+                .startDate(today).endDate(today)
+                .startTime(LocalTime.MIN).endTime(LocalTime.MAX)
+                .build();
+        // Đã kết thúc hẳn từ hôm qua -> chắc chắn không active.
+        MaintenanceSchedule endedYesterday = MaintenanceSchedule.builder()
+                .maintenanceId(2).stadium(court)
+                .startDate(today.minusDays(3)).endDate(today.minusDays(1))
+                .startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(9, 0))
+                .build();
+        Pageable pageable = PageRequest.of(0, 20);
+        when(maintenanceScheduleRepository.findByStadiumStadiumIdOrderByStartDateDesc(court.getStadiumId(), pageable))
+                .thenReturn(new PageImpl<>(List.of(allDayToday, endedYesterday)));
+
+        Page<MaintenanceScheduleResponse> result = service.listSchedules(court.getStadiumId(), OWNER_USER_ID, pageable);
+
+        assertTrue(result.getContent().get(0).getActive());
+        assertFalse(result.getContent().get(1).getActive());
     }
 }

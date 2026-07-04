@@ -8,6 +8,7 @@ import lombok.Setter;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Getter
 @Setter
@@ -22,10 +23,14 @@ public class MaintenanceScheduleResponse {
     private Integer complexId;
     private LocalDate startDate;
     private LocalDate endDate;
+    /** Null = tính từ đầu ngày startDate. */
+    private LocalTime startTime;
+    /** Null = tính đến hết ngày endDate. */
+    private LocalTime endTime;
     private String reason;
     /** {@code true} nếu endDate == null. */
     private Boolean indefinite;
-    /** {@code true} nếu hôm nay nằm trong khoảng [startDate, endDate ?? +inf]. */
+    /** {@code true} nếu thời điểm hiện tại nằm trong khoảng hiệu lực [effectiveStart, effectiveEnd ?? +inf]. */
     private Boolean active;
     private LocalDateTime createdAt;
 }

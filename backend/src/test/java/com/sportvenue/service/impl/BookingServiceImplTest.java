@@ -27,6 +27,7 @@ import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.repository.TimeSlotExceptionRepository;
 import com.sportvenue.security.UserPrincipal;
+import com.sportvenue.service.MaintenanceScheduleService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -274,7 +275,7 @@ class BookingServiceImplTest {
     }
 
     @Test
-    @DisplayName("createBooking: sân đang bảo trì (isStadiumUnderMaintenance=true) → BadRequestException")
+    @DisplayName("createBooking: slot đang bảo trì (isSlotUnderMaintenance=true) → BadRequestException")
     void createBooking_stadiumUnderMaintenance_throwsBadRequest() {
         CreateBookingRequest request = CreateBookingRequest.builder()
                 .stadiumId(10).slotId(20).reservationDate(futureDate()).build();
@@ -282,7 +283,7 @@ class BookingServiceImplTest {
         when(userRepository.findById(1)).thenReturn(Optional.of(customer));
         when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
         when(timeSlotRepository.findByIdForUpdate(20)).thenReturn(Optional.of(slot));
-        when(maintenanceScheduleService.isStadiumUnderMaintenance(eq(stadium), any(LocalDate.class)))
+        when(maintenanceScheduleService.isSlotUnderMaintenance(eq(stadium), any(LocalDate.class), any(LocalTime.class), any(LocalTime.class)))
                 .thenReturn(true);
 
         assertThrows(BadRequestException.class,
@@ -457,14 +458,14 @@ class BookingServiceImplTest {
                 .thenReturn(List.of(slot));
         when(bookingRepository.findWeeklyBookings(eq(10), any(LocalDate.class), any(LocalDate.class), anyList()))
                 .thenReturn(List.of());
-        when(maintenanceScheduleService.isUnderMaintenanceForDateRange(eq(stadium), any(LocalDate.class), any(LocalDate.class)))
+        when(maintenanceScheduleService.getDayMaintenanceForDateRange(eq(stadium), any(LocalDate.class), any(LocalDate.class)))
                 .thenAnswer(invocation -> allDaysInRangeMappedTo(invocation, true));
 
         var result = bookingService.getWeeklySlots(10, weekStart);
 
         result.getDays().forEach(day -> day.getSlots().forEach(item ->
                 assertEquals("MAINTENANCE", item.getStatus(),
-                        "Ngày " + day.getDate() + " phải là MAINTENANCE khi isUnderMaintenanceForDateRange=true")));
+                        "Ngày " + day.getDate() + " phải là MAINTENANCE khi cả ngày đang bảo trì")));
     }
 
     @Test
@@ -476,7 +477,7 @@ class BookingServiceImplTest {
                 .thenReturn(List.of(slot));
         when(bookingRepository.findWeeklyBookings(eq(10), any(LocalDate.class), any(LocalDate.class), anyList()))
                 .thenReturn(List.of());
-        when(maintenanceScheduleService.isUnderMaintenanceForDateRange(eq(stadium), any(LocalDate.class), any(LocalDate.class)))
+        when(maintenanceScheduleService.getDayMaintenanceForDateRange(eq(stadium), any(LocalDate.class), any(LocalDate.class)))
                 .thenAnswer(invocation -> allDaysInRangeMappedTo(invocation, false));
 
         var result = bookingService.getWeeklySlots(10, weekStart);
@@ -485,13 +486,21 @@ class BookingServiceImplTest {
                 assertEquals("AVAILABLE", item.getStatus())));
     }
 
-    /** Helper: build 1 Map&lt;LocalDate, Boolean&gt; phủ đúng [rangeStart, rangeEnd] được truyền vào mock — dùng cho stub isUnderMaintenanceForDateRange. */
-    private static Map<LocalDate, Boolean> allDaysInRangeMappedTo(org.mockito.invocation.InvocationOnMock invocation, boolean value) {
+    /**
+     * Helper: build 1 {@code Map<LocalDate, DayMaintenance>} phủ đúng [rangeStart, rangeEnd] được
+     * truyền vào mock — dùng cho stub {@code getDayMaintenanceForDateRange}. {@code value=true} ->
+     * cả ngày bảo trì ({@link MaintenanceScheduleService.DayMaintenance#ALL_DAY}).
+     */
+    private static Map<LocalDate, MaintenanceScheduleService.DayMaintenance> allDaysInRangeMappedTo(
+            org.mockito.invocation.InvocationOnMock invocation, boolean value) {
         LocalDate rangeStart = invocation.getArgument(1);
         LocalDate rangeEnd = invocation.getArgument(2);
-        Map<LocalDate, Boolean> map = new java.util.LinkedHashMap<>();
+        Map<LocalDate, MaintenanceScheduleService.DayMaintenance> map = new java.util.LinkedHashMap<>();
+        MaintenanceScheduleService.DayMaintenance dayMaintenance = value
+                ? MaintenanceScheduleService.DayMaintenance.ALL_DAY
+                : MaintenanceScheduleService.DayMaintenance.NONE;
         for (LocalDate d = rangeStart; !d.isAfter(rangeEnd); d = d.plusDays(1)) {
-            map.put(d, value);
+            map.put(d, dayMaintenance);
         }
         return map;
     }
