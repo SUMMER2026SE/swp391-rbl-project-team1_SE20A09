@@ -65,8 +65,10 @@ export default function ComplexDetail({
   const searchParams = useSearchParams()
   
   // Tự động chuyển sang tab 'courts' (Sân lẻ) nếu có sportTypeId trên URL hoặc có param tab=courts
-  const defaultTab = searchParams.has('sportTypeId') || searchParams.get('tab') === 'courts' 
-    ? 'courts' 
+  const sportTypeIdParam = searchParams.get('sportTypeId')
+  const tabParam = searchParams.get('tab')
+  const defaultTab = sportTypeIdParam || tabParam === 'courts'
+    ? 'courts'
     : 'overview'
 
   const [activeIndex, setActiveIndex] = useState(0)
@@ -74,6 +76,15 @@ export default function ComplexDetail({
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const [mapLoaded, setMapLoaded] = useState(false)
+
+  // Re-sync activeTab whenever the URL params that drive defaultTab change.
+  // Next.js does not remount this component when only the query string changes
+  // (e.g. navigating to the same complex again with a different sportTypeId),
+  // so relying on the useState initializer alone would leave the tab stuck.
+  useEffect(() => {
+    setActiveTab(defaultTab)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sportTypeIdParam, tabParam])
 
   // Collect all images
   const allImages: string[] = []

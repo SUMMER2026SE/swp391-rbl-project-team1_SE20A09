@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { Header } from '@/components/layout/Header'
@@ -43,10 +43,20 @@ export default function ComplexDetailPage() {
   })
 
   // Filter facilities based on URL param
-  const filterSportTypeId = searchParams.get('sportTypeId') ? parseInt(searchParams.get('sportTypeId')!, 10) : null
-  const filteredFacilities = filterSportTypeId 
-    ? facilities.filter(f => f.sportType?.sportTypeId === filterSportTypeId)
+  const sportTypeIdParam = searchParams.get('sportTypeId')
+  const filterSportTypeId = sportTypeIdParam ? Number(sportTypeIdParam) : null
+  const filteredFacilities = filterSportTypeId
+    ? facilities.filter(f => !f.sportType || f.sportType.sportTypeId === filterSportTypeId)
     : facilities
+
+  // Reset the selected facility whenever the sport filter no longer includes it
+  // (e.g. navigating to the same complex again with a different sportTypeId, which
+  // Next.js does not remount for since only the query string changes)
+  useEffect(() => {
+    if (selectedFacilityId !== null && !filteredFacilities.some(f => f.stadiumId === selectedFacilityId)) {
+      setSelectedFacilityId(null)
+    }
+  }, [selectedFacilityId, filteredFacilities])
 
   // Auto-select facility when data arrives
   const activeFacilityId = selectedFacilityId ?? (filteredFacilities[0]?.stadiumId ?? null)

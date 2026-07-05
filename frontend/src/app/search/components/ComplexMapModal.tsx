@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import type { StadiumComplexDto } from '@/types/complex'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import 'leaflet/dist/leaflet.css'
 
 const getSportEmoji = (sportName?: string) => {
@@ -41,6 +42,13 @@ interface ComplexMapModalProps {
 }
 
 export default function ComplexMapModal({ isOpen, onClose, complexes }: ComplexMapModalProps) {
+  const searchParams = useSearchParams()
+  const sportTypeId = searchParams.get('sportTypeId')
+  const detailHref = (complexId: number) =>
+    sportTypeId
+      ? `/complexes/${complexId}?sportTypeId=${sportTypeId}&tab=courts`
+      : `/complexes/${complexId}?tab=courts`
+
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
@@ -170,7 +178,7 @@ export default function ComplexMapModal({ isOpen, onClose, complexes }: ComplexM
                           asChild
                           className="bg-primary hover:bg-primary/90 text-white font-bold rounded-lg text-[11px] px-3 py-1.5 shadow-md shadow-primary/10 transition-all hover:scale-105 active:scale-95"
                         >
-                          <Link href={`/complexes/${complex.complexId}`}>
+                          <Link href={detailHref(complex.complexId)}>
                             Chi tiết
                           </Link>
                         </Button>
