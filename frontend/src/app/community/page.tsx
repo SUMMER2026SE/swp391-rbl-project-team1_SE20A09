@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import type { Session } from "next-auth";
 import { Header } from "@/components/layout/Header";
@@ -98,6 +99,7 @@ const getMatchStatusBadgeClass = (m: MatchResponse) => {
 
 function MatchRequestFeedPage() {
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
   const { isOpen, options, confirm, close, execute, isLoading: confirming } = useConfirm();
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -227,6 +229,19 @@ function MatchRequestFeedPage() {
     fetchFeed();
     fetchDropdowns();
   }, []);
+
+  // Deep-link từ trợ lý AI (nút "Xem kèo" trỏ /community?matchId=X) — tự mở đúng kèo
+  // thay vì chỉ đưa về danh sách chung chung.
+  useEffect(() => {
+    const matchIdParam = searchParams.get("matchId");
+    if (!matchIdParam || matchRequests.length === 0) return;
+    const matchId = parseInt(matchIdParam, 10);
+    const match = matchRequests.find((m) => m.matchId === matchId);
+    if (match) {
+      setSelectedRequest(match);
+      setShowJoinDialog(true);
+    }
+  }, [searchParams, matchRequests]);
 
   useEffect(() => {
     if (session?.user) {

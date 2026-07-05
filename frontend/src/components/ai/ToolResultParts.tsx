@@ -114,7 +114,7 @@ export function ToolResultParts({ parts, compact = false }: ToolResultPartsProps
                         <Button
                           size="sm"
                           className="bg-primary hover:bg-primary/95 text-[10px] h-7 px-3 rounded-full"
-                          onClick={() => window.location.href = `/venues/${stadium.stadiumId}`}
+                          onClick={() => window.open(`/venues/${stadium.stadiumId}`, '_blank', 'noopener,noreferrer')}
                         >
                           Đặt ngay
                         </Button>
@@ -166,7 +166,7 @@ export function ToolResultParts({ parts, compact = false }: ToolResultPartsProps
                         <Button
                           size="sm"
                           className="bg-primary hover:bg-primary/95 text-[10px] h-7 px-3 rounded-full"
-                          onClick={() => window.location.href = '/community'}
+                          onClick={() => window.open(`/community?matchId=${match.matchId}`, '_blank', 'noopener,noreferrer')}
                         >
                           Xem kèo
                         </Button>
