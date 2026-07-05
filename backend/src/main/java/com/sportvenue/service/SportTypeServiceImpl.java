@@ -11,6 +11,7 @@ import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.repository.StadiumRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +34,7 @@ public class SportTypeServiceImpl implements SportTypeService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "sportTypes", allEntries = true)
     public SportTypeResponse createSportType(CreateSportTypeRequest request) {
         log.info("Creating new sport type: {} with code: {}", request.getSportName(), request.getSportCode());
 
@@ -59,6 +61,7 @@ public class SportTypeServiceImpl implements SportTypeService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "sportTypes", allEntries = true)
     public SportTypeResponse updateSportType(Integer id, CreateSportTypeRequest request) {
         log.info("Updating sport type ID: {} with name: {}", id, request.getSportName());
 
@@ -91,6 +94,7 @@ public class SportTypeServiceImpl implements SportTypeService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "sportTypes", allEntries = true)
     public void deleteSportType(Integer id) {
         log.info("Request to delete/deactivate sport type with ID: {}", id);
         SportType sportType = sportTypeRepository.findById(id)

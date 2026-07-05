@@ -6,6 +6,7 @@ import com.sportvenue.service.ai.AiChatService;
 import io.github.bucket4j.Bucket;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 
 import java.io.InputStream;
 import java.time.Duration;
@@ -31,10 +33,11 @@ public class AiChatController {
 
     private final AiChatService aiChatService;
     private final Executor aiTaskExecutor;
-    private final Map<String, Bucket> rateLimitBuckets = new ConcurrentHashMap<>();
+    private final Map<String, RateLimitEntry> rateLimitBuckets = new ConcurrentHashMap<>();
 
     private static final int CUSTOMER_REQUESTS_PER_MINUTE = 10;
     private static final int GUEST_REQUESTS_PER_MINUTE = 5;
+    private static final long BUCKET_IDLE_EXPIRY_MILLIS = Duration.ofMinutes(10).toMillis();
 
     public AiChatController(AiChatService aiChatService,
                             @Qualifier("aiTaskExecutor") Executor aiTaskExecutor) {
@@ -42,8 +45,29 @@ public class AiChatController {
         this.aiTaskExecutor = aiTaskExecutor;
     }
 
+    /** Bucket kèm timestamp lần truy cập gần nhất — dùng để dọn dẹp entry của IP/user không còn hoạt động. */
+    private static final class RateLimitEntry {
+        private final Bucket bucket;
+        private volatile long lastAccessMillis;
+
+        private RateLimitEntry(Bucket bucket) {
+            this.bucket = bucket;
+            this.lastAccessMillis = System.currentTimeMillis();
+        }
+    }
+
+    /**
+     * Dọn các bucket không hoạt động quá 10 phút — tránh rateLimitBuckets phình vô hạn
+     * khi có nhiều IP khách vãng lai khác nhau truy cập (memory leak trên singleton Bean).
+     */
+    @Scheduled(fixedRate = 5 * 60 * 1000)
+    void evictStaleRateLimitBuckets() {
+        long now = System.currentTimeMillis();
+        rateLimitBuckets.entrySet().removeIf(entry -> now - entry.getValue().lastAccessMillis > BUCKET_IDLE_EXPIRY_MILLIS);
+    }
+
     @PostMapping(value = "/chat", produces = "text/event-stream")
-    public ResponseBodyEmitter chatStream(@RequestBody AiChatRequest request,
+    public ResponseBodyEmitter chatStream(@Valid @RequestBody AiChatRequest request,
                                          @AuthenticationPrincipal UserPrincipal userPrincipal,
                                          HttpServletRequest httpRequest,
                                          HttpServletResponse response) {
@@ -55,11 +79,12 @@ public class AiChatController {
         String rateLimitKey = userId != null ? "u:" + userId : "ip:" + getClientIp(httpRequest);
         int limitPerMinute = userId != null ? CUSTOMER_REQUESTS_PER_MINUTE : GUEST_REQUESTS_PER_MINUTE;
 
-        Bucket bucket = rateLimitBuckets.computeIfAbsent(rateLimitKey, key -> Bucket.builder()
+        RateLimitEntry entry = rateLimitBuckets.computeIfAbsent(rateLimitKey, key -> new RateLimitEntry(Bucket.builder()
                 .addLimit(limit -> limit.capacity(limitPerMinute).refillGreedy(limitPerMinute, Duration.ofMinutes(1)))
-                .build());
+                .build()));
+        entry.lastAccessMillis = System.currentTimeMillis();
 
-        if (!bucket.tryConsume(1)) {
+        if (!entry.bucket.tryConsume(1)) {
             log.warn("Rate limit exceeded for: {}", rateLimitKey);
             response.setStatus(429); // TOO_MANY_REQUESTS
             ResponseBodyEmitter emitter = new ResponseBodyEmitter();

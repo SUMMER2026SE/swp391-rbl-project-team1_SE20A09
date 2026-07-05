@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportvenue.dto.request.AiChatRequest;
 import com.sportvenue.security.UserPrincipal;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,6 +48,17 @@ public class AiChatServiceImpl implements AiChatService {
 
     @Value("${app.ai.model:llama-3.3-70b-versatile}")
     private String aiModel;
+
+    /**
+     * Fail-fast khi thiếu GROQ_API_KEY — phát hiện lỗi cấu hình ngay lúc khởi động
+     * thay vì chỉ báo lỗi khi có request AI đầu tiên tới (khó phát hiện hơn nhiều).
+     */
+    @PostConstruct
+    void validateConfig() {
+        if (aiApiKey == null || aiApiKey.isBlank()) {
+            log.error("app.ai.api-key (GROQ_API_KEY) chưa được cấu hình. Tính năng AI Chat sẽ không hoạt động.");
+        }
+    }
 
     @Override
     public void handleChatStream(AiChatRequest request, ResponseBodyEmitter emitter, UserPrincipal userPrincipal,

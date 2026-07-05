@@ -2,6 +2,8 @@ package com.sportvenue.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,6 +18,8 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AiChatRequest {
 
+    @NotEmpty(message = "messages must not be empty")
+    @Valid
     private List<Message> messages;
 
     @Data

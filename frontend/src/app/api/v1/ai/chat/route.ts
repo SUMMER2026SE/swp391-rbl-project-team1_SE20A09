@@ -16,25 +16,22 @@ export async function POST(req: NextRequest) {
 
     const serverToken = (token as any)?.accessToken;
 
-    // Fallback: dùng Authorization header từ client nếu cookie session không có
+    // Fallback: dùng Authorization header từ client nếu cookie session không có.
+    // Không chặn 401 khi thiếu token — backend đã cho phép guest dùng /api/v1/ai/chat
+    // (public endpoint, các tool hiện có chỉ đọc dữ liệu công khai).
     const clientAuthHeader = req.headers.get('authorization');
-    const authHeader = serverToken
-      ? `Bearer ${serverToken}`
-      : clientAuthHeader;
-
-    if (!authHeader) {
-      console.error('[AI Chat Proxy] No auth token found — session:', !!token, 'clientHeader:', !!clientAuthHeader);
-      return new NextResponse('Unauthorized', { status: 401 });
-    }
+    const authHeader = serverToken ? `Bearer ${serverToken}` : clientAuthHeader;
 
     const body = await req.json();
 
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (authHeader) {
+      headers['Authorization'] = authHeader;
+    }
+
     const response = await fetch(backendUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authHeader,
-      },
+      headers,
       body: JSON.stringify(body),
     });
 

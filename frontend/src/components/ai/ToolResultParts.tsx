@@ -11,20 +11,57 @@ const TOOL_LABELS: Record<string, string> = {
   findMatchRequests: "Tìm kèo ghép thể thao",
 };
 
+/**
+ * Shape tối thiểu dùng chung cho mọi loại UIMessagePart (text/tool/dynamic-tool...) của AI SDK v5.
+ * `state` để kiểu string (không union hẹp) vì mỗi loại part có tập giá trị state khác nhau
+ * (TextUIPart: "streaming"|"done", tool part: "input-streaming"|"input-available"|...).
+ */
+interface ToolPart {
+  type: string; // "dynamic-tool" hoặc `tool-${toolName}`
+  toolName?: string; // chỉ có khi type === "dynamic-tool"
+  toolCallId?: string;
+  state?: string;
+  output?: unknown;
+  errorText?: string;
+}
+
+interface StadiumResult {
+  stadiumId: number;
+  stadiumName: string;
+  address: string;
+  sportName?: string;
+  status?: string;
+  pricePerHour?: number;
+}
+
+interface MatchRequestResult {
+  matchId: number;
+  title: string;
+  sportName?: string;
+  stadiumName?: string;
+  stadiumAddress?: string;
+  playDate: string;
+  startTime: string;
+  endTime: string;
+  currentPlayers: number;
+  maxPlayers: number;
+  pricePerPlayer?: number;
+}
+
 function getToolLabel(toolName: string) {
   return TOOL_LABELS[toolName] || "Xử lý yêu cầu";
 }
 
-function isToolPart(part: any): boolean {
+function isToolPart(part: { type?: string }): part is ToolPart {
   return part.type === "dynamic-tool" || (typeof part.type === "string" && part.type.startsWith("tool-"));
 }
 
-function getToolName(part: any): string {
-  return part.type === "dynamic-tool" ? part.toolName : part.type.slice("tool-".length);
+function getToolName(part: ToolPart): string {
+  return part.type === "dynamic-tool" ? (part.toolName ?? "") : part.type.slice("tool-".length);
 }
 
 interface ToolResultPartsProps {
-  parts: any[];
+  parts: ToolPart[];
   /** Popup widget nhỏ (360px) — ép grid 1 cột thay vì 2 cột như trang /ai-assistant */
   compact?: boolean;
 }
@@ -42,7 +79,7 @@ export function ToolResultParts({ parts, compact = false }: ToolResultPartsProps
 
   return (
     <>
-      {parts.map((part: any, partIdx: number) => {
+      {parts.map((part, partIdx: number) => {
         if (!isToolPart(part)) {
           return null;
         }
@@ -71,10 +108,10 @@ export function ToolResultParts({ parts, compact = false }: ToolResultPartsProps
         if (part.state === 'output-available') {
           const result = part.output;
 
-          if (result && typeof result === 'object' && !Array.isArray(result) && result.error) {
+          if (result && typeof result === 'object' && !Array.isArray(result) && 'error' in result) {
             return (
               <div key={toolCallId || partIdx} className="text-xs text-destructive italic my-1">
-                {String(result.error)}
+                {String((result as { error: unknown }).error)}
               </div>
             );
           }
@@ -89,7 +126,7 @@ export function ToolResultParts({ parts, compact = false }: ToolResultPartsProps
             }
             return (
               <div key={toolCallId || partIdx} className={`grid gap-3 ${gridCols} mt-2`}>
-                {result.map((stadium: any) => (
+                {(result as StadiumResult[]).map((stadium) => (
                   <Card key={stadium.stadiumId} className="border border-border/85 shadow-sm bg-card overflow-hidden transition-all hover:shadow-lg">
                     <div className="h-20 bg-gradient-to-r from-emerald-500 to-teal-600 flex flex-col justify-center text-white relative p-3">
                       <Sparkles className="absolute top-2 right-2 text-yellow-300 h-4.5 w-4.5 animate-pulse" />
@@ -136,7 +173,7 @@ export function ToolResultParts({ parts, compact = false }: ToolResultPartsProps
             }
             return (
               <div key={toolCallId || partIdx} className={`grid gap-3 ${gridCols} mt-2`}>
-                {result.map((match: any) => (
+                {(result as MatchRequestResult[]).map((match) => (
                   <Card key={match.matchId} className="border border-border/85 shadow-sm bg-card overflow-hidden transition-all hover:shadow-lg">
                     <CardContent className="p-3 space-y-2">
                       <div className="flex justify-between items-start gap-2">
