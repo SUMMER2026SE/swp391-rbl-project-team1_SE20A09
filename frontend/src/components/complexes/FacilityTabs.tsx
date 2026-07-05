@@ -9,9 +9,11 @@ interface FacilityTabsProps {
   onSelect: (id: number) => void
 }
 
+// MAINTENANCE không disabled — khách vẫn xem được lịch tuần để biết slot nào bị chặn và đặt
+// slot khác ngày/giờ; chỉ CLOSED (đóng cửa hẳn) mới thực sự chặn truy cập.
 const STATUS_CONFIG: Record<StadiumStatus, { label: string; dotCls: string; disabled: boolean }> = {
   AVAILABLE: { label: 'Hoạt động', dotCls: 'bg-emerald-500', disabled: false },
-  MAINTENANCE: { label: 'Bảo trì', dotCls: 'bg-amber-400', disabled: true },
+  MAINTENANCE: { label: 'Bảo trì', dotCls: 'bg-amber-400', disabled: false },
   CLOSED: { label: 'Đóng cửa', dotCls: 'bg-red-500', disabled: true },
 }
 
@@ -47,7 +49,13 @@ export default function FacilityTabs({
       <h2 className="text-lg font-semibold text-gray-800 mb-4">Chọn khu sân</h2>
       <div className="flex flex-wrap gap-3">
         {facilities.map((facility) => {
-          const statusCfg = STATUS_CONFIG[facility.stadiumStatus] ?? STATUS_CONFIG.AVAILABLE
+          // stadiumStatus riêng vẫn AVAILABLE khi bảo trì đến từ Complex cha (cascade) hoặc
+          // MaintenanceSchedule theo khung ngày — dùng underMaintenanceToday để phản ánh đúng.
+          const effectiveStatus: StadiumStatus =
+            facility.stadiumStatus === 'AVAILABLE' && facility.underMaintenanceToday
+              ? 'MAINTENANCE'
+              : facility.stadiumStatus
+          const statusCfg = STATUS_CONFIG[effectiveStatus] ?? STATUS_CONFIG.AVAILABLE
           const isSelected = selectedId === facility.stadiumId
           const sportIcon = facility.sportType
             ? (SPORT_ICONS[facility.sportType.sportName] ?? '🏟️')
@@ -97,10 +105,10 @@ export default function FacilityTabs({
                 </span>
               )}
 
-              {/* Maintenance/Closed warning */}
-              {statusCfg.disabled && (
+              {/* Maintenance/Closed warning — hiển thị cả khi MAINTENANCE (không disabled) để báo trước cho khách */}
+              {effectiveStatus !== 'AVAILABLE' && (
                 <span className="flex items-center gap-1 text-[10px] text-amber-600 font-medium mt-0.5">
-                  {facility.stadiumStatus === 'MAINTENANCE' ? (
+                  {effectiveStatus === 'MAINTENANCE' ? (
                     <><IconTool className="w-3 h-3" /> Đang bảo trì</>
                   ) : (
                     <><IconAlertTriangle className="w-3 h-3" /> Đã đóng cửa</>

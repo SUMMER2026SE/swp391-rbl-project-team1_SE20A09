@@ -109,4 +109,26 @@ public class StadiumComplexController {
         ComplexResponse response = stadiumComplexService.updateComplex(complexId, request, userPrincipal.getUser().getUserId());
         return ResponseEntity.ok(response);
     }
+
+    @PutMapping("/{complexId}/suspend")
+    @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
+    @Operation(summary = "Suspend complex (indefinite)", description = "Sets complexStatus = MAINTENANCE — cascades to all facilities/courts underneath via isStadiumUnderMaintenance.")
+    public ResponseEntity<Void> suspendComplex(
+            @PathVariable Integer complexId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        stadiumComplexService.suspendComplex(complexId, userPrincipal.getUser().getUserId());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/{complexId}/activate")
+    @PreAuthorize("hasRole('Owner')")
+    @RequireApprovedOwner
+    @Operation(summary = "Activate complex", description = "Sets complexStatus = AVAILABLE.")
+    public ResponseEntity<Void> activateComplex(
+            @PathVariable Integer complexId,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        stadiumComplexService.activateComplex(complexId, userPrincipal.getUser().getUserId());
+        return ResponseEntity.noContent().build();
+    }
 }

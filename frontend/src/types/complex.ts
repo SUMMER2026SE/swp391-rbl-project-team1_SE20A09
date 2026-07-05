@@ -62,6 +62,8 @@ export interface FacilityDto {
   openTime: string   // "HH:mm:ss"
   closeTime: string  // "HH:mm:ss"
   stadiumStatus: StadiumStatus
+  /** True nếu bị chặn đặt HÔM NAY do bảo trì (kể cả cascade từ Complex cha) — dù stadiumStatus vẫn AVAILABLE. */
+  underMaintenanceToday?: boolean
   imageUrls?: string[]
 }
 
@@ -72,6 +74,8 @@ export interface CourtWithSlotsDto {
   pricePerHour: number
   parentStadiumId: number
   stadiumStatus: StadiumStatus
+  /** True nếu bị chặn đặt HÔM NAY do bảo trì (kể cả cascade từ Facility/Complex cha) — dù stadiumStatus vẫn AVAILABLE. */
+  underMaintenanceToday?: boolean
   imageUrls: string[]
   timeSlots?: TimeSlotDto[]
 }
