@@ -1,26 +1,30 @@
 package com.sportvenue.controller;
 
 import com.sportvenue.dto.request.AiChatRequest;
+import com.sportvenue.dto.request.AiFeedbackRequest;
+import com.sportvenue.entity.AiChatFeedback;
+import com.sportvenue.repository.AiChatFeedbackRepository;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.ai.AiChatService;
 import io.github.bucket4j.Bucket;
+import io.github.bucket4j.BucketConfiguration;
+import io.github.bucket4j.distributed.proxy.ProxyManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.CompletableFuture;
@@ -33,37 +37,36 @@ public class AiChatController {
 
     private final AiChatService aiChatService;
     private final Executor aiTaskExecutor;
-    private final Map<String, RateLimitEntry> rateLimitBuckets = new ConcurrentHashMap<>();
+    private final ProxyManager<byte[]> proxyManager;
+    private final AiChatFeedbackRepository aiChatFeedbackRepository;
 
     private static final int CUSTOMER_REQUESTS_PER_MINUTE = 10;
+    private static final int CUSTOMER_REQUESTS_PER_DAY = 150;
     private static final int GUEST_REQUESTS_PER_MINUTE = 5;
-    private static final long BUCKET_IDLE_EXPIRY_MILLIS = Duration.ofMinutes(10).toMillis();
+    private static final int GUEST_REQUESTS_PER_DAY = 50;
 
     public AiChatController(AiChatService aiChatService,
-                            @Qualifier("aiTaskExecutor") Executor aiTaskExecutor) {
+                            @Qualifier("aiTaskExecutor") Executor aiTaskExecutor,
+                            ProxyManager<byte[]> proxyManager,
+                            AiChatFeedbackRepository aiChatFeedbackRepository) {
         this.aiChatService = aiChatService;
         this.aiTaskExecutor = aiTaskExecutor;
+        this.proxyManager = proxyManager;
+        this.aiChatFeedbackRepository = aiChatFeedbackRepository;
     }
 
-    /** Bucket kèm timestamp lần truy cập gần nhất — dùng để dọn dẹp entry của IP/user không còn hoạt động. */
-    private static final class RateLimitEntry {
-        private final Bucket bucket;
-        private volatile long lastAccessMillis;
-
-        private RateLimitEntry(Bucket bucket) {
-            this.bucket = bucket;
-            this.lastAccessMillis = System.currentTimeMillis();
-        }
+    private BucketConfiguration getCustomerConfig() {
+        return BucketConfiguration.builder()
+                .addLimit(limit -> limit.capacity(CUSTOMER_REQUESTS_PER_MINUTE).refillGreedy(CUSTOMER_REQUESTS_PER_MINUTE, Duration.ofMinutes(1)))
+                .addLimit(limit -> limit.capacity(CUSTOMER_REQUESTS_PER_DAY).refillGreedy(CUSTOMER_REQUESTS_PER_DAY, Duration.ofDays(1)))
+                .build();
     }
 
-    /**
-     * Dọn các bucket không hoạt động quá 10 phút — tránh rateLimitBuckets phình vô hạn
-     * khi có nhiều IP khách vãng lai khác nhau truy cập (memory leak trên singleton Bean).
-     */
-    @Scheduled(fixedRate = 5 * 60 * 1000)
-    void evictStaleRateLimitBuckets() {
-        long now = System.currentTimeMillis();
-        rateLimitBuckets.entrySet().removeIf(entry -> now - entry.getValue().lastAccessMillis > BUCKET_IDLE_EXPIRY_MILLIS);
+    private BucketConfiguration getGuestConfig() {
+        return BucketConfiguration.builder()
+                .addLimit(limit -> limit.capacity(GUEST_REQUESTS_PER_MINUTE).refillGreedy(GUEST_REQUESTS_PER_MINUTE, Duration.ofMinutes(1)))
+                .addLimit(limit -> limit.capacity(GUEST_REQUESTS_PER_DAY).refillGreedy(GUEST_REQUESTS_PER_DAY, Duration.ofDays(1)))
+                .build();
     }
 
     @PostMapping(value = "/chat", produces = "text/event-stream")
@@ -73,23 +76,19 @@ public class AiChatController {
                                          HttpServletResponse response) {
         Integer userId = userPrincipal != null ? userPrincipal.getUserId() : null;
 
-        // Rate limiting: user đã đăng nhập tính theo userId, guest tính theo IP
-        // (data 3 tool hiện có đều public nên không cần bắt đăng nhập, nhưng vẫn
-        // phải giới hạn riêng để tránh 1 IP ẩn danh spam free-tier Groq key).
-        String rateLimitKey = userId != null ? "u:" + userId : "ip:" + getClientIp(httpRequest);
-        int limitPerMinute = userId != null ? CUSTOMER_REQUESTS_PER_MINUTE : GUEST_REQUESTS_PER_MINUTE;
+        String sessionId = httpRequest.getHeader("X-Session-ID");
+        String rateLimitKey = userId != null ? "ai_rate_limit:u:" + userId 
+                            : (sessionId != null && !sessionId.isBlank() ? "ai_rate_limit:s:" + sessionId : "ai_rate_limit:ip:" + getClientIp(httpRequest));
+                            
+        BucketConfiguration bucketConfig = userId != null ? getCustomerConfig() : getGuestConfig();
+        Bucket bucket = proxyManager.builder().build(rateLimitKey.getBytes(StandardCharsets.UTF_8), bucketConfig);
 
-        RateLimitEntry entry = rateLimitBuckets.computeIfAbsent(rateLimitKey, key -> new RateLimitEntry(Bucket.builder()
-                .addLimit(limit -> limit.capacity(limitPerMinute).refillGreedy(limitPerMinute, Duration.ofMinutes(1)))
-                .build()));
-        entry.lastAccessMillis = System.currentTimeMillis();
-
-        if (!entry.bucket.tryConsume(1)) {
+        if (!bucket.tryConsume(1)) {
             log.warn("Rate limit exceeded for: {}", rateLimitKey);
             response.setStatus(429); // TOO_MANY_REQUESTS
             ResponseBodyEmitter emitter = new ResponseBodyEmitter();
             try {
-                emitter.send("3:\"Rate limit exceeded\"\n");
+                emitter.send("3:\"Rate limit exceeded - Quá tải yêu cầu hoặc bạn đã hết lượt chat hôm nay. Vui lòng thử lại sau.\"\n");
                 emitter.complete();
             } catch (Exception e) {
                 emitter.completeWithError(e);
@@ -97,7 +96,6 @@ public class AiChatController {
             return emitter;
         }
 
-        // Set headers directly on HTTP response
         response.setHeader("X-Vercel-AI-Data-Stream", "v1");
         response.setContentType("text/event-stream");
         response.setCharacterEncoding("UTF-8");
@@ -110,13 +108,11 @@ public class AiChatController {
         Runnable cleanup = () -> {
             Future<?> future = futureRef.get();
             if (future != null && !future.isDone()) {
-                log.info("Cancelling task execution due to SSE abort for user: {}", userId);
                 future.cancel(true);
             }
             InputStream is = activeStreamRef.get();
             if (is != null) {
                 try {
-                    log.info("Closing active HTTP stream due to SSE abort for user: {}", userId);
                     is.close();
                 } catch (Exception e) {
                     log.warn("Error closing stream on abort", e);
@@ -127,7 +123,7 @@ public class AiChatController {
         emitter.onCompletion(cleanup);
         emitter.onTimeout(cleanup);
         emitter.onError(e -> {
-            log.warn("SSE connection error for user: {}", userId, e);
+            log.warn("SSE connection error for user: {}", userId != null ? userId : rateLimitKey, e);
             cleanup.run();
         });
 
@@ -142,6 +138,24 @@ public class AiChatController {
         futureRef.set(future);
 
         return emitter;
+    }
+
+    @PostMapping("/feedback")
+    public ResponseEntity<?> submitFeedback(@Valid @RequestBody AiFeedbackRequest feedbackRequest,
+                                            @AuthenticationPrincipal UserPrincipal userPrincipal,
+                                            HttpServletRequest request) {
+        Integer userId = userPrincipal != null ? userPrincipal.getUserId() : null;
+        String sessionId = request.getHeader("X-Session-ID");
+
+        AiChatFeedback feedback = AiChatFeedback.builder()
+                .messageId(feedbackRequest.getMessageId())
+                .rating(feedbackRequest.getRating())
+                .userId(userId)
+                .sessionId(sessionId)
+                .build();
+
+        aiChatFeedbackRepository.save(feedback);
+        return ResponseEntity.ok().build();
     }
 
     private String getClientIp(HttpServletRequest request) {

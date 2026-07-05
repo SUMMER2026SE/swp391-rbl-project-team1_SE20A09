@@ -215,6 +215,52 @@ export function ToolResultParts({ parts, compact = false }: ToolResultPartsProps
             );
           }
 
+          if (toolName === 'getStadiumSlots' && Array.isArray(result)) {
+            if (result.length === 0) {
+              return (
+                <div key={toolCallId || partIdx} className="text-xs text-yellow-600 italic my-1">
+                  Không có khung giờ nào.
+                </div>
+              );
+            }
+            // Assume result is array of TimeSlotResult
+            const slots = result as any[];
+            const stadiumId = slots.length > 0 ? slots[0].stadiumId : null;
+            return (
+              <div key={toolCallId || partIdx} className="mt-2 space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  {slots.map((slot: any) => (
+                    <div key={slot.slotId || Math.random()} className={`border rounded-md px-3 py-1.5 text-xs flex flex-col gap-1 items-center justify-center transition-colors ${slot.available ? 'bg-emerald-50 border-emerald-200' : 'bg-muted border-border opacity-60'}`}>
+                      <span className="font-medium text-foreground">{slot.startTime} - {slot.endTime}</span>
+                      <span className="text-[10px] text-muted-foreground">{slot.price ? slot.price.toLocaleString('vi-VN') + 'đ' : ''}</span>
+                      {slot.available ? (
+                         <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-5 px-2 text-[10px] text-emerald-700 hover:text-emerald-800 hover:bg-emerald-100"
+                          onClick={() => window.open(`/venues/${stadiumId}?date=${slot.date || ''}&startTime=${slot.startTime}`, '_blank', 'noopener,noreferrer')}
+                        >
+                          Chọn
+                        </Button>
+                      ) : (
+                        <span className="text-[10px] text-destructive">Kín</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {stadiumId && (
+                  <Button 
+                    size="sm" 
+                    className="w-full sm:w-auto text-xs h-8"
+                    onClick={() => window.open(`/venues/${stadiumId}`, '_blank', 'noopener,noreferrer')}
+                  >
+                    Xem tất cả giờ trống tại sân này
+                  </Button>
+                )}
+              </div>
+            );
+          }
+
           return (
             <div key={toolCallId || partIdx} className="text-[11px] text-emerald-600 italic my-1 flex items-center gap-1.5">
               <span>✓</span>
