@@ -30,9 +30,9 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Inte
             LEFT JOIN m.complex cx
             WHERE m.matchStatus IN (:statuses)
             AND (m.playDate > :nowDate OR (m.playDate = :nowDate AND m.startTime > :nowTime))
-            AND (:location IS NULL
-                 OR LOWER(st.address) LIKE LOWER(CONCAT('%', :location, '%'))
-                 OR LOWER(cx.address) LIKE LOWER(CONCAT('%', :location, '%')))
+            AND (CAST(:location AS string) IS NULL
+                 OR LOWER(st.address) LIKE LOWER(CONCAT('%', CAST(:location AS string), '%'))
+                 OR LOWER(cx.address) LIKE LOWER(CONCAT('%', CAST(:location AS string), '%')))
             ORDER BY CASE WHEN m.matchStatus = 'OPEN' THEN 0 ELSE 1 END ASC,
                      m.playDate ASC,
                      m.startTime ASC
