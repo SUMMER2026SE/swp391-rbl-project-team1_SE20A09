@@ -422,86 +422,91 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
         if (district == null || district.isBlank()) {
             return null;
         }
-        
-        String key = district.toLowerCase().replaceAll("\\s+", "").trim();
-        
-        // Mapping of key values to standardized HCM districts
-        if (key.contains("thủđức") || key.contains("thuduc")) {
+
+        // Bỏ dấu trước khi so khớp — model đôi khi tự đánh dấu tiếng Việt sai/không ổn định
+        // giữa các lần gọi (vd "Thù Đùc" thay vì "Thủ Đức"), khiến so khớp dấu chính xác trước
+        // đây thất bại dù ý người dùng rõ ràng là đúng quận đó.
+        String key = stripDiacritics(district).toLowerCase().replaceAll("\\s+", "");
+
+        if (key.contains("thuduc")) {
             return "Thủ Đức";
         }
-        if (key.contains("bìnhthạnh") || key.contains("binhthanh")) {
+        if (key.contains("binhthanh")) {
             return "Bình Thạnh";
         }
-        if (key.contains("phúnhuận") || key.contains("phunhuan")) {
+        if (key.contains("phunhuan")) {
             return "Phú Nhuận";
         }
-        if (key.contains("gòvấp") || key.contains("govap")) {
+        if (key.contains("govap")) {
             return "Gò Vấp";
         }
-        if (key.contains("tânbình") || key.contains("tanbinh")) {
+        if (key.contains("tanbinh")) {
             return "Tân Bình";
         }
-        if (key.contains("tânphú") || key.contains("tanphu")) {
+        if (key.contains("tanphu")) {
             return "Tân Phú";
         }
-        if (key.contains("bìnhtân") || key.contains("binhtan")) {
+        if (key.contains("binhtan")) {
             return "Bình Tân";
         }
-        if (key.contains("bìnhchánh") || key.contains("binhchanh")) {
+        if (key.contains("binhchanh")) {
             return "Bình Chánh";
         }
-        if (key.contains("hócmôn") || key.contains("hocmon")) {
+        if (key.contains("hocmon")) {
             return "Hóc Môn";
         }
-        if (key.contains("củchi") || key.contains("cuchi")) {
+        if (key.contains("cuchi")) {
             return "Củ Chi";
         }
-        if (key.contains("nhàbè") || key.contains("nhabe")) {
+        if (key.contains("nhabe")) {
             return "Nhà Bè";
         }
-        if (key.contains("cầngiờ") || key.contains("cangio")) {
+        if (key.contains("cangio")) {
             return "Cần Giờ";
         }
 
         return matchDistrictNumber(key);
     }
 
-    /** Handle District numbers (e.g., q1, q.1, quan 1, d1) — tách riêng để normalizeDistrict gọn hơn. */
+    /**
+     * Handle District numbers (e.g., q1, q.1, quan 1, d1) — tách riêng để normalizeDistrict gọn hơn.
+     * {@code key} đã được stripDiacritics ở normalizeDistrict nên chỉ cần so "quan", không cần "quận".
+     */
     private String matchDistrictNumber(String key) {
-        if (key.matches(".*(q|quận|district|d)\\.?0?1$") || key.equals("1")) {
+        if (key.matches(".*(q|quan|district|d)\\.?0?1$") || key.equals("1")) {
             return "Quận 1";
         }
-        if (key.matches(".*(q|quận|district|d)\\.?0?2$") || key.equals("2")) {
+        if (key.matches(".*(q|quan|district|d)\\.?0?2$") || key.equals("2")) {
             return "Quận 2";
         }
-        if (key.matches(".*(q|quận|district|d)\\.?0?3$") || key.equals("3")) {
+        if (key.matches(".*(q|quan|district|d)\\.?0?3$") || key.equals("3")) {
             return "Quận 3";
         }
-        if (key.matches(".*(q|quận|district|d)\\.?0?4$") || key.equals("4")) {
+        if (key.matches(".*(q|quan|district|d)\\.?0?4$") || key.equals("4")) {
             return "Quận 4";
         }
-        if (key.matches(".*(q|quận|district|d)\\.?0?5$") || key.equals("5")) {
+        if (key.matches(".*(q|quan|district|d)\\.?0?5$") || key.equals("5")) {
             return "Quận 5";
         }
-        if (key.matches(".*(q|quận|district|d)\\.?0?6$") || key.equals("6")) {
+        if (key.matches(".*(q|quan|district|d)\\.?0?6$") || key.equals("6")) {
             return "Quận 6";
         }
-        if (key.matches(".*(q|quận|district|d)\\.?0?7$") || key.equals("7")) {
+        if (key.matches(".*(q|quan|district|d)\\.?0?7$") || key.equals("7")) {
             return "Quận 7";
         }
-        if (key.matches(".*(q|quận|district|d)\\.?0?8$") || key.equals("8")) {
+        if (key.matches(".*(q|quan|district|d)\\.?0?8$") || key.equals("8")) {
             return "Quận 8";
         }
-        if (key.matches(".*(q|quận|district|d)\\.?0?9$") || key.equals("9")) {
+        if (key.matches(".*(q|quan|district|d)\\.?0?9$") || key.equals("9")) {
             return "Quận 9";
         }
-        if (key.matches(".*(q|quận|district|d)\\.?10$") || key.equals("10")) {
+        if (key.matches(".*(q|quan|district|d)\\.?10$") || key.equals("10")) {
             return "Quận 10";
         }
-        if (key.matches(".*(q|quận|district|d)\\.?11$") || key.equals("11")) {
+        if (key.matches(".*(q|quan|district|d)\\.?11$") || key.equals("11")) {
             return "Quận 11";
         }
-        if (key.matches(".*(q|quận|district|d)\\.?12$") || key.equals("12")) {
+        if (key.matches(".*(q|quan|district|d)\\.?12$") || key.equals("12")) {
             return "Quận 12";
         }
 

@@ -133,6 +133,31 @@ class CustomerAgentToolProviderTest {
     }
 
     @Test
+    void executeTool_searchStadiums_districtWithWrongDiacritics_stillNormalizes() {
+        PageResponse<StadiumResponse> pageResponse = PageResponse.<StadiumResponse>builder()
+                .content(List.of()).pageNumber(0).pageSize(10).totalElements(0).totalPages(0).last(true).build();
+        when(publicStadiumService.searchStadiums(any())).thenReturn(pageResponse);
+
+        // Model tự đánh sai dấu ("Thù Đùc" thay vì "Thủ Đức") — trước đây so khớp chính xác dấu
+        // sẽ thất bại và rơi vào nhánh fallback dùng nguyên văn sai.
+        provider.executeTool("searchStadiums", "{\"district\":\"Thù Đùc\"}", 1);
+
+        ArgumentCaptor<StadiumSearchRequest> captor = ArgumentCaptor.forClass(StadiumSearchRequest.class);
+        verify(publicStadiumService).searchStadiums(captor.capture());
+        assertEquals("Thủ Đức", captor.getValue().getAddress());
+    }
+
+    @Test
+    void executeTool_findMatchRequests_locationWithWrongDiacritics_stillNormalizes() {
+        Page<MatchResponse> page = new PageImpl<>(List.of());
+        when(matchRequestService.getActiveMatches(any(Pageable.class), eq("Bình Thạnh"))).thenReturn(page);
+
+        provider.executeTool("findMatchRequests", "{\"location\":\"Bính Thánh\"}", 1);
+
+        verify(matchRequestService).getActiveMatches(any(Pageable.class), eq("Bình Thạnh"));
+    }
+
+    @Test
     void executeTool_searchStadiums_emptyResult_fallsBackToParentFacilityName() {
         PageResponse<StadiumResponse> emptyResponse = PageResponse.<StadiumResponse>builder()
                 .content(List.of()).pageNumber(0).pageSize(10).totalElements(0).totalPages(0).last(true).build();
