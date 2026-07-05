@@ -287,7 +287,7 @@ function SearchPageContent() {
         {/* 4. Filter Info & Modal Trigger */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Danh sách tổ hợp sân</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Danh sách sân</h2>
             <p className="text-muted-foreground text-sm mt-1">
               Tìm thấy <strong className="text-foreground">{totalElements}</strong> tổ hợp phù hợp với bạn
             </p>

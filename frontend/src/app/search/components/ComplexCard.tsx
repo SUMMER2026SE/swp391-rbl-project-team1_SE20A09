@@ -4,12 +4,20 @@ import { MapPin, Star } from 'lucide-react'
 import type { StadiumComplexDto } from '@/types/complex'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 
 interface ComplexCardProps {
   complex: StadiumComplexDto
 }
 
 export function ComplexCard({ complex }: ComplexCardProps) {
+  const searchParams = useSearchParams()
+  const sportTypeId = searchParams.get('sportTypeId')
+
+  const href = sportTypeId
+    ? `/complexes/${complex.complexId}?sportTypeId=${sportTypeId}&tab=courts`
+    : `/complexes/${complex.complexId}?tab=courts`
+
   const formattedPrice = (() => {
     if (complex.minPrice !== undefined && complex.minPrice !== null) {
       if (complex.maxPrice !== undefined && complex.maxPrice !== null && complex.minPrice !== complex.maxPrice) {
@@ -22,7 +30,7 @@ export function ComplexCard({ complex }: ComplexCardProps) {
 
   return (
     <Card className="overflow-hidden bg-card hover:shadow-2xl transition-all duration-300 border-gray-100 dark:border-border group cursor-pointer flex flex-col h-full rounded-2xl">
-      <Link href={`/complexes/${complex.complexId}`} className="flex flex-col flex-1">
+      <Link href={href} className="flex flex-col flex-1">
         <div className="relative h-64 w-full bg-muted overflow-hidden">
           {complex.coverImageUrl ? (
             <img
@@ -95,14 +103,14 @@ export function ComplexCard({ complex }: ComplexCardProps) {
       </Link>
 
       <CardFooter className="p-5 border-t border-gray-100 dark:border-border bg-white dark:bg-card flex justify-between items-center gap-4">
-        <Link href={`/complexes/${complex.complexId}`} className="hover:opacity-80 transition-opacity">
+        <Link href={href} className="hover:opacity-80 transition-opacity">
           <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">Giá thuê mỗi giờ</div>
           <div className="font-extrabold text-lg text-gray-900 dark:text-white truncate max-w-[180px]">
             {formattedPrice}
           </div>
         </Link>
         <Button asChild className="rounded-xl px-6 py-6 font-bold bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95">
-          <Link href={`/complexes/${complex.complexId}`}>
+          <Link href={href}>
             Xem Chi Tiết
           </Link>
         </Button>

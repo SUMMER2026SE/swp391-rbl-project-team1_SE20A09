@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   IconBallFootball,
   IconClock,
@@ -62,11 +62,29 @@ export default function ComplexDetail({
   courtsLoading
 }: ComplexDetailProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  
+  // Tự động chuyển sang tab 'courts' (Sân lẻ) nếu có sportTypeId trên URL hoặc có param tab=courts
+  const sportTypeIdParam = searchParams.get('sportTypeId')
+  const tabParam = searchParams.get('tab')
+  const defaultTab = sportTypeIdParam || tabParam === 'courts'
+    ? 'courts'
+    : 'overview'
+
   const [activeIndex, setActiveIndex] = useState(0)
-  const [activeTab, setActiveTab] = useState<string>('overview')
+  const [activeTab, setActiveTab] = useState<string>(defaultTab)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const [mapLoaded, setMapLoaded] = useState(false)
+
+  // Re-sync activeTab whenever the URL params that drive defaultTab change.
+  // Next.js does not remount this component when only the query string changes
+  // (e.g. navigating to the same complex again with a different sportTypeId),
+  // so relying on the useState initializer alone would leave the tab stuck.
+  useEffect(() => {
+    setActiveTab(defaultTab)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sportTypeIdParam, tabParam])
 
   // Collect all images
   const allImages: string[] = []
@@ -226,7 +244,7 @@ export default function ComplexDetail({
   return (
     <div className="w-full min-h-screen bg-gray-50/50 select-none relative flex flex-col font-sans pb-12">
       <div className="w-full max-w-[1440px] mx-auto bg-white shadow-sm md:rounded-2xl md:my-6 overflow-hidden border border-gray-200">
-        
+
         {/* [A] HERO IMAGE SECTION */}
         <div
           onClick={() => openLightbox(activeIndex)}
@@ -341,10 +359,10 @@ export default function ComplexDetail({
 
         {/* [C] BODY */}
         <div className="w-full px-4 md:px-6 py-5 grid grid-cols-1 lg:grid-cols-[minmax(900px,1fr)_320px] gap-5">
-          
+
           {/* Left Column (flex:1) — Tabs + Tab panel content */}
           <div className="flex flex-col min-w-0" id="complex-tab-content">
-            
+
             {/* TAB BAR */}
             <div className="grid grid-cols-4 bg-white border-[0.5px] border-gray-200 rounded-[12px] overflow-hidden mb-3.5">
               {[
@@ -375,7 +393,7 @@ export default function ComplexDetail({
 
             {/* PANEL WRAPPER */}
             <div className="bg-white border-[0.5px] border-gray-200 rounded-[12px] p-4 min-h-[300px]">
-              
+
               {/* TAB 1: Tổng quan */}
               {activeTab === 'overview' && (
                 <div className="space-y-4">
@@ -460,7 +478,7 @@ export default function ComplexDetail({
                     ) : courts.length === 0 ? (
                       <div className="text-center py-10 bg-gray-50 rounded-[12px] border border-dashed border-gray-200">
                         <IconBallFootball className="w-10 h-10 text-gray-350 mx-auto mb-2" />
-                        <p className="text-sm text-gray-400 font-medium">Khu vực này chưa cấu hình sân lẻ.</p>
+                        <p className="text-sm text-gray-400 font-medium">Không có sân lẻ nào phù hợp với loại sân bạn tìm hoặc chưa được cấu hình.</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -480,13 +498,12 @@ export default function ComplexDetail({
                                     {court.stadiumName}
                                   </h4>
                                   <span
-                                    className={`text-[9px] font-bold px-2 py-0.5 rounded-[20px] tracking-wide select-none ${
-                                      isAvailable
+                                    className={`text-[9px] font-bold px-2 py-0.5 rounded-[20px] tracking-wide select-none ${isAvailable
                                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                                         : isMaintenance
                                           ? 'bg-amber-50 text-amber-700 border border-amber-100'
                                           : 'bg-red-50 text-red-700 border border-red-100'
-                                    }`}
+                                      }`}
                                   >
                                     {isAvailable ? 'CÒN TRỐNG' : isMaintenance ? 'ĐANG BẢO TRÌ' : 'TẠM ĐÓNG'}
                                   </span>
@@ -574,14 +591,14 @@ export default function ComplexDetail({
           {/* Right Column (320px) — Sticky Sidebar */}
           <div className="w-full lg:w-[320px] flex flex-col gap-[14px] shrink-0">
             <div className="sticky top-5 flex flex-col gap-[14px]">
-              
+
               {/* CARD: Contact & General Info Card */}
               <div className="bg-white border-[0.5px] border-gray-200 rounded-[12px] p-4 flex flex-col gap-4 shadow-none">
                 <span className="block text-[11px] font-semibold tracking-[0.5px] uppercase text-gray-400 select-none">
                   LIÊN HỆ CHỦ SÂN
                 </span>
                 <ContactCard />
-                
+
                 <div className="border-t-[0.5px] border-gray-200 pt-3 flex flex-col gap-2">
                   <span className="block text-[11px] font-semibold tracking-[0.5px] uppercase text-gray-400">
                     THÔNG TIN CHUNG

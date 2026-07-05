@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import type { StadiumComplexDto } from '@/types/complex'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import 'leaflet/dist/leaflet.css'
 
 const getUnifiedIcon = (isHovered: boolean = false): L.DivIcon | undefined => {
@@ -65,6 +66,13 @@ interface ComplexMapProps {
 }
 
 export default function ComplexMap({ complexes, hoveredComplexId }: ComplexMapProps) {
+  const searchParams = useSearchParams()
+  const sportTypeId = searchParams.get('sportTypeId')
+  const detailHref = (complexId: number) =>
+    sportTypeId
+      ? `/complexes/${complexId}?sportTypeId=${sportTypeId}&tab=courts`
+      : `/complexes/${complexId}?tab=courts`
+
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -176,7 +184,7 @@ export default function ComplexMap({ complexes, hoveredComplexId }: ComplexMapPr
                       size="sm"
                       className="bg-primary hover:bg-primary/90 text-white font-bold rounded-lg text-[11px] px-3 py-1.5 h-7 shadow-md shadow-primary/10 transition-all hover:scale-105"
                     >
-                      <Link href={`/complexes/${complex.complexId}`}>Chi tiết</Link>
+                      <Link href={detailHref(complex.complexId)}>Chi tiết</Link>
                     </Button>
                   </div>
                 </div>
