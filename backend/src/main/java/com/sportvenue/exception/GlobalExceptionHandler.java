@@ -130,11 +130,28 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex) {
-        log.error("Unhandled exception: {}", ex.getMessage(), ex);
+        if (isClientDisconnect(ex)) {
+            // Client tự đóng kết nối giữa chừng (đóng tab, bấm Stop trên stream SSE...) —
+            // sự kiện bình thường, không phải lỗi hệ thống, nên không log ERROR gây nhiễu alert.
+            log.warn("Client disconnected before response completed: {}", ex.getMessage());
+        } else {
+            log.error("Unhandled exception: {}", ex.getMessage(), ex);
+        }
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of(
                         HttpStatus.INTERNAL_SERVER_ERROR.value(),
                         "Lỗi hệ thống: " + ex.getMessage()
                 ));
+    }
+
+    private boolean isClientDisconnect(Exception ex) {
+        if (!(ex instanceof java.io.IOException) || ex.getMessage() == null) {
+            return false;
+        }
+        String lowerMessage = ex.getMessage().toLowerCase();
+        return lowerMessage.contains("broken pipe")
+                || lowerMessage.contains("connection reset")
+                || lowerMessage.contains("aborted")
+                || lowerMessage.contains("connection was forcibly closed");
     }
 }
