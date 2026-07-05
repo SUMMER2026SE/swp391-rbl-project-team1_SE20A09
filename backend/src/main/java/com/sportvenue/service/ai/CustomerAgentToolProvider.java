@@ -9,6 +9,7 @@ import com.sportvenue.dto.response.TimeSlotResponse;
 import com.sportvenue.dto.response.MatchResponse;
 import com.sportvenue.entity.SportType;
 import com.sportvenue.entity.Stadium;
+import com.sportvenue.entity.enums.StadiumNodeType;
 import com.sportvenue.mapper.StadiumMapper;
 import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.repository.StadiumRepository;
@@ -30,6 +31,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -43,6 +45,29 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
     private final StadiumRepository stadiumRepository;
     private final StadiumMapper stadiumMapper;
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+
+    private static final String CUSTOMER_SYSTEM_PROMPT =
+            "Bạn là trợ lý ảo AI chính thức của SportHub, một nền tảng đặt sân thể thao trực tuyến tại Việt Nam. " +
+            "Nhiệm vụ của bạn là giúp khách hàng tìm kiếm sân đấu, xem lịch trống, tìm kèo ghép và trả lời các thông tin liên quan đến đặt sân. " +
+            "Hãy luôn thân thiện, chuyên nghiệp và trả lời bằng tiếng Việt. " +
+            "Khi gọi công cụ (tools), hãy sử dụng thông tin trả về từ công cụ để trả lời chính xác nhất. Nếu công cụ trả về danh sách sân đấu, hãy cung cấp chi tiết như tên sân, địa chỉ, giá cả cho người dùng. " +
+            "Công cụ getStadiumSlots trả về TẤT CẢ khung giờ trong ngày, không lọc theo khung giờ người dùng hỏi — bạn PHẢI tự lọc lại danh sách trả về, chỉ liệt kê các khung giờ thực sự nằm trong khoảng người dùng yêu cầu (đã quy đổi đúng sang hệ 24 giờ) trước khi trả lời, không liệt kê nhầm khung giờ khác.";
+
+    private static final String GUEST_SYSTEM_PROMPT_SUFFIX =
+            " Người dùng hiện tại CHƯA đăng nhập (khách vãng lai). Bạn vẫn có thể giúp họ tìm sân, xem lịch trống và tìm kèo ghép bình thường. " +
+            "Nhưng nếu họ hỏi về thông tin cá nhân, lịch sử đặt sân, hoặc muốn thực hiện đặt sân/thanh toán, hãy nhắc họ đăng nhập hoặc đăng ký tài khoản trước.";
+
+    @Override
+    public String getRoleName() {
+        return "Customer";
+    }
+
+    @Override
+    public String getSystemPrompt(Integer userId) {
+        return userId != null
+                ? CUSTOMER_SYSTEM_PROMPT
+                : CUSTOMER_SYSTEM_PROMPT + GUEST_SYSTEM_PROMPT_SUFFIX;
+    }
 
     @Override
     public List<Map<String, Object>> getToolDefinitions() {
@@ -315,6 +340,19 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
             return Map.of("error", "Missing required parameter: stadiumId");
         }
         int stadiumId = args.get("stadiumId").asInt();
+
+        // Guardrail: model đôi khi tự bịa/nhầm ID (vd truyền ID của Facility cha thay vì Court
+        // con) — validate đúng loại trước khi query, tránh trả mảng rỗng gây hiểu lầm "sân
+        // không có slot" trong khi thực ra ID không hợp lệ cho thao tác này.
+        Optional<Stadium> stadiumOpt = stadiumRepository.findById(stadiumId);
+        if (stadiumOpt.isEmpty()) {
+            return Map.of("error", "Không tìm thấy sân với ID " + stadiumId + ". Hãy gọi searchStadiums trước để lấy đúng ID.");
+        }
+        if (stadiumOpt.get().getNodeType() != StadiumNodeType.COURT) {
+            return Map.of("error", "ID " + stadiumId + " không phải là sân lẻ (court) có thể đặt lịch. "
+                    + "Hãy gọi searchStadiums để lấy đúng stadiumId của sân lẻ trước khi tra khung giờ.");
+        }
+
         List<TimeSlotResponse> slots = timeSlotService.getSlotsByStadiumId(stadiumId);
         return slots;
     }

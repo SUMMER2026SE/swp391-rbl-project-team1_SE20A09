@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @RequiredArgsConstructor
 public class AiChatServiceImpl implements AiChatService {
 
-    private final CustomerAgentToolProvider customerAgentToolProvider;
+    private final AgentRegistry agentRegistry;
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
@@ -48,38 +48,36 @@ public class AiChatServiceImpl implements AiChatService {
     @Value("${app.ai.model:llama-3.3-70b-versatile}")
     private String aiModel;
 
-    private static final String CUSTOMER_SYSTEM_PROMPT =
-            "Bạn là trợ lý ảo AI chính thức của SportHub, một nền tảng đặt sân thể thao trực tuyến tại Việt Nam. " +
-            "Nhiệm vụ của bạn là giúp khách hàng tìm kiếm sân đấu, xem lịch trống, tìm kèo ghép và trả lời các thông tin liên quan đến đặt sân. " +
-            "Hãy luôn thân thiện, chuyên nghiệp và trả lời bằng tiếng Việt. " +
-            "Khi gọi công cụ (tools), hãy sử dụng thông tin trả về từ công cụ để trả lời chính xác nhất. Nếu công cụ trả về danh sách sân đấu, hãy cung cấp chi tiết như tên sân, địa chỉ, giá cả cho người dùng. " +
-            "Công cụ getStadiumSlots trả về TẤT CẢ khung giờ trong ngày, không lọc theo khung giờ người dùng hỏi — bạn PHẢI tự lọc lại danh sách trả về, chỉ liệt kê các khung giờ thực sự nằm trong khoảng người dùng yêu cầu (đã quy đổi đúng sang hệ 24 giờ) trước khi trả lời, không liệt kê nhầm khung giờ khác.";
-
-    private static final String GUEST_SYSTEM_PROMPT_SUFFIX =
-            " Người dùng hiện tại CHƯA đăng nhập (khách vãng lai). Bạn vẫn có thể giúp họ tìm sân, xem lịch trống và tìm kèo ghép bình thường. " +
-            "Nhưng nếu họ hỏi về thông tin cá nhân, lịch sử đặt sân, hoặc muốn thực hiện đặt sân/thanh toán, hãy nhắc họ đăng nhập hoặc đăng ký tài khoản trước.";
-
     @Override
     public void handleChatStream(AiChatRequest request, ResponseBodyEmitter emitter, UserPrincipal userPrincipal,
                                  AtomicReference<InputStream> activeStreamRef) {
         Integer userId = userPrincipal != null ? userPrincipal.getUserId() : null;
-        log.info("Starting chat stream for user: {} with model: {}", userId, aiModel);
+        String roleName = userPrincipal != null ? userPrincipal.getUser().getRole().getRoleName() : null;
+        log.info("Starting chat stream for user: {} (role: {}) with model: {}", userId, roleName, aiModel);
 
         try {
             if (aiApiKey == null || aiApiKey.isBlank()) {
                 throw new IllegalStateException("GROQ_API_KEY chưa được cấu hình ở Backend.");
             }
 
-            log.info("Received request payload: {}", objectMapper.writeValueAsString(request));
+            // Ticket 2C: chọn đúng agent (tool + system prompt) theo role — thêm Owner/Admin
+            // sau này chỉ cần thêm 1 AgentToolProvider mới, không cần sửa orchestration ở đây.
+            AgentToolProvider agent = agentRegistry.resolve(roleName);
+            AgentConfig agentConfig = AgentConfig.builder()
+                    .systemPrompt(agent.getSystemPrompt(userId))
+                    .tools(agent.getToolDefinitions())
+                    .build();
 
-            List<Map<String, Object>> chatHistory = buildChatHistory(request, userId);
-            log.info("Built chat history: {}", objectMapper.writeValueAsString(chatHistory));
+            log.debug("Received request payload: {}", objectMapper.writeValueAsString(request));
+
+            List<Map<String, Object>> chatHistory = buildChatHistory(request, agentConfig);
+            log.debug("Built chat history: {}", objectMapper.writeValueAsString(chatHistory));
 
             boolean keepRunning = true;
             int toolCallCount = 0;
 
             while (keepRunning) {
-                HttpResponse<InputStream> response = sendLlmTurnRequest(chatHistory);
+                HttpResponse<InputStream> response = sendLlmTurnRequest(chatHistory, agentConfig);
                 InputStream is = response.body();
                 activeStreamRef.set(is);
 
@@ -102,7 +100,7 @@ public class AiChatServiceImpl implements AiChatService {
                         break;
                     }
                     toolCallCount += turn.toolCalls().size();
-                    handleToolCallsTurn(turn, chatHistory, emitter, userId);
+                    handleToolCallsTurn(turn, chatHistory, emitter, userId, agent);
                 }
             }
 
@@ -114,7 +112,7 @@ public class AiChatServiceImpl implements AiChatService {
             try {
                 Map<String, Object> error = Map.of(
                     "type", "error",
-                    "errorText", "Đã xảy ra lỗi: " + e.getMessage()
+                    "errorText", resolveUserFacingErrorMessage(e, userId)
                 );
                 emitter.send("event: error\ndata: " + objectMapper.writeValueAsString(error) + "\n\n");
             } catch (Exception ex) {
@@ -124,12 +122,33 @@ public class AiChatServiceImpl implements AiChatService {
         }
     }
 
-    private List<Map<String, Object>> buildChatHistory(AiChatRequest request, Integer userId) {
-        String systemPrompt = userId != null
-                ? CUSTOMER_SYSTEM_PROMPT
-                : CUSTOMER_SYSTEM_PROMPT + GUEST_SYSTEM_PROMPT_SUFFIX;
+    /**
+     * Ticket 1.9: phân nhánh thông điệp theo loại lỗi thay vì 1 catch-all chung chung —
+     * 401 là lỗi cấu hình phía server (cần alert riêng), 429 là quá tải/hết quota, timeout
+     * và tool-call validation cần lời khuyên khác nhau cho người dùng.
+     */
+    private String resolveUserFacingErrorMessage(Exception e, Integer userId) {
+        if (!(e instanceof LlmGatewayException gatewayException)) {
+            return "Đã xảy ra lỗi: " + e.getMessage();
+        }
+        return switch (gatewayException.getKind()) {
+            case AUTH_ERROR -> {
+                log.error("AI_GATEWAY_AUTH_ERROR — GROQ_API_KEY có thể sai/hết hạn/chưa cấu hình. Cần kiểm tra ngay.");
+                yield "Trợ lý AI hiện đang gặp sự cố cấu hình phía hệ thống, vui lòng thử lại sau.";
+            }
+            case RATE_LIMITED -> {
+                log.warn("AI Gateway rate limit hit for user: {}", userId);
+                yield "Trợ lý AI đang bị giới hạn tốc độ do quá nhiều yêu cầu, vui lòng thử lại sau ít phút.";
+            }
+            case TIMEOUT -> "Kết nối tới trợ lý AI bị gián đoạn do quá thời gian chờ, vui lòng thử lại.";
+            case TOOL_CALL_ERROR -> "Trợ lý AI gặp lỗi khi xử lý yêu cầu này, vui lòng diễn đạt lại câu hỏi hoặc thử lại.";
+            case UNKNOWN -> "Đã xảy ra lỗi: " + gatewayException.getMessage();
+        };
+    }
+
+    private List<Map<String, Object>> buildChatHistory(AiChatRequest request, AgentConfig agentConfig) {
         List<Map<String, Object>> chatHistory = new ArrayList<>();
-        chatHistory.add(Map.of("role", "system", "content", systemPrompt));
+        chatHistory.add(Map.of("role", "system", "content", agentConfig.getSystemPrompt()));
 
         if (request.getMessages() != null) {
             for (AiChatRequest.Message reqMsg : request.getMessages()) {
@@ -182,14 +201,15 @@ public class AiChatServiceImpl implements AiChatService {
         return msgMap;
     }
 
-    private HttpResponse<InputStream> sendLlmTurnRequest(List<Map<String, Object>> chatHistory) throws Exception {
+    private HttpResponse<InputStream> sendLlmTurnRequest(List<Map<String, Object>> chatHistory, AgentConfig agentConfig) throws Exception {
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("model", aiModel);
         requestBody.put("messages", chatHistory);
         requestBody.put("stream", true);
         requestBody.put("temperature", 0.0); // Set temperature to 0.0 for tool call stability
+        requestBody.put("stream_options", Map.of("include_usage", true)); // để log token count/turn
 
-        List<Map<String, Object>> toolDefs = customerAgentToolProvider.getToolDefinitions();
+        List<Map<String, Object>> toolDefs = agentConfig.getTools();
         if (toolDefs != null && !toolDefs.isEmpty()) {
             requestBody.put("tools", toolDefs);
         }
@@ -203,10 +223,21 @@ public class AiChatServiceImpl implements AiChatService {
                 .POST(HttpRequest.BodyPublishers.ofString(requestJson))
                 .build();
 
-        HttpResponse<InputStream> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofInputStream());
+        HttpResponse<InputStream> response;
+        try {
+            response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofInputStream());
+        } catch (java.net.http.HttpTimeoutException te) {
+            throw new LlmGatewayException(LlmGatewayException.Kind.TIMEOUT, "Timed out calling LLM gateway: " + te.getMessage());
+        }
+
         if (response.statusCode() != 200) {
             String errorMsg = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
-            throw new RuntimeException("LLM Gateway returned error: " + errorMsg);
+            LlmGatewayException.Kind kind = switch (response.statusCode()) {
+                case 401, 403 -> LlmGatewayException.Kind.AUTH_ERROR;
+                case 429 -> LlmGatewayException.Kind.RATE_LIMITED;
+                default -> LlmGatewayException.Kind.UNKNOWN;
+            };
+            throw new LlmGatewayException(kind, "LLM Gateway returned error (" + response.statusCode() + "): " + errorMsg);
         }
         return response;
     }
@@ -221,7 +252,7 @@ public class AiChatServiceImpl implements AiChatService {
         boolean textStarted = false;
 
         while ((line = reader.readLine()) != null) {
-            log.info("Raw response line from LLM: {}", line);
+            log.debug("Raw response line from LLM: {}", line);
             if (!line.startsWith("data: ")) {
                 continue;
             }
@@ -233,10 +264,17 @@ public class AiChatServiceImpl implements AiChatService {
 
             JsonNode chunkNode = objectMapper.readTree(data);
             if (chunkNode.hasNonNull("error")) {
-                String errorMsg = chunkNode.get("error").hasNonNull("message")
-                        ? chunkNode.get("error").get("message").asText()
-                        : "Unknown LLM stream error";
-                throw new RuntimeException("LLM Stream Error: " + errorMsg);
+                JsonNode errorNode = chunkNode.get("error");
+                String errorMsg = errorNode.hasNonNull("message") ? errorNode.get("message").asText() : "Unknown LLM stream error";
+                throw new LlmGatewayException(classifyStreamError(errorNode, errorMsg), "LLM Stream Error: " + errorMsg);
+            }
+
+            if (chunkNode.hasNonNull("usage")) {
+                JsonNode usage = chunkNode.get("usage");
+                log.info("LLM token usage — prompt: {}, completion: {}, total: {}",
+                        usage.path("prompt_tokens").asInt(0),
+                        usage.path("completion_tokens").asInt(0),
+                        usage.path("total_tokens").asInt(0));
             }
 
             if (!chunkNode.hasNonNull("choices") || chunkNode.get("choices").isEmpty()) {
@@ -273,6 +311,19 @@ public class AiChatServiceImpl implements AiChatService {
         return new StreamTurnResult(accumulatorMap, assistantText.toString());
     }
 
+    /** Groq không luôn trả field "type" ổn định cho lỗi giữa stream, nên dò thêm theo nội dung message. */
+    private LlmGatewayException.Kind classifyStreamError(JsonNode errorNode, String errorMsg) {
+        String errorType = errorNode.hasNonNull("type") ? errorNode.get("type").asText().toLowerCase() : "";
+        String lowerMsg = errorMsg.toLowerCase();
+        if (errorType.contains("rate_limit") || lowerMsg.contains("rate limit")) {
+            return LlmGatewayException.Kind.RATE_LIMITED;
+        }
+        if (lowerMsg.contains("tool call") || lowerMsg.contains("function call")) {
+            return LlmGatewayException.Kind.TOOL_CALL_ERROR;
+        }
+        return LlmGatewayException.Kind.UNKNOWN;
+    }
+
     private void accumulateToolCallDeltas(JsonNode toolCallsNode, Map<Integer, ToolCallAccumulator> accumulatorMap) {
         for (JsonNode tcNode : toolCallsNode) {
             int index = tcNode.get("index").asInt();
@@ -297,7 +348,7 @@ public class AiChatServiceImpl implements AiChatService {
     }
 
     private void handleToolCallsTurn(StreamTurnResult turn, List<Map<String, Object>> chatHistory,
-                                     ResponseBodyEmitter emitter, Integer userId) throws Exception {
+                                     ResponseBodyEmitter emitter, Integer userId, AgentToolProvider agent) throws Exception {
         Map<Integer, ToolCallAccumulator> accumulatorMap = turn.toolCalls();
         List<Map<String, Object>> assistantToolCalls = new ArrayList<>();
         Set<String> failedToolCallIds = new HashSet<>();
@@ -338,12 +389,12 @@ public class AiChatServiceImpl implements AiChatService {
         assistantMsg.put("tool_calls", assistantToolCalls);
         chatHistory.add(assistantMsg);
 
-        executeToolsAndEmitResults(accumulatorMap, failedToolCallIds, chatHistory, emitter, userId);
+        executeToolsAndEmitResults(accumulatorMap, failedToolCallIds, chatHistory, emitter, userId, agent);
     }
 
     private void executeToolsAndEmitResults(Map<Integer, ToolCallAccumulator> accumulatorMap, Set<String> failedToolCallIds,
                                              List<Map<String, Object>> chatHistory, ResponseBodyEmitter emitter,
-                                             Integer userId) throws Exception {
+                                             Integer userId, AgentToolProvider agent) throws Exception {
         for (Map.Entry<Integer, ToolCallAccumulator> entry : accumulatorMap.entrySet()) {
             ToolCallAccumulator acc = entry.getValue();
 
@@ -352,7 +403,7 @@ public class AiChatServiceImpl implements AiChatService {
                 toolResult = Map.of("error", "Invalid arguments: Failed to parse tool call arguments JSON.");
             } else {
                 try {
-                    toolResult = customerAgentToolProvider.executeTool(acc.name, acc.arguments.toString(), userId);
+                    toolResult = agent.executeTool(acc.name, acc.arguments.toString(), userId);
                 } catch (Exception e) {
                     log.error("Failed to execute tool: {}", acc.name, e);
                     toolResult = Map.of("error", "Tool execution failed: " + e.getMessage());

@@ -1,6 +1,8 @@
 package com.sportvenue.service.ai;
 
 import com.sportvenue.dto.request.AiChatRequest;
+import com.sportvenue.entity.Role;
+import com.sportvenue.entity.User;
 import com.sportvenue.security.UserPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,11 +44,24 @@ class AiChatServiceImplTest {
     @Mock
     private UserPrincipal userPrincipal;
 
+    @Mock
+    private User user;
+
+    @Mock
+    private Role role;
+
     private AiChatServiceImpl aiChatService;
 
     @BeforeEach
     void setUp() {
-        aiChatService = new AiChatServiceImpl(customerAgentToolProvider, httpClient);
+        when(customerAgentToolProvider.getRoleName()).thenReturn("Customer");
+        when(customerAgentToolProvider.getSystemPrompt(any())).thenReturn("System prompt for test");
+        when(userPrincipal.getUser()).thenReturn(user);
+        when(user.getRole()).thenReturn(role);
+        when(role.getRoleName()).thenReturn("Customer");
+
+        AgentRegistry agentRegistry = new AgentRegistry(List.of(customerAgentToolProvider));
+        aiChatService = new AiChatServiceImpl(agentRegistry, httpClient);
         ReflectionTestUtils.setField(aiChatService, "aiBaseUrl", "https://api.groq.com/openai/v1");
         ReflectionTestUtils.setField(aiChatService, "aiApiKey", "mock-api-key");
         ReflectionTestUtils.setField(aiChatService, "aiModel", "llama-3.3-70b-versatile");
@@ -331,5 +346,76 @@ class AiChatServiceImplTest {
         verify(sseEmitter, atLeastOnce()).send(contains("event: error"));
         verify(sseEmitter, atLeastOnce()).send(contains("LLM Stream Error: Failed to call a function. Please adjust your prompt."));
         verify(sseEmitter).completeWithError(any(RuntimeException.class));
+    }
+
+    @Test
+    void testHandleChatStream_AuthError401_ReturnsFriendlyMessageNotRawDetails() throws Exception {
+        String errorBody = "{\"error\":{\"message\":\"Invalid API Key\",\"type\":\"invalid_request_error\"}}";
+        InputStream errorBodyStream = new ByteArrayInputStream(errorBody.getBytes(StandardCharsets.UTF_8));
+
+        doReturn(httpResponse).when(httpClient).send(any(), any());
+        when(httpResponse.statusCode()).thenReturn(401);
+        when(httpResponse.body()).thenReturn(errorBodyStream);
+
+        AiChatRequest request = AiChatRequest.builder()
+                .messages(List.of(AiChatRequest.Message.builder().role("user").content("Xin chào").build()))
+                .build();
+
+        AtomicReference<InputStream> activeStreamRef = new AtomicReference<>();
+
+        aiChatService.handleChatStream(request, sseEmitter, userPrincipal, activeStreamRef);
+
+        verify(sseEmitter, atLeastOnce()).send(contains("event: error"));
+        verify(sseEmitter, atLeastOnce()).send(contains("sự cố cấu hình"));
+        verify(sseEmitter, never()).send(contains("Invalid API Key"));
+        verify(sseEmitter).completeWithError(any(LlmGatewayException.class));
+    }
+
+    @Test
+    void testHandleChatStream_RateLimited429_ReturnsFriendlyMessage() throws Exception {
+        String errorBody = "{\"error\":{\"message\":\"Rate limit reached for model\",\"type\":\"tokens\"}}";
+        InputStream errorBodyStream = new ByteArrayInputStream(errorBody.getBytes(StandardCharsets.UTF_8));
+
+        doReturn(httpResponse).when(httpClient).send(any(), any());
+        when(httpResponse.statusCode()).thenReturn(429);
+        when(httpResponse.body()).thenReturn(errorBodyStream);
+
+        AiChatRequest request = AiChatRequest.builder()
+                .messages(List.of(AiChatRequest.Message.builder().role("user").content("Xin chào").build()))
+                .build();
+
+        AtomicReference<InputStream> activeStreamRef = new AtomicReference<>();
+
+        aiChatService.handleChatStream(request, sseEmitter, userPrincipal, activeStreamRef);
+
+        verify(sseEmitter, atLeastOnce()).send(contains("event: error"));
+        verify(sseEmitter, atLeastOnce()).send(contains("giới hạn tốc độ"));
+        verify(sseEmitter).completeWithError(any(LlmGatewayException.class));
+    }
+
+    @Test
+    void testHandleChatStream_ToolCallValidationErrorInStream_ReturnsFriendlyMessage() throws Exception {
+        String errorStreamContent =
+                "event: error\n" +
+                "data: {\"error\":{\"message\":\"tool call validation failed: parameters for tool getStadiumSlots did not match schema\",\"type\":\"invalid_request_error\"}}\n";
+
+        InputStream inputStream = new ByteArrayInputStream(errorStreamContent.getBytes(StandardCharsets.UTF_8));
+
+        doReturn(httpResponse).when(httpClient).send(any(), any());
+        when(httpResponse.statusCode()).thenReturn(200);
+        when(httpResponse.body()).thenReturn(inputStream);
+
+        AiChatRequest request = AiChatRequest.builder()
+                .messages(List.of(AiChatRequest.Message.builder().role("user").content("Sân vận động Cẩm Lệ").build()))
+                .build();
+
+        AtomicReference<InputStream> activeStreamRef = new AtomicReference<>();
+
+        aiChatService.handleChatStream(request, sseEmitter, userPrincipal, activeStreamRef);
+
+        verify(sseEmitter, atLeastOnce()).send(contains("event: error"));
+        verify(sseEmitter, atLeastOnce()).send(contains("diễn đạt lại câu hỏi"));
+        verify(sseEmitter, never()).send(contains("did not match schema"));
+        verify(sseEmitter).completeWithError(any(LlmGatewayException.class));
     }
 }
