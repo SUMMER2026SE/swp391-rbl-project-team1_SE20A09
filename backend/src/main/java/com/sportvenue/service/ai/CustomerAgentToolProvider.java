@@ -97,12 +97,12 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
         ));
 
         propertiesSearch.put("minPrice", Map.of(
-            "type", "number",
+            "type", List.of("number", "string"),
             "description", "Giá thuê tối thiểu mỗi giờ (VND)."
         ));
 
         propertiesSearch.put("maxPrice", Map.of(
-            "type", "number",
+            "type", List.of("number", "string"),
             "description", "Giá thuê tối đa mỗi giờ (VND)."
         ));
 
@@ -142,7 +142,7 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
     private Map<String, Object> buildGetStadiumSlotsToolDefinition() {
         Map<String, Object> propertiesSlots = new HashMap<>();
         propertiesSlots.put("stadiumId", Map.of(
-            "type", "integer",
+            "type", List.of("integer", "string"),
             "description", "ID số nguyên của sân đấu (lấy từ kết quả searchStadiums), cần lấy khung giờ."
         ));
 
@@ -170,11 +170,11 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
             "description", "Khu vực/thành phố/quận muốn tìm kèo ghép (ví dụ: Đà Nẵng, Hà Nội, Quận 9, Thủ Đức). Bỏ trống nếu muốn tìm ở mọi khu vực."
         ));
         propertiesMatches.put("page", Map.of(
-            "type", "integer",
+            "type", List.of("integer", "string"),
             "description", "Số thứ tự trang kết quả (mặc định 0)."
         ));
         propertiesMatches.put("size", Map.of(
-            "type", "integer",
+            "type", List.of("integer", "string"),
             "description", "Số lượng phần tử mỗi trang (mặc định 10)."
         ));
 
