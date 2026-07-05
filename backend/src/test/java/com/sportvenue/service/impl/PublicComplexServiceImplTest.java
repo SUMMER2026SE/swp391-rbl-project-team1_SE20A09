@@ -42,6 +42,9 @@ public class PublicComplexServiceImplTest {
     @Mock
     private StadiumRepository stadiumRepository;
 
+    @Mock
+    private com.sportvenue.service.MaintenanceScheduleService maintenanceScheduleService;
+
     @InjectMocks
     private PublicComplexServiceImpl publicComplexService;
 

@@ -44,12 +44,14 @@ public class StadiumServiceImpl implements StadiumService {
 
     private final StadiumRepository stadiumRepository;
     private final OwnerRepository ownerRepository;
+    private final MaintenanceScheduleService maintenanceScheduleService;
     private final SportTypeRepository sportTypeRepository;
     private final BookingRepository bookingRepository;
     private final AmenityRepository amenityRepository;
     private final StadiumMapper stadiumMapper;
     private final FileStorageProperties fileStorageProperties;
     private final NotificationService notificationService;
+    private final com.sportvenue.repository.UserRepository userRepository;
     private final Environment env;
     private final StadiumComplexRepository stadiumComplexRepository;
 
@@ -103,6 +105,19 @@ public class StadiumServiceImpl implements StadiumService {
         Stadium savedStadium = stadiumRepository.save(stadium);
         log.info("Successfully created stadium with ID: {}", savedStadium.getStadiumId());
 
+        // Thông báo cho tất cả Admin: có sân mới chờ duyệt
+        String ownerName = owner.getUser() != null ? owner.getUser().getFullName() : "N/A";
+        String resourceId = "STADIUM-" + savedStadium.getStadiumId();
+        userRepository.findAllAdmins().forEach(admin ->
+            notificationService.createNotification(
+                admin.getUserId(),
+                "Sân mới chờ duyệt",
+                "\"" + savedStadium.getStadiumName() + "\" của " + ownerName + " đang chờ phê duyệt",
+                com.sportvenue.entity.enums.NotificationType.STADIUM_APPROVAL,
+                resourceId
+            )
+        );
+
         return stadiumMapper.toResponse(savedStadium);
     }
 
@@ -145,9 +160,16 @@ public class StadiumServiceImpl implements StadiumService {
             return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
         };
 
-        return stadiumRepository.findAll(spec)
-                .stream()
-                .map(stadiumMapper::toResponse)
+        List<Stadium> stadiums = stadiumRepository.findAll(spec);
+        // Batch — tối đa 2 query bất kể danh sách dài bao nhiêu, thay vì gọi isStadiumUnderMaintenanceNow
+        // (1-2 query/lần) lặp lại cho từng sân.
+        java.util.Map<Integer, Boolean> maintenanceByStadiumId = maintenanceScheduleService.isUnderMaintenanceNow(stadiums);
+        return stadiums.stream()
+                .map(stadium -> {
+                    StadiumResponse response = stadiumMapper.toResponse(stadium);
+                    response.setUnderMaintenanceToday(maintenanceByStadiumId.getOrDefault(stadium.getStadiumId(), false));
+                    return response;
+                })
                 .toList();
     }
 
@@ -165,7 +187,9 @@ public class StadiumServiceImpl implements StadiumService {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
-        return stadiumMapper.toResponse(stadium);
+        StadiumResponse response = stadiumMapper.toResponse(stadium);
+        response.setUnderMaintenanceToday(maintenanceScheduleService.isStadiumUnderMaintenanceNow(stadium));
+        return response;
     }
 
     @Override

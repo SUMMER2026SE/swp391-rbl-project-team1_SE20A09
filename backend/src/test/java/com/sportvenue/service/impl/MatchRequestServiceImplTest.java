@@ -29,6 +29,7 @@ import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.StadiumComplexRepository;
 import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.service.ChatService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -73,10 +74,16 @@ class MatchRequestServiceImplTest {
     private JoinRequestRepository joinRequestRepository;
 
     @Mock
+    private ChatService chatService;
+
+    @Mock
     private StadiumComplexRepository stadiumComplexRepository;
 
     @Mock
     private TimeSlotRepository timeSlotRepository;
+
+    @Mock
+    private com.sportvenue.service.MaintenanceScheduleService maintenanceScheduleService;
 
     private MatchRequestServiceImpl matchRequestService;
 
@@ -89,8 +96,10 @@ class MatchRequestServiceImplTest {
                 sportTypeRepository,
                 bookingRepository,
                 joinRequestRepository,
+                chatService,
                 stadiumComplexRepository,
-                timeSlotRepository
+                timeSlotRepository,
+                maintenanceScheduleService
         );
     }
 

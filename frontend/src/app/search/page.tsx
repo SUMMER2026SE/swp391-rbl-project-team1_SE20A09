@@ -327,7 +327,7 @@ function SearchPageContent() {
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {complexes.map((complex) => (
-                    <div 
+                    <div
                       key={complex.complexId}
                       onMouseEnter={() => setHoveredComplexId(complex.complexId)}
                       onMouseLeave={() => setHoveredComplexId(null)}

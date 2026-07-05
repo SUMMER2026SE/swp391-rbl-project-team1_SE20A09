@@ -28,7 +28,9 @@ import com.sportvenue.repository.UserRepository;
 import com.sportvenue.entity.JoinRequest;
 import com.sportvenue.entity.enums.JoinRequestStatus;
 import com.sportvenue.dto.response.JoinRequestResponse;
+import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.MatchRequestService;
+import com.sportvenue.service.ChatService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -60,8 +62,10 @@ public class MatchRequestServiceImpl implements MatchRequestService {
     private final SportTypeRepository sportTypeRepository;
     private final BookingRepository bookingRepository;
     private final JoinRequestRepository joinRequestRepository;
+    private final ChatService chatService;
     private final StadiumComplexRepository stadiumComplexRepository;
     private final TimeSlotRepository timeSlotRepository;
+    private final MaintenanceScheduleService maintenanceScheduleService;
 
     @Override
     @Transactional
@@ -92,6 +96,11 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         final Stadium preferredCourt = request.getPreferredCourtId() != null
                 ? validatePreferredCourt(request.getPreferredCourtId(), targetComplexId, preferredFacility)
                 : resolved.preferredCourt();
+
+        // 5b. Kiểm tra bảo trì theo khung ngày (MaintenanceSchedule) cho playDate — tách khỏi bước 3
+        // vì cần biết preferredCourt/preferredFacility (chính xác hơn complex chung chung) trước.
+        // Trước PR này chỉ check complexStatus/stadiumStatus tĩnh, bỏ sót bảo trì có khung ngày.
+        validateNotUnderMaintenance(complex, legacyStadium, preferredFacility, preferredCourt, request.getPlayDate());
 
         // 6. Kiểm tra Sport Type tồn tại
         SportType sportType = sportTypeRepository.findById(request.getSportTypeId())
@@ -191,6 +200,9 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         MatchRequest savedMatch = matchRequestRepository.save(matchRequest);
         log.info("Successfully created match request with ID: {}", savedMatch.getMatchId());
 
+        // Create empty group chat for the host immediately upon match creation
+        chatService.createOrUpdateMatchGroupChat(savedMatch, user.getUserId());
+
         return mapToResponse(savedMatch);
     }
 
@@ -208,6 +220,33 @@ public class MatchRequestServiceImpl implements MatchRequestService {
             }
             if (legacyStadium.getApprovedStatus() != ApprovedStatus.APPROVED) {
                 throw new BadRequestException("Stadium is not approved yet");
+            }
+        }
+    }
+
+    /**
+     * {@link #validateComplexOrStadiumAvailability} chỉ check cờ tĩnh (stadiumStatus/complexStatus —
+     * bảo trì vô thời hạn). Bảo trì có khung ngày ({@link com.sportvenue.entity.MaintenanceSchedule})
+     * cố tình KHÔNG đổi 2 cờ đó, nên cần check riêng qua {@code MaintenanceScheduleService} — dùng
+     * target cụ thể nhất đã biết (Court > Facility > Stadium legacy > Complex chung chung).
+     */
+    private void validateNotUnderMaintenance(StadiumComplex complex, Stadium legacyStadium,
+                                              Stadium preferredFacility, Stadium preferredCourt, LocalDate playDate) {
+        if (preferredCourt != null) {
+            if (maintenanceScheduleService.isStadiumUnderMaintenance(preferredCourt, playDate)) {
+                throw new BadRequestException("Selected court has a scheduled maintenance window on " + playDate);
+            }
+        } else if (preferredFacility != null) {
+            if (maintenanceScheduleService.isStadiumUnderMaintenance(preferredFacility, playDate)) {
+                throw new BadRequestException("Selected facility has a scheduled maintenance window on " + playDate);
+            }
+        } else if (legacyStadium != null) {
+            if (maintenanceScheduleService.isStadiumUnderMaintenance(legacyStadium, playDate)) {
+                throw new BadRequestException("Selected stadium has a scheduled maintenance window on " + playDate);
+            }
+        } else if (complex != null) {
+            if (maintenanceScheduleService.isComplexUnderMaintenance(complex, playDate)) {
+                throw new BadRequestException("Selected complex has a scheduled maintenance window on " + playDate);
             }
         }
     }
@@ -531,6 +570,9 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                     Arrays.asList(JoinRequestStatus.PENDING)
             );
         }
+
+        // Create or update group chat
+        chatService.createOrUpdateMatchGroupChat(updatedMatch, joinRequest.getUser().getUserId());
     }
 
     @Override

@@ -375,6 +375,38 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate);
 
+    /** UC-ADM-01: Đếm booking theo trạng thái trong khoảng ngày (reservationDate). */
+    @Query("""
+            SELECT COUNT(b) FROM Booking b
+            WHERE b.bookingStatus = :status
+            AND b.reservationDate BETWEEN :startDate AND :endDate
+            """)
+    long countByBookingStatusAndDateRange(
+            @Param("status") BookingStatus status,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
+
+    /** UC-ADM-01: Tổng booking trong khoảng ngày — cho KPI card. */
+    @Query("""
+            SELECT COUNT(b) FROM Booking b
+            WHERE b.reservationDate BETWEEN :startDate AND :endDate
+            """)
+    long countByDateRange(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
+
+    /** UC-ADM-01: Top 5 đặt sân gần nhất trong khoảng ngày. */
+    @EntityGraph(attributePaths = {"user", "stadium", "slot"})
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.reservationDate BETWEEN :startDate AND :endDate
+            ORDER BY b.bookingDate DESC
+            """)
+    List<Booking> findTop5ByDateRangeOrderByBookingDateDesc(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            Pageable pageable);
+
     @Query("""
             SELECT b.stadium.stadiumId FROM Booking b
             WHERE b.user.userId = :userId
@@ -385,6 +417,26 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     List<Integer> findDistinctBookedStadiumIds(@Param("userId") Integer userId, Pageable pageable);
 
 
+
+    /**
+     * Booking đang chiếm chỗ (theo {@code statuses}) của 1 hoặc nhiều sân trong khoảng
+     * ngày {@code [rangeStart, rangeEnd]} — dùng để check conflict khi Owner tạo
+     * MaintenanceSchedule mới (bao gồm cả court con khi bảo trì đặt ở FACILITY).
+     * {@code @EntityGraph(slot)} — caller lọc tiếp theo giờ slot (so-trùng khung giờ bảo trì),
+     * cần {@code slot} tránh N+1 khi truy cập {@code booking.getSlot().getStartTime()/getEndTime()}.
+     */
+    @EntityGraph(attributePaths = {"slot"})
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.stadium.stadiumId IN :stadiumIds
+            AND b.reservationDate BETWEEN :rangeStart AND :rangeEnd
+            AND b.bookingStatus IN :statuses
+            """)
+    List<Booking> findByStadiumIdsAndDateRangeAndStatuses(
+            @Param("stadiumIds") List<Integer> stadiumIds,
+            @Param("rangeStart") LocalDate rangeStart,
+            @Param("rangeEnd") LocalDate rangeEnd,
+            @Param("statuses") List<BookingStatus> statuses);
 
     /**
      * UC-CUS-07: Lấy booking COMPLETED của user tại sân cụ thể mà chưa được review.

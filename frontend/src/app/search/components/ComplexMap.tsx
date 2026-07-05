@@ -12,7 +12,7 @@ import 'leaflet/dist/leaflet.css'
 
 const getUnifiedIcon = (isHovered: boolean = false): L.DivIcon | undefined => {
   if (typeof window === 'undefined') return undefined;
-  
+
   const bgColor = isHovered ? 'bg-gray-900 border-yellow-400' : 'bg-primary border-white';
   const svgColor = isHovered ? 'text-yellow-400' : 'text-white';
   const transform = isHovered ? 'scale-125 -translate-y-2' : 'hover:scale-110 hover:-translate-y-1';

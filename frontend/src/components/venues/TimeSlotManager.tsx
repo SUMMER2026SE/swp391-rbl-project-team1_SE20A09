@@ -32,6 +32,7 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog"
 import { useConfirm } from "@/hooks/useConfirm"
 import { EditTimeSlotDialog } from "./EditTimeSlotDialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import WeeklyAgendaGrid from "./WeeklyAgendaGrid"
 
 // ── Date management helpers ──────────────────────────────────────────────────
 function mondayOfThisWeek(): string {
@@ -121,30 +122,6 @@ export function TimeSlotManager({
   
   // Bulk states
   const [bulkPrice, setBulkPrice] = React.useState<string>("")
-
-  // Tập unique time-slot (startTime) xuất hiện trong tuần — sort theo startTime.
-  const uniqueTimeRows = React.useMemo(() => {
-    const map = new Map<string, { startTime: string; endTime: string }>()
-    for (const day of weeklyData?.days ?? []) {
-      for (const slot of day.slots) {
-        if (slot.startTime && !map.has(slot.startTime)) {
-          map.set(slot.startTime, { startTime: slot.startTime, endTime: slot.endTime })
-        }
-      }
-    }
-    return Array.from(map.values()).sort((a, b) => a.startTime.localeCompare(b.startTime))
-  }, [weeklyData])
-
-  // Lookup (date, startTime) → WeeklySlotItem — render nhanh từng ô.
-  const cellLookup = React.useMemo(() => {
-    const map = new Map<string, WeeklySlotItem>()
-    for (const day of weeklyData?.days ?? []) {
-      for (const slot of day.slots) {
-        map.set(`${day.date}|${slot.startTime}`, slot)
-      }
-    }
-    return map
-  }, [weeklyData])
 
   const loadData = React.useCallback(async () => {
     try {
@@ -505,149 +482,28 @@ export function TimeSlotManager({
                   <Clock className="w-12 h-12 text-slate-200 mx-auto mb-3" />
                   <p className="text-slate-400 font-medium">Chưa cấu hình lịch hoạt động tuần này</p>
                 </div>
-              ) : uniqueTimeRows.length === 0 ? (
-                <div className="text-center py-20 border-2 border-dashed rounded-xl bg-slate-50/30">
-                  <Clock className="w-12 h-12 text-slate-200 mx-auto mb-3" />
-                  <p className="text-slate-400 font-medium">Chưa có khung giờ nào được thiết lập cho tuần này</p>
-                </div>
               ) : (
-                <div className="overflow-x-auto -mx-1 px-1 scrollbar-thin">
-                  <table className="w-full border-separate border-spacing-1 min-w-[860px]">
-                    <thead>
-                      <tr>
-                        <th className="w-[100px] min-w-[100px] text-sm font-semibold text-slate-500 text-left pl-2 pr-2 pb-3 pt-2 align-bottom">
-                          Giờ
-                        </th>
-                        {weeklyData.days.map((day) => (
-                          <th
-                            key={day.date}
-                            className="text-center align-bottom pb-3 pt-2 px-3 min-w-[100px]"
-                          >
-                            <div className="text-sm font-bold text-slate-700 leading-tight">
-                              {day.dayName}
-                            </div>
-                            <div className="text-[13px] text-slate-500 font-semibold leading-tight mt-1">
-                              {formatDayShort(day.date)}
-                            </div>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {uniqueTimeRows.map((time) => (
-                        <tr key={time.startTime}>
-                          <td className="text-[13px] text-slate-600 font-bold align-middle pl-3 pr-3 py-2 whitespace-nowrap">
-                            {time.startTime.substring(0, 5)}–{time.endTime.substring(0, 5)}
-                          </td>
-                          {weeklyData.days.map((day) => {
-                            const slot = cellLookup.get(`${day.date}|${time.startTime}`)
-                            
-                            if (!slot) {
-                              return (
-                                <td key={day.date} className="p-0">
-                                  <div className="min-h-[48px] h-[48px] rounded-[6px] bg-slate-50 border-[0.5px] border-slate-100 flex items-center justify-center text-[13px] text-slate-300">
-                                    —
-                                  </div>
-                                </td>
-                              )
-                            }
-                            
-                            if (slot.status === 'BOOKED') {
-                              return (
-                                <td key={day.date} className="p-0">
-                                  <div className="min-h-[48px] h-[48px] rounded-[6px] bg-[#fdf0f0] border-[0.5px] border-[#f5b7b7] flex items-center justify-center px-3 text-[13px] font-bold text-[#8a1c1c] select-none cursor-not-allowed">
-                                    Đã đặt
-                                  </div>
-                                </td>
-                              )
-                            }
-                            
-                            if (slot.status === 'PAST') {
-                              return (
-                                <td key={day.date} className="p-0">
-                                  <div className="min-h-[48px] h-[48px] rounded-[6px] bg-slate-50 border-[0.5px] border-slate-200 flex items-center justify-center px-3 text-[13px] font-medium text-slate-400 select-none cursor-not-allowed">
-                                    Đã qua
-                                  </div>
-                                </td>
-                              )
-                            }
-                            
-                            if (slot.status === 'AVAILABLE' || slot.status === 'OWNER_CLOSED') {
-                              const isAvailable = slot.status === 'AVAILABLE'
-                              return (
-                                <td key={day.date} className="p-0">
-                                  <div
-                                    className={`min-h-[48px] h-[48px] w-full rounded-[6px] flex flex-col items-center justify-center px-3 relative group transition-colors overflow-hidden border-[0.5px] ${
-                                      isAvailable
-                                        ? "bg-[#e8f7ee] border-[#9eddb6] text-[#0d5c2e]"
-                                        : "bg-orange-50 border-orange-200 text-orange-700"
-                                    }`}
-                                  >
-                                    <span className="text-[13px] font-bold leading-none">
-                                      {slot.price.toLocaleString('vi-VN')}đ
-                                    </span>
-                                    <span className="text-[10px] font-semibold mt-1 leading-none">
-                                      {isAvailable ? "Mở" : "Tạm đóng"}
-                                    </span>
-
-                                    {/* Hover Actions Overlay */}
-                                    <div className="absolute inset-0 bg-black/60 rounded-[6px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 px-1.5 z-10">
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => {
-                                          setSelectedSlotForChoice({ slot, date: day.date, action: "edit" })
-                                          setIsChoiceOpen(true)
-                                        }}
-                                        className="h-7 w-7 bg-white/90 hover:bg-white text-slate-700 hover:text-primary rounded-full transition-all"
-                                        title="Chỉnh sửa"
-                                      >
-                                        <Edit3 className="w-3.5 h-3.5" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => {
-                                          setSelectedSlotForChoice({ slot, date: day.date, action: "toggle" })
-                                          setIsChoiceOpen(true)
-                                        }}
-                                        className="h-7 w-7 bg-white/90 hover:bg-white text-slate-700 hover:text-amber-600 rounded-full transition-all"
-                                        title={isAvailable ? "Tạm đóng" : "Mở lại"}
-                                      >
-                                        <Power className={`w-3.5 h-3.5 ${isAvailable ? 'text-amber-600' : 'text-emerald-600'}`} />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => {
-                                          setSelectedSlotForChoice({ slot, date: day.date, action: "delete" })
-                                          setIsChoiceOpen(true)
-                                        }}
-                                        className="h-7 w-7 bg-white/90 hover:bg-red-50 text-slate-700 hover:text-red-600 rounded-full transition-all"
-                                        title="Xóa"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </td>
-                              )
-                            }
-
-                            const label = slot.status === "MAINTENANCE" ? "Bảo trì" : "Đã qua";
-                            return (
-                              <td key={day.date} className="p-0">
-                                <div className="min-h-[48px] h-[48px] rounded-[6px] bg-slate-50 border-[0.5px] border-slate-200 flex items-center justify-center px-3 text-[13px] font-medium text-slate-400 select-none cursor-not-allowed">
-                                  {label}
-                                </div>
-                              </td>
-                            )
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <WeeklyAgendaGrid
+                  data={weeklyData}
+                  emptyMessage="Chưa có khung giờ nào được thiết lập cho tuần này"
+                  renderDayHeader={(day) => (
+                    <>
+                      <div className="text-sm font-bold text-slate-700 leading-tight">{day.dayName}</div>
+                      <div className="text-[13px] text-slate-500 font-semibold leading-tight mt-1">
+                        {formatDayShort(day.date)}
+                      </div>
+                    </>
+                  )}
+                  renderSlotBlock={(slot, date) => (
+                    <OwnerSlotBlock
+                      slot={slot}
+                      onChoice={(action) => {
+                        setSelectedSlotForChoice({ slot, date, action })
+                        setIsChoiceOpen(true)
+                      }}
+                    />
+                  )}
+                />
               )}
             </div>
           )}
@@ -865,6 +721,96 @@ export function TimeSlotManager({
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// ── Owner slot block (weekly agenda grid) ────────────────────────────────────
+
+interface OwnerSlotBlockProps {
+  slot: WeeklySlotItem
+  onChoice: (action: "edit" | "toggle" | "delete") => void
+}
+
+function OwnerSlotBlock({ slot, onChoice }: OwnerSlotBlockProps) {
+  if (slot.status === 'BOOKED') {
+    return (
+      <div className="h-full w-full rounded-[6px] bg-[#fdf0f0] border-[0.5px] border-[#f5b7b7] flex items-center justify-center px-3 text-[13px] font-bold text-[#8a1c1c] select-none cursor-not-allowed">
+        Đã đặt
+      </div>
+    )
+  }
+
+  if (slot.status === 'PAST') {
+    return (
+      <div className="h-full w-full rounded-[6px] bg-slate-50 border-[0.5px] border-slate-200 flex items-center justify-center px-3 text-[13px] font-medium text-slate-400 select-none cursor-not-allowed">
+        Đã qua
+      </div>
+    )
+  }
+
+  if (slot.status === 'AVAILABLE' || slot.status === 'OWNER_CLOSED') {
+    const isAvailable = slot.status === 'AVAILABLE'
+    return (
+      <div
+        className={`h-full w-full rounded-[6px] flex flex-col items-center justify-center px-3 relative group transition-colors overflow-hidden border-[0.5px] ${
+          isAvailable
+            ? "bg-[#e8f7ee] border-[#9eddb6] text-[#0d5c2e]"
+            : "bg-orange-50 border-orange-200 text-orange-700"
+        }`}
+      >
+        <span className="text-[13px] font-bold leading-none">
+          {slot.price.toLocaleString('vi-VN')}đ
+        </span>
+        <span className="text-[10px] font-semibold mt-1 leading-none">
+          {isAvailable ? "Mở" : "Tạm đóng"}
+        </span>
+
+        {/* Hover Actions Overlay */}
+        <div className="absolute inset-0 bg-black/60 rounded-[6px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 px-1.5 z-10">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onChoice("edit")}
+            className="h-7 w-7 bg-white/90 hover:bg-white text-slate-700 hover:text-primary rounded-full transition-all"
+            title="Chỉnh sửa"
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onChoice("toggle")}
+            className="h-7 w-7 bg-white/90 hover:bg-white text-slate-700 hover:text-amber-600 rounded-full transition-all"
+            title={isAvailable ? "Tạm đóng" : "Mở lại"}
+          >
+            <Power className={`w-3.5 h-3.5 ${isAvailable ? 'text-amber-600' : 'text-emerald-600'}`} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onChoice("delete")}
+            className="h-7 w-7 bg-white/90 hover:bg-red-50 text-slate-700 hover:text-red-600 rounded-full transition-all"
+            title="Xóa"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const isMaintenance = slot.status === "MAINTENANCE"
+  const label = isMaintenance ? "Bảo trì" : "Đã qua"
+  return (
+    <div
+      className={`h-full w-full rounded-[6px] border-[0.5px] flex items-center justify-center px-3 text-[13px] font-medium select-none cursor-not-allowed ${
+        isMaintenance
+          ? "bg-amber-50 border-amber-200 text-amber-600"
+          : "bg-slate-50 border-slate-200 text-slate-400"
+      }`}
+    >
+      {label}
     </div>
   )
 }
