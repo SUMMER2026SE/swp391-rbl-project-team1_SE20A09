@@ -6,11 +6,13 @@ import com.sportvenue.service.ai.AiChatService;
 import io.github.bucket4j.Bucket;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.InputStream;
@@ -29,9 +31,12 @@ public class AiChatController {
 
     private final AiChatService aiChatService;
     private final Executor aiTaskExecutor;
-    private final Map<Integer, Bucket> userBuckets = new ConcurrentHashMap<>();
+    private final Map<String, Bucket> rateLimitBuckets = new ConcurrentHashMap<>();
 
-    public AiChatController(AiChatService aiChatService, 
+    private static final int CUSTOMER_REQUESTS_PER_MINUTE = 10;
+    private static final int GUEST_REQUESTS_PER_MINUTE = 5;
+
+    public AiChatController(AiChatService aiChatService,
                             @Qualifier("aiTaskExecutor") Executor aiTaskExecutor) {
         this.aiChatService = aiChatService;
         this.aiTaskExecutor = aiTaskExecutor;
@@ -40,28 +45,22 @@ public class AiChatController {
     @PostMapping(value = "/chat", produces = "text/event-stream")
     public ResponseBodyEmitter chatStream(@RequestBody AiChatRequest request,
                                          @AuthenticationPrincipal UserPrincipal userPrincipal,
+                                         HttpServletRequest httpRequest,
                                          HttpServletResponse response) {
-        if (userPrincipal == null) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            ResponseBodyEmitter emitter = new ResponseBodyEmitter();
-            try {
-                emitter.send("3:\"Unauthorized\"\n");
-                emitter.complete();
-            } catch (Exception e) {
-                emitter.completeWithError(e);
-            }
-            return emitter;
-        }
+        Integer userId = userPrincipal != null ? userPrincipal.getUserId() : null;
 
-        Integer userId = userPrincipal.getUserId();
-        
-        // Rate limiting: 10 requests / 1 minute / user
-        Bucket bucket = userBuckets.computeIfAbsent(userId, id -> Bucket.builder()
-                .addLimit(limit -> limit.capacity(10).refillGreedy(10, Duration.ofMinutes(1)))
+        // Rate limiting: user đã đăng nhập tính theo userId, guest tính theo IP
+        // (data 3 tool hiện có đều public nên không cần bắt đăng nhập, nhưng vẫn
+        // phải giới hạn riêng để tránh 1 IP ẩn danh spam free-tier Groq key).
+        String rateLimitKey = userId != null ? "u:" + userId : "ip:" + getClientIp(httpRequest);
+        int limitPerMinute = userId != null ? CUSTOMER_REQUESTS_PER_MINUTE : GUEST_REQUESTS_PER_MINUTE;
+
+        Bucket bucket = rateLimitBuckets.computeIfAbsent(rateLimitKey, key -> Bucket.builder()
+                .addLimit(limit -> limit.capacity(limitPerMinute).refillGreedy(limitPerMinute, Duration.ofMinutes(1)))
                 .build());
 
         if (!bucket.tryConsume(1)) {
-            log.warn("Rate limit exceeded for user: {}", userId);
+            log.warn("Rate limit exceeded for: {}", rateLimitKey);
             response.setStatus(429); // TOO_MANY_REQUESTS
             ResponseBodyEmitter emitter = new ResponseBodyEmitter();
             try {
@@ -118,5 +117,13 @@ public class AiChatController {
         futureRef.set(future);
 
         return emitter;
+    }
+
+    private String getClientIp(HttpServletRequest request) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

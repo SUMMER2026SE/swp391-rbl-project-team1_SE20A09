@@ -1,18 +1,19 @@
 'use client'
 
 import { useRef, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useChat, UIMessage } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { MessageScroller } from "@/components/ai/MessageScroller";
+import { ToolResultParts } from "@/components/ai/ToolResultParts";
 import { getSession } from 'next-auth/react';
-import { Bot, Send, Search, Calendar, TrendingUp, Sparkles, AlertCircle, StopCircle } from "lucide-react";
+import { Bot, Send, Search, Calendar, TrendingUp, AlertCircle, StopCircle } from "lucide-react";
 
 function formatMessageContent(content: string) {
   const lines = content.split('\n');
@@ -61,8 +62,10 @@ function formatMessageContent(content: string) {
 }
 
 function AIAssistantPage() {
+  const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
+  const [blockedForRole, setBlockedForRole] = useState(false);
 
   useEffect(() => {
     getSession().then((session) => {
@@ -70,9 +73,21 @@ function AIAssistantPage() {
       if (accessToken) {
         setToken(accessToken);
       }
+      const roleName = session?.user?.roleName;
+      // Trợ lý AI hiện chỉ có tool dành cho Customer (tìm sân/kèo ghép) — Owner/Admin
+      // chưa có agent riêng nên chuyển hướng về trang chủ nếu cố truy cập trực tiếp.
+      if (roleName === "Owner" || roleName === "Admin") {
+        setBlockedForRole(true);
+        router.replace("/");
+        return;
+      }
       setSessionLoaded(true);
     });
-  }, []);
+  }, [router]);
+
+  if (blockedForRole) {
+    return null;
+  }
 
   if (!sessionLoaded) {
     return (
@@ -193,80 +208,10 @@ function AIAssistantPageInner({ token, sessionLoaded }: PageInnerProps) {
                     </div>
                   </div>
 
-                  {/* Render Tool Invocations inside message context */}
+                  {/* Trạng thái/card kết quả tool-call — logic dùng chung ở ToolResultParts */}
                   {msg.role === "assistant" && msg.parts && (
                     <div className="md:pl-12 pl-2 space-y-3">
-                      {msg.parts.map((part: any, partIdx: number) => {
-                        if (part.type === 'tool-call') {
-                          const { toolCallId, toolName } = part.toolCall;
-                          return (
-                            <div key={toolCallId || partIdx} className="text-xs text-muted-foreground italic flex items-center gap-2 my-1">
-                              <span className="animate-spin h-3.5 w-3.5 border-2 border-primary border-t-transparent rounded-full" />
-                              Đang xử lý: {toolName === 'searchStadiums' ? 'Tìm kiếm sân đấu...' : toolName === 'getStadiumSlots' ? 'Tra cứu khung giờ trống...' : 'Tìm kèo ghép thể thao...'}
-                            </div>
-                          );
-                        }
-
-                        if (part.type === 'tool-result') {
-                          const { toolCallId, toolName, result } = part.toolResult;
-                          
-                          if (toolName === 'searchStadiums' && Array.isArray(result)) {
-                            if (result.length === 0) {
-                              return (
-                                <div key={toolCallId || partIdx} className="text-xs text-yellow-600 italic my-1">
-                                  Không tìm thấy sân đấu nào phù hợp với yêu cầu.
-                                </div>
-                              );
-                            }
-                            return (
-                              <div key={toolCallId || partIdx} className="grid gap-3 grid-cols-1 sm:grid-cols-2 mt-2">
-                                {result.map((stadium: any) => (
-                                  <Card key={stadium.stadiumId} className="border border-border/85 shadow-sm bg-card overflow-hidden transition-all hover:shadow-lg">
-                                    <div className="h-20 bg-gradient-to-r from-emerald-500 to-teal-600 flex flex-col justify-center text-white relative p-3">
-                                      <Sparkles className="absolute top-2 right-2 text-yellow-300 h-4.5 w-4.5 animate-pulse" />
-                                      <h4 className="font-bold text-xs leading-tight line-clamp-1">{stadium.stadiumName}</h4>
-                                      <p className="text-[9px] opacity-90 mt-0.5 line-clamp-1">{stadium.address}</p>
-                                    </div>
-                                    <CardContent className="p-3 space-y-2">
-                                      <div className="flex justify-between items-center text-xs">
-                                        <Badge variant="secondary" className="bg-teal-500/10 text-teal-600 dark:text-teal-400 border-none px-1.5 py-0 text-[10px]">
-                                          {stadium.sportName || 'Thể thao'}
-                                        </Badge>
-                                        <span className="text-[10px] font-medium text-emerald-600">
-                                          {stadium.status === 'AVAILABLE' ? 'Đang hoạt động' : 'Bảo trì'}
-                                        </span>
-                                      </div>
-                                      <div className="border-t pt-2 flex items-center justify-between">
-                                        <div>
-                                          <span className="text-xs font-bold text-primary">
-                                            {stadium.pricePerHour?.toLocaleString('vi-VN')}đ<span className="text-[9px] font-normal text-muted-foreground">/h</span>
-                                          </span>
-                                        </div>
-                                        <Button 
-                                          size="sm" 
-                                          className="bg-primary hover:bg-primary/95 text-[10px] h-7 px-3 rounded-full"
-                                          onClick={() => window.location.href = `/stadiums/${stadium.stadiumId}`}
-                                        >
-                                          Đặt ngay
-                                        </Button>
-                                      </div>
-                                    </CardContent>
-                                  </Card>
-                                ))}
-                              </div>
-                            );
-                          }
-
-                          return (
-                            <div key={toolCallId || partIdx} className="text-[11px] text-emerald-600 italic my-1 flex items-center gap-1.5">
-                              <span>✓</span>
-                              <span>Hoàn thành: {toolName === 'searchStadiums' ? 'Tìm sân đấu' : toolName === 'getStadiumSlots' ? 'Tra cứu khung giờ trống' : 'Tìm kèo ghép'}</span>
-                            </div>
-                          );
-                        }
-
-                        return null;
-                      })}
+                      <ToolResultParts parts={msg.parts} />
                     </div>
                   )}
                 </div>

@@ -357,13 +357,19 @@ public class MatchRequestServiceImpl implements MatchRequestService {
     @Override
     @Transactional(readOnly = true)
     public Page<MatchResponse> getActiveMatches(Pageable pageable) {
-        log.info("Retrieving active match requests with pagination and future dates: {}", pageable);
+        return getActiveMatches(pageable, null);
+    }
+
+    @Override
+    public Page<MatchResponse> getActiveMatches(Pageable pageable, String location) {
+        log.info("Retrieving active match requests with pagination, location={} and future dates: {}", location, pageable);
         LocalDate nowDate = LocalDate.now();
         LocalTime nowTime = LocalTime.now();
         Page<MatchRequest> matches = matchRequestRepository.findActiveMatchesSorted(
                 Arrays.asList(MatchStatus.OPEN, MatchStatus.FULL),
                 nowDate,
                 nowTime,
+                location,
                 pageable
         );
         return matches.map(this::mapToResponse);

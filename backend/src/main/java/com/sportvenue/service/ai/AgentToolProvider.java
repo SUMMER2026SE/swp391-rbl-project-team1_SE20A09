@@ -5,5 +5,6 @@ import java.util.Map;
 
 public interface AgentToolProvider {
     List<Map<String, Object>> getToolDefinitions();
+
     Object executeTool(String toolName, String jsonArguments, Integer userId);
 }

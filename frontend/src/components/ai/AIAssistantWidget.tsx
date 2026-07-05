@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardFooter, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { MessageScroller } from "./MessageScroller";
+import { ToolResultParts } from "./ToolResultParts";
 import { Bot, Send, X, MessageSquare, Search, Calendar, TrendingUp, AlertCircle } from "lucide-react";
 
 function getMessageText(msg: UIMessage) {
@@ -69,6 +70,7 @@ export default function AIAssistantWidget() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [token, setToken] = useState<string | null>(null);
+  const [roleName, setRoleName] = useState<string | null>(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
 
   useEffect(() => {
@@ -77,6 +79,7 @@ export default function AIAssistantWidget() {
       if (accessToken) {
         setToken(accessToken);
       }
+      setRoleName(session?.user?.roleName ?? null);
       setSessionLoaded(true);
     });
   }, []);
@@ -88,13 +91,18 @@ export default function AIAssistantWidget() {
     return null;
   }
 
+  // Trợ lý AI hiện chỉ có tool dành cho Customer (tìm sân/kèo ghép) — Owner/Admin
+  // chưa có agent riêng nên ẩn widget để tránh gây hiểu lầm là dùng được cho việc quản lý.
+  if (roleName === "Owner" || roleName === "Admin") {
+    return null;
+  }
+
   return (
     <AIAssistantWidgetInner
       token={token}
       sessionLoaded={sessionLoaded}
       isOpen={isOpen}
       setIsOpen={setIsOpen}
-      pathname={pathname}
     />
   );
 }
@@ -104,10 +112,9 @@ interface WidgetInnerProps {
   sessionLoaded: boolean;
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
-  pathname: string;
 }
 
-function AIAssistantWidgetInner({ token, sessionLoaded, isOpen, setIsOpen, pathname }: WidgetInnerProps) {
+function AIAssistantWidgetInner({ token, sessionLoaded, isOpen, setIsOpen }: WidgetInnerProps) {
   const [inputValue, setInputValue] = useState("");
 
   const { messages, sendMessage, status, error } = useChat({
@@ -141,13 +148,12 @@ function AIAssistantWidgetInner({ token, sessionLoaded, isOpen, setIsOpen, pathn
   ];
 
   const handleQuickAction = (text: string) => {
-    if (!token) return;
     sendMessage({ text });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim() || isLoading || !token) return;
+    if (!inputValue.trim() || isLoading) return;
     sendMessage({ text: inputValue });
     setInputValue("");
   };
@@ -184,39 +190,46 @@ function AIAssistantWidgetInner({ token, sessionLoaded, isOpen, setIsOpen, pathn
           <MessageScroller dependencies={[messages, isLoading]}>
             <div className="space-y-4 pb-2">
               {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex gap-2.5 ${
-                    msg.role === "user" ? "flex-row-reverse" : ""
-                  }`}
-                >
-                  <Avatar className="h-8 w-8 flex-shrink-0 border border-border">
-                    {msg.role === "assistant" ? (
-                      <div className="w-full h-full bg-primary/10 flex items-center justify-center">
-                        <Bot className="h-5 w-5 text-primary" />
-                      </div>
-                    ) : (
-                      <AvatarFallback className="bg-secondary text-secondary-foreground text-[10px] font-bold">U</AvatarFallback>
-                    )}
-                  </Avatar>
-
+                <div key={msg.id} className="flex flex-col gap-2">
                   <div
-                    className={`flex-1 ${
-                      msg.role === "user" ? "text-right" : ""
+                    className={`flex gap-2.5 ${
+                      msg.role === "user" ? "flex-row-reverse" : ""
                     }`}
                   >
+                    <Avatar className="h-8 w-8 flex-shrink-0 border border-border">
+                      {msg.role === "assistant" ? (
+                        <div className="w-full h-full bg-primary/10 flex items-center justify-center">
+                          <Bot className="h-5 w-5 text-primary" />
+                        </div>
+                      ) : (
+                        <AvatarFallback className="bg-secondary text-secondary-foreground text-[10px] font-bold">U</AvatarFallback>
+                      )}
+                    </Avatar>
+
                     <div
-                      className={`inline-block max-w-[85%] text-left ${
-                        msg.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-foreground"
-                      } rounded-2xl px-3 py-2 shadow-sm`}
+                      className={`flex-1 ${
+                        msg.role === "user" ? "text-right" : ""
+                      }`}
                     >
-                      <div className="space-y-1">
-                        {formatMessageContent(getMessageText(msg))}
+                      <div
+                        className={`inline-block max-w-[85%] text-left ${
+                          msg.role === "user"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-foreground"
+                        } rounded-2xl px-3 py-2 shadow-sm`}
+                      >
+                        <div className="space-y-1">
+                          {formatMessageContent(getMessageText(msg))}
+                        </div>
                       </div>
                     </div>
                   </div>
+
+                  {msg.role === "assistant" && msg.parts && (
+                    <div className="pl-10 space-y-2">
+                      <ToolResultParts parts={msg.parts} compact />
+                    </div>
+                  )}
                 </div>
               ))}
 
@@ -246,7 +259,7 @@ function AIAssistantWidgetInner({ token, sessionLoaded, isOpen, setIsOpen, pathn
               )}
 
               {/* Quick action buttons */}
-              {messages.length === 1 && !isLoading && token && (
+              {messages.length === 1 && !isLoading && (
                 <div className="flex flex-col gap-1.5 pt-2 pl-10 max-w-[85%]">
                   <p className="text-[10px] text-muted-foreground font-medium mb-0.5">Gợi ý câu hỏi:</p>
                   {quickActions.map((action, idx) => (
@@ -264,23 +277,6 @@ function AIAssistantWidgetInner({ token, sessionLoaded, isOpen, setIsOpen, pathn
                 </div>
               )}
 
-              {/* Login Prompt for Guest */}
-              {sessionLoaded && !token && (
-                <div className="flex flex-col gap-2 p-3 bg-muted rounded-xl border border-border text-center max-w-[85%] mx-auto mt-2">
-                  <div className="flex justify-center">
-                    <AlertCircle className="h-5 w-5 text-primary shrink-0 animate-bounce" />
-                  </div>
-                  <p className="text-xs text-foreground font-medium">Bạn cần đăng nhập để trò chuyện với trợ lý ảo AI.</p>
-                  <Button 
-                    size="sm" 
-                    className="w-full text-xs h-8 bg-primary text-primary-foreground hover:bg-primary/90 mt-1" 
-                    onClick={() => window.location.href = `/login?callbackUrl=${encodeURIComponent(pathname)}`}
-                  >
-                    Đăng nhập ngay
-                  </Button>
-                </div>
-              )}
-
             </div>
           </MessageScroller>
 
@@ -288,21 +284,15 @@ function AIAssistantWidgetInner({ token, sessionLoaded, isOpen, setIsOpen, pathn
           <CardFooter className="p-3 border-t bg-card shrink-0">
             <form onSubmit={handleSubmit} className="flex gap-2 w-full">
               <Input
-                placeholder={
-                  !sessionLoaded
-                    ? "Đang kiểm tra phiên làm việc..."
-                    : !token
-                    ? "Đăng nhập để trò chuyện với AI..."
-                    : "Nhập tin nhắn..."
-                }
+                placeholder={!sessionLoaded ? "Đang kiểm tra phiên làm việc..." : "Nhập tin nhắn..."}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                disabled={!sessionLoaded || !token}
+                disabled={!sessionLoaded}
                 className="flex-1 text-xs h-9 rounded-xl focus-visible:ring-primary/50"
               />
-              <Button 
-                type="submit" 
-                disabled={!inputValue.trim() || isLoading || !token} 
+              <Button
+                type="submit"
+                disabled={!inputValue.trim() || isLoading}
                 className="rounded-xl h-9 w-9 p-0 flex items-center justify-center shrink-0 bg-primary hover:bg-primary/95 text-primary-foreground"
               >
                 <Send className="h-3.5 w-3.5" />

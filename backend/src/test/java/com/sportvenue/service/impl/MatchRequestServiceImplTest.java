@@ -319,7 +319,7 @@ class MatchRequestServiceImplTest {
                 .build();
 
         Page<MatchRequest> page = new PageImpl<>(List.of(mr), pageable, 1);
-        when(matchRequestRepository.findActiveMatchesSorted(any(), any(), any(), eq(pageable))).thenReturn(page);
+        when(matchRequestRepository.findActiveMatchesSorted(any(), any(), any(), any(), eq(pageable))).thenReturn(page);
 
         // Act
         Page<MatchResponse> result = matchRequestService.getActiveMatches(pageable);

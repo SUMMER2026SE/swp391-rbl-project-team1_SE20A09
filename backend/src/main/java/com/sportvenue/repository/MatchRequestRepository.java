@@ -23,11 +23,16 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Inte
     @EntityGraph(attributePaths = {"user", "stadium", "sportType"})
     Page<MatchRequest> findAllByMatchStatus(MatchStatus status, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"user", "stadium", "sportType"})
+    @EntityGraph(attributePaths = {"user", "stadium", "complex", "sportType"})
     @Query("""
             SELECT m FROM MatchRequest m
+            LEFT JOIN m.stadium st
+            LEFT JOIN m.complex cx
             WHERE m.matchStatus IN (:statuses)
             AND (m.playDate > :nowDate OR (m.playDate = :nowDate AND m.startTime > :nowTime))
+            AND (:location IS NULL
+                 OR LOWER(st.address) LIKE LOWER(CONCAT('%', :location, '%'))
+                 OR LOWER(cx.address) LIKE LOWER(CONCAT('%', :location, '%')))
             ORDER BY CASE WHEN m.matchStatus = 'OPEN' THEN 0 ELSE 1 END ASC,
                      m.playDate ASC,
                      m.startTime ASC
@@ -36,6 +41,7 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Inte
             @Param("statuses") List<MatchStatus> statuses,
             @Param("nowDate") LocalDate nowDate,
             @Param("nowTime") LocalTime nowTime,
+            @Param("location") String location,
             Pageable pageable);
 
     @EntityGraph(attributePaths = {"user", "stadium", "sportType"})
