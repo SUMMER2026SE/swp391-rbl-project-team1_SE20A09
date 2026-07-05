@@ -20,6 +20,7 @@ import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.JoinRequestRepository;
 import com.sportvenue.repository.MatchRequestRepository;
+import com.sportvenue.repository.specification.MatchRequestSpecification;
 import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.StadiumComplexRepository;
@@ -371,12 +372,13 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                 location, sportTypeId, pageable);
         LocalDate nowDate = LocalDate.now();
         LocalTime nowTime = LocalTime.now();
-        Page<MatchRequest> matches = matchRequestRepository.findActiveMatchesSorted(
-                Arrays.asList(MatchStatus.OPEN, MatchStatus.FULL),
-                nowDate,
-                nowTime,
-                location,
-                sportTypeId,
+        Page<MatchRequest> matches = matchRequestRepository.findAll(
+                MatchRequestSpecification.withDynamicFilter(
+                        Arrays.asList(MatchStatus.OPEN, MatchStatus.FULL),
+                        nowDate,
+                        nowTime,
+                        location,
+                        sportTypeId),
                 pageable
         );
         return matches.map(this::mapToResponse);

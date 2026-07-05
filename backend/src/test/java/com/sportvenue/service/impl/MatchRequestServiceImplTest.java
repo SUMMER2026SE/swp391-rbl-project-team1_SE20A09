@@ -40,6 +40,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -319,7 +320,7 @@ class MatchRequestServiceImplTest {
                 .build();
 
         Page<MatchRequest> page = new PageImpl<>(List.of(mr), pageable, 1);
-        when(matchRequestRepository.findActiveMatchesSorted(any(), any(), any(), any(), any(), eq(pageable))).thenReturn(page);
+        when(matchRequestRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
 
         // Act
         Page<MatchResponse> result = matchRequestService.getActiveMatches(pageable);

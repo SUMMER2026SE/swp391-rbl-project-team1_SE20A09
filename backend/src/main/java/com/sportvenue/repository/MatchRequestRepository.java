@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -17,34 +18,11 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface MatchRequestRepository extends JpaRepository<MatchRequest, Integer> {
+public interface MatchRequestRepository extends JpaRepository<MatchRequest, Integer>, JpaSpecificationExecutor<MatchRequest> {
 
     /** Tìm các kèo ghép có kèm thông tin sân, môn thể thao và người tạo kèm phân trang */
     @EntityGraph(attributePaths = {"user", "stadium", "sportType"})
     Page<MatchRequest> findAllByMatchStatus(MatchStatus status, Pageable pageable);
-
-    @EntityGraph(attributePaths = {"user", "stadium", "complex", "sportType"})
-    @Query("""
-            SELECT m FROM MatchRequest m
-            LEFT JOIN m.stadium st
-            LEFT JOIN m.complex cx
-            WHERE m.matchStatus IN (:statuses)
-            AND (m.playDate > :nowDate OR (m.playDate = :nowDate AND m.startTime > :nowTime))
-            AND (CAST(:location AS string) IS NULL
-                 OR LOWER(st.address) LIKE LOWER(CONCAT('%', CAST(:location AS string), '%'))
-                 OR LOWER(cx.address) LIKE LOWER(CONCAT('%', CAST(:location AS string), '%')))
-            AND (CAST(:sportTypeId AS integer) IS NULL OR m.sportType.sportTypeId = CAST(:sportTypeId AS integer))
-            ORDER BY CASE WHEN m.matchStatus = 'OPEN' THEN 0 ELSE 1 END ASC,
-                     m.playDate ASC,
-                     m.startTime ASC
-            """)
-    Page<MatchRequest> findActiveMatchesSorted(
-            @Param("statuses") List<MatchStatus> statuses,
-            @Param("nowDate") LocalDate nowDate,
-            @Param("nowTime") LocalTime nowTime,
-            @Param("location") String location,
-            @Param("sportTypeId") Integer sportTypeId,
-            Pageable pageable);
 
     @EntityGraph(attributePaths = {"user", "stadium", "sportType"})
     List<MatchRequest> findAllByPlayDateGreaterThanEqualAndMatchStatus(LocalDate date, MatchStatus status);
