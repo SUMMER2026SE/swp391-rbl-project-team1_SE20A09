@@ -83,14 +83,19 @@ export default function ComplexMap({ complexes, hoveredComplexId }: ComplexMapPr
     [hoveredLat, hoveredLng]
   )
 
-  if (!mounted) return <div className="w-full h-full bg-muted animate-pulse rounded-2xl" />
+  // Memoized on `complexes` (not on hover state) so hovering/unhovering a card
+  // doesn't re-trigger MapRecenter and snap the map back to the average center.
+  const mapCenter: [number, number] = useMemo(() => {
+    return validComplexes.length > 0
+      ? [
+          validComplexes.reduce((sum, c) => sum + (c.latitude || 0), 0) / validComplexes.length,
+          validComplexes.reduce((sum, c) => sum + (c.longitude || 0), 0) / validComplexes.length,
+        ]
+      : [10.7769, 106.7009]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complexes])
 
-  const mapCenter: [number, number] = validComplexes.length > 0
-    ? [
-        validComplexes.reduce((sum, c) => sum + (c.latitude || 0), 0) / validComplexes.length,
-        validComplexes.reduce((sum, c) => sum + (c.longitude || 0), 0) / validComplexes.length,
-      ]
-    : [10.7769, 106.7009]
+  if (!mounted) return <div className="w-full h-full bg-muted animate-pulse rounded-2xl" />
 
   return (
     <div className="w-full h-full relative bg-muted rounded-2xl overflow-hidden z-10 border border-gray-100 shadow-inner">
