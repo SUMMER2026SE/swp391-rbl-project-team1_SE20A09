@@ -41,6 +41,28 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue
 }
 
+function buildSearchParams(filters: ComplexSearchParams): URLSearchParams {
+  const params = new URLSearchParams()
+
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '' && key !== 'amenityIds') {
+      if (key === 'minPrice' && Number(value) === 0) return
+      if (key === 'maxPrice' && Number(value) === 1000000) return
+      if (key === 'page' && Number(value) === 0) return
+      if (key === 'size' && Number(value) === 12) return
+      params.append(key, String(value))
+    }
+  })
+
+  if (filters.amenityIds && filters.amenityIds.length > 0) {
+    filters.amenityIds.forEach(id => {
+      params.append('amenityIds', String(id))
+    })
+  }
+
+  return params
+}
+
 export default function SearchPage() {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Đang tải...</div>}>
@@ -101,24 +123,7 @@ function SearchPageContent() {
 
   // 2. Sync debounced state to URL
   useEffect(() => {
-    const params = new URLSearchParams()
-
-    Object.entries(debouncedFilters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '' && key !== 'amenityIds') {
-        if (key === 'minPrice' && Number(value) === 0) return
-        if (key === 'maxPrice' && Number(value) === 1000000) return
-        if (key === 'page' && Number(value) === 0) return
-        if (key === 'size' && Number(value) === 12) return
-        params.append(key, String(value))
-      }
-    })
-
-    if (debouncedFilters.amenityIds && debouncedFilters.amenityIds.length > 0) {
-      debouncedFilters.amenityIds.forEach(id => {
-        params.append('amenityIds', String(id))
-      })
-    }
-
+    const params = buildSearchParams(debouncedFilters)
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }, [debouncedFilters, pathname, router])
 
@@ -176,6 +181,11 @@ function SearchPageContent() {
 
   const handleFilterChange = (key: keyof ComplexSearchParams, value: ComplexSearchParams[keyof ComplexSearchParams]) => {
     setFilters(prev => ({ ...prev, [key]: value, page: key !== 'page' ? 0 : value as number }))
+  }
+
+  const handleSearchNow = () => {
+    const params = buildSearchParams(filters)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
   const handleAmenityToggle = (id: number) => {
@@ -252,6 +262,7 @@ function SearchPageContent() {
         filters={filters}
         onFilterChange={handleFilterChange}
         onGetLocation={getLocation}
+        onSearch={handleSearchNow}
         isLocating={isLocating}
       />
 

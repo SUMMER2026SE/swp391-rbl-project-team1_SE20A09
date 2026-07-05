@@ -7,10 +7,11 @@ interface HorizontalSearchProps {
   filters: ComplexSearchParams
   onFilterChange: <K extends keyof ComplexSearchParams>(key: K, value: ComplexSearchParams[K]) => void
   onGetLocation: () => void
+  onSearch: () => void
   isLocating?: boolean
 }
 
-export function HorizontalSearch({ filters, onFilterChange, onGetLocation, isLocating = false }: HorizontalSearchProps) {
+export function HorizontalSearch({ filters, onFilterChange, onGetLocation, onSearch, isLocating = false }: HorizontalSearchProps) {
   return (
     <div className="bg-white dark:bg-card p-3 md:p-4 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-gray-100 dark:border-border max-w-4xl mx-auto flex flex-col md:flex-row items-center gap-3 relative z-10 -mt-10 mb-8 w-[95%]">
       
@@ -25,6 +26,9 @@ export function HorizontalSearch({ filters, onFilterChange, onGetLocation, isLoc
             placeholder="Tìm kiếm khu vực, tên tổ hợp sân..."
             value={filters.keyword || ''}
             onChange={(e) => onFilterChange('keyword', e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onSearch()
+            }}
             className="border-0 shadow-none focus-visible:ring-0 p-0 text-base font-medium text-gray-900 dark:text-white placeholder:text-gray-300 h-auto bg-transparent w-full"
           />
         </div>
@@ -43,6 +47,7 @@ export function HorizontalSearch({ filters, onFilterChange, onGetLocation, isLoc
           onClick={onGetLocation}
           disabled={isLocating}
           title="Tìm sân gần tôi"
+          aria-label="Tìm sân gần tôi"
           className={`rounded-full h-14 w-14 p-0 flex items-center justify-center font-semibold shadow-sm border-gray-200 transition-all duration-300
             ${isLocating 
               ? 'bg-gray-100 cursor-not-allowed' 
@@ -62,6 +67,7 @@ export function HorizontalSearch({ filters, onFilterChange, onGetLocation, isLoc
         {/* Nút Tìm kiếm chính */}
         <Button
           type="button"
+          onClick={onSearch}
           className="w-full md:w-auto rounded-full px-8 h-14 font-bold shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 hover:scale-105 active:scale-95 transition-all duration-300 text-white text-base tracking-wide"
         >
           Tìm Kiếm
