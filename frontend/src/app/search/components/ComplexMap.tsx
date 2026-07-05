@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { Star, MapPin } from 'lucide-react'
@@ -10,8 +10,8 @@ import Image from 'next/image'
 import Link from 'next/link'
 import 'leaflet/dist/leaflet.css'
 
-const getUnifiedIcon = (isHovered: boolean = false) => {
-  if (typeof window === 'undefined') return undefined as any;
+const getUnifiedIcon = (isHovered: boolean = false): L.DivIcon | undefined => {
+  if (typeof window === 'undefined') return undefined;
   
   const bgColor = isHovered ? 'bg-gray-900 border-yellow-400' : 'bg-primary border-white';
   const svgColor = isHovered ? 'text-yellow-400' : 'text-white';
@@ -71,11 +71,19 @@ export default function ComplexMap({ complexes, hoveredComplexId }: ComplexMapPr
     setMounted(true)
   }, [])
 
-  if (!mounted) return <div className="w-full h-full bg-muted animate-pulse rounded-2xl" />
-
   const validComplexes = complexes.filter(
     (c) => c.latitude !== undefined && c.latitude !== null && c.longitude !== undefined && c.longitude !== null
   )
+
+  const hoveredComplex = hoveredComplexId ? validComplexes.find(c => c.complexId === hoveredComplexId) : null;
+  const hoveredLat = hoveredComplex?.latitude
+  const hoveredLng = hoveredComplex?.longitude
+  const hoveredCenter: [number, number] | null = useMemo(
+    () => (hoveredLat && hoveredLng ? [hoveredLat, hoveredLng] : null),
+    [hoveredLat, hoveredLng]
+  )
+
+  if (!mounted) return <div className="w-full h-full bg-muted animate-pulse rounded-2xl" />
 
   const mapCenter: [number, number] = validComplexes.length > 0
     ? [
@@ -83,11 +91,6 @@ export default function ComplexMap({ complexes, hoveredComplexId }: ComplexMapPr
         validComplexes.reduce((sum, c) => sum + (c.longitude || 0), 0) / validComplexes.length,
       ]
     : [10.7769, 106.7009]
-
-  const hoveredComplex = hoveredComplexId ? validComplexes.find(c => c.complexId === hoveredComplexId) : null;
-  const hoveredCenter: [number, number] | null = hoveredComplex && hoveredComplex.latitude && hoveredComplex.longitude 
-    ? [hoveredComplex.latitude, hoveredComplex.longitude] 
-    : null;
 
   return (
     <div className="w-full h-full relative bg-muted rounded-2xl overflow-hidden z-10 border border-gray-100 shadow-inner">
