@@ -175,6 +175,10 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
             "type", "string",
             "description", "Khu vực/thành phố/quận muốn tìm kèo ghép (ví dụ: Đà Nẵng, Hà Nội, Quận 9, Thủ Đức). Bỏ trống nếu muốn tìm ở mọi khu vực."
         ));
+        propertiesMatches.put("sportName", Map.of(
+            "type", "string",
+            "description", "Tên môn thể thao bằng tiếng Việt (ví dụ: Bóng đá, Cầu lông, Bóng rổ). Bỏ trống nếu muốn tìm ở mọi môn thể thao."
+        ));
         propertiesMatches.put("page", Map.of(
             "type", List.of("integer", "string"),
             "description", "Số thứ tự trang kết quả (mặc định 0)."
@@ -374,8 +378,17 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
             location = normalized != null ? normalized : rawLocation;
         }
 
+        Integer sportTypeId = null;
+        if (args.hasNonNull("sportName")) {
+            String rawSportName = args.get("sportName").asText();
+            sportTypeId = resolveSportTypeId(rawSportName);
+            if (sportTypeId == null) {
+                return Map.of("error", "Không tìm thấy loại môn thể thao: " + rawSportName + ". Hãy chọn một trong các môn thể thao được hỗ trợ.");
+            }
+        }
+
         Pageable pageable = PageRequest.of(page, size);
-        Page<MatchResponse> matches = matchRequestService.getActiveMatches(pageable, location);
+        Page<MatchResponse> matches = matchRequestService.getActiveMatches(pageable, location, sportTypeId);
         return matches.getContent();
     }
 

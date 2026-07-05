@@ -33,6 +33,7 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Inte
             AND (CAST(:location AS string) IS NULL
                  OR LOWER(st.address) LIKE LOWER(CONCAT('%', CAST(:location AS string), '%'))
                  OR LOWER(cx.address) LIKE LOWER(CONCAT('%', CAST(:location AS string), '%')))
+            AND (CAST(:sportTypeId AS integer) IS NULL OR m.sportType.sportTypeId = CAST(:sportTypeId AS integer))
             ORDER BY CASE WHEN m.matchStatus = 'OPEN' THEN 0 ELSE 1 END ASC,
                      m.playDate ASC,
                      m.startTime ASC
@@ -42,6 +43,7 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Inte
             @Param("nowDate") LocalDate nowDate,
             @Param("nowTime") LocalTime nowTime,
             @Param("location") String location,
+            @Param("sportTypeId") Integer sportTypeId,
             Pageable pageable);
 
     @EntityGraph(attributePaths = {"user", "stadium", "sportType"})

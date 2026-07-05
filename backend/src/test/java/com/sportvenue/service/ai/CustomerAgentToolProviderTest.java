@@ -150,11 +150,11 @@ class CustomerAgentToolProviderTest {
     @Test
     void executeTool_findMatchRequests_locationWithWrongDiacritics_stillNormalizes() {
         Page<MatchResponse> page = new PageImpl<>(List.of());
-        when(matchRequestService.getActiveMatches(any(Pageable.class), eq("Bình Thạnh"))).thenReturn(page);
+        when(matchRequestService.getActiveMatches(any(Pageable.class), eq("Bình Thạnh"), eq((Integer) null))).thenReturn(page);
 
         provider.executeTool("findMatchRequests", "{\"location\":\"Bính Thánh\"}", 1);
 
-        verify(matchRequestService).getActiveMatches(any(Pageable.class), eq("Bình Thạnh"));
+        verify(matchRequestService).getActiveMatches(any(Pageable.class), eq("Bình Thạnh"), eq((Integer) null));
     }
 
     @Test
@@ -239,7 +239,7 @@ class CustomerAgentToolProviderTest {
     @Test
     void executeTool_findMatchRequests_normalizesLocationAndDelegates() {
         Page<MatchResponse> page = new PageImpl<>(List.of(MatchResponse.builder().matchId(1).build()));
-        when(matchRequestService.getActiveMatches(any(Pageable.class), eq("Thủ Đức"))).thenReturn(page);
+        when(matchRequestService.getActiveMatches(any(Pageable.class), eq("Thủ Đức"), eq((Integer) null))).thenReturn(page);
 
         Object result = provider.executeTool("findMatchRequests", "{\"location\":\"Thu Duc\"}", 1);
 
@@ -250,11 +250,35 @@ class CustomerAgentToolProviderTest {
     @Test
     void executeTool_findMatchRequests_noLocation_passesNull() {
         Page<MatchResponse> page = new PageImpl<>(List.of());
-        when(matchRequestService.getActiveMatches(any(Pageable.class), eq((String) null))).thenReturn(page);
+        when(matchRequestService.getActiveMatches(any(Pageable.class), eq((String) null), eq((Integer) null))).thenReturn(page);
 
         provider.executeTool("findMatchRequests", "{}", 1);
 
-        verify(matchRequestService).getActiveMatches(any(Pageable.class), eq((String) null));
+        verify(matchRequestService).getActiveMatches(any(Pageable.class), eq((String) null), eq((Integer) null));
+    }
+
+    @Test
+    void executeTool_findMatchRequests_resolvesSportNameAndDelegates() {
+        SportType badminton = SportType.builder().sportTypeId(2).sportName("Cầu lông").sportCode("BADMINTON").build();
+        when(sportTypeRepository.findAll()).thenReturn(List.of(badminton));
+
+        Page<MatchResponse> page = new PageImpl<>(List.of(MatchResponse.builder().matchId(6).sportName("Badminton").build()));
+        when(matchRequestService.getActiveMatches(any(Pageable.class), eq((String) null), eq(2))).thenReturn(page);
+
+        Object result = provider.executeTool("findMatchRequests", "{\"sportName\":\"Cầu lông\"}", 1);
+
+        assertInstanceOf(List.class, result);
+        assertEquals(1, ((List<?>) result).size());
+        verify(matchRequestService).getActiveMatches(any(Pageable.class), eq((String) null), eq(2));
+    }
+
+    @Test
+    void executeTool_findMatchRequests_unknownSportName_returnsError() {
+        when(sportTypeRepository.findAll()).thenReturn(List.of());
+
+        Object result = provider.executeTool("findMatchRequests", "{\"sportName\":\"Không tồn tại\"}", 1);
+
+        assertTrue(((Map<?, ?>) result).get("error").toString().contains("Không tìm thấy loại môn thể thao"));
     }
 
     @Test

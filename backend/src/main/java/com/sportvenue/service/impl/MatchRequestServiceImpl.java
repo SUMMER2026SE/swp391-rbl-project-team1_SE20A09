@@ -357,12 +357,18 @@ public class MatchRequestServiceImpl implements MatchRequestService {
     @Override
     @Transactional(readOnly = true)
     public Page<MatchResponse> getActiveMatches(Pageable pageable) {
-        return getActiveMatches(pageable, null);
+        return getActiveMatches(pageable, null, null);
     }
 
     @Override
     public Page<MatchResponse> getActiveMatches(Pageable pageable, String location) {
-        log.info("Retrieving active match requests with pagination, location={} and future dates: {}", location, pageable);
+        return getActiveMatches(pageable, location, null);
+    }
+
+    @Override
+    public Page<MatchResponse> getActiveMatches(Pageable pageable, String location, Integer sportTypeId) {
+        log.info("Retrieving active match requests with pagination, location={}, sportTypeId={} and future dates: {}",
+                location, sportTypeId, pageable);
         LocalDate nowDate = LocalDate.now();
         LocalTime nowTime = LocalTime.now();
         Page<MatchRequest> matches = matchRequestRepository.findActiveMatchesSorted(
@@ -370,6 +376,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                 nowDate,
                 nowTime,
                 location,
+                sportTypeId,
                 pageable
         );
         return matches.map(this::mapToResponse);
