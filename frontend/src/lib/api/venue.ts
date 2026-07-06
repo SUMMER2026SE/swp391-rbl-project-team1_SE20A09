@@ -39,6 +39,7 @@ export interface VenueDetail {
   longitude?: number
   sportName: string
   imageUrls: string[]
+  footballFieldType?: 'FIVE_A_SIDE' | 'SEVEN_A_SIDE' | 'ELEVEN_A_SIDE' | 'FUTSAL' | null
   openTime: string
   closeTime: string
   stadiumStatus: string

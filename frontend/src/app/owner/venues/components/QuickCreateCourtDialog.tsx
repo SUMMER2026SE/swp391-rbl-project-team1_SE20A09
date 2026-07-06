@@ -11,6 +11,8 @@ import { toast } from 'sonner'
 import { uploadStadiumImage } from '@/lib/api'
 import { X, Upload, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { FootballFieldType } from '@/types/stadium'
 
 interface QuickCreateCourtDialogProps {
   isOpen: boolean
@@ -24,6 +26,7 @@ export function QuickCreateCourtDialog({ isOpen, onClose, parentStadiumId, onSuc
   const [description, setDescription] = useState('')
   const [pricePerHour, setPricePerHour] = useState<number>(150000)
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([])
+  const [footballFieldType, setFootballFieldType] = useState<FootballFieldType | ''>('')
   const [isUploading, setIsUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -70,6 +73,7 @@ export function QuickCreateCourtDialog({ isOpen, onClose, parentStadiumId, onSuc
         description: description.trim() || undefined,
         pricePerHour,
         imageUrls: uploadedPhotos,
+        footballFieldType: footballFieldType === '' ? undefined : footballFieldType,
       })
       toast.success('Đã tạo sân lẻ thành công!')
       // Reset form
@@ -77,6 +81,7 @@ export function QuickCreateCourtDialog({ isOpen, onClose, parentStadiumId, onSuc
       setDescription('')
       setPricePerHour(150000)
       setUploadedPhotos([])
+      setFootballFieldType('')
       onSuccess()
       onClose()
     } catch (err: unknown) {
@@ -103,6 +108,25 @@ export function QuickCreateCourtDialog({ isOpen, onClose, parentStadiumId, onSuc
               onChange={(e) => setStadiumName(e.target.value)}
               disabled={submitting}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="court-type">Loại sân bóng đá (tuỳ chọn)</Label>
+            <Select 
+              value={footballFieldType} 
+              onValueChange={(val) => setFootballFieldType(val as FootballFieldType)}
+              disabled={submitting}
+            >
+              <SelectTrigger id="court-type">
+                <SelectValue placeholder="Chọn loại sân (nếu là sân bóng đá)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="FIVE_A_SIDE">Sân 5 người</SelectItem>
+                <SelectItem value="SEVEN_A_SIDE">Sân 7 người</SelectItem>
+                <SelectItem value="ELEVEN_A_SIDE">Sân 11 người</SelectItem>
+                <SelectItem value="FUTSAL">Sân Futsal</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">

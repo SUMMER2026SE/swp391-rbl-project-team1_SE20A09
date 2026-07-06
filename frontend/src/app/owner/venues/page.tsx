@@ -492,7 +492,17 @@ function VenueManagementPage() {
                                           {facilityCourts.map(court => (
                                             <TableRow key={court.stadiumId} className="hover:bg-slate-50/30 transition-colors">
                                               <TableCell className="font-semibold text-slate-800 dark:text-slate-200 truncate">
-                                                {court.stadiumName}
+                                                <div className="flex flex-col gap-1 items-start">
+                                                  <span className="truncate">{court.stadiumName}</span>
+                                                  {court.footballFieldType && (
+                                                    <Badge variant="outline" className="text-[10px] py-0 font-medium">
+                                                      {court.footballFieldType === 'FIVE_A_SIDE' && 'Sân 5'}
+                                                      {court.footballFieldType === 'SEVEN_A_SIDE' && 'Sân 7'}
+                                                      {court.footballFieldType === 'ELEVEN_A_SIDE' && 'Sân 11'}
+                                                      {court.footballFieldType === 'FUTSAL' && 'Sân Futsal'}
+                                                    </Badge>
+                                                  )}
+                                                </div>
                                               </TableCell>
                                               <TableCell className="font-extrabold text-slate-900 dark:text-white text-sm">
                                                 {court.pricePerHour.toLocaleString('vi-VN')}₫
