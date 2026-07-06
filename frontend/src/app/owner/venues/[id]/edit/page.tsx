@@ -232,7 +232,7 @@ export default function EditVenuePage() {
                 )}
               </div>
 
-              {stadium?.nodeType === 'COURT' && (
+              {stadium?.nodeType === 'COURT' && sportTypes.find(t => t.sportTypeId === form.watch("sportTypeId"))?.isFootballType && (
                 <div className="space-y-2">
                   <Label>Loại sân bóng đá (tuỳ chọn)</Label>
                   <Select

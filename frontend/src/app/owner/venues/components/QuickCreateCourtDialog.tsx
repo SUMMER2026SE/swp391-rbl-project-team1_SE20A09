@@ -12,16 +12,16 @@ import { uploadStadiumImage } from '@/lib/api'
 import { X, Upload, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { FootballFieldType } from '@/types/stadium'
+import { FootballFieldType, StadiumResponse } from '@/types/stadium'
 
 interface QuickCreateCourtDialogProps {
   isOpen: boolean
   onClose: () => void
-  parentStadiumId: number | null
+  parentFacility: StadiumResponse | null
   onSuccess: () => void
 }
 
-export function QuickCreateCourtDialog({ isOpen, onClose, parentStadiumId, onSuccess }: QuickCreateCourtDialogProps) {
+export function QuickCreateCourtDialog({ isOpen, onClose, parentFacility, onSuccess }: QuickCreateCourtDialogProps) {
   const [stadiumName, setStadiumName] = useState('')
   const [description, setDescription] = useState('')
   const [pricePerHour, setPricePerHour] = useState<number>(150000)
@@ -55,7 +55,7 @@ export function QuickCreateCourtDialog({ isOpen, onClose, parentStadiumId, onSuc
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!parentStadiumId) return
+    if (!parentFacility?.stadiumId) return
     if (!stadiumName.trim()) {
       toast.error('Vui lòng nhập tên sân lẻ')
       return
@@ -68,7 +68,7 @@ export function QuickCreateCourtDialog({ isOpen, onClose, parentStadiumId, onSuc
     setSubmitting(true)
     try {
       await stadiumService.createCourt({
-        parentStadiumId,
+        parentStadiumId: parentFacility.stadiumId,
         stadiumName: stadiumName.trim(),
         description: description.trim() || undefined,
         pricePerHour,
@@ -110,24 +110,26 @@ export function QuickCreateCourtDialog({ isOpen, onClose, parentStadiumId, onSuc
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="court-type">Loại sân bóng đá (tuỳ chọn)</Label>
-            <Select 
-              value={footballFieldType} 
-              onValueChange={(val) => setFootballFieldType(val as FootballFieldType)}
-              disabled={submitting}
-            >
-              <SelectTrigger id="court-type">
-                <SelectValue placeholder="Chọn loại sân (nếu là sân bóng đá)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="FIVE_A_SIDE">Sân 5 người</SelectItem>
-                <SelectItem value="SEVEN_A_SIDE">Sân 7 người</SelectItem>
-                <SelectItem value="ELEVEN_A_SIDE">Sân 11 người</SelectItem>
-                <SelectItem value="FUTSAL">Sân Futsal</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {parentFacility?.isFootballType ? (
+            <div className="space-y-2">
+              <Label htmlFor="court-type">Loại sân bóng đá (tuỳ chọn)</Label>
+              <Select 
+                value={footballFieldType} 
+                onValueChange={(val) => setFootballFieldType(val as FootballFieldType)}
+                disabled={submitting}
+              >
+                <SelectTrigger id="court-type">
+                  <SelectValue placeholder="Chọn loại sân (nếu là sân bóng đá)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="FIVE_A_SIDE">Sân 5 người</SelectItem>
+                  <SelectItem value="SEVEN_A_SIDE">Sân 7 người</SelectItem>
+                  <SelectItem value="ELEVEN_A_SIDE">Sân 11 người</SelectItem>
+                  <SelectItem value="FUTSAL">Sân Futsal</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <Label htmlFor="price-per-hour">Giá thuê mỗi giờ (VNĐ) <span className="text-red-500">*</span></Label>

@@ -90,7 +90,7 @@ function VenueManagementPage() {
 
   // Quick action states
   const [activeComplexIdForFacility, setActiveComplexIdForFacility] = useState<number | null>(null);
-  const [activeFacilityIdForCourt, setActiveFacilityIdForCourt] = useState<number | null>(null);
+  const [activeFacilityForCourt, setActiveFacilityForCourt] = useState<StadiumResponse | null>(null);
   const [bulkFacilityId, setBulkFacilityId] = useState<number | null>(null);
   const [bulkComplexId, setBulkComplexId] = useState<number | null>(null);
   const [bulkCourtsList, setBulkCourtsList] = useState<StadiumResponse[]>([]);
@@ -407,7 +407,7 @@ function VenueManagementPage() {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setActiveFacilityIdForCourt(facility.stadiumId)}
+                                    onClick={() => setActiveFacilityForCourt(facility)}
                                     className="text-xs font-semibold h-8 border-primary/20 text-primary hover:bg-primary/5"
                                   >
                                     <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -708,9 +708,9 @@ function VenueManagementPage() {
       />
 
       <QuickCreateCourtDialog
-        isOpen={activeFacilityIdForCourt !== null}
-        onClose={() => setActiveFacilityIdForCourt(null)}
-        parentStadiumId={activeFacilityIdForCourt}
+        isOpen={activeFacilityForCourt !== null}
+        onClose={() => setActiveFacilityForCourt(null)}
+        parentFacility={activeFacilityForCourt}
         onSuccess={fetchTreeData}
       />
 

@@ -41,6 +41,7 @@ export interface StadiumResponse {
   description: string;
   sportTypeId: number;
   sportName: string;
+  isFootballType?: boolean;
   pricePerHour: number;
   openTime: string;
   closeTime: string;
@@ -114,6 +115,7 @@ export interface BulkTimeSlotRequest {
 export interface SportType {
   sportTypeId: number;
   sportName: string;
+  isFootballType?: boolean;
 }
 
 export interface CreateComplexRequest {
@@ -141,6 +143,8 @@ export interface MaintenanceScheduleResponse {
   maintenanceId: number;
   stadiumId: number | null;
   complexId: number | null;
+  sportName: string;
+  firstImageUrl: string | null;
   startDate: string;
   endDate: string | null;
   startTime: string | null;
