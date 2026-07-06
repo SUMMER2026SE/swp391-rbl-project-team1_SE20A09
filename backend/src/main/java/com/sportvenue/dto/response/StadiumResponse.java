@@ -29,8 +29,9 @@ public class StadiumResponse {
     private Double distanceInKm; // Calculated distance if user coords provided
     
     private String sportName; 
+    private Boolean isFootballType;
     private String firstImageUrl;
-    private List<String> imageUrls; 
+    private List<String> imageUrls;
     
     private LocalTime openTime; 
     private LocalTime closeTime; 

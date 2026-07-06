@@ -213,31 +213,7 @@ public class StadiumServiceImpl implements StadiumService {
                 .orElseThrow(() -> new ResourceNotFoundException("Sport type not found with ID: " + request.getSportTypeId()));
 
         boolean nameChanged = !stadium.getStadiumName().equals(request.getStadiumName());
-        boolean imagesChanged = false;
-
-        java.util.List<String> currentImageUrls = stadium.getImages().stream()
-                .map(StadiumImage::getImageUrl)
-                .toList();
-        
-        java.util.List<String> newImageUrls = request.getImageUrls();
-        if (newImageUrls != null) {
-            newImageUrls = newImageUrls.stream()
-                    .map(this::trimToNull)
-                    .filter(url -> url != null)
-                    .toList();
-            validateStadiumImageUrls(newImageUrls);
-
-            imagesChanged = !new java.util.HashSet<>(currentImageUrls).equals(new java.util.HashSet<>(newImageUrls));
-            
-            // Clear and reload images
-            stadium.getImages().clear();
-            for (String url : newImageUrls) {
-                stadium.getImages().add(StadiumImage.builder()
-                        .stadium(stadium)
-                        .imageUrl(url)
-                        .build());
-            }
-        }
+        boolean imagesChanged = updateStadiumImages(stadium, request.getImageUrls());
 
         if (nameChanged || imagesChanged) {
             stadium.setApprovedStatus(ApprovedStatus.PENDING);
@@ -253,8 +229,10 @@ public class StadiumServiceImpl implements StadiumService {
         stadium.setLatitude(request.getLatitude().doubleValue());
         stadium.setLongitude(request.getLongitude().doubleValue());
         
-        if (request.getFootballFieldType() != null) {
+        if (Boolean.TRUE.equals(sportType.getIsFootballType())) {
             stadium.setFootballFieldType(request.getFootballFieldType());
+        } else {
+            stadium.setFootballFieldType(null);
         }
 
         // Sync amenities if provided in the update request
@@ -276,6 +254,32 @@ public class StadiumServiceImpl implements StadiumService {
         log.info("Successfully updated stadium with ID: {}", updatedStadium.getStadiumId());
 
         return stadiumMapper.toResponse(updatedStadium);
+    }
+
+    private boolean updateStadiumImages(Stadium stadium, java.util.List<String> newImageUrls) {
+        if (newImageUrls == null) {
+            return false;
+        }
+        java.util.List<String> currentImageUrls = stadium.getImages().stream()
+                .map(com.sportvenue.entity.StadiumImage::getImageUrl)
+                .toList();
+        
+        newImageUrls = newImageUrls.stream()
+                .map(this::trimToNull)
+                .filter(url -> url != null)
+                .toList();
+        validateStadiumImageUrls(newImageUrls);
+
+        boolean imagesChanged = !new java.util.HashSet<>(currentImageUrls).equals(new java.util.HashSet<>(newImageUrls));
+        
+        stadium.getImages().clear();
+        for (String url : newImageUrls) {
+            stadium.getImages().add(com.sportvenue.entity.StadiumImage.builder()
+                    .stadium(stadium)
+                    .imageUrl(url)
+                    .build());
+        }
+        return imagesChanged;
     }
 
     @Override
@@ -582,7 +586,7 @@ public class StadiumServiceImpl implements StadiumService {
                 .stadiumStatus(StadiumStatus.AVAILABLE)
                 .approvedStatus(ApprovedStatus.APPROVED)
                 .createdAt(LocalDateTime.now())
-                .footballFieldType(request.getFootballFieldType())
+                .footballFieldType(Boolean.TRUE.equals(parent.getSportType().getIsFootballType()) ? request.getFootballFieldType() : null)
                 .build();
 
         if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
