@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.List;
 
+import com.sportvenue.exception.PaymentGatewayRefundException;
+
 /**
  * Global exception handler — chuẩn hóa error response cho toàn bộ API.
  */
@@ -125,6 +127,16 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of(
                         HttpStatus.FORBIDDEN.value(),
                         "Bạn không có quyền truy cập tài nguyên này."
+                ));
+    }
+
+    @ExceptionHandler(PaymentGatewayRefundException.class)
+    public ResponseEntity<ErrorResponse> handlePaymentGatewayRefundException(PaymentGatewayRefundException ex) {
+        log.error("Payment Gateway Refund Error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ErrorResponse.of(
+                        HttpStatus.BAD_GATEWAY.value(),
+                        "Lỗi kết nối cổng thanh toán: " + ex.getMessage()
                 ));
     }
 

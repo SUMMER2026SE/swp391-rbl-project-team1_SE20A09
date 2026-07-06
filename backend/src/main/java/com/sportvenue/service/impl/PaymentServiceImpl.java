@@ -258,6 +258,7 @@ public class PaymentServiceImpl implements PaymentService {
                  originalPayment.getPaymentMethod(), originalPayment.getTransactionCode(), refundAmount, refundReason);
         
         try {
+            // TODO: Replace this mock implementation with actual HTTP Client (RestTemplate/WebClient) call to VNPay/MoMo refund API in production.
             // Giả lập delay gọi API
             Thread.sleep(500);
             
