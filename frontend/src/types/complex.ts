@@ -46,7 +46,7 @@ export interface StadiumComplexDto {
   amenities: AmenityDto[]
   images: ComplexImageDto[]
   averageRating: number
-  totalReviews?: number
+  reviewCount?: number
   ownerName?: string | null
   ownerPhone?: string | null
   distanceInKm?: number | null

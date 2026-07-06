@@ -174,7 +174,7 @@ export default function ComplexHeader({ complex }: ComplexHeaderProps) {
                 ))}
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                {complex.totalReviews ?? 0} đánh giá
+                {complex.reviewCount ?? 0} đánh giá
               </p>
               {complex.ownerName && (
                 <div className="mt-3 pt-3 border-t border-gray-100">

@@ -6,6 +6,7 @@ import type {
   PageResponse,
   ComplexSearchParams,
 } from '@/types/complex'
+import type { ReviewDto, PageResponse as ReviewPageResponse } from './venue'
 
 /**
  * Fetch public complex detail (no auth required).
@@ -64,6 +65,22 @@ export async function searchComplexes(
   const res = await api.get<PageResponse<StadiumComplexDto>>(
     '/public/complexes',
     { params }
+  )
+  return res.data
+}
+
+/**
+ * Fetch reviews for a complex, aggregated across all courts under it
+ * (reviews are stored per-court — the backend merges them by complex_id).
+ */
+export async function getComplexReviews(
+  complexId: number,
+  page: number = 0,
+  size: number = 5
+): Promise<ReviewPageResponse<ReviewDto>> {
+  const res = await api.get<ReviewPageResponse<ReviewDto>>(
+    `/public/complexes/${complexId}/reviews`,
+    { params: { page, size } }
   )
   return res.data
 }
