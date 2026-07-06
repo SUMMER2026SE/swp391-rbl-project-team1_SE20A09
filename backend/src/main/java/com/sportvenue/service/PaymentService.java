@@ -35,4 +35,13 @@ public interface PaymentService {
      */
     record ReturnResult(boolean success, Integer bookingId, String reason) {
     }
+
+    /**
+     * Thực hiện gọi API hoàn tiền sang cổng thanh toán (VNPay/MoMo).
+     * @param originalPayment Giao dịch gốc
+     * @param refundAmount Số tiền cần hoàn
+     * @param refundReason Lý do hoàn tiền
+     * @throws com.sportvenue.exception.PaymentGatewayRefundException nếu API cổng thanh toán trả về lỗi
+     */
+    void processRefund(com.sportvenue.entity.Payment originalPayment, java.math.BigDecimal refundAmount, String refundReason);
 }

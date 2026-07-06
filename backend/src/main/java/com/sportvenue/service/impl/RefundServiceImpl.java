@@ -23,6 +23,7 @@ import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.RefundService;
+import com.sportvenue.service.PaymentService;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +43,7 @@ public class RefundServiceImpl implements RefundService {
     private final TimeSlotRepository timeSlotRepository;
     private final UserRepository userRepository;
     private final OwnerRepository ownerRepository;
+    private final PaymentService paymentService;
 
     @Transactional
     @Override
@@ -145,7 +147,8 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private void recordRefundTransaction(Booking booking, Payment originalPayment, BigDecimal refundAmount) {
-        // TODO: Call VNPAY/MoMo refund API here to actually process bank refund in production
+        paymentService.processRefund(originalPayment, refundAmount, booking.getNote());
+        
         Payment refundPayment = Payment.builder()
                 .booking(booking)
                 .paymentMethod(originalPayment.getPaymentMethod())

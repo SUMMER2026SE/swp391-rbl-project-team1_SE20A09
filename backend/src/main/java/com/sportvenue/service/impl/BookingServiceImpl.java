@@ -37,6 +37,7 @@ import com.sportvenue.entity.TimeSlotException;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.BookingService;
 import com.sportvenue.service.MaintenanceScheduleService;
+import com.sportvenue.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -93,6 +94,7 @@ public class BookingServiceImpl implements BookingService {
     private final BookingAccessoryRepository bookingAccessoryRepository;
     private final TimeSlotExceptionRepository timeSlotExceptionRepository;
     private final MaintenanceScheduleService maintenanceScheduleService;
+    private final PaymentService paymentService;
 
     @Override
     @Transactional
@@ -349,18 +351,21 @@ public class BookingServiceImpl implements BookingService {
 
         Booking saved = bookingRepository.save(booking);
 
-        // Tạo bản ghi refund âm để tracking — tiền thực tế hoàn qua VNPay cần xử lý thêm
+        // Tạo bản ghi refund âm để tracking — tiền thực tế hoàn qua VNPay/MoMo
         if (wasReallyPaid) {
             paymentRepository.findSuccessPaymentsByBookingId(bookingId)
                     .stream().findFirst()
-                    .ifPresent(original -> paymentRepository.save(Payment.builder()
+                    .ifPresent(original -> {
+                        paymentService.processRefund(original, original.getAmount(), reason != null ? reason : "Khách hàng tự hủy");
+                        paymentRepository.save(Payment.builder()
                             .booking(saved)
                             .paymentMethod(original.getPaymentMethod())
                             .amount(original.getAmount().negate())
                             .transactionCode("RFND_CUST_" + original.getTransactionCode())
                             .paymentStatus(TransactionStatus.SUCCESS)
                             .paidAt(LocalDateTime.now())
-                            .build()));
+                            .build());
+                    });
         }
 
         log.info("[UC-CUS-03] Booking #{} was cancelled by userId={}, reason={}",
