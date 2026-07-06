@@ -20,6 +20,7 @@ import { uploadStadiumImage } from "@/lib/api";
 import { toast } from "sonner";
 import { AddressPicker } from "@/components/AddressPicker";
 import { Badge } from "@/components/ui/badge";
+import { FootballFieldType } from "@/types/stadium";
 
 const updateStadiumSchema = z.object({
   stadiumName: z.string()
@@ -42,6 +43,7 @@ const updateStadiumSchema = z.object({
   description: z.string().max(2000, "Mô tả không được quá 2000 ký tự").optional(),
   openTime: z.string().min(1, "Vui lòng chọn giờ mở cửa"),
   closeTime: z.string().min(1, "Vui lòng chọn giờ đóng cửa"),
+  footballFieldType: z.nativeEnum(FootballFieldType).optional().nullable(),
 }).refine(
   (data) => {
     if (!data.openTime || !data.closeTime) return true;
@@ -98,6 +100,7 @@ export default function EditVenuePage() {
       description: "",
       openTime: "06:00",
       closeTime: "22:00",
+      footballFieldType: null,
     },
   });
 
@@ -127,6 +130,7 @@ export default function EditVenuePage() {
             description: stadiumData.description || "",
             openTime: normalizeTime(stadiumData.openTime),
             closeTime: normalizeTime(stadiumData.closeTime),
+            footballFieldType: stadiumData.footballFieldType || null,
           });
         })
         .catch((err) => {
@@ -227,6 +231,26 @@ export default function EditVenuePage() {
                   <p className="text-sm text-destructive">{form.formState.errors.sportTypeId.message}</p>
                 )}
               </div>
+
+              {stadium?.nodeType === 'COURT' && sportTypes.find(t => t.sportTypeId === form.watch("sportTypeId"))?.isFootballType && (
+                <div className="space-y-2">
+                  <Label>Loại sân bóng đá (tuỳ chọn)</Label>
+                  <Select
+                    value={form.watch("footballFieldType")?.toString() || ""}
+                    onValueChange={(val) => form.setValue("footballFieldType", val as FootballFieldType, { shouldValidate: true })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn loại sân (nếu là sân bóng đá)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="FIVE_A_SIDE">Sân 5 người</SelectItem>
+                      <SelectItem value="SEVEN_A_SIDE">Sân 7 người</SelectItem>
+                      <SelectItem value="ELEVEN_A_SIDE">Sân 11 người</SelectItem>
+                      <SelectItem value="FUTSAL">Sân Futsal</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {stadium?.nodeType !== 'COURT' && (
                 <div className="space-y-2">

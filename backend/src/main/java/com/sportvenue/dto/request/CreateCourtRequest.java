@@ -11,6 +11,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import com.sportvenue.entity.enums.FootballFieldType;
+
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -37,4 +39,6 @@ public class CreateCourtRequest {
     private BigDecimal pricePerHour;
 
     private List<String> imageUrls;
+
+    private FootballFieldType footballFieldType;
 }

@@ -719,7 +719,7 @@ class BookingServiceImplTest {
         CreateBookingRequest req = CreateBookingRequest.builder()
                 .stadiumId(stadium.getStadiumId())
                 .slotId(slot.getSlotId())
-                .reservationDate(LocalDate.of(2026, 7, 6))
+                .reservationDate(futureDate())
                 .accessories(List.of())
                 .build();
 
@@ -748,7 +748,7 @@ class BookingServiceImplTest {
         CreateBookingRequest req = CreateBookingRequest.builder()
                 .stadiumId(stadium.getStadiumId())
                 .slotId(slot.getSlotId())
-                .reservationDate(LocalDate.of(2026, 7, 6))
+                .reservationDate(futureDate())
                 .accessories(List.of())
                 .build();
 

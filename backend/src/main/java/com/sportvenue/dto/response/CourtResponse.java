@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import com.sportvenue.entity.enums.FootballFieldType;
+
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -22,4 +24,5 @@ public class CourtResponse {
     /** True nếu Court bị chặn đặt HÔM NAY do bảo trì (kể cả cascade từ Facility/Complex cha) — dù stadiumStatus vẫn AVAILABLE. */
     private Boolean underMaintenanceToday;
     private List<String> imageUrls;
+    private FootballFieldType footballFieldType;
 }

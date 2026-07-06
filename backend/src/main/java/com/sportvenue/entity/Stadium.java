@@ -1,6 +1,7 @@
 package com.sportvenue.entity;
 
 import com.sportvenue.entity.enums.ApprovedStatus;
+import com.sportvenue.entity.enums.FootballFieldType;
 import com.sportvenue.entity.enums.StadiumStatus;
 import com.sportvenue.entity.enums.StadiumNodeType;
 import jakarta.persistence.CascadeType;
@@ -115,6 +116,11 @@ public class Stadium implements Serializable {
     @Column(name = "node_type", nullable = false, length = 20)
     @Builder.Default
     private StadiumNodeType nodeType = StadiumNodeType.COURT;
+
+    /** Loại sân bóng đá (Sân 5, Sân 7...). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "football_field_type", length = 20)
+    private FootballFieldType footballFieldType;
 
     /** Tổ hợp sở hữu sân này (bắt buộc cho cả FACILITY và COURT). */
     @ManyToOne(fetch = FetchType.LAZY)

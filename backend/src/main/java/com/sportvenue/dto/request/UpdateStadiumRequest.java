@@ -15,6 +15,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import com.sportvenue.entity.enums.FootballFieldType;
+
 import java.math.BigDecimal;
 import java.time.LocalTime;
 
@@ -70,6 +72,8 @@ public class UpdateStadiumRequest {
     private java.util.List<Integer> amenityIds;
 
     private com.sportvenue.entity.enums.StadiumStatus stadiumStatus;
+
+    private FootballFieldType footballFieldType;
 
     @AssertTrue(message = "Close time must be after open time")
     public boolean isCloseTimeAfterOpenTime() {

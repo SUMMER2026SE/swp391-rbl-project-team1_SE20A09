@@ -90,7 +90,7 @@ function VenueManagementPage() {
 
   // Quick action states
   const [activeComplexIdForFacility, setActiveComplexIdForFacility] = useState<number | null>(null);
-  const [activeFacilityIdForCourt, setActiveFacilityIdForCourt] = useState<number | null>(null);
+  const [activeFacilityForCourt, setActiveFacilityForCourt] = useState<StadiumResponse | null>(null);
   const [bulkFacilityId, setBulkFacilityId] = useState<number | null>(null);
   const [bulkComplexId, setBulkComplexId] = useState<number | null>(null);
   const [bulkCourtsList, setBulkCourtsList] = useState<StadiumResponse[]>([]);
@@ -407,7 +407,7 @@ function VenueManagementPage() {
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setActiveFacilityIdForCourt(facility.stadiumId)}
+                                    onClick={() => setActiveFacilityForCourt(facility)}
                                     className="text-xs font-semibold h-8 border-primary/20 text-primary hover:bg-primary/5"
                                   >
                                     <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -492,7 +492,17 @@ function VenueManagementPage() {
                                           {facilityCourts.map(court => (
                                             <TableRow key={court.stadiumId} className="hover:bg-slate-50/30 transition-colors">
                                               <TableCell className="font-semibold text-slate-800 dark:text-slate-200 truncate">
-                                                {court.stadiumName}
+                                                <div className="flex flex-col gap-1 items-start">
+                                                  <span className="truncate">{court.stadiumName}</span>
+                                                  {court.footballFieldType && (
+                                                    <Badge variant="outline" className="text-[10px] py-0 font-medium">
+                                                      {court.footballFieldType === 'FIVE_A_SIDE' && 'Sân 5'}
+                                                      {court.footballFieldType === 'SEVEN_A_SIDE' && 'Sân 7'}
+                                                      {court.footballFieldType === 'ELEVEN_A_SIDE' && 'Sân 11'}
+                                                      {court.footballFieldType === 'FUTSAL' && 'Sân Futsal'}
+                                                    </Badge>
+                                                  )}
+                                                </div>
                                               </TableCell>
                                               <TableCell className="font-extrabold text-slate-900 dark:text-white text-sm">
                                                 {court.pricePerHour.toLocaleString('vi-VN')}₫
@@ -698,9 +708,9 @@ function VenueManagementPage() {
       />
 
       <QuickCreateCourtDialog
-        isOpen={activeFacilityIdForCourt !== null}
-        onClose={() => setActiveFacilityIdForCourt(null)}
-        parentStadiumId={activeFacilityIdForCourt}
+        isOpen={activeFacilityForCourt !== null}
+        onClose={() => setActiveFacilityForCourt(null)}
+        parentFacility={activeFacilityForCourt}
         onSuccess={fetchTreeData}
       />
 
