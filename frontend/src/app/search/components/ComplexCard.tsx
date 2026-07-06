@@ -57,9 +57,9 @@ export function ComplexCard({ complex }: ComplexCardProps) {
             <div className="flex items-center text-sm font-medium mb-1.5 bg-black/40 w-fit px-2 py-0.5 rounded-full backdrop-blur-sm">
               <Star className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400 mr-1" />
               <span className="font-bold">
-                {complex.totalReviews && complex.totalReviews > 0 ? (complex.averageRating || 5.0).toFixed(1) : '—'}
+                {complex.reviewCount && complex.reviewCount > 0 ? (complex.averageRating || 5.0).toFixed(1) : '—'}
               </span>
-              <span className="text-gray-300 ml-1.5 text-xs font-normal">({complex.totalReviews || 0} đánh giá)</span>
+              <span className="text-gray-300 ml-1.5 text-xs font-normal">({complex.reviewCount || 0} đánh giá)</span>
             </div>
             <h3 className="text-xl font-bold truncate text-white drop-shadow-md">{complex.name}</h3>
           </div>

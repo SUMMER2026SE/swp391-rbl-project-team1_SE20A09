@@ -5,6 +5,8 @@ import com.sportvenue.dto.response.CourtResponse;
 import com.sportvenue.dto.response.FacilityResponse;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.dto.response.PublicComplexDetailResponse;
+import com.sportvenue.dto.response.StadiumDetailResponse;
+import com.sportvenue.entity.Review;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.StadiumComplex;
 import com.sportvenue.entity.enums.ApprovedStatus;
@@ -12,6 +14,7 @@ import com.sportvenue.entity.enums.ComplexStatus;
 import com.sportvenue.entity.enums.StadiumNodeType;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
+import com.sportvenue.repository.ReviewRepository;
 import com.sportvenue.repository.StadiumComplexRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.specification.StadiumComplexSpecification;
@@ -38,6 +41,7 @@ public class PublicComplexServiceImpl implements PublicComplexService {
     private final StadiumComplexRepository stadiumComplexRepository;
     private final StadiumRepository stadiumRepository;
     private final MaintenanceScheduleService maintenanceScheduleService;
+    private final ReviewRepository reviewRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -292,5 +296,43 @@ public class PublicComplexServiceImpl implements PublicComplexService {
                 * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<StadiumDetailResponse.ReviewDto> getComplexReviews(Integer complexId, int page, int size) {
+        log.info("Fetching reviews for complex ID: {}, page: {}, size: {}", complexId, page, size);
+
+        StadiumComplex complex = stadiumComplexRepository.findById(complexId)
+                .orElseThrow(() -> new ResourceNotFoundException("Complex not found with ID: " + complexId));
+        if (complex.getApprovedStatus() != ApprovedStatus.APPROVED
+                || complex.getComplexStatus() == ComplexStatus.CLOSED) {
+            throw new ResourceNotFoundException("Complex is not available or does not exist");
+        }
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Review> reviewPage = reviewRepository.findByStadiumComplexComplexIdOrderByCreatedAtDesc(complexId, pageable);
+
+        List<StadiumDetailResponse.ReviewDto> content = reviewPage.getContent().stream()
+                .map(r -> StadiumDetailResponse.ReviewDto.builder()
+                        .reviewId(r.getReviewId())
+                        .userId(r.getUser().getUserId())
+                        .userName(r.getUser().getFullName())
+                        .userAvatar(r.getUser().getAvatarUrl())
+                        .ratingScore(r.getRatingScore())
+                        .comment(r.getComment())
+                        .ownerResponse(r.getOwnerResponse())
+                        .createdAt(r.getCreatedAt())
+                        .build())
+                .toList();
+
+        return PageResponse.<StadiumDetailResponse.ReviewDto>builder()
+                .content(content)
+                .pageNumber(reviewPage.getNumber())
+                .pageSize(reviewPage.getSize())
+                .totalElements(reviewPage.getTotalElements())
+                .totalPages(reviewPage.getTotalPages())
+                .last(reviewPage.isLast())
+                .build();
     }
 }
