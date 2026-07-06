@@ -252,6 +252,10 @@ public class StadiumServiceImpl implements StadiumService {
         stadium.setPricePerHour(request.getPricePerHour());
         stadium.setLatitude(request.getLatitude().doubleValue());
         stadium.setLongitude(request.getLongitude().doubleValue());
+        
+        if (request.getFootballFieldType() != null) {
+            stadium.setFootballFieldType(request.getFootballFieldType());
+        }
 
         // Sync amenities if provided in the update request
         if (request.getAmenityIds() != null) {
@@ -578,6 +582,7 @@ public class StadiumServiceImpl implements StadiumService {
                 .stadiumStatus(StadiumStatus.AVAILABLE)
                 .approvedStatus(ApprovedStatus.APPROVED)
                 .createdAt(LocalDateTime.now())
+                .footballFieldType(request.getFootballFieldType())
                 .build();
 
         if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {

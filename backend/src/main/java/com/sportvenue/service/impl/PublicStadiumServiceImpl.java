@@ -319,6 +319,7 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 .closeTime(stadium.getCloseTime())
                 .stadiumStatus(stadium.getStadiumStatus() != null ? stadium.getStadiumStatus().name() : null)
                 .approvedStatus(approvedStatusVal != null ? approvedStatusVal.name() : null)
+                .footballFieldType(stadium.getFootballFieldType())
                 .amenities(mapAmenities(stadium))
                 .accessories(mapAccessories(stadiumAccessories))
                 .timeSlots(mapTimeSlots(stadium))

@@ -190,6 +190,7 @@ public class PublicComplexServiceImpl implements PublicComplexService {
                 .stadiumStatus(s.getStadiumStatus().name())
                 .underMaintenanceToday(underMaintenanceToday)
                 .imageUrls(imageUrls)
+                .footballFieldType(s.getFootballFieldType())
                 .build();
     }
 

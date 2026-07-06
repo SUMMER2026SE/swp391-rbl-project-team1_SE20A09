@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import com.sportvenue.entity.enums.FootballFieldType;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -34,6 +36,7 @@ public class StadiumDetailResponse {
     private LocalTime closeTime;
     private String stadiumStatus;
     private String approvedStatus;
+    private FootballFieldType footballFieldType;
     
     private List<AmenityResponse> amenities;
     private List<AccessoryResponse> accessories;

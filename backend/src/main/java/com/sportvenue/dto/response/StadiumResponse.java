@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import com.sportvenue.entity.enums.FootballFieldType;
+
 import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.util.List;
@@ -35,6 +37,7 @@ public class StadiumResponse {
     private BigDecimal pricePerHour;
     private String stadiumStatus;
     private String approvedStatus;
+    private FootballFieldType footballFieldType;
 
     /**
      * True nếu sân đang bị chặn đặt HÔM NAY do bất kỳ cơ chế bảo trì nào (stadiumStatus,
