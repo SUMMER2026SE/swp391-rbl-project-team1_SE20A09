@@ -78,6 +78,13 @@ public class RefundServiceImpl implements RefundService {
 
             validateOwnershipAndStatus(booking, owner);
 
+            // Kiểm tra xem đã có giao dịch hoàn tiền nào (PENDING hoặc SUCCESS) đang tồn tại chưa để tránh Double Refund
+            paymentRepository.findRefundPaymentByBookingId(bookingId).ifPresent(p -> {
+                if (p.getPaymentStatus() == TransactionStatus.PENDING || p.getPaymentStatus() == TransactionStatus.SUCCESS) {
+                    throw new BadRequestException("Yêu cầu hoàn tiền đang được xử lý hoặc đã thành công.");
+                }
+            });
+
             Payment originalPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
                     .stream().findFirst()
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán ban đầu"));

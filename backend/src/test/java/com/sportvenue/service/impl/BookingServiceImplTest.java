@@ -137,6 +137,8 @@ class BookingServiceImplTest {
                     TransactionCallback callback = invocation.getArgument(0);
                     return callback.doInTransaction(null);
                 });
+        org.mockito.Mockito.lenient().when(bookingRepository.findByIdForUpdate(any(Integer.class)))
+                .thenAnswer(invocation -> bookingRepository.findDetailById(invocation.getArgument(0)));
     }
 
     /** Helper: reservationDate 7 ngày trong tương lai → luôn future. */
@@ -772,6 +774,36 @@ class BookingServiceImplTest {
         // Act & Assert
         assertThrows(ResourceNotFoundException.class,
                 () -> bookingService.cancelBooking(principal, 999, "Not exists"));
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cancelBooking: refund already pending -> throws BadRequestException")
+    void cancelBooking_refundAlreadyPending_throwsBadRequest() {
+        // Arrange
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .build();
+
+        com.sportvenue.entity.Payment pendingRefund = com.sportvenue.entity.Payment.builder()
+                .paymentId(2)
+                .booking(booking)
+                .amount(new BigDecimal("-150000"))
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.PENDING)
+                .build();
+
+        when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(Optional.of(pendingRefund));
+
+        // Act & Assert
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> bookingService.cancelBooking(principal, 100, "Duplicate cancel"));
+        assertTrue(ex.getMessage().contains("đang được xử lý hoặc đã thành công"));
         verify(bookingRepository, never()).save(any());
     }
 

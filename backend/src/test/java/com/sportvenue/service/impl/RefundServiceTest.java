@@ -149,4 +149,55 @@ class RefundServiceTest {
         assertEquals(PaymentStatus.PAID, booking.getPaymentStatus());
         assertEquals(SlotStatus.BOOKED, slot.getSlotStatus());
     }
+
+    @Test
+    @DisplayName("processRefund: refund already pending -> throws BadRequestException")
+    void processRefund_refundAlreadyPending_throwsBadRequest() {
+        // Arrange
+        com.sportvenue.entity.User ownerUser = com.sportvenue.entity.User.builder()
+                .userId(1).email("owner@example.com").build();
+        com.sportvenue.entity.Owner owner = com.sportvenue.entity.Owner.builder()
+                .ownerId(1).user(ownerUser).build();
+        com.sportvenue.entity.Stadium stadium = com.sportvenue.entity.Stadium.builder()
+                .stadiumId(10).owner(owner).build();
+        
+        booking.setStadium(stadium);
+        booking.setUser(ownerUser);
+        booking.setTotalPrice(new java.math.BigDecimal("150000"));
+        booking.setReservationDate(java.time.LocalDate.now().plusDays(7));
+
+        com.sportvenue.dto.request.RefundRequest request = new com.sportvenue.dto.request.RefundRequest();
+        request.setReason("Owner cancelled");
+
+        com.sportvenue.entity.Payment pendingRefund = com.sportvenue.entity.Payment.builder()
+                .paymentId(2)
+                .booking(booking)
+                .amount(new java.math.BigDecimal("-150000"))
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.PENDING)
+                .build();
+
+        org.mockito.Mockito.lenient().when(userRepository.findByEmail("owner@example.com"))
+                .thenReturn(java.util.Optional.of(ownerUser));
+        org.mockito.Mockito.lenient().when(ownerRepository.findByUserUserId(1))
+                .thenReturn(java.util.Optional.of(owner));
+        org.mockito.Mockito.lenient().when(bookingRepository.findByIdForUpdate(1))
+                .thenReturn(java.util.Optional.of(booking));
+        org.mockito.Mockito.lenient().when(paymentRepository.findRefundPaymentByBookingId(1))
+                .thenReturn(java.util.Optional.of(pendingRefund));
+
+        org.springframework.transaction.support.TransactionTemplate txTemplate = org.mockito.Mockito.mock(org.springframework.transaction.support.TransactionTemplate.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(refundService, "transactionTemplate", txTemplate);
+        
+        org.mockito.Mockito.lenient().when(txTemplate.execute(org.mockito.ArgumentMatchers.any(org.springframework.transaction.support.TransactionCallback.class)))
+                .thenAnswer(invocation -> {
+                    org.springframework.transaction.support.TransactionCallback callback = invocation.getArgument(0);
+                    return callback.doInTransaction(null);
+                });
+
+        // Act & Assert
+        com.sportvenue.exception.BadRequestException ex = assertThrows(com.sportvenue.exception.BadRequestException.class, 
+                () -> refundService.processRefund(1, request, "owner@example.com"));
+        
+        assertTrue(ex.getMessage().contains("đang được xử lý hoặc đã thành công"));
+    }
 }

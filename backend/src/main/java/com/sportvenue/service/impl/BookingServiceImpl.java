@@ -328,7 +328,7 @@ public class BookingServiceImpl implements BookingService {
 
     private CancelProcessContext processLocalCancellationTx(Integer bookingId, Integer currentUserId, String reason) {
         return transactionTemplate.execute(status -> {
-            Booking booking = bookingRepository.findDetailById(bookingId)
+            Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Không tìm thấy booking với ID " + bookingId));
 
@@ -341,6 +341,13 @@ public class BookingServiceImpl implements BookingService {
             Payment originalPayment = null;
 
             if (wasReallyPaid) {
+                // Kiểm tra xem đã có giao dịch hoàn tiền nào (PENDING hoặc SUCCESS) đang tồn tại chưa để tránh Double Refund
+                paymentRepository.findRefundPaymentByBookingId(bookingId).ifPresent(p -> {
+                    if (p.getPaymentStatus() == TransactionStatus.PENDING || p.getPaymentStatus() == TransactionStatus.SUCCESS) {
+                        throw new BadRequestException("Yêu cầu hủy đơn và hoàn tiền đang được xử lý hoặc đã thành công.");
+                    }
+                });
+
                 originalPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
                         .stream().findFirst().orElse(null);
                 
