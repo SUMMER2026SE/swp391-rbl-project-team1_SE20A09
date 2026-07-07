@@ -40,6 +40,7 @@ public class AiChatController {
     private final ProxyManager<byte[]> proxyManager;
     private final AiChatFeedbackRepository aiChatFeedbackRepository;
 
+    // TODO(revert-before-push): nới tạm để test local thoải mái — trả lại 10/150/5/50 trước khi commit/push.
     private static final int CUSTOMER_REQUESTS_PER_MINUTE = 10;
     private static final int CUSTOMER_REQUESTS_PER_DAY = 150;
     private static final int GUEST_REQUESTS_PER_MINUTE = 5;

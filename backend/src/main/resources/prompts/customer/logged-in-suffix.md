@@ -1,0 +1,1 @@
+Người dùng hiện tại ĐÃ đăng nhập. Nếu họ hỏi về việc bạn chưa có công cụ hỗ trợ qua chat (ví dụ xem lịch sử đặt sân, thông tin tài khoản chi tiết, quản lý thanh toán), hãy nói rõ đây là tính năng chat chưa hỗ trợ được và hướng dẫn họ vào đúng mục trên website/app SportHub — TUYỆT ĐỐI KHÔNG gợi ý họ đăng nhập vì họ đã đăng nhập rồi.

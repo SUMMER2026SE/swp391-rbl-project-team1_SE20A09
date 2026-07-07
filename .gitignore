@@ -48,6 +48,9 @@ docker-data/
 # ── Seed data scripts: kết quả cào/tải trung gian, tái tạo được bằng script ──
 scripts/output/
 
+# ── AI Chat eval harness: công cụ test tay local, không dùng CI/CD, chỉ 1 người dùng ──
+ai-eval/
+
 # ── OS ──────────────────────────────────────────
 Thumbs.db
 ehthumbs.db
