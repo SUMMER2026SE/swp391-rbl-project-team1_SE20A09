@@ -310,31 +310,33 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     public BookingDetailResponse cancelBooking(UserPrincipal principal, Integer bookingId, String reason) {
+        Integer currentUserId = principal.getUser().getUserId();
         
-        CancelProcessContext ctx = transactionTemplate.execute(status -> {
+        // 1. Transaction 1: Khóa DB, cập nhật trạng thái Booking và tạo Refund Payment (PENDING)
+        CancelProcessContext ctx = processLocalCancellationTx(bookingId, currentUserId, reason);
+
+        // 2. Gọi Gateway và Transaction 2: Cập nhật trạng thái SUCCESS/FAILED
+        if (ctx.refundPayment != null && ctx.originalPayment != null) {
+            processGatewayRefundTx(ctx, bookingId, reason);
+        }
+
+        // 3. Fetch lại Booking mới nhất để build response
+        Booking finalBooking = transactionTemplate.execute(status -> 
+                bookingRepository.findDetailById(bookingId).orElse(ctx.booking));
+        return toBookingDetailResponse(finalBooking, finalBooking.getStadium(), finalBooking.getSlot());
+    }
+
+    private CancelProcessContext processLocalCancellationTx(Integer bookingId, Integer currentUserId, String reason) {
+        return transactionTemplate.execute(status -> {
             Booking booking = bookingRepository.findDetailById(bookingId)
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Không tìm thấy booking với ID " + bookingId));
 
-            Integer currentUserId = principal.getUser().getUserId();
-            boolean isCustomer = booking.getUser() != null
-                    && booking.getUser().getUserId().equals(currentUserId);
-            boolean isVenueOwner = booking.getStadium() != null
-                    && booking.getStadium().getOwner() != null
-                    && booking.getStadium().getOwner().getUser() != null
-                    && booking.getStadium().getOwner().getUser().getUserId().equals(currentUserId);
-            if (!isCustomer && !isVenueOwner) {
-                throw new BadRequestException("Bạn không có quyền hủy đơn đặt sân này");
-            }
-
-            BookingStatus currentStatus = booking.getBookingStatus();
-            if (currentStatus == BookingStatus.COMPLETED || currentStatus == BookingStatus.CANCELLED) {
-                throw new BadRequestException(
-                        "Không thể hủy đơn đặt sân ở trạng thái " + currentStatus);
-            }
+            validateCancellation(booking, currentUserId);
 
             boolean wasReallyPaid = booking.getPaymentStatus() == PaymentStatus.PAID
                     || booking.getPaymentStatus() == PaymentStatus.DEPOSITED;
+            
             booking.setBookingStatus(BookingStatus.CANCELLED);
             booking.setCancelReason(reason);
             if (wasReallyPaid) {
@@ -374,34 +376,49 @@ public class BookingServiceImpl implements BookingService {
 
             return new CancelProcessContext(saved, originalPayment, refundPayment);
         });
+    }
 
-        if (ctx.refundPayment != null && ctx.originalPayment != null) {
-            boolean gatewaySuccess = false;
-            try {
-                paymentService.processRefund(ctx.originalPayment, ctx.originalPayment.getAmount(), reason != null ? reason : "Khách hàng tự hủy");
-                gatewaySuccess = true;
-            } catch (Exception e) {
-                log.error("Refund gateway failed for customer cancel booking {}", bookingId, e);
-            }
-
-            final boolean finalSuccess = gatewaySuccess;
-            transactionTemplate.execute(status -> {
-                Payment payment = paymentRepository.findById(ctx.refundPayment.getPaymentId()).orElse(null);
-                if (payment != null) {
-                    payment.setPaymentStatus(finalSuccess ? TransactionStatus.SUCCESS : TransactionStatus.FAILED);
-                    paymentRepository.save(payment);
-                }
-                return null;
-            });
-            
-            if (!gatewaySuccess) {
-                throw new BadRequestException("Lỗi hoàn tiền qua cổng thanh toán. Đơn đã được hủy nhưng tiền chưa được hoàn. Vui lòng thử lại sau.");
-            }
+    private void validateCancellation(Booking booking, Integer currentUserId) {
+        boolean isCustomer = booking.getUser() != null
+                && booking.getUser().getUserId().equals(currentUserId);
+        boolean isVenueOwner = booking.getStadium() != null
+                && booking.getStadium().getOwner() != null
+                && booking.getStadium().getOwner().getUser() != null
+                && booking.getStadium().getOwner().getUser().getUserId().equals(currentUserId);
+        if (!isCustomer && !isVenueOwner) {
+            throw new BadRequestException("Bạn không có quyền hủy đơn đặt sân này");
         }
 
-        Booking finalBooking = transactionTemplate.execute(status -> 
-                bookingRepository.findDetailById(bookingId).orElse(ctx.booking));
-        return toBookingDetailResponse(finalBooking, finalBooking.getStadium(), finalBooking.getSlot());
+        BookingStatus currentStatus = booking.getBookingStatus();
+        if (currentStatus == BookingStatus.COMPLETED || currentStatus == BookingStatus.CANCELLED) {
+            throw new BadRequestException(
+                    "Không thể hủy đơn đặt sân ở trạng thái " + currentStatus);
+        }
+    }
+
+    private void processGatewayRefundTx(CancelProcessContext ctx, Integer bookingId, String reason) {
+        boolean gatewaySuccess = false;
+        try {
+            paymentService.processRefund(ctx.originalPayment, ctx.originalPayment.getAmount(), 
+                    reason != null ? reason : "Khách hàng tự hủy");
+            gatewaySuccess = true;
+        } catch (Exception e) {
+            log.error("Refund gateway failed for customer cancel booking {}", bookingId, e);
+        }
+
+        final boolean finalSuccess = gatewaySuccess;
+        transactionTemplate.execute(status -> {
+            Payment payment = paymentRepository.findById(ctx.refundPayment.getPaymentId()).orElse(null);
+            if (payment != null) {
+                payment.setPaymentStatus(finalSuccess ? TransactionStatus.SUCCESS : TransactionStatus.FAILED);
+                paymentRepository.save(payment);
+            }
+            return null;
+        });
+        
+        if (!gatewaySuccess) {
+            throw new BadRequestException("Lỗi hoàn tiền qua cổng thanh toán. Đơn đã được hủy nhưng tiền chưa được hoàn. Vui lòng thử lại sau.");
+        }
     }
 
     @RequiredArgsConstructor
