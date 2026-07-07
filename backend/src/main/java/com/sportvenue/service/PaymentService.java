@@ -44,4 +44,11 @@ public interface PaymentService {
      * @throws com.sportvenue.exception.PaymentGatewayRefundException nếu API cổng thanh toán trả về lỗi
      */
     void processRefund(com.sportvenue.entity.Payment originalPayment, java.math.BigDecimal refundAmount, String refundReason);
+
+    /**
+     * Truy vấn trạng thái giao dịch hoàn tiền từ cổng thanh toán (VNPay/MoMo) - QueryDR.
+     * @param refundPayment Giao dịch hoàn tiền đang ở trạng thái PENDING
+     * @return true nếu thành công, false nếu thất bại (hoặc ném exception nếu vẫn đang chờ).
+     */
+    boolean checkRefundStatus(com.sportvenue.entity.Payment refundPayment);
 }

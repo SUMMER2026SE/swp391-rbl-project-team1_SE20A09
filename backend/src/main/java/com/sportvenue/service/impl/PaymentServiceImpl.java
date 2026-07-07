@@ -288,4 +288,17 @@ public class PaymentServiceImpl implements PaymentService {
             throw new PaymentGatewayRefundException("Lỗi không xác định khi hoàn tiền qua cổng thanh toán", e);
         }
     }
+
+    @Override
+    public boolean checkRefundStatus(Payment refundPayment) {
+        log.info("Kiểm tra trạng thái hoàn tiền (QueryDR) qua cổng thanh toán (Mock): TxnRef={}", refundPayment.getTransactionCode());
+        try {
+            // TODO: Call actual QueryDR API of VNPay/MoMo
+            Thread.sleep(300);
+            return true; // Giả sử thành công
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new PaymentGatewayRefundException("Lỗi timeout khi đối soát", e);
+        }
+    }
 }

@@ -76,6 +76,7 @@ public class RefundController {
 
         Integer userId = userPrincipal.getUser().getUserId();
 
+        boolean acquired = false;
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<Integer> existing = idempotencyService.getExistingBookingId(userId, idempotencyKey);
             if (existing.isPresent()) {
@@ -86,19 +87,25 @@ public class RefundController {
             if (!idempotencyService.tryAcquire(userId, idempotencyKey)) {
                 return ResponseEntity.status(HttpStatus.CONFLICT).build();
             }
+            acquired = true;
         }
 
         try {
             RefundResponse response = refundService.processRefund(bookingId, request, userPrincipal.getUsername());
-            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            if (acquired) {
                 idempotencyService.complete(userId, idempotencyKey, response.getBookingId());
             }
             return ResponseEntity.ok(response);
-        } catch (RuntimeException ex) {
-            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+        } catch (com.sportvenue.exception.PaymentGatewayRefundException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            if (acquired) {
                 idempotencyService.release(userId, idempotencyKey);
             }
-            throw ex;
+            if (ex instanceof RuntimeException) {
+                throw (RuntimeException) ex;
+            }
+            throw new RuntimeException(ex);
         }
     }
 }
