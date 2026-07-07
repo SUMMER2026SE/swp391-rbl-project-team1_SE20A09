@@ -142,6 +142,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 1536m
+          cpus: '2.0'
 
   # ── Frontend ──────────────────────────────────────────────
   frontend:
