@@ -51,8 +51,22 @@ public class RefundServiceImpl implements RefundService {
     public RefundResponse processRefund(Integer bookingId, RefundRequest request, String ownerEmail) {
         log.info("Starting processRefund for bookingId: {} by Owner: {}", bookingId, ownerEmail);
 
-        // Transaction 1: Khóa booking, cập nhật trạng thái, lưu Payment PENDING
-        RefundProcessContext ctx = transactionTemplate.execute(status -> {
+        RefundProcessContext ctx = processLocalRefundTx(bookingId, ownerEmail, request.getReason());
+
+        if (ctx.calculation.getAmount().compareTo(BigDecimal.ZERO) > 0 && ctx.refundPayment != null) {
+            processGatewayRefundTx(ctx, bookingId, request.getReason());
+        }
+
+        log.info("Successfully processed refund for booking ID: {}. Refund Amount: {} ({}%)",
+                bookingId, ctx.calculation.getAmount(), ctx.calculation.getPercentage());
+
+        Booking finalBooking = transactionTemplate
+                .execute(status -> bookingRepository.findById(bookingId).orElse(ctx.booking));
+        return buildRefundResponse(finalBooking, ctx.calculation, request.getReason());
+    }
+
+    private RefundProcessContext processLocalRefundTx(Integer bookingId, String ownerEmail, String reason) {
+        return transactionTemplate.execute(status -> {
             User user = userRepository.findByEmail(ownerEmail)
                     .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng: " + ownerEmail));
 
@@ -82,54 +96,42 @@ public class RefundServiceImpl implements RefundService {
                         .build();
                 refundPayment = paymentRepository.save(refundPayment);
             } else {
-                // If refund amount is 0, we can cancel it right away locally
-                updateBookingAndReleaseSlot(booking, request.getReason());
+                updateBookingAndReleaseSlot(booking, reason);
             }
 
             return new RefundProcessContext(booking, originalPayment, calculation, refundPayment);
         });
+    }
 
-        // Nếu số tiền hoàn > 0, gọi Gateway ở ngoài Transaction (để không giữ lock)
-        if (ctx.calculation.getAmount().compareTo(BigDecimal.ZERO) > 0 && ctx.refundPayment != null) {
-            boolean gatewaySuccess = false;
-            try {
-                paymentService.processRefund(ctx.originalPayment, ctx.calculation.getAmount(), request.getReason());
-                gatewaySuccess = true;
-            } catch (Exception e) {
-                log.error("Refund gateway failed for booking {}", bookingId, e);
-            }
-
-            // Transaction 2: Cập nhật kết quả Gateway
-            final boolean finalSuccess = gatewaySuccess;
-            transactionTemplate.execute(status -> {
-                Payment payment = paymentRepository.findById(ctx.refundPayment.getPaymentId()).orElse(null);
-                if (payment != null) {
-                    payment.setPaymentStatus(finalSuccess ? TransactionStatus.SUCCESS : TransactionStatus.FAILED);
-                    paymentRepository.save(payment);
-                }
-                if (finalSuccess) {
-                    Booking booking = bookingRepository.findById(bookingId).orElse(null);
-                    if (booking != null) {
-                        updateBookingAndReleaseSlot(booking, request.getReason());
-                    }
-                }
-                return null;
-            });
-
-            if (!gatewaySuccess) {
-                throw new BadRequestException(
-                        "Lỗi hoàn tiền qua cổng thanh toán. Giao dịch hủy đơn thất bại. Vui lòng thử lại sau.");
-            }
+    private void processGatewayRefundTx(RefundProcessContext ctx, Integer bookingId, String reason) {
+        boolean gatewaySuccess = false;
+        try {
+            paymentService.processRefund(ctx.originalPayment, ctx.calculation.getAmount(), reason);
+            gatewaySuccess = true;
+        } catch (Exception e) {
+            log.error("Refund gateway failed for booking {}", bookingId, e);
         }
 
-        log.info("Successfully processed refund for booking ID: {}. Refund Amount: {} ({}%)",
-                bookingId, ctx.calculation.getAmount(), ctx.calculation.getPercentage());
+        final boolean finalSuccess = gatewaySuccess;
+        transactionTemplate.execute(status -> {
+            Payment payment = paymentRepository.findById(ctx.refundPayment.getPaymentId()).orElse(null);
+            if (payment != null) {
+                payment.setPaymentStatus(finalSuccess ? TransactionStatus.SUCCESS : TransactionStatus.FAILED);
+                paymentRepository.save(payment);
+            }
+            if (finalSuccess) {
+                Booking booking = bookingRepository.findById(bookingId).orElse(null);
+                if (booking != null) {
+                    updateBookingAndReleaseSlot(booking, reason);
+                }
+            }
+            return null;
+        });
 
-        // Lấy lại Booking mới nhất để build response (tránh dùng object cũ ngoài
-        // session)
-        Booking finalBooking = transactionTemplate
-                .execute(status -> bookingRepository.findById(bookingId).orElse(ctx.booking));
-        return buildRefundResponse(finalBooking, ctx.calculation, request.getReason());
+        if (!gatewaySuccess) {
+            throw new BadRequestException(
+                    "Lỗi hoàn tiền qua cổng thanh toán. Giao dịch hủy đơn thất bại. Vui lòng thử lại sau.");
+        }
     }
 
     @RequiredArgsConstructor
