@@ -19,9 +19,9 @@ import java.util.List;
  */
 public final class VietnamLocationReference {
 
-    public record District(String canonicalName, List<String> aliases) {}
+    public record District(String canonicalName, List<String> aliases) { }
 
-    public record Province(String canonicalName, List<String> aliases, List<District> districts) {}
+    public record Province(String canonicalName, List<String> aliases, List<District> districts) { }
 
     private static List<District> numberedDistricts(int fromInclusive, int toInclusive) {
         List<District> districts = new ArrayList<>();
