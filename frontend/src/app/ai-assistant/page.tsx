@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState } from "react";
 import { Header } from "@/components/layout/Header";
@@ -19,7 +19,7 @@ function AIAssistantPage() {
       id: 1,
       type: "assistant",
       content:
-        "Xin chào! Tôi là trợ lý AI của SportHub. Tôi có thể giúp bạn tìm sân, đặt lịch, hoặc gợi ý sân phù hợp. Bạn cần tôi giúp gì?",
+        "Xin chào! Tôi là trợ lý AI của SportsBook. Tôi có thể giúp bạn tìm sân, đặt lịch, hoặc gợi ý sân phù hợp. Bạn cần tôi giúp gì?",
       timestamp: "14:00",
     },
   ]);

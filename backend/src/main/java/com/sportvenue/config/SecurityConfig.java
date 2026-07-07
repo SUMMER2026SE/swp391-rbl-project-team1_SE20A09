@@ -46,7 +46,8 @@ public class SecurityConfig {
             "/api/v1/public/facilities/**",
             "/api/v1/public/amenities/**",
             "/api/v1/sport-types/**",
-            // UC-CUS-01: weekly grid endpoint — guest xem trước lịch tuần khi chưa login.
+            // UC-CUS-01: guests need to view slots by date and weekly slots
+            "/api/v1/stadiums/*/slots",
             "/api/v1/stadiums/*/weekly-slots",
             // UC-CUS-02: VNPay redirect về /api/v1/payments/vnpay-return — public vì
             // VNPay gọi browser redirect tới đây (không có Bearer token).

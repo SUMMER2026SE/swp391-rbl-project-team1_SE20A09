@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { getVenueDetail } from "@/lib/api/venue";
@@ -14,6 +14,9 @@ import { Separator } from "@/components/ui/separator";
 import { Calendar, MapPin, Minus, Plus } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { toast } from "sonner";
+
+
 
 function BookingContent() {
   const router = useRouter();
@@ -25,9 +28,9 @@ function BookingContent() {
     return searchParams.get("date") || new Date().toISOString().split("T")[0];
   });
 
-  const [selectedSlot, setSelectedSlot] = useState<string>(() => {
-    return searchParams.get("slot") || "";
-  });
+  // Support slotId from QuickBookDrawer redirect (URL param "slotId")
+  const slotIdParam = searchParams.get("slotId") || searchParams.get("slot") || ""
+  const [selectedSlot, setSelectedSlot] = useState<string>(() => slotIdParam);
 
   const [accessories, setAccessories] = useState<Record<number, number>>({});
 
@@ -43,6 +46,26 @@ function BookingContent() {
     enabled: !!venueId && !!selectedDate,
     refetchInterval: 5000,
   });
+
+  // ── Re-validate pre-selected slot (from QuickBookDrawer) continuously ──
+  useEffect(() => {
+    if (!slotAvailabilities || !selectedSlot) return
+
+    const targetSlotId = parseInt(selectedSlot)
+    if (isNaN(targetSlotId)) return
+
+    const found = slotAvailabilities.find(s => s.slotId === targetSlotId)
+    if (!found) return
+
+    if (!found.available) {
+      toast.error('Slot này vừa có người đặt, vui lòng chọn slot khác', {
+        description: 'Quay lại trang tìm kiếm để chọn sân và khung giờ khác.',
+        action: { label: 'Tìm sân khác', onClick: () => router.push('/search') },
+        duration: 8000,
+      })
+      setSelectedSlot('')
+    }
+  }, [slotAvailabilities, selectedSlot, router])
 
   if (isLoading) {
     return (

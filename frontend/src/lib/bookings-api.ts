@@ -1,4 +1,4 @@
-import { get, post, put } from "@/lib/api";
+import { get, post, put, publicApi } from "@/lib/api";
 
 export type BookingHistoryItem = {
   id: string;
@@ -213,10 +213,14 @@ export async function getSlotsByDate(
   stadiumId: number,
   date: string
 ): Promise<SlotAvailability[]> {
-  const data = await get<SlotAvailability[]>(
-    `/stadiums/${stadiumId}/slots?date=${encodeURIComponent(date)}`
-  );
-  return data ?? [];
+  try {
+    const res = await publicApi.get<SlotAvailability[]>(
+      `/stadiums/${stadiumId}/slots?date=${encodeURIComponent(date)}`
+    );
+    return res.data ?? [];
+  } catch {
+    return [];
+  }
 }
 
 // ── UC-CUS-01: Weekly schedule ──────────────────────────────────────────────
@@ -269,9 +273,10 @@ export async function getWeeklySlots(
   stadiumId: number,
   weekStart: string
 ): Promise<WeeklySlotsResponse> {
-  return get<WeeklySlotsResponse>(
+  const res = await publicApi.get<WeeklySlotsResponse>(
     `/stadiums/${stadiumId}/weekly-slots?weekStart=${encodeURIComponent(weekStart)}`
   );
+  return res.data;
 }
 
 /**

@@ -41,7 +41,7 @@ export function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
             <div className="p-1.5 bg-emerald-600 rounded-lg">
               <TrendingUp className="h-5 w-5 text-white" />
             </div>
-            <span className="text-xl font-bold tracking-tight">SportHub</span>
+            <span className="text-xl font-bold tracking-tight">SportsBook</span>
           </div>
           <button className="md:hidden text-slate-500 hover:text-slate-900" onClick={() => setIsOpen(false)}>
             <X className="h-5 w-5" />
@@ -76,7 +76,7 @@ export function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
         <div className="p-4 border-t border-slate-100 shrink-0">
           <div className="bg-slate-50 rounded-xl p-4 text-center">
             <p className="text-xs text-slate-500 mb-2">Phiên bản 2.4.0</p>
-            <p className="text-xs font-medium text-slate-700">© 2026 SportHub</p>
+            <p className="text-xs font-medium text-slate-700">© 2026 SportsBook</p>
           </div>
         </div>
       </aside>

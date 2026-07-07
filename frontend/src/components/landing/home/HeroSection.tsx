@@ -22,7 +22,7 @@ export function HeroSection() {
         <div className="mx-auto max-w-4xl text-center">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm text-emerald-50 backdrop-blur-md">
             <Sparkles className="h-4 w-4 text-emerald-300" />
-            <span>SportHub - Điểm đến của người yêu thể thao</span>
+            <span>SportsBook - Điểm đến của người yêu thể thao</span>
           </div>
 
           <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl">

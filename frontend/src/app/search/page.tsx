@@ -50,7 +50,7 @@ function buildSearchParams(filters: ComplexSearchParams): URLSearchParams {
       if (key === 'minPrice' && Number(value) === 0) return
       if (key === 'maxPrice' && Number(value) === 1000000) return
       if (key === 'page' && Number(value) === 0) return
-      if (key === 'size' && Number(value) === 12) return
+      if (key === 'size' && Number(value) === 100) return
       params.append(key, String(value))
     }
   })
@@ -105,7 +105,9 @@ function SearchPageContent() {
     minPrice: 0,
     maxPrice: 1000000,
     page: 0,
-    size: 12,
+    // [SUGGEST] TODO: Consider separating map endpoint to avoid large payload
+    // Tăng page size lên 100 để hỗ trợ hiển thị markers trên bản đồ
+    size: 100,
   })
 
   const debouncedFilters = useDebounce(filters, 500)
@@ -145,7 +147,9 @@ function SearchPageContent() {
       minPrice: searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : 0,
       maxPrice: searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : 1000000,
       page: searchParams.has('page') ? Number(searchParams.get('page')) : 0,
-      size: searchParams.has('size') ? Number(searchParams.get('size')) : 12,
+      // [SUGGEST] TODO: Consider separating map endpoint to avoid large payload
+      // Tăng page size lên 100 để hỗ trợ hiển thị markers trên bản đồ
+      size: searchParams.has('size') ? Number(searchParams.get('size')) : 100,
     }
 
     setFilters(prev => {
@@ -213,7 +217,9 @@ function SearchPageContent() {
       minPrice: 0,
       maxPrice: 1000000,
       page: 0,
-      size: 12,
+      // [SUGGEST] TODO: Consider separating map endpoint to avoid large payload
+      // Tăng page size lên 100 để hỗ trợ hiển thị markers trên bản đồ
+      size: 100,
     })
   }
 
