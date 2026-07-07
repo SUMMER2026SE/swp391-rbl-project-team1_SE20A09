@@ -22,7 +22,7 @@ public class PublicLocationController {
 
     @GetMapping
     @Operation(summary = "Get supported provinces/districts",
-            description = "Returns the 2 provinces (Hồ Chí Minh, Đà Nẵng) currently supported for search, each with their districts.")
+            description = "Returns the 3 provinces (Hồ Chí Minh, Đà Nẵng, Hà Nội) currently supported for search, each with their districts.")
     public ResponseEntity<List<SupportedLocationDto>> getLocations() {
         return ResponseEntity.ok(VietnamLocationReference.toSupportedLocationDtos());
     }

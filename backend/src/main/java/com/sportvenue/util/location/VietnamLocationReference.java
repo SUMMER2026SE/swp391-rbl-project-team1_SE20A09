@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Dữ liệu tham chiếu tĩnh cho 2 thành phố hiện có dữ liệu sân thật: TP. Hồ Chí Minh và Đà Nẵng.
+ * Dữ liệu tham chiếu tĩnh cho các thành phố được hỗ trợ tìm kiếm: TP. Hồ Chí Minh, Đà Nẵng và Hà Nội.
  * Alias được lưu ở dạng đã bỏ dấu + viết thường để so khớp trực tiếp với chuỗi đã qua
  * {@link VietnamLocationResolver#stripDiacritics(String)}. Mở rộng thêm thành phố mới chỉ cần
  * thêm 1 {@link Province} vào {@link #PROVINCES}.
@@ -73,7 +73,47 @@ public final class VietnamLocationReference {
             )
     );
 
-    public static final List<Province> PROVINCES = List.of(HO_CHI_MINH, DA_NANG);
+    public static final Province HA_NOI = new Province(
+            "Hà Nội",
+            List.of("ha noi", "tp ha noi", "tp.ha noi", "thanh pho ha noi", "thu do", "hn"),
+            List.of(
+                    // 12 quận nội thành
+                    new District("Ba Đình",       List.of("ba dinh")),
+                    new District("Hoàn Kiếm",     List.of("hoan kiem")),
+                    new District("Tây Hồ",        List.of("tay ho")),
+                    new District("Long Biên",      List.of("long bien")),
+                    new District("Cầu Giấy",      List.of("cau giay")),
+                    new District("Đống Đa",        List.of("dong da")),
+                    new District("Hai Bà Trưng",   List.of("hai ba trung")),
+                    new District("Hoàng Mai",      List.of("hoang mai")),
+                    new District("Thanh Xuân",     List.of("thanh xuan")),
+                    new District("Nam Từ Liêm",    List.of("nam tu liem")),
+                    new District("Bắc Từ Liêm",    List.of("bac tu liem")),
+                    new District("Hà Đông",        List.of("ha dong")),
+                    // Thị xã
+                    new District("Sơn Tây",        List.of("son tay")),
+                    // 17 huyện ngoại thành
+                    new District("Sóc Sơn",        List.of("soc son")),
+                    new District("Đông Anh",       List.of("dong anh")),
+                    new District("Gia Lâm",        List.of("gia lam")),
+                    new District("Thanh Trì",      List.of("thanh tri")),
+                    new District("Mê Linh",        List.of("me linh")),
+                    new District("Thường Tín",     List.of("thuong tin")),
+                    new District("Phú Xuyên",      List.of("phu xuyen")),
+                    new District("Ứng Hòa",        List.of("ung hoa")),
+                    new District("Mỹ Đức",         List.of("my duc")),
+                    new District("Thanh Oai",      List.of("thanh oai")),
+                    new District("Chương Mỹ",      List.of("chuong my")),
+                    new District("Quốc Oai",       List.of("quoc oai")),
+                    new District("Thạch Thất",     List.of("thach that")),
+                    new District("Phúc Thọ",       List.of("phuc tho")),
+                    new District("Đan Phượng",     List.of("dan phuong")),
+                    new District("Hoài Đức",       List.of("hoai duc")),
+                    new District("Ba Vì",          List.of("ba vi"))
+            )
+    );
+
+    public static final List<Province> PROVINCES = List.of(HO_CHI_MINH, DA_NANG, HA_NOI);
 
     /** Dùng bởi PublicLocationController để trả danh sách tỉnh/thành cho dropdown ở frontend. */
     public static List<SupportedLocationDto> toSupportedLocationDtos() {
