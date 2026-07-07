@@ -15,6 +15,7 @@ import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.service.BookingService;
 import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.MatchRequestService;
+import com.sportvenue.service.PublicComplexService;
 import com.sportvenue.service.PublicStadiumService;
 import com.sportvenue.util.location.VietnamLocationResolver;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +57,9 @@ class CustomerAgentToolProviderTest {
     private PublicStadiumService publicStadiumService;
 
     @Mock
+    private PublicComplexService publicComplexService;
+
+    @Mock
     private BookingService bookingService;
 
     @Mock
@@ -78,7 +82,7 @@ class CustomerAgentToolProviderTest {
     @BeforeEach
     void setUp() {
         provider = new CustomerAgentToolProvider(
-                publicStadiumService, bookingService, maintenanceScheduleService,
+                publicStadiumService, publicComplexService, bookingService, maintenanceScheduleService,
                 matchRequestService, sportTypeRepository, stadiumRepository, stadiumMapper,
                 new VietnamLocationResolver());
     }
@@ -101,15 +105,15 @@ class CustomerAgentToolProviderTest {
     }
 
     @Test
-    void getToolDefinitions_returnsAllFourTools() {
+    void getToolDefinitions_returnsFiveTools() {
         List<Map<String, Object>> tools = provider.getToolDefinitions();
 
-        assertEquals(4, tools.size());
+        assertEquals(5, tools.size());
         List<String> names = tools.stream()
                 .map(t -> (Map<?, ?>) t.get("function"))
                 .map(f -> (String) f.get("name"))
                 .toList();
-        assertTrue(names.containsAll(List.of("searchStadiums", "getStadiumSlots", "findMatchRequests", "getPolicyInformation")));
+        assertTrue(names.containsAll(List.of("searchComplexes", "searchStadiums", "getStadiumSlots", "findMatchRequests", "getPolicyInformation")));
     }
 
     @Test

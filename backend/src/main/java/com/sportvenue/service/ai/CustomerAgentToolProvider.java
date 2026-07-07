@@ -2,8 +2,10 @@ package com.sportvenue.service.ai;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sportvenue.dto.request.StadiumComplexSearchRequest;
 import com.sportvenue.dto.request.StadiumSearchRequest;
 import com.sportvenue.dto.response.PageResponse;
+import com.sportvenue.dto.response.PublicComplexDetailResponse;
 import com.sportvenue.dto.response.StadiumResponse;
 import com.sportvenue.dto.response.TimeSlotResponse;
 import com.sportvenue.dto.response.MatchResponse;
@@ -16,6 +18,7 @@ import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.service.BookingService;
 import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.MatchRequestService;
+import com.sportvenue.service.PublicComplexService;
 import com.sportvenue.service.PublicStadiumService;
 import com.sportvenue.util.location.VietnamLocationResolver;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +37,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 
 @Slf4j
 @Service
@@ -41,6 +45,7 @@ import java.util.Optional;
 public class CustomerAgentToolProvider implements AgentToolProvider {
 
     private final PublicStadiumService publicStadiumService;
+    private final PublicComplexService publicComplexService;
     private final BookingService bookingService;
     private final MaintenanceScheduleService maintenanceScheduleService;
     private final MatchRequestService matchRequestService;
@@ -105,11 +110,86 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
     @Override
     public List<Map<String, Object>> getToolDefinitions() {
         List<Map<String, Object>> tools = new ArrayList<>();
+        tools.add(buildSearchComplexesToolDefinition());
         tools.add(buildSearchStadiumsToolDefinition());
         tools.add(buildGetStadiumSlotsToolDefinition());
         tools.add(buildFindMatchRequestsToolDefinition());
         tools.add(buildGetPolicyInformationToolDefinition());
         return tools;
+    }
+
+    /**
+     * Tool tìm TỔ HỢP SÂN (Complex L1) — dùng khi người dùng hỏi tổng quan về các sân,
+     * lọc theo tỉnh/thành + quận/huyện với exact-match (hạ tầng PR1).
+     * Khác với searchStadiums (tìm sân lẻ/court để lấy stadiumId cho getStadiumSlots).
+     */
+    private Map<String, Object> buildSearchComplexesToolDefinition() {
+        Map<String, Object> props = new HashMap<>();
+
+        props.put("keyword", Map.of(
+            "type", "string",
+            "description", "Tên riêng của tổ hợp sân nếu người dùng nhắc tên cụ thể. Bỏ trống nếu không nhắc tên."
+        ));
+
+        props.put("province", Map.of(
+            "type", "string",
+            "description", "Tên tỉnh/thành phố người dùng muốn tìm. Ví dụ: 'Hồ Chí Minh', 'Đà Nẵng', 'Hà Nội'. " +
+                    "LUÔN truyền tham số này khi người dùng có nhắc đến thành phố/tỉnh — dù họ nói 'HCM', 'Sài Gòn', 'SG' hay 'HN' đều quy về tên chuẩn."
+        ));
+
+        props.put("district", Map.of(
+            "type", "string",
+            "description", "Tên quận/huyện trong tỉnh đã chọn. Ví dụ: 'Cẩm Lệ', 'Hải Châu', 'Thủ Đức', 'Cầu Giấy'. " +
+                    "Chỉ truyền khi người dùng nhắc rõ quận/huyện — KHÔNG tự suy đoán quận nếu người dùng chỉ nhắc tỉnh."
+        ));
+
+        props.put("sportName", Map.of(
+            "type", "string",
+            "description", "Tên môn thể thao bằng tiếng Việt (ví dụ: Bóng đá, Cầu lông, Bóng rổ)."
+        ));
+
+        props.put("minPrice", Map.of(
+            "type", List.of("number", "string"),
+            "description", "Giá thuê tối thiểu mỗi giờ (VND)."
+        ));
+
+        props.put("maxPrice", Map.of(
+            "type", List.of("number", "string"),
+            "description", "Giá thuê tối đa mỗi giờ (VND)."
+        ));
+
+        props.put("targetDate", Map.of(
+            "type", "string",
+            "description", "Ngày muốn đặt sân dưới định dạng YYYY-MM-DD — dùng để lọc tổ hợp còn slot trống."
+        ));
+
+        props.put("startTime", Map.of(
+            "type", "string",
+            "description", "Giờ bắt đầu dưới định dạng HH:mm theo hệ 24 giờ."
+        ));
+
+        props.put("endTime", Map.of(
+            "type", "string",
+            "description", "Giờ kết thúc dưới định dạng HH:mm theo hệ 24 giờ."
+        ));
+
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("type", "object");
+        parameters.put("properties", props);
+
+        Map<String, Object> function = new HashMap<>();
+        function.put("name", "searchComplexes");
+        function.put("description",
+            "Tìm kiếm TỔ HỢP SÂN theo tỉnh/thành, quận/huyện, môn thể thao và khoảng giá. " +
+            "Dùng tool này khi người dùng hỏi 'có sân nào ở Đà Nẵng không?', 'tìm sân ở Cầu Giấy', " +
+            "'sân bóng đá ở Hà Nội'... — tức là hỏi tổng quan danh sách tổ hợp theo địa điểm. " +
+            "Sau khi có complexId từ kết quả, dùng searchStadiums để lấy sân lẻ và getStadiumSlots để xem khung giờ.");
+        function.put("parameters", parameters);
+
+        Map<String, Object> tool = new HashMap<>();
+        tool.put("type", "function");
+        tool.put("function", function);
+        return tool;
     }
 
     private Map<String, Object> buildSearchStadiumsToolDefinition() {
@@ -172,7 +252,9 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
 
         Map<String, Object> functionSearch = new HashMap<>();
         functionSearch.put("name", "searchStadiums");
-        functionSearch.put("description", "Tìm kiếm các sân thể thao dựa trên các điều kiện lọc như tên sân, môn thể thao, quận/khu vực, khoảng giá, và thời gian. " +
+        functionSearch.put("description", "Tìm kiếm SÂN LẺ (court có thể đặt lịch) để lấy stadiumId dùng cho getStadiumSlots. " +
+                "Dùng khi cần tra stadiumId theo tên sân cụ thể, hoặc tìm sân theo môn/khu vực/giá/khung giờ. " +
+                "KHÔNG dùng để tìm danh sách tổ hợp theo tỉnh/quận — dùng searchComplexes cho việc đó. " +
                 "LUÔN gọi tool này trước để lấy đúng stadiumId khi người dùng nhắc tên một sân cụ thể — KHÔNG được tự đoán/bịa stadiumId.");
         functionSearch.put("parameters", parametersSearch);
 
@@ -274,6 +356,8 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
             JsonNode argsNode = objectMapper.readTree(jsonArguments);
             
             switch (toolName) {
+                case "searchComplexes":
+                    return handleSearchComplexes(argsNode);
                 case "searchStadiums":
                     return handleSearchStadiums(argsNode);
                 case "getStadiumSlots":
@@ -289,6 +373,121 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
             log.error("Error executing tool: {}", toolName, e);
             return Map.of("error", "Hệ thống đang bận hoặc gặp lỗi khi xử lý (Lỗi kỹ thuật: " + e.getMessage() + "). Hãy thông báo lỗi này cho người dùng một cách thân thiện và khuyên họ thử lại sau.");
         }
+    }
+
+    /**
+     * Tìm tổ hợp sân (Complex L1) với exact-match province/district — dùng hạ tầng PR1.
+     * Trả danh sách rút gọn (tối đa 5) gồm tên, địa chỉ, giá và môn thể thao để AI tóm tắt.
+     * Không trả ảnh/amenity thô để tránh response quá lớn trong khung chat.
+     */
+    private Object handleSearchComplexes(JsonNode args) {
+        StadiumComplexSearchRequest.StadiumComplexSearchRequestBuilder builder =
+                StadiumComplexSearchRequest.builder();
+
+        // keyword
+        if (args.hasNonNull("keyword")) {
+            builder.keyword(args.get("keyword").asText());
+        }
+
+        // province / district — dùng resolver để chuẩn hoá alias trước khi truyền exact-match
+        String rawLocation = null;
+        if (args.hasNonNull("district")) {
+            rawLocation = args.get("district").asText();
+        } else if (args.hasNonNull("province")) {
+            rawLocation = args.get("province").asText();
+        }
+        if (rawLocation != null && !rawLocation.isBlank()) {
+            VietnamLocationResolver.LocationMatch match = locationResolver.deriveFromAddress(rawLocation);
+            if (match.province() != null) {
+                builder.province(match.province());
+            }
+            if (match.district() != null) {
+                builder.district(match.district());
+            }
+            // Nếu resolver không match tỉnh nào (địa danh ngoài hỗ trợ) — thử chuẩn hoá lại
+            // từ tham số province riêng biệt (model đôi khi truyền cả 2 province + district)
+            if (match.province() == null && args.hasNonNull("province")) {
+                VietnamLocationResolver.LocationMatch provinceMatch =
+                        locationResolver.deriveFromAddress(args.get("province").asText());
+                if (provinceMatch.province() != null) {
+                    builder.province(provinceMatch.province());
+                }
+            }
+        }
+
+        // sportTypeId
+        if (args.hasNonNull("sportName")) {
+            String rawSportName = args.get("sportName").asText();
+            Integer sportTypeId = resolveSportTypeId(rawSportName);
+            if (sportTypeId == null) {
+                return buildUnknownSportError(rawSportName);
+            }
+            builder.sportTypeId(sportTypeId);
+        }
+
+        // price
+        if (args.hasNonNull("minPrice")) {
+            builder.minPrice(BigDecimal.valueOf(args.get("minPrice").asDouble()));
+        }
+        if (args.hasNonNull("maxPrice")) {
+            builder.maxPrice(BigDecimal.valueOf(args.get("maxPrice").asDouble()));
+        }
+
+        // date / time
+        if (args.hasNonNull("targetDate")) {
+            try {
+                builder.targetDate(LocalDate.parse(args.get("targetDate").asText()));
+            } catch (Exception e) {
+                log.warn("Invalid targetDate for searchComplexes", e);
+            }
+        }
+        if (args.hasNonNull("startTime")) {
+            try {
+                builder.startTime(LocalTime.parse(args.get("startTime").asText(),
+                        DateTimeFormatter.ofPattern("HH:mm")));
+            } catch (Exception e) {
+                log.warn("Invalid startTime for searchComplexes", e);
+            }
+        }
+        if (args.hasNonNull("endTime")) {
+            try {
+                builder.endTime(LocalTime.parse(args.get("endTime").asText(),
+                        DateTimeFormatter.ofPattern("HH:mm")));
+            } catch (Exception e) {
+                log.warn("Invalid endTime for searchComplexes", e);
+            }
+        }
+
+        builder.page(0).size(AI_SEARCH_RESULT_LIMIT);
+
+        PageResponse<PublicComplexDetailResponse> result =
+                publicComplexService.searchComplexes(builder.build());
+
+        if (result.getContent().isEmpty()) {
+            return Map.of(
+                "results", List.of(),
+                "hint", "Không tìm thấy tổ hợp sân nào khớp với điều kiện lọc. " +
+                        "Hãy thông báo lịch sự cho người dùng và gợi ý nới lỏng bộ lọc (thử bỏ quận/huyện, chỉ giữ tỉnh)."
+            );
+        }
+
+        // Rút gọn response — chỉ giữ các trường hữu ích cho AI tóm tắt, bỏ ảnh/amenity chi tiết
+        List<Map<String, Object>> summary = result.getContent().stream().map(c -> {
+            Map<String, Object> item = new TreeMap<>();
+            item.put("complexId", c.getComplexId());
+            item.put("name", c.getName());
+            item.put("address", c.getAddress());
+            if (c.getAverageRating() != null) item.put("averageRating", c.getAverageRating());
+            if (c.getMinPrice() != null)     item.put("minPrice", c.getMinPrice());
+            if (c.getMaxPrice() != null)     item.put("maxPrice", c.getMaxPrice());
+            if (c.getSportTypes() != null) {
+                item.put("sportTypes",
+                    c.getSportTypes().stream().map(PublicComplexDetailResponse.SportTypeInfo::getSportName).toList());
+            }
+            return item;
+        }).toList();
+
+        return Map.of("results", summary, "total", result.getTotalElements());
     }
 
     private Object handleSearchStadiums(JsonNode args) {
