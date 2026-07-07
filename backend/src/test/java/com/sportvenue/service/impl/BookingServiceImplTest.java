@@ -605,9 +605,19 @@ class BookingServiceImplTest {
                 .reservationDate(futureDate())
                 .build();
 
+        com.sportvenue.entity.Payment originalPayment = com.sportvenue.entity.Payment.builder()
+                .paymentId(1)
+                .booking(booking)
+                .amount(new BigDecimal("150000"))
+                .transactionCode("TXN123")
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.SUCCESS)
+                .build();
+
         when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        when(bookingRepository.findById(100)).thenReturn(Optional.of(booking));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of());
+        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(originalPayment));
+        when(paymentRepository.save(any(com.sportvenue.entity.Payment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Act
         BookingDetailResponse response = bookingService.cancelBooking(principal, 100, "Customer cancelled due to rain");
@@ -661,6 +671,48 @@ class BookingServiceImplTest {
         assertEquals(PaymentStatus.UNPAID, booking.getPaymentStatus());
         assertEquals("Owner closed court", booking.getCancelReason());
         verify(bookingRepository, times(1)).save(booking);
+    }
+
+    @Test
+    @DisplayName("cancelBooking: gateway fails -> throws exception and keeps booking intact")
+    void cancelBooking_gatewayFails_keepsBookingIntact() {
+        // Arrange
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("150000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .reservationDate(futureDate())
+                .build();
+        
+        com.sportvenue.entity.Payment originalPayment = com.sportvenue.entity.Payment.builder()
+                .paymentId(1)
+                .booking(booking)
+                .amount(new BigDecimal("150000"))
+                .transactionCode("TXN123")
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.SUCCESS)
+                .build();
+
+        when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(originalPayment));
+        when(paymentRepository.save(any(com.sportvenue.entity.Payment.class))).thenAnswer(inv -> inv.getArgument(0));
+        
+        org.mockito.Mockito.doThrow(new RuntimeException("Gateway error"))
+                .when(paymentService).processRefund(any(), any(), any());
+
+        // Act & Assert
+        BadRequestException ex = assertThrows(BadRequestException.class, 
+                () -> bookingService.cancelBooking(principal, 100, "Customer cancelled"));
+        
+        assertTrue(ex.getMessage().contains("Giao dịch hủy đơn thất bại"));
+        // Confirm booking state is untouched
+        assertEquals(BookingStatus.CONFIRMED, booking.getBookingStatus());
+        assertEquals(PaymentStatus.PAID, booking.getPaymentStatus());
+        // verify save on booking was NEVER called in Tx1 (since it was paid) and Tx2 didn't happen for success
+        verify(bookingRepository, never()).save(booking);
     }
 
     @Test

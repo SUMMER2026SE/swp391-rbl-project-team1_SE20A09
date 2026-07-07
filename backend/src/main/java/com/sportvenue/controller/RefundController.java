@@ -80,7 +80,7 @@ public class RefundController {
             Optional<Integer> existing = idempotencyService.getExistingBookingId(userId, idempotencyKey);
             if (existing.isPresent()) {
                 // Return cached response (just a basic 200 OK since we don't cache the whole RefundResponse)
-                RefundResponse cached = refundService.previewRefund(existing.get(), userPrincipal.getUsername());
+                RefundResponse cached = refundService.getRefundResponse(existing.get(), userPrincipal.getUsername());
                 return ResponseEntity.status(HttpStatus.OK).body(cached);
             }
             if (!idempotencyService.tryAcquire(userId, idempotencyKey)) {

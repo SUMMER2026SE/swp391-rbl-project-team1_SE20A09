@@ -337,20 +337,6 @@ public class BookingServiceImpl implements BookingService {
             boolean wasReallyPaid = booking.getPaymentStatus() == PaymentStatus.PAID
                     || booking.getPaymentStatus() == PaymentStatus.DEPOSITED;
             
-            booking.setBookingStatus(BookingStatus.CANCELLED);
-            booking.setCancelReason(reason);
-            if (wasReallyPaid) {
-                booking.setPaymentStatus(PaymentStatus.REFUNDED);
-            }
-            booking.setExpiredAt(null);
-
-            TimeSlot slot = booking.getSlot();
-            if (slot != null && slot.getSlotStatus() == SlotStatus.BOOKED) {
-                slot.setSlotStatus(SlotStatus.AVAILABLE);
-                timeSlotRepository.save(slot);
-            }
-
-            Booking saved = bookingRepository.save(booking);
             Payment refundPayment = null;
             Payment originalPayment = null;
 
@@ -360,7 +346,7 @@ public class BookingServiceImpl implements BookingService {
                 
                 if (originalPayment != null) {
                     refundPayment = Payment.builder()
-                        .booking(saved)
+                        .booking(booking)
                         .paymentMethod(originalPayment.getPaymentMethod())
                         .amount(originalPayment.getAmount().negate())
                         .transactionCode("RFND_CUST_" + originalPayment.getTransactionCode())
@@ -369,12 +355,23 @@ public class BookingServiceImpl implements BookingService {
                         .build();
                     refundPayment = paymentRepository.save(refundPayment);
                 }
+            } else {
+                booking.setBookingStatus(BookingStatus.CANCELLED);
+                booking.setCancelReason(reason);
+                booking.setExpiredAt(null);
+
+                TimeSlot slot = booking.getSlot();
+                if (slot != null && slot.getSlotStatus() == SlotStatus.BOOKED) {
+                    slot.setSlotStatus(SlotStatus.AVAILABLE);
+                    timeSlotRepository.save(slot);
+                }
+                booking = bookingRepository.save(booking);
             }
 
-            log.info("[UC-CUS-03] Booking #{} was cancelled by userId={}, reason={}",
-                    saved.getBookingId(), currentUserId, reason);
+            log.info("[UC-CUS-03] Booking #{} was locally checked for cancellation by userId={}, reason={}",
+                    booking.getBookingId(), currentUserId, reason);
 
-            return new CancelProcessContext(saved, originalPayment, refundPayment);
+            return new CancelProcessContext(booking, originalPayment, refundPayment);
         });
     }
 
@@ -413,11 +410,27 @@ public class BookingServiceImpl implements BookingService {
                 payment.setPaymentStatus(finalSuccess ? TransactionStatus.SUCCESS : TransactionStatus.FAILED);
                 paymentRepository.save(payment);
             }
+            if (finalSuccess) {
+                Booking booking = bookingRepository.findById(bookingId).orElse(null);
+                if (booking != null) {
+                    booking.setBookingStatus(BookingStatus.CANCELLED);
+                    booking.setCancelReason(reason);
+                    booking.setPaymentStatus(PaymentStatus.REFUNDED);
+                    booking.setExpiredAt(null);
+                    
+                    TimeSlot slot = booking.getSlot();
+                    if (slot != null && slot.getSlotStatus() == SlotStatus.BOOKED) {
+                        slot.setSlotStatus(SlotStatus.AVAILABLE);
+                        timeSlotRepository.save(slot);
+                    }
+                    bookingRepository.save(booking);
+                }
+            }
             return null;
         });
         
         if (!gatewaySuccess) {
-            throw new BadRequestException("Lỗi hoàn tiền qua cổng thanh toán. Đơn đã được hủy nhưng tiền chưa được hoàn. Vui lòng thử lại sau.");
+            throw new BadRequestException("Lỗi hoàn tiền qua cổng thanh toán. Giao dịch hủy đơn thất bại. Vui lòng thử lại sau.");
         }
     }
 
