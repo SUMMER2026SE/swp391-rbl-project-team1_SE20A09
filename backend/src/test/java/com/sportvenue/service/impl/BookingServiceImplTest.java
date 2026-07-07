@@ -42,6 +42,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionCallback;
+import com.sportvenue.service.PaymentService;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -83,6 +86,8 @@ class BookingServiceImplTest {
     @Mock private BookingAccessoryRepository bookingAccessoryRepository;
     @Mock private TimeSlotExceptionRepository timeSlotExceptionRepository;
     @Mock private com.sportvenue.service.MaintenanceScheduleService maintenanceScheduleService;
+    @Mock private PaymentService paymentService;
+    @Mock private TransactionTemplate transactionTemplate;
 
     @InjectMocks private BookingServiceImpl bookingService;
 
@@ -127,6 +132,14 @@ class BookingServiceImplTest {
                 .quantity(20)
                 .isAvailable(true)
                 .build();
+
+        org.mockito.Mockito.lenient().when(transactionTemplate.execute(any(TransactionCallback.class)))
+                .thenAnswer(invocation -> {
+                    TransactionCallback callback = invocation.getArgument(0);
+                    return callback.doInTransaction(null);
+                });
+        org.mockito.Mockito.lenient().when(bookingRepository.findByIdForUpdate(any(Integer.class)))
+                .thenAnswer(invocation -> bookingRepository.findDetailById(invocation.getArgument(0)));
     }
 
     /** Helper: reservationDate 7 ngày trong tương lai → luôn future. */
@@ -595,9 +608,19 @@ class BookingServiceImplTest {
                 .reservationDate(futureDate())
                 .build();
 
+        com.sportvenue.entity.Payment originalPayment = com.sportvenue.entity.Payment.builder()
+                .paymentId(1)
+                .booking(booking)
+                .amount(new BigDecimal("150000"))
+                .transactionCode("TXN123")
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.SUCCESS)
+                .build();
+
         when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        when(bookingRepository.findById(100)).thenReturn(Optional.of(booking));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of());
+        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(originalPayment));
+        when(paymentRepository.save(any(com.sportvenue.entity.Payment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Act
         BookingDetailResponse response = bookingService.cancelBooking(principal, 100, "Customer cancelled due to rain");
@@ -650,6 +673,48 @@ class BookingServiceImplTest {
         assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
         assertEquals("Owner closed court", booking.getCancelReason());
         verify(bookingRepository, times(1)).save(booking);
+    }
+
+    @Test
+    @DisplayName("cancelBooking: gateway fails -> throws exception and keeps booking intact")
+    void cancelBooking_gatewayFails_keepsBookingIntact() {
+        // Arrange
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("150000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .reservationDate(futureDate())
+                .build();
+        
+        com.sportvenue.entity.Payment originalPayment = com.sportvenue.entity.Payment.builder()
+                .paymentId(1)
+                .booking(booking)
+                .amount(new BigDecimal("150000"))
+                .transactionCode("TXN123")
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.SUCCESS)
+                .build();
+
+        when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(originalPayment));
+        when(paymentRepository.save(any(com.sportvenue.entity.Payment.class))).thenAnswer(inv -> inv.getArgument(0));
+        
+        org.mockito.Mockito.doThrow(new RuntimeException("Gateway error"))
+                .when(paymentService).processRefund(any(), any(), any());
+
+        // Act & Assert
+        BadRequestException ex = assertThrows(BadRequestException.class, 
+                () -> bookingService.cancelBooking(principal, 100, "Customer cancelled"));
+        
+        assertTrue(ex.getMessage().contains("Giao dịch hủy đơn thất bại"));
+        // Confirm booking state is untouched
+        assertEquals(BookingStatus.CONFIRMED, booking.getBookingStatus());
+        assertEquals(PaymentStatus.PAID, booking.getPaymentStatus());
+        // verify save on booking was NEVER called in Tx1 (since it was paid) and Tx2 didn't happen for success
+        verify(bookingRepository, never()).save(booking);
     }
 
     @Test
@@ -710,6 +775,36 @@ class BookingServiceImplTest {
         // Act & Assert
         assertThrows(ResourceNotFoundException.class,
                 () -> bookingService.cancelBooking(principal, 999, "Not exists"));
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cancelBooking: refund already pending -> throws BadRequestException")
+    void cancelBooking_refundAlreadyPending_throwsBadRequest() {
+        // Arrange
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .build();
+
+        com.sportvenue.entity.Payment pendingRefund = com.sportvenue.entity.Payment.builder()
+                .paymentId(2)
+                .booking(booking)
+                .amount(new BigDecimal("-150000"))
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.PENDING)
+                .build();
+
+        when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(Optional.of(pendingRefund));
+
+        // Act & Assert
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> bookingService.cancelBooking(principal, 100, "Duplicate cancel"));
+        assertTrue(ex.getMessage().contains("đang được xử lý hoặc đã thành công"));
         verify(bookingRepository, never()).save(any());
     }
 

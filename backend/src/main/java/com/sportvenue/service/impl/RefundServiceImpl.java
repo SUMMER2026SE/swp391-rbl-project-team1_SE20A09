@@ -23,6 +23,7 @@ import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.RefundService;
+import com.sportvenue.service.PaymentService;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -42,46 +44,109 @@ public class RefundServiceImpl implements RefundService {
     private final TimeSlotRepository timeSlotRepository;
     private final UserRepository userRepository;
     private final OwnerRepository ownerRepository;
+    private final PaymentService paymentService;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional
     @Override
     public RefundResponse processRefund(Integer bookingId, RefundRequest request, String ownerEmail) {
         log.info("Starting processRefund for bookingId: {} by Owner: {}", bookingId, ownerEmail);
 
-        // 1. Tìm thông tin User và Owner profile
-        User user = userRepository.findByEmail(ownerEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng: " + ownerEmail));
+        RefundProcessContext ctx = processLocalRefundTx(bookingId, ownerEmail, request.getReason());
 
-        Owner owner = ownerRepository.findByUserUserId(user.getUserId())
-                .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không có profile chủ sân (Owner)"));
-
-        // 2. Tìm Booking (Sử dụng Pessimistic Write Lock để tránh Race Condition)
-        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân ID: " + bookingId));
-
-        // 3. Kiểm tra tính hợp lệ và quyền sở hữu
-        validateOwnershipAndStatus(booking, owner);
-
-        // 4. Tìm giao dịch thanh toán gốc (SUCCESS, amount > 0, mới nhất)
-        Payment originalPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
-                .stream().findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán ban đầu"));
-
-        // 5. Áp dụng chính sách hoàn tiền
-        RefundCalculation calculation = calculateRefund(booking);
-
-        // 6. Cập nhật dữ liệu
-        updateBookingAndReleaseSlot(booking, request.getReason());
-
-        // 7. Tạo bản ghi giao dịch âm nếu có số tiền hoàn lại lớn hơn 0
-        if (calculation.getAmount().compareTo(BigDecimal.ZERO) > 0) {
-            recordRefundTransaction(booking, originalPayment, calculation.getAmount());
+        if (ctx.calculation.getAmount().compareTo(BigDecimal.ZERO) > 0 && ctx.refundPayment != null) {
+            processGatewayRefundTx(ctx, bookingId, request.getReason());
         }
 
         log.info("Successfully processed refund for booking ID: {}. Refund Amount: {} ({}%)",
-                bookingId, calculation.getAmount(), calculation.getPercentage());
+                bookingId, ctx.calculation.getAmount(), ctx.calculation.getPercentage());
 
-        return buildRefundResponse(booking, calculation, request.getReason());
+        Booking finalBooking = transactionTemplate
+                .execute(status -> bookingRepository.findById(bookingId).orElse(ctx.booking));
+        return buildRefundResponse(finalBooking, ctx.calculation, request.getReason());
+    }
+
+    private RefundProcessContext processLocalRefundTx(Integer bookingId, String ownerEmail, String reason) {
+        return transactionTemplate.execute(status -> {
+            User user = userRepository.findByEmail(ownerEmail)
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng: " + ownerEmail));
+
+            Owner owner = ownerRepository.findByUserUserId(user.getUserId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không có profile chủ sân (Owner)"));
+
+            Booking booking = bookingRepository.findByIdForUpdate(bookingId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân ID: " + bookingId));
+
+            validateOwnershipAndStatus(booking, owner);
+
+            // Kiểm tra xem đã có giao dịch hoàn tiền nào (PENDING hoặc SUCCESS) đang tồn tại chưa để tránh Double Refund
+            paymentRepository.findRefundPaymentByBookingId(bookingId).ifPresent(p -> {
+                if (p.getPaymentStatus() == TransactionStatus.PENDING || p.getPaymentStatus() == TransactionStatus.SUCCESS) {
+                    throw new BadRequestException("Yêu cầu hoàn tiền đang được xử lý hoặc đã thành công.");
+                }
+            });
+
+            Payment originalPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
+                    .stream().findFirst()
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán ban đầu"));
+
+            RefundCalculation calculation = calculateRefund(booking, originalPayment);
+
+            Payment refundPayment = null;
+            if (calculation.getAmount().compareTo(BigDecimal.ZERO) > 0) {
+                refundPayment = Payment.builder()
+                        .booking(booking)
+                        .paymentMethod(originalPayment.getPaymentMethod())
+                        .amount(calculation.getAmount().negate())
+                        .transactionCode("RFND_" + originalPayment.getTransactionCode())
+                        .paymentStatus(TransactionStatus.PENDING)
+                        .paidAt(LocalDateTime.now())
+                        .build();
+                refundPayment = paymentRepository.save(refundPayment);
+            } else {
+                updateBookingAndReleaseSlot(booking, reason);
+            }
+
+            return new RefundProcessContext(booking, originalPayment, calculation, refundPayment);
+        });
+    }
+
+    private void processGatewayRefundTx(RefundProcessContext ctx, Integer bookingId, String reason) {
+        boolean gatewaySuccess = false;
+        try {
+            paymentService.processRefund(ctx.originalPayment, ctx.calculation.getAmount(), reason);
+            gatewaySuccess = true;
+        } catch (Exception e) {
+            log.error("Refund gateway failed for booking {}", bookingId, e);
+        }
+
+        final boolean finalSuccess = gatewaySuccess;
+        transactionTemplate.execute(status -> {
+            Payment payment = paymentRepository.findById(ctx.refundPayment.getPaymentId()).orElse(null);
+            if (payment != null) {
+                payment.setPaymentStatus(finalSuccess ? TransactionStatus.SUCCESS : TransactionStatus.FAILED);
+                paymentRepository.save(payment);
+            }
+            if (finalSuccess) {
+                Booking booking = bookingRepository.findById(bookingId).orElse(null);
+                if (booking != null) {
+                    updateBookingAndReleaseSlot(booking, reason);
+                }
+            }
+            return null;
+        });
+
+        if (!gatewaySuccess) {
+            throw new BadRequestException(
+                    "Lỗi hoàn tiền qua cổng thanh toán. Giao dịch hủy đơn thất bại. Vui lòng thử lại sau.");
+        }
+    }
+
+    @RequiredArgsConstructor
+    private static class RefundProcessContext {
+        final Booking booking;
+        final Payment originalPayment;
+        final RefundCalculation calculation;
+        final Payment refundPayment;
     }
 
     private void validateOwnershipAndStatus(Booking booking, Owner owner) {
@@ -101,7 +166,8 @@ public class RefundServiceImpl implements RefundService {
             throw new BadRequestException("Không thể hủy đơn đặt sân đã hoàn thành (COMPLETED)");
         }
         if (booking.getPaymentStatus() != PaymentStatus.PAID && booking.getPaymentStatus() != PaymentStatus.DEPOSITED) {
-            throw new BadRequestException("Chỉ có thể hoàn tiền cho những đơn đặt sân đã thanh toán (PAID hoặc DEPOSITED)");
+            throw new BadRequestException(
+                    "Chỉ có thể hoàn tiền cho những đơn đặt sân đã thanh toán (PAID hoặc DEPOSITED)");
         }
     }
 
@@ -109,7 +175,7 @@ public class RefundServiceImpl implements RefundService {
         return LocalDateTime.of(booking.getReservationDate(), booking.getSlot().getStartTime());
     }
 
-    private RefundCalculation calculateRefund(Booking booking) {
+    private RefundCalculation calculateRefund(Booking booking, Payment originalPayment) {
         LocalDateTime playTime = playTime(booking);
         LocalDateTime now = LocalDateTime.now();
         double hoursDiff = (double) java.time.Duration.between(now, playTime).toMinutes() / 60.0;
@@ -117,12 +183,14 @@ public class RefundServiceImpl implements RefundService {
         BigDecimal refundAmount;
         int refundPercentage;
 
+        BigDecimal baseAmount = originalPayment != null ? originalPayment.getAmount() : booking.getTotalPrice();
+
         if (hoursDiff >= 24.0) {
             refundPercentage = 100;
-            refundAmount = booking.getTotalPrice();
+            refundAmount = baseAmount;
         } else if (hoursDiff >= 12.0) {
             refundPercentage = 50;
-            refundAmount = booking.getTotalPrice().multiply(new BigDecimal("0.5"));
+            refundAmount = baseAmount.multiply(new BigDecimal("0.5"));
         } else {
             refundPercentage = 0;
             refundAmount = BigDecimal.ZERO;
@@ -142,21 +210,6 @@ public class RefundServiceImpl implements RefundService {
         TimeSlot slot = booking.getSlot();
         slot.setSlotStatus(SlotStatus.AVAILABLE);
         timeSlotRepository.save(slot);
-    }
-
-    private void recordRefundTransaction(Booking booking, Payment originalPayment, BigDecimal refundAmount) {
-        // TODO: Call VNPAY/MoMo refund API here to actually process bank refund in production
-        Payment refundPayment = Payment.builder()
-                .booking(booking)
-                .paymentMethod(originalPayment.getPaymentMethod())
-                .amount(refundAmount.negate())
-                .transactionCode("RFND_" + originalPayment.getTransactionCode())
-                .paymentStatus(TransactionStatus.SUCCESS)
-                .paidAt(LocalDateTime.now())
-                .build();
-        paymentRepository.save(refundPayment);
-        log.info("Recorded negative refund transaction of amount {} for booking ID {}", 
-                refundAmount.negate(), booking.getBookingId());
     }
 
     private RefundResponse buildRefundResponse(Booking booking, RefundCalculation calc, String reason) {
@@ -195,7 +248,10 @@ public class RefundServiceImpl implements RefundService {
         validateOwnershipAndStatus(booking, owner);
 
         // 4. Áp dụng chính sách hoàn tiền
-        RefundCalculation calculation = calculateRefund(booking);
+        Payment originalPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
+                .stream().findFirst()
+                .orElse(null);
+        RefundCalculation calculation = calculateRefund(booking, originalPayment);
 
         return RefundResponse.builder()
                 .bookingId(booking.getBookingId())
@@ -214,11 +270,57 @@ public class RefundServiceImpl implements RefundService {
 
     @Transactional(readOnly = true)
     @Override
+    public RefundResponse getRefundResponse(Integer bookingId, String ownerEmail) {
+        log.info("Starting getRefundResponse for bookingId: {} by Owner: {}", bookingId, ownerEmail);
+
+        User user = userRepository.findByEmail(ownerEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng: " + ownerEmail));
+
+        Owner owner = ownerRepository.findByUserUserId(user.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không có profile chủ sân (Owner)"));
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân ID: " + bookingId));
+
+        Stadium stadium = booking.getStadium();
+        Owner resolvedOwner = stadium.resolveOwner();
+        if (resolvedOwner == null || !resolvedOwner.getOwnerId().equals(owner.getOwnerId())) {
+            throw new BadRequestException("Bạn không có quyền quản lý đơn đặt sân này!");
+        }
+
+        // Lấy thông tin Refund từ DB để trả về
+        Payment refundPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
+                .stream().filter(p -> p.getAmount().compareTo(BigDecimal.ZERO) < 0).findFirst().orElse(null);
+
+        BigDecimal refundAmount = refundPayment != null ? refundPayment.getAmount().negate() : BigDecimal.ZERO;
+        BigDecimal originalPrice = booking.getTotalPrice();
+        int refundPercentage = 0;
+        if (originalPrice.compareTo(BigDecimal.ZERO) > 0) {
+            refundPercentage = refundAmount.multiply(new BigDecimal("100")).divide(originalPrice, 0, java.math.RoundingMode.HALF_UP).intValue();
+        }
+
+        return RefundResponse.builder()
+                .bookingId(booking.getBookingId())
+                .stadiumName(stadium.getStadiumName())
+                .customerName(booking.getUser().getFirstName() + " " + booking.getUser().getLastName())
+                .playTime(playTime(booking))
+                .originalPrice(originalPrice)
+                .refundAmount(refundAmount)
+                .refundPercentage(refundPercentage)
+                .bookingStatus(booking.getBookingStatus().name())
+                .paymentStatus(booking.getPaymentStatus().name())
+                .processedAt(refundPayment != null ? refundPayment.getPaidAt() : booking.getBookingDate())
+                .reason(booking.getNote() != null ? booking.getNote().replace("Lý do hủy hoàn tiền: ", "") : "")
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    @Override
     public List<OwnerBookingResponse> getOwnerBookings(String ownerEmail) {
         log.info("Fetching all bookings for owner: {}", ownerEmail);
-        
+
         List<Booking> bookings = bookingRepository.findByStadiumOwnerUserEmailOrderByBookingDateDesc(ownerEmail);
-        
+
         List<Integer> bookingIds = bookings.stream().map(Booking::getBookingId).toList();
         java.util.Map<Integer, BigDecimal> refundMap = new java.util.HashMap<>();
         if (!bookingIds.isEmpty()) {
@@ -231,7 +333,7 @@ public class RefundServiceImpl implements RefundService {
                 }
             }
         }
-        
+
         return bookings.stream().map(b -> {
             String customerName = b.getUser().getFirstName() + " " + b.getUser().getLastName();
             OwnerBookingResponse.CustomerInfo customerInfo = OwnerBookingResponse.CustomerInfo.builder()
@@ -239,10 +341,10 @@ public class RefundServiceImpl implements RefundService {
                     .phone(b.getUser().getPhoneNumber())
                     .email(b.getUser().getEmail())
                     .build();
-            
+
             String startTimeStr = b.getSlot().getStartTime().toString();
             String endTimeStr = b.getSlot().getEndTime().toString();
-            
+
             BigDecimal refundAmt = refundMap.getOrDefault(b.getBookingId(), BigDecimal.ZERO);
 
             return OwnerBookingResponse.builder()
