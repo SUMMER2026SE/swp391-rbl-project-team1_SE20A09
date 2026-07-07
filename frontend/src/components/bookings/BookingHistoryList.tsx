@@ -227,10 +227,11 @@ function EmptyState({
 }
 
 interface BookingHistoryListProps {
-  isOwner?: boolean;
+  viewMode?: "CUSTOMER_VIEW" | "VENUE_MANAGEMENT";
 }
 
-export function BookingHistoryList({ isOwner = false }: BookingHistoryListProps) {
+export function BookingHistoryList({ viewMode = "CUSTOMER_VIEW" }: BookingHistoryListProps) {
+  const isOwner = viewMode === "VENUE_MANAGEMENT";
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("all");
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);

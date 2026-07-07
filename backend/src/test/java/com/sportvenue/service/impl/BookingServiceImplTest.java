@@ -17,6 +17,7 @@ import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.DuplicateResourceException;
+import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.AccessoryRepository;
 import com.sportvenue.repository.BookingAccessoryRepository;
@@ -611,8 +612,8 @@ class BookingServiceImplTest {
     }
 
     @Test
-    @DisplayName("cancelBooking: owner cannot cancel using this endpoint -> throws AccessDeniedException")
-    void cancelBooking_owner_throwsAccessDenied() {
+    @DisplayName("cancelBooking: venue owner can cancel booking successfully -> success")
+    void cancelBooking_byVenueOwner_success() {
         // Arrange
         User ownerUser = User.builder()
                 .userId(99)
@@ -639,19 +640,21 @@ class BookingServiceImplTest {
         UserPrincipal ownerPrincipal = new UserPrincipal(ownerUser);
 
         when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        // Act & Assert
-        org.springframework.security.access.AccessDeniedException ex = assertThrows(
-                org.springframework.security.access.AccessDeniedException.class,
-                () -> bookingService.cancelBooking(ownerPrincipal, 100, "Owner closed court")
-        );
-        assertTrue(ex.getMessage().contains("Chủ sân không được phép"));
-        verify(bookingRepository, never()).save(any());
+        // Act
+        BookingDetailResponse response = bookingService.cancelBooking(ownerPrincipal, 100, "Owner closed court");
+        
+        // Assert
+        assertNotNull(response);
+        assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
+        assertEquals("Owner closed court", booking.getCancelReason());
+        verify(bookingRepository, times(1)).save(booking);
     }
 
     @Test
-    @DisplayName("cancelBooking: user has no permission to cancel booking -> throws BadRequestException")
-    void cancelBooking_noPermission_throwsBadRequest() {
+    @DisplayName("cancelBooking: user has no permission to cancel booking -> throws ForbiddenException")
+    void cancelBooking_byOtherUser_throwsForbiddenException() {
         // Arrange
         User stranger = User.builder()
                 .userId(888)
@@ -671,7 +674,7 @@ class BookingServiceImplTest {
         when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
 
         // Act & Assert
-        BadRequestException ex = assertThrows(BadRequestException.class,
+        ForbiddenException ex = assertThrows(ForbiddenException.class,
                 () -> bookingService.cancelBooking(strangerPrincipal, 100, "No right"));
         assertTrue(ex.getMessage().contains("không có quyền"));
         verify(bookingRepository, never()).save(any());

@@ -1104,7 +1104,7 @@ function UserProfilePage() {
           </TabsContent>
 
           <TabsContent value="bookings" className="pt-4">
-            <BookingHistoryList isOwner={profile.roleName?.toUpperCase() === 'OWNER'} />
+            <BookingHistoryList viewMode="CUSTOMER_VIEW" />
           </TabsContent>
 
           <TabsContent value="reviews" className="pt-4">

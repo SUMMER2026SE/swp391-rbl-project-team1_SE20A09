@@ -22,6 +22,7 @@ import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.DuplicateResourceException;
+import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.entity.Payment;
 import com.sportvenue.entity.enums.TransactionStatus;
@@ -314,16 +315,15 @@ public class BookingServiceImpl implements BookingService {
         // UC-CUS-03: chỉ customer của booking mới có quyền hủy bằng luồng này.
         Integer currentUserId = principal.getUser().getUserId();
 
-        boolean isOwnerRole = principal.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_OWNER") || a.getAuthority().equalsIgnoreCase("OWNER"));
-        if (isOwnerRole) {
-            throw new AccessDeniedException("Chủ sân không được phép dùng luồng hủy đơn của khách hàng. Vui lòng sử dụng tính năng Xử lý Hoàn tiền chuyên dụng.");
-        }
-
         boolean isCustomer = booking.getUser() != null
                 && booking.getUser().getUserId().equals(currentUserId);
-        if (!isCustomer) {
-            throw new BadRequestException("Bạn không có quyền hủy đơn đặt sân này");
+        boolean isVenueOwner = booking.getStadium() != null
+                && booking.getStadium().getOwner() != null
+                && booking.getStadium().getOwner().getUser() != null
+                && booking.getStadium().getOwner().getUser().getUserId().equals(currentUserId);
+                
+        if (!isCustomer && !isVenueOwner) {
+            throw new ForbiddenException("Bạn không có quyền hủy đơn đặt sân này");
         }
 
         // UC-CUS-03: không cho hủy booking đã hoàn thành hoặc đã hủy trước đó.
