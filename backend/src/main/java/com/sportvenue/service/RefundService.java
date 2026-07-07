@@ -28,6 +28,15 @@ public interface RefundService {
     RefundResponse previewRefund(Integer bookingId, String ownerEmail);
 
     /**
+     * Xem trước số tiền hoàn lại trước khi xác nhận hủy sân (Customer).
+     *
+     * @param bookingId ID của đơn đặt sân
+     * @param customerEmail Email của Customer
+     * @return Kết quả hoàn tiền ước tính chi tiết
+     */
+    RefundResponse previewRefundForCustomer(Integer bookingId, String customerEmail);
+
+    /**
      * Lấy toàn bộ danh sách đặt sân của Owner để hiển thị trên Dashboard.
      *
      * @param ownerEmail Email của Owner đang thực hiện thao tác

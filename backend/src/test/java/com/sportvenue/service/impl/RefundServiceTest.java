@@ -86,4 +86,30 @@ class RefundServiceTest {
         
         verify(bookingRepository).save(booking);
     }
+
+    @Test
+    @DisplayName("Should refund 100% of the deposit amount instead of the total price when cancelled >= 24 hours")
+    void Refund_DepositBooking_ShouldRefundCorrectPercentageOfDeposit() throws Exception {
+        Method method = RefundServiceImpl.class.getDeclaredMethod("calculateRefund", Booking.class, com.sportvenue.entity.Payment.class);
+        method.setAccessible(true);
+
+        Booking depositBooking = new Booking();
+        depositBooking.setTotalPrice(new java.math.BigDecimal("1000000"));
+        depositBooking.setReservationDate(java.time.LocalDate.now().plusDays(2)); // > 24 hours
+        
+        TimeSlot ts = new TimeSlot();
+        ts.setStartTime(java.time.LocalTime.now());
+        depositBooking.setSlot(ts);
+
+        com.sportvenue.entity.Payment originalPayment = new com.sportvenue.entity.Payment();
+        originalPayment.setAmount(new java.math.BigDecimal("300000")); // 30% deposit
+
+        Object result = method.invoke(refundService, depositBooking, originalPayment);
+        
+        Method getAmountMethod = result.getClass().getDeclaredMethod("getAmount");
+        getAmountMethod.setAccessible(true);
+        java.math.BigDecimal refundAmount = (java.math.BigDecimal) getAmountMethod.invoke(result);
+
+        assertEquals(0, new java.math.BigDecimal("300000").compareTo(refundAmount), "Refund amount should be exactly the deposit amount (300000)");
+    }
 }

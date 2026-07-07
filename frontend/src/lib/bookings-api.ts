@@ -314,3 +314,24 @@ export async function cancelBooking(
   );
 }
 
+export type RefundPreviewResponse = {
+  bookingId: number;
+  stadiumName: string;
+  customerName: string;
+  playTime: string;
+  originalPrice: number;
+  refundAmount: number;
+  refundPercentage: number;
+  bookingStatus: string;
+  paymentStatus: string;
+  processedAt: string;
+  reason: string;
+};
+
+/**
+ * Lấy thông tin xem trước hoàn tiền cho customer.
+ */
+export async function previewRefund(bookingId: number): Promise<RefundPreviewResponse> {
+  return get<RefundPreviewResponse>(`/bookings/${bookingId}/refund-preview`);
+}
+
