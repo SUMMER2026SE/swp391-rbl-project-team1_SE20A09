@@ -311,15 +311,18 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy booking với ID " + bookingId));
 
-        // UC-CUS-03: chỉ customer của booking hoặc owner của sân mới có quyền hủy.
+        // UC-CUS-03: chỉ customer của booking mới có quyền hủy bằng luồng này.
         Integer currentUserId = principal.getUser().getUserId();
+
+        boolean isOwnerRole = principal.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_OWNER") || a.getAuthority().equals("OWNER"));
+        if (isOwnerRole) {
+            throw new AccessDeniedException("Chủ sân không được phép dùng luồng hủy đơn của khách hàng. Vui lòng sử dụng tính năng Xử lý Hoàn tiền chuyên dụng.");
+        }
+
         boolean isCustomer = booking.getUser() != null
                 && booking.getUser().getUserId().equals(currentUserId);
-        boolean isVenueOwner = booking.getStadium() != null
-                && booking.getStadium().getOwner() != null
-                && booking.getStadium().getOwner().getUser() != null
-                && booking.getStadium().getOwner().getUser().getUserId().equals(currentUserId);
-        if (!isCustomer && !isVenueOwner) {
+        if (!isCustomer) {
             throw new BadRequestException("Bạn không có quyền hủy đơn đặt sân này");
         }
 
