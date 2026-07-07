@@ -63,6 +63,14 @@ public class StadiumComplex implements Serializable {
     @Column(name = "address", nullable = false, columnDefinition = "TEXT")
     private String address;
 
+    /** Tỉnh/thành đã chuẩn hoá — suy ra từ {@link #address} qua VietnamLocationResolver, dùng cho exact-match search. */
+    @Column(name = "province", length = 100)
+    private String province;
+
+    /** Quận/huyện đã chuẩn hoá — suy ra từ {@link #address} qua VietnamLocationResolver, dùng cho exact-match search. */
+    @Column(name = "district", length = 100)
+    private String district;
+
     @Column(name = "phone", length = 20)
     private String phone;
 

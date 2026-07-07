@@ -25,6 +25,12 @@ public class StadiumComplexSearchRequest {
     private String keyword;
     private Integer sportTypeId;
 
+    /** Tỉnh/thành đã chuẩn hoá (vd "Hồ Chí Minh") — exact-match, khác với keyword (free-text LIKE). */
+    private String province;
+
+    /** Quận/huyện đã chuẩn hoá (vd "Quận 1", "Cẩm Lệ") — exact-match, khác với keyword (free-text LIKE). */
+    private String district;
+
     @DecimalMin(value = "0.0", message = "Minimum price must not be negative")
     private BigDecimal minPrice;
 
