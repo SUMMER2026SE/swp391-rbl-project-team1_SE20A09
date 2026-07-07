@@ -16,25 +16,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { toast } from "sonner";
 
-// ── Pending booking helpers ──────────────────────────────────────────────────
-const PENDING_KEY = 'pendingBooking'
 
-function consumePendingBooking(): { courtId: number; slotId: number; date: string } | null {
-  try {
-    const raw = sessionStorage.getItem(PENDING_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    // Check TTL
-    if (parsed.expiredAt && Date.now() > parsed.expiredAt) {
-      sessionStorage.removeItem(PENDING_KEY)
-      return null
-    }
-    sessionStorage.removeItem(PENDING_KEY)
-    return { courtId: parsed.courtId, slotId: parsed.slotId, date: parsed.date }
-  } catch {
-    return null
-  }
-}
 
 function BookingContent() {
   const router = useRouter();
@@ -51,7 +33,6 @@ function BookingContent() {
   const [selectedSlot, setSelectedSlot] = useState<string>(() => slotIdParam);
 
   const [accessories, setAccessories] = useState<Record<number, number>>({});
-  const [slotValidated, setSlotValidated] = useState(false);
 
   const { data: venue, isLoading, error } = useQuery({
     queryKey: ["venue-detail", venueId],
@@ -66,12 +47,10 @@ function BookingContent() {
     refetchInterval: 5000,
   });
 
-  // ── Re-validate pre-selected slot (from QuickBookDrawer) on first load ──
+  // ── Re-validate pre-selected slot (from QuickBookDrawer) continuously ──
   useEffect(() => {
-    if (slotValidated || !slotAvailabilities || !selectedSlot) return
-    setSlotValidated(true)
+    if (!slotAvailabilities || !selectedSlot) return
 
-    // Check pending booking TTL (sessionStorage consumed by now — just validate the slot)
     const targetSlotId = parseInt(selectedSlot)
     if (isNaN(targetSlotId)) return
 
@@ -86,7 +65,7 @@ function BookingContent() {
       })
       setSelectedSlot('')
     }
-  }, [slotAvailabilities, selectedSlot, slotValidated, router])
+  }, [slotAvailabilities, selectedSlot, router])
 
   if (isLoading) {
     return (
