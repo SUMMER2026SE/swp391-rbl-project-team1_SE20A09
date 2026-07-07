@@ -101,15 +101,15 @@ class CustomerAgentToolProviderTest {
     }
 
     @Test
-    void getToolDefinitions_returnsAllThreeTools() {
+    void getToolDefinitions_returnsAllFourTools() {
         List<Map<String, Object>> tools = provider.getToolDefinitions();
 
-        assertEquals(3, tools.size());
+        assertEquals(4, tools.size());
         List<String> names = tools.stream()
                 .map(t -> (Map<?, ?>) t.get("function"))
                 .map(f -> (String) f.get("name"))
                 .toList();
-        assertTrue(names.containsAll(List.of("searchStadiums", "getStadiumSlots", "findMatchRequests")));
+        assertTrue(names.containsAll(List.of("searchStadiums", "getStadiumSlots", "findMatchRequests", "getPolicyInformation")));
     }
 
     @Test

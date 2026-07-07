@@ -14,7 +14,7 @@ import { MessageScroller } from "@/components/ai/MessageScroller";
 import { ToolResultParts } from "@/components/ai/ToolResultParts";
 import { friendlyAiError } from "@/components/ai/aiError";
 import { getSession } from 'next-auth/react';
-import { Bot, Send, Search, Calendar, TrendingUp, AlertCircle, StopCircle } from "lucide-react";
+import { Bot, Send, Search, Calendar, TrendingUp, AlertCircle, StopCircle, RotateCcw, ThumbsUp, ThumbsDown } from "lucide-react";
 
 /** Message chỉ có tool parts (đang gọi tool / lỗi tool) — không render bubble text rỗng. */
 function messageHasText(msg: UIMessage) {
@@ -119,13 +119,26 @@ interface PageInnerProps {
 
 function AIAssistantPageInner({ token, sessionLoaded }: PageInnerProps) {
   const [inputValue, setInputValue] = useState("");
+  const [sessionId, setSessionId] = useState<string>('');
+  const [feedbackGiven, setFeedbackGiven] = useState<Record<string, 'up' | 'down'>>({});
+
+  useEffect(() => {
+    let sid = localStorage.getItem('ai_session_id');
+    if (!sid) {
+      sid = Math.random().toString(36).substring(2, 15);
+      localStorage.setItem('ai_session_id', sid);
+    }
+    setSessionId(sid);
+  }, []);
+
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (sessionId) headers['X-Session-ID'] = sessionId;
 
   const { messages, sendMessage, status, error, stop } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/v1/ai/chat',
-      headers: token ? {
-        'Authorization': `Bearer ${token}`
-      } : {}
+      headers: headers
     }),
     messages: [
       {
@@ -152,6 +165,23 @@ function AIAssistantPageInner({ token, sessionLoaded }: PageInnerProps) {
 
   const handleQuickAction = (text: string) => {
     sendMessage({ text });
+  };
+
+  const handleFeedback = async (messageId: string, rating: 'up' | 'down') => {
+    setFeedbackGiven(prev => ({ ...prev, [messageId]: rating }));
+    try {
+      await fetch('/api/v1/ai/feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          'X-Session-ID': sessionId
+        },
+        body: JSON.stringify({ messageId, rating })
+      });
+    } catch (e) {
+      console.error('Failed to submit feedback', e);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -222,6 +252,32 @@ function AIAssistantPageInner({ token, sessionLoaded }: PageInnerProps) {
                   {msg.role === "assistant" && msg.parts && (
                     <div className="md:pl-12 pl-2 space-y-3">
                       <ToolResultParts parts={msg.parts} />
+                    </div>
+                  )}
+
+                  {/* Feedback Loop */}
+                  {msg.role === "assistant" && msg.id !== "welcome" && status !== "streaming" && msg.parts.some((p: any) => p.type === 'text' && p.state === 'done') && (
+                    <div className="md:pl-12 pl-2 flex gap-1 mt-1 opacity-60 hover:opacity-100 transition-opacity">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className={`h-6 w-6 rounded-full ${feedbackGiven[msg.id] === 'up' ? 'text-primary bg-primary/10' : 'text-muted-foreground'}`}
+                        onClick={() => handleFeedback(msg.id, 'up')}
+                        disabled={!!feedbackGiven[msg.id]}
+                        title="Hữu ích"
+                      >
+                        <ThumbsUp className="h-3 w-3" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className={`h-6 w-6 rounded-full ${feedbackGiven[msg.id] === 'down' ? 'text-destructive bg-destructive/10' : 'text-muted-foreground'}`}
+                        onClick={() => handleFeedback(msg.id, 'down')}
+                        disabled={!!feedbackGiven[msg.id]}
+                        title="Không hữu ích"
+                      >
+                        <ThumbsDown className="h-3 w-3" />
+                      </Button>
                     </div>
                   )}
                 </div>

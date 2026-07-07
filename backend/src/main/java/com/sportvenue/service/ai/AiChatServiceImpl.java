@@ -98,7 +98,8 @@ public class AiChatServiceImpl implements AiChatService {
                 activeStreamRef.set(null);
 
                 long duration = System.currentTimeMillis() - startTime;
-                log.info("LLM turn completed in {} ms. Tool calls requested: {}", duration, turn.toolCalls().size());
+                log.info("AI_METRIC | userId={} | role={} | duration={}ms | toolCalledCount={}", 
+                         userId, roleName, duration, turn.toolCalls().size());
 
                 if (turn.toolCalls().isEmpty()) {
                     keepRunning = false;
@@ -167,7 +168,12 @@ public class AiChatServiceImpl implements AiChatService {
         chatHistory.add(Map.of("role", "system", "content", agentConfig.getSystemPrompt()));
 
         if (request.getMessages() != null) {
-            for (AiChatRequest.Message reqMsg : request.getMessages()) {
+            List<AiChatRequest.Message> userMessages = request.getMessages();
+            int maxHistory = 10;
+            if (userMessages.size() > maxHistory) {
+                userMessages = userMessages.subList(userMessages.size() - maxHistory, userMessages.size());
+            }
+            for (AiChatRequest.Message reqMsg : userMessages) {
                 chatHistory.add(convertMessageToMap(reqMsg));
             }
         }

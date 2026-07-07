@@ -56,6 +56,7 @@ public class SecurityConfig {
             // như tìm kiếm thường. JwtAuthenticationFilter vẫn set UserPrincipal nếu request có
             // Bearer token hợp lệ, nên user đã đăng nhập vẫn được nhận diện trong controller.
             "/api/v1/ai/chat",
+            "/api/v1/ai/feedback",
             "/actuator/health",
             "/actuator/info",
             "/swagger-ui.html",
