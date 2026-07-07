@@ -58,7 +58,7 @@ public class StadiumComplexSearchRequest {
     private int page = 0;
 
     @Min(value = 1, message = "Page size must be at least 1")
-    @Max(value = 50, message = "Page size must not exceed 50")
+    @Max(value = 500, message = "Page size must not exceed 500")
     @Builder.Default
     private int size = 12;
 

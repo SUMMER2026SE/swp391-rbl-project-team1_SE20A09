@@ -66,7 +66,7 @@ public class StadiumSearchRequest {
     private int page = 0;
     
     @Min(value = 1, message = "Kích thước trang phải lớn hơn hoặc bằng 1")
-    @Max(value = 100, message = "Kích thước trang không được vượt quá 100")
+    @Max(value = 500, message = "Kích thước trang không được vượt quá 500")
     @Builder.Default
     private int size = 10;
 
