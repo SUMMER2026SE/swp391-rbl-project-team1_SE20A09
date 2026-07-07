@@ -49,14 +49,16 @@ function getActionButtons(
           <Button asChild variant="outline" className={secondaryBtnClass}>
             <Link href={detailLink}>Xem chi tiết</Link>
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className={`${primaryBtnClass} border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700`}
-            onClick={() => onRequestCancel(booking.id)}
-          >
-            Hủy đơn
-          </Button>
+          {!isOwner && (
+            <Button
+              type="button"
+              variant="outline"
+              className={`${primaryBtnClass} border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700`}
+              onClick={() => onRequestCancel(booking.id)}
+            >
+              Hủy đơn
+            </Button>
+          )}
         </>
       );
     case "completed":
