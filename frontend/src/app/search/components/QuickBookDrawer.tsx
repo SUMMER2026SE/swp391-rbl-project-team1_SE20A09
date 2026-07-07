@@ -184,20 +184,6 @@ export default function QuickBookDrawer({
 
   const days = getNext7Days()
 
-  // ── Reset when drawer opens ──────────────────────────────────────────────
-  useEffect(() => {
-    if (open) {
-      setState(INITIAL_STATE)
-      setFacilities([])
-      setCourts([])
-      setSlots([])
-      setShowLoginModal(false)
-      // Fetch facilities/courts
-      fetchCourts()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
-
   // ── Fetch courts (flat or via facilities) ────────────────────────────────
   const fetchCourts = useCallback(async () => {
     setLoadingCourts(true)
@@ -221,6 +207,19 @@ export default function QuickBookDrawer({
       setLoadingCourts(false)
     }
   }, [complexId])
+
+  // ── Reset when drawer opens ──────────────────────────────────────────────
+  useEffect(() => {
+    if (open) {
+      setState(INITIAL_STATE)
+      setFacilities([])
+      setCourts([])
+      setSlots([])
+      setShowLoginModal(false)
+      // Fetch facilities/courts
+      fetchCourts()
+    }
+  }, [open, fetchCourts])
 
   // ── Fetch courts for selected facility ──────────────────────────────────
   const handleFacilityChange = async (facilityId: number) => {
