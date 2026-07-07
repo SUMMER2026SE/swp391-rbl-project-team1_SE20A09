@@ -2,9 +2,11 @@ package com.sportvenue.repository.specification;
 
 import com.sportvenue.dto.request.StadiumSearchRequest;
 import com.sportvenue.entity.Amenity;
+import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.TimeSlot;
 import com.sportvenue.entity.enums.ApprovedStatus;
+import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.entity.enums.StadiumStatus;
 import com.sportvenue.entity.enums.StadiumNodeType;
@@ -12,6 +14,7 @@ import com.sportvenue.entity.StadiumComplex;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
@@ -53,12 +56,24 @@ public class StadiumSpecification {
         };
     }
 
+    /**
+     * Keyword match trên: tên Court, mô tả, tên Facility cha, địa chỉ Court và địa chỉ Complex.
+     * Trước đây chỉ match tên Court + description — người dùng gõ tên Facility ("Sân vận động
+     * Cẩm Lệ") ra rỗng vì Court con đặt tên chung chung ("Sân 1"). Dùng LEFT JOIN tường minh
+     * để sân không có Facility cha/Complex vẫn được match theo tên chính nó.
+     */
     private static void addKeywordPredicate(List<Predicate> preds, CriteriaBuilder cb, Root<Stadium> root, String kw) {
         if (StringUtils.hasText(kw)) {
             String likePattern = "%" + kw.toLowerCase() + "%";
+            Join<Object, Object> parentJoin = root.join("parentStadium", JoinType.LEFT);
+            Join<Object, Object> complexJoin = parentJoin.join("complex", JoinType.LEFT);
+
             Predicate nameLike = cb.like(cb.lower(root.get("stadiumName")), likePattern);
             Predicate descLike = cb.like(cb.lower(root.get("description")), likePattern);
-            preds.add(cb.or(nameLike, descLike));
+            Predicate parentNameLike = cb.like(cb.lower(parentJoin.get("stadiumName")), likePattern);
+            Predicate ownAddressLike = cb.like(cb.lower(root.get("address")), likePattern);
+            Predicate complexAddressLike = cb.like(cb.lower(complexJoin.get("address")), likePattern);
+            preds.add(cb.or(nameLike, descLike, parentNameLike, ownAddressLike, complexAddressLike));
         }
     }
 
@@ -75,6 +90,17 @@ public class StadiumSpecification {
                 cb.like(cb.lower(root.get("address")), searchAddress),
                 cb.like(cb.lower(root.get("parentStadium").get("complex").get("address")), searchAddress)
             ));
+        }
+        // Province/district exact-match — chuẩn hoá qua VietnamLocationResolver, thay cho LIKE thô
+        // dễ miss khi user gõ dài hơn chuỗi lưu trong DB (vd "Thành phố Hồ Chí Minh" vs "Hồ Chí Minh").
+        // Dùng root.get("complex") trực tiếp thay vì root.get("parentStadium").get("complex") như
+        // addKeywordPredicate ở trên — cả hai đều hợp lệ vì complex_id được set thẳng trên MỌI row
+        // COURT/FACILITY (Stadium.java), không chỉ qua parentStadium.
+        if (StringUtils.hasText(req.getProvince())) {
+            preds.add(cb.equal(cb.lower(root.get("complex").get("province")), req.getProvince().toLowerCase()));
+        }
+        if (StringUtils.hasText(req.getDistrict())) {
+            preds.add(cb.equal(cb.lower(root.get("complex").get("district")), req.getDistrict().toLowerCase()));
         }
         if (req.getMinPrice() != null || req.getMaxPrice() != null) {
             Subquery<Integer> priceSubquery = query.subquery(Integer.class);
@@ -96,22 +122,52 @@ public class StadiumSpecification {
         }
     }
 
+    /**
+     * Trạng thái booking chiếm chỗ slot — đồng bộ với ACTIVE_STATUSES ở BookingServiceImpl.
+     */
+    private static final List<BookingStatus> SLOT_BLOCKING_STATUSES =
+            List.of(BookingStatus.PENDING_PAYMENT, BookingStatus.PENDING, BookingStatus.CONFIRMED);
+
+    /**
+     * Sân phải có ít nhất 1 slot AVAILABLE khớp khoảng giờ yêu cầu; nếu có {@code targetDate},
+     * slot đó còn phải CHƯA bị đặt trong ngày đó (đối chiếu bảng booking) — trước đây chỉ check
+     * khung giờ mẫu tĩnh nên "tìm sân trống ngày X" vẫn trả sân đã kín lịch ngày X.
+     * targetDate không kèm giờ cũng được hỗ trợ: chỉ cần còn bất kỳ slot nào trống ngày đó.
+     */
     private static void addTimeSlotPredicate(List<Predicate> preds, CriteriaBuilder cb, Root<Stadium> root, CriteriaQuery<?> query, StadiumSearchRequest req) {
-        if (req.getStartTime() != null && req.getEndTime() != null) {
-            Subquery<Integer> slotSubquery = query.subquery(Integer.class);
-            var slotRoot = slotSubquery.from(TimeSlot.class);
-            slotSubquery.select(slotRoot.get("stadium").get("stadiumId"));
-            
-            Predicate stadiumMatch = cb.equal(slotRoot.get("stadium").get("stadiumId"), root.get("stadiumId"));
-            Predicate statusMatch = cb.equal(slotRoot.get("slotStatus"), SlotStatus.AVAILABLE);
-            Predicate timeMatch = cb.and(
+        boolean hasTimeRange = req.getStartTime() != null && req.getEndTime() != null;
+        if (!hasTimeRange && req.getTargetDate() == null) {
+            return;
+        }
+
+        Subquery<Integer> slotSubquery = query.subquery(Integer.class);
+        var slotRoot = slotSubquery.from(TimeSlot.class);
+        slotSubquery.select(slotRoot.get("stadium").get("stadiumId"));
+
+        List<Predicate> slotPreds = new ArrayList<>();
+        slotPreds.add(cb.equal(slotRoot.get("stadium").get("stadiumId"), root.get("stadiumId")));
+        slotPreds.add(cb.equal(slotRoot.get("slotStatus"), SlotStatus.AVAILABLE));
+        if (hasTimeRange) {
+            slotPreds.add(cb.and(
                     cb.lessThan(slotRoot.get("startTime"), req.getEndTime()),
                     cb.greaterThan(slotRoot.get("endTime"), req.getStartTime())
-            );
-            
-            slotSubquery.where(cb.and(stadiumMatch, statusMatch, timeMatch));
-            preds.add(cb.exists(slotSubquery));
+            ));
         }
+
+        if (req.getTargetDate() != null) {
+            Subquery<Integer> bookedSubquery = slotSubquery.subquery(Integer.class);
+            var bookingRoot = bookedSubquery.from(Booking.class);
+            bookedSubquery.select(bookingRoot.get("bookingId"));
+            bookedSubquery.where(cb.and(
+                    cb.equal(bookingRoot.get("slot").get("slotId"), slotRoot.get("slotId")),
+                    cb.equal(bookingRoot.get("reservationDate"), req.getTargetDate()),
+                    bookingRoot.get("bookingStatus").in(SLOT_BLOCKING_STATUSES)
+            ));
+            slotPreds.add(cb.not(cb.exists(bookedSubquery)));
+        }
+
+        slotSubquery.where(cb.and(slotPreds.toArray(new Predicate[0])));
+        preds.add(cb.exists(slotSubquery));
     }
 
     private static void addLocationPredicate(List<Predicate> preds, CriteriaBuilder cb, Root<Stadium> root, StadiumSearchRequest req) {

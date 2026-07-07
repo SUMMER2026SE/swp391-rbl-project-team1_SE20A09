@@ -60,3 +60,4 @@ CLAUDE.md
 .claude/settings.json
 .gemini/settings.json
 *.txt
+node_modules/

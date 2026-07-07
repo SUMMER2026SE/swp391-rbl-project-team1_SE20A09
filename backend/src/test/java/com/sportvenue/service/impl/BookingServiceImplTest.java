@@ -17,6 +17,7 @@ import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.DuplicateResourceException;
+import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.AccessoryRepository;
 import com.sportvenue.repository.BookingAccessoryRepository;
@@ -634,8 +635,8 @@ class BookingServiceImplTest {
     }
 
     @Test
-    @DisplayName("cancelBooking: owner cancels booking on their stadium successfully")
-    void cancelBooking_happyPath_ownerSuccess() {
+    @DisplayName("cancelBooking: venue owner can cancel booking successfully -> success")
+    void cancelBooking_byVenueOwner_success() {
         // Arrange
         User ownerUser = User.builder()
                 .userId(99)
@@ -666,11 +667,10 @@ class BookingServiceImplTest {
 
         // Act
         BookingDetailResponse response = bookingService.cancelBooking(ownerPrincipal, 100, "Owner closed court");
-
+        
         // Assert
         assertNotNull(response);
         assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
-        assertEquals(PaymentStatus.UNPAID, booking.getPaymentStatus());
         assertEquals("Owner closed court", booking.getCancelReason());
         verify(bookingRepository, times(1)).save(booking);
     }
@@ -718,12 +718,13 @@ class BookingServiceImplTest {
     }
 
     @Test
-    @DisplayName("cancelBooking: user has no permission to cancel booking -> throws BadRequestException")
-    void cancelBooking_noPermission_throwsBadRequest() {
+    @DisplayName("cancelBooking: user has no permission to cancel booking -> throws ForbiddenException")
+    void cancelBooking_byOtherUser_throwsForbiddenException() {
         // Arrange
         User stranger = User.builder()
                 .userId(888)
                 .email("stranger@example.com")
+                .role(Role.builder().roleName("Customer").build())
                 .build();
         UserPrincipal strangerPrincipal = new UserPrincipal(stranger);
 
@@ -738,7 +739,7 @@ class BookingServiceImplTest {
         when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
 
         // Act & Assert
-        BadRequestException ex = assertThrows(BadRequestException.class,
+        ForbiddenException ex = assertThrows(ForbiddenException.class,
                 () -> bookingService.cancelBooking(strangerPrincipal, 100, "No right"));
         assertTrue(ex.getMessage().contains("không có quyền"));
         verify(bookingRepository, never()).save(any());

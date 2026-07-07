@@ -22,6 +22,7 @@ import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.DuplicateResourceException;
+import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.entity.Payment;
 import com.sportvenue.entity.enums.TransactionStatus;
@@ -389,8 +390,9 @@ public class BookingServiceImpl implements BookingService {
                 && booking.getStadium().getOwner() != null
                 && booking.getStadium().getOwner().getUser() != null
                 && booking.getStadium().getOwner().getUser().getUserId().equals(currentUserId);
+                
         if (!isCustomer && !isVenueOwner) {
-            throw new BadRequestException("Bạn không có quyền hủy đơn đặt sân này");
+            throw new ForbiddenException("Bạn không có quyền hủy đơn đặt sân này");
         }
 
         BookingStatus currentStatus = booking.getBookingStatus();

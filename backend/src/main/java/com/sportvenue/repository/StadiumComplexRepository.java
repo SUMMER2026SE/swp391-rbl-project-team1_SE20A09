@@ -31,6 +31,9 @@ public interface StadiumComplexRepository extends JpaRepository<StadiumComplex, 
 
     List<StadiumComplex> findByOwnerOwnerId(Integer ownerId);
 
+    /** Dùng bởi LocationBackfillRunner để tìm complex chưa được chuẩn hoá province/district. */
+    List<StadiumComplex> findAllByProvinceIsNull();
+
     @EntityGraph(attributePaths = {"owner", "owner.user", "sportTypes", "amenities", "images"})
     @Query("SELECT sc FROM StadiumComplex sc WHERE sc.complexId = :complexId")
     Optional<StadiumComplex> findWithDetailsByComplexId(@Param("complexId") Integer complexId);

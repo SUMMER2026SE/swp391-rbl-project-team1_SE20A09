@@ -65,6 +65,7 @@ export interface VenueDetailProps {
     description: string
     images: string[]        // array of image URLs, length >= 5
     amenities: string[]
+    footballFieldType?: 'FIVE_A_SIDE' | 'SEVEN_A_SIDE' | 'ELEVEN_A_SIDE' | 'FUTSAL' | null
     timeSlots: {
       date: string          // "YYYY-MM-DD"
       hour: string          // "07:00"
@@ -115,6 +116,13 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
   const [lightboxIndex, setLightboxIndex] = useState(0)
   const [mapLoaded, setMapLoaded] = useState(false)
   const [editingReviewId, setEditingReviewId] = useState<number | null>(null)
+
+  const fieldTypeMapping: Record<string, string> = {
+    FIVE_A_SIDE: 'Sân 5 người',
+    SEVEN_A_SIDE: 'Sân 7 người',
+    ELEVEN_A_SIDE: 'Sân 11 người',
+    FUTSAL: 'Sân Futsal',
+  }
 
   // UC-CUS-01: booking state — selected slot + date được WeeklySchedule set
   // khi user click một ô AVAILABLE.
@@ -350,9 +358,16 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
 
         {/* Venue Info overlaid bottom-left */}
         <div className="absolute bottom-3 left-3 text-white right-16">
-          <div className="inline-flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-[20px] text-[11px] font-medium border-[0.5px] border-white/10 mb-1.5">
-            <IconBallFootball className="w-3.5 h-3.5" />
-            <span>{venue.sport}</span>
+          <div className="flex flex-wrap items-center gap-2 mb-1.5">
+            <div className="inline-flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-[20px] text-[11px] font-medium border-[0.5px] border-white/10">
+              <IconBallFootball className="w-3.5 h-3.5" />
+              <span>{venue.sport}</span>
+            </div>
+            {venue.footballFieldType && (
+              <div className="inline-flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-[20px] text-[11px] font-medium border-[0.5px] border-white/10">
+                <span>{fieldTypeMapping[venue.footballFieldType] || venue.footballFieldType}</span>
+              </div>
+            )}
           </div>
           <h1 className="text-[22px] font-medium leading-tight mb-1 truncate">
             {venue.name}

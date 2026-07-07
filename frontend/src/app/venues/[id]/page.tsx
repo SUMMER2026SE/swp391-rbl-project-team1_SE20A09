@@ -50,6 +50,7 @@ export default async function VenueDetailPage({ params }: PageProps) {
     rating: venue.averageRating || 0,
     reviewCount: venue.totalReviews || 0,
     pricePerHour: venue.pricePerHour,
+    footballFieldType: venue.footballFieldType,
     openTime: formatTimeNum(venue.openTime),
     closeTime: formatTimeNum(venue.closeTime),
     status: venue.stadiumStatus,

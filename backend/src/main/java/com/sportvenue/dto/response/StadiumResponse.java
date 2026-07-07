@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import com.sportvenue.entity.enums.FootballFieldType;
+
 import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.util.List;
@@ -27,14 +29,16 @@ public class StadiumResponse {
     private Double distanceInKm; // Calculated distance if user coords provided
     
     private String sportName; 
+    private Boolean isFootballType;
     private String firstImageUrl;
-    private List<String> imageUrls; 
+    private List<String> imageUrls;
     
     private LocalTime openTime; 
     private LocalTime closeTime; 
     private BigDecimal pricePerHour;
     private String stadiumStatus;
     private String approvedStatus;
+    private FootballFieldType footballFieldType;
 
     /**
      * True nếu sân đang bị chặn đặt HÔM NAY do bất kỳ cơ chế bảo trì nào (stadiumStatus,

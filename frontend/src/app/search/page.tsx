@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { getAmenities, getSportTypes, Amenity } from '@/lib/api/stadium'
 import { searchComplexes } from '@/lib/api/complex'
+import { getLocations, SupportedLocationDto } from '@/lib/api/location'
 import type { StadiumComplexDto, ComplexSearchParams } from '@/types/complex'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
@@ -50,7 +51,7 @@ function buildSearchParams(filters: ComplexSearchParams): URLSearchParams {
       if (key === 'minPrice' && Number(value) === 0) return
       if (key === 'maxPrice' && Number(value) === 1000000) return
       if (key === 'page' && Number(value) === 0) return
-      if (key === 'size' && Number(value) === 12) return
+      if (key === 'size' && Number(value) === 100) return
       params.append(key, String(value))
     }
   })
@@ -80,6 +81,7 @@ function SearchPageContent() {
   const [complexes, setComplexes] = useState<StadiumComplexDto[]>([])
   const [amenitiesList, setAmenitiesList] = useState<Amenity[]>([])
   const [sportTypes, setSportTypes] = useState<{ sportTypeId: number, sportName: string }[]>([])
+  const [locations, setLocations] = useState<SupportedLocationDto[]>([])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isLocating, setIsLocating] = useState(false)
@@ -95,6 +97,8 @@ function SearchPageContent() {
   const [filters, setFilters] = useState<ComplexSearchParams>({
     keyword: '',
     sportTypeId: undefined,
+    province: '',
+    district: '',
     targetDate: '',
     startTime: '',
     endTime: '',
@@ -105,17 +109,20 @@ function SearchPageContent() {
     minPrice: 0,
     maxPrice: 1000000,
     page: 0,
-    size: 12,
+    // [SUGGEST] TODO: Consider separating map endpoint to avoid large payload
+    // Tăng page size lên 100 để hỗ trợ hiển thị markers trên bản đồ
+    size: 100,
   })
 
   const debouncedFilters = useDebounce(filters, 500)
 
-  // 1. Fetch amenities and sports
+  // 1. Fetch amenities, sports and locations
   useEffect(() => {
-    Promise.all([getAmenities(), getSportTypes()])
-      .then(([amenitiesRes, sportTypesRes]) => {
+    Promise.all([getAmenities(), getSportTypes(), getLocations()])
+      .then(([amenitiesRes, sportTypesRes, locationsRes]) => {
         setAmenitiesList(amenitiesRes)
         setSportTypes(sportTypesRes)
+        setLocations(locationsRes)
       })
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : 'Không tải được bộ lọc tìm kiếm.'
@@ -135,6 +142,8 @@ function SearchPageContent() {
     const currentFilters: ComplexSearchParams = {
       keyword: searchParams.get('keyword') || '',
       sportTypeId: searchParams.get('sportTypeId') ? Number(searchParams.get('sportTypeId')) : undefined,
+      province: searchParams.get('province') || '',
+      district: searchParams.get('district') || '',
       targetDate: searchParams.get('targetDate') || '',
       startTime: searchParams.get('startTime') || '',
       endTime: searchParams.get('endTime') || '',
@@ -145,7 +154,9 @@ function SearchPageContent() {
       minPrice: searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : 0,
       maxPrice: searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : 1000000,
       page: searchParams.has('page') ? Number(searchParams.get('page')) : 0,
-      size: searchParams.has('size') ? Number(searchParams.get('size')) : 12,
+      // [SUGGEST] TODO: Consider separating map endpoint to avoid large payload
+      // Tăng page size lên 100 để hỗ trợ hiển thị markers trên bản đồ
+      size: searchParams.has('size') ? Number(searchParams.get('size')) : 100,
     }
 
     setFilters(prev => {
@@ -162,6 +173,8 @@ function SearchPageContent() {
     if (!cleanFilters.endTime) delete cleanFilters.endTime
     if (!cleanFilters.keyword) delete cleanFilters.keyword
     if (cleanFilters.sportTypeId === undefined) delete cleanFilters.sportTypeId
+    if (!cleanFilters.province) delete cleanFilters.province
+    if (!cleanFilters.district) delete cleanFilters.district
     if (cleanFilters.minPrice === 0) delete cleanFilters.minPrice
     if (cleanFilters.maxPrice === 1000000) delete cleanFilters.maxPrice
 
@@ -203,6 +216,8 @@ function SearchPageContent() {
     setFilters({
       keyword: '',
       sportTypeId: undefined,
+      province: '',
+      district: '',
       targetDate: '',
       startTime: '',
       endTime: '',
@@ -213,7 +228,9 @@ function SearchPageContent() {
       minPrice: 0,
       maxPrice: 1000000,
       page: 0,
-      size: 12,
+      // [SUGGEST] TODO: Consider separating map endpoint to avoid large payload
+      // Tăng page size lên 100 để hỗ trợ hiển thị markers trên bản đồ
+      size: 100,
     })
   }
 
@@ -267,6 +284,7 @@ function SearchPageContent() {
         onGetLocation={getLocation}
         onSearch={handleSearchNow}
         isLocating={isLocating}
+        locations={locations}
       />
 
       {/* 3. Sport Type Tabs */}

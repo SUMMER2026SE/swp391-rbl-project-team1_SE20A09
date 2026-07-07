@@ -154,6 +154,32 @@ api.interceptors.response.use(
 
 export default api
 
+/**
+ * Public API instance — dùng cho các endpoint không cần auth (/public/...).
+ * Không có response interceptor 401→signOut nên guest user không bị redirect login.
+ */
+export const publicApi = axios.create({
+  baseURL: resolveApiBaseUrl(),
+  timeout: 10_000,
+  headers: { 'Content-Type': 'application/json' },
+  paramsSerializer: { indexes: null },
+})
+
+
+
+// Response interceptor: chỉ reject lỗi — KHÔNG signOut khi 401
+publicApi.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    const data = error.response?.data as { message?: string; error?: string } | undefined
+    const message = data?.message || data?.error || error.message || 'Đã xảy ra lỗi'
+    const customError = new Error(message) as Error & { status?: number }
+    customError.status = error.response?.status
+    return Promise.reject(customError)
+  }
+)
+
+
 export async function get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
   const res = await api.get<T>(url, config)
   return res.data

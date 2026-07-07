@@ -1,3 +1,10 @@
+export enum FootballFieldType {
+  FIVE_A_SIDE = 'FIVE_A_SIDE',
+  SEVEN_A_SIDE = 'SEVEN_A_SIDE',
+  ELEVEN_A_SIDE = 'ELEVEN_A_SIDE',
+  FUTSAL = 'FUTSAL'
+}
+
 export interface CreateStadiumRequest {
   stadiumName: string;
   address: string;
@@ -22,6 +29,7 @@ export interface UpdateStadiumRequest {
   openTime: string; // Format HH:mm:ss
   closeTime: string; // Format HH:mm:ss
   imageUrls?: string[];
+  footballFieldType?: FootballFieldType | null;
 }
 
 export interface StadiumResponse {
@@ -33,6 +41,7 @@ export interface StadiumResponse {
   description: string;
   sportTypeId: number;
   sportName: string;
+  isFootballType?: boolean;
   pricePerHour: number;
   openTime: string;
   closeTime: string;
@@ -46,6 +55,7 @@ export interface StadiumResponse {
   parentStadiumId?: number | null;
   /** True nếu sân đang bị chặn đặt HÔM NAY do bất kỳ cơ chế bảo trì nào (kể cả khung ngày, dù stadiumStatus vẫn AVAILABLE). Chỉ có ở API dành cho Owner. */
   underMaintenanceToday?: boolean | null;
+  footballFieldType?: FootballFieldType | null;
 }
 
 export interface ComplexResponse {
@@ -86,6 +96,7 @@ export interface CreateCourtRequest {
   description?: string;
   pricePerHour: number;
   imageUrls?: string[];
+  footballFieldType?: FootballFieldType | null;
 }
 
 export interface CreateTimeSlotRequest {
@@ -104,6 +115,7 @@ export interface BulkTimeSlotRequest {
 export interface SportType {
   sportTypeId: number;
   sportName: string;
+  isFootballType?: boolean;
 }
 
 export interface CreateComplexRequest {
@@ -131,6 +143,8 @@ export interface MaintenanceScheduleResponse {
   maintenanceId: number;
   stadiumId: number | null;
   complexId: number | null;
+  sportName: string;
+  firstImageUrl: string | null;
   startDate: string;
   endDate: string | null;
   startTime: string | null;
