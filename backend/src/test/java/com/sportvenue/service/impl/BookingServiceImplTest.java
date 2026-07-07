@@ -611,8 +611,8 @@ class BookingServiceImplTest {
     }
 
     @Test
-    @DisplayName("cancelBooking: owner cancels booking on their stadium successfully")
-    void cancelBooking_happyPath_ownerSuccess() {
+    @DisplayName("cancelBooking: owner cannot cancel using this endpoint -> throws AccessDeniedException")
+    void cancelBooking_owner_throwsAccessDenied() {
         // Arrange
         User ownerUser = User.builder()
                 .userId(99)
@@ -639,17 +639,14 @@ class BookingServiceImplTest {
         UserPrincipal ownerPrincipal = new UserPrincipal(ownerUser);
 
         when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
-        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        // Act
-        BookingDetailResponse response = bookingService.cancelBooking(ownerPrincipal, 100, "Owner closed court");
-
-        // Assert
-        assertNotNull(response);
-        assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
-        assertEquals(PaymentStatus.UNPAID, booking.getPaymentStatus());
-        assertEquals("Owner closed court", booking.getCancelReason());
-        verify(bookingRepository, times(1)).save(booking);
+        // Act & Assert
+        org.springframework.security.access.AccessDeniedException ex = assertThrows(
+                org.springframework.security.access.AccessDeniedException.class,
+                () -> bookingService.cancelBooking(ownerPrincipal, 100, "Owner closed court")
+        );
+        assertTrue(ex.getMessage().contains("Chủ sân không được phép"));
+        verify(bookingRepository, never()).save(any());
     }
 
     @Test
@@ -659,6 +656,7 @@ class BookingServiceImplTest {
         User stranger = User.builder()
                 .userId(888)
                 .email("stranger@example.com")
+                .role(Role.builder().roleName("Customer").build())
                 .build();
         UserPrincipal strangerPrincipal = new UserPrincipal(stranger);
 

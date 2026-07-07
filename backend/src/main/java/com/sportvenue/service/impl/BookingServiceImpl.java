@@ -315,7 +315,7 @@ public class BookingServiceImpl implements BookingService {
         Integer currentUserId = principal.getUser().getUserId();
 
         boolean isOwnerRole = principal.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_OWNER") || a.getAuthority().equals("OWNER"));
+                .anyMatch(a -> a.getAuthority().equalsIgnoreCase("ROLE_OWNER") || a.getAuthority().equalsIgnoreCase("OWNER"));
         if (isOwnerRole) {
             throw new AccessDeniedException("Chủ sân không được phép dùng luồng hủy đơn của khách hàng. Vui lòng sử dụng tính năng Xử lý Hoàn tiền chuyên dụng.");
         }
