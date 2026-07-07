@@ -29,7 +29,7 @@ class VietnamLocationResolverTest {
 
     @Test
     void resolveProvince_unknownCityReturnsNull() {
-        assertNull(resolver.resolveProvince("Hà Nội"));
+        assertNull(resolver.resolveProvince("Hải Phòng"));
         assertNull(resolver.resolveProvince(""));
         assertNull(resolver.resolveProvince(null));
     }
@@ -98,7 +98,7 @@ class VietnamLocationResolverTest {
         var locations = VietnamLocationReference.toSupportedLocationDtos();
         var hcm = locations.stream().filter(l -> l.province().equals("Hồ Chí Minh")).findFirst().orElseThrow();
 
-        assertEquals(2, locations.size());
+        assertEquals(3, locations.size());
         assertEquals(true, hcm.districts().contains("Quận 1"));
         assertEquals(true, hcm.districts().contains("Quận 12"));
         assertEquals(true, hcm.districts().contains("Thủ Đức"));
