@@ -67,6 +67,8 @@ function BookingManagementPage() {
   const [selectedBooking, setSelectedBooking] = useState<BookingItem | null>(null);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [reasonType, setReasonType] = useState("CUSTOMER_REQUEST");
+  const [proofUrl, setProofUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Xem trước tiền hoàn từ Backend (Tránh clock skew của client)
@@ -162,6 +164,8 @@ function BookingManagementPage() {
   const handleOpenRefundModal = async (booking: BookingItem) => {
     setSelectedBooking(booking);
     setCancelReason("");
+    setReasonType("CUSTOMER_REQUEST");
+    setProofUrl("");
     setIsCancelModalOpen(true);
     setPreviewData(null);
     setIsPreviewLoading(true);
@@ -185,13 +189,20 @@ function BookingManagementPage() {
       return;
     }
 
+    if (reasonType === "OWNER_FAULT" && !proofUrl.trim()) {
+      toast.error("Vui lòng cung cấp bằng chứng (link ảnh/mô tả) cho sự cố từ phía sân!");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       toast.loading("Đang kết nối backend xử lý hoàn tiền...", { id: "refund-process" });
 
       // Gọi API thật
       const response = await post<any>(`/owner/bookings/${selectedBooking.id}/refund`, {
-        reason: cancelReason.trim()
+        reason: cancelReason.trim(),
+        reasonType,
+        proofUrl: reasonType === "OWNER_FAULT" ? proofUrl.trim() : null
       });
 
       // Thành công: Cập nhật state ở local
@@ -731,14 +742,41 @@ function BookingManagementPage() {
                 )}
               </div>
 
+              {/* Chọn người chịu trách nhiệm */}
+              <div className="space-y-1.5 mt-2">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">Nguyên nhân hủy <span className="text-rose-500">*</span></label>
+                <Select value={reasonType} onValueChange={setReasonType}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Chọn nguyên nhân" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CUSTOMER_REQUEST">Khách hàng yêu cầu hủy</SelectItem>
+                    <SelectItem value="OWNER_FAULT">Sự cố từ phía sân (Mưa ngập, hỏng hóc...)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {reasonType === "OWNER_FAULT" && (
+                <div className="space-y-1.5 mt-2 p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900 rounded-md">
+                  <label className="block text-xs font-semibold text-rose-700 dark:text-rose-400">Bằng chứng sự cố <span className="text-rose-500">*</span></label>
+                  <p className="text-[11px] text-rose-600 mb-2">Bằng chứng này sẽ được lưu lại để Admin đối soát. Nếu khai báo sai, bạn có thể bị phạt.</p>
+                  <Textarea 
+                    value={proofUrl}
+                    onChange={(e) => setProofUrl(e.target.value)}
+                    placeholder="Mô tả chi tiết sự cố hoặc dán link ảnh bằng chứng vào đây..."
+                    className="min-h-[60px] focus:ring-1 focus:ring-rose-500 focus:outline-none"
+                  />
+                </div>
+              )}
+
               {/* Lý do hủy */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">Lý do hủy sân <span className="text-rose-500">*</span></label>
+              <div className="space-y-1.5 mt-2">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">Ghi chú hủy sân</label>
                 <Textarea 
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder="Nhập lý do chi tiết hủy đặt sân (e.g. Khách yêu cầu bận việc đột xuất, Sân bảo trì đột xuất...)"
-                  className="min-h-[80px] focus:ring-1 focus:ring-rose-500 focus:outline-none"
+                  placeholder="Ghi chú thêm (không bắt buộc)..."
+                  className="min-h-[60px] focus:ring-1 focus:ring-primary focus:outline-none"
                 />
               </div>
             </div>

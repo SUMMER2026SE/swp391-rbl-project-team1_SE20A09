@@ -86,4 +86,34 @@ class RefundServiceTest {
         
         verify(bookingRepository).save(booking);
     }
+
+    @Test
+    @DisplayName("Should return 100% refund for OWNER_FAULT with proof")
+    void calculateRefund_OwnerFault_Success() throws Exception {
+        Method method = RefundServiceImpl.class.getDeclaredMethod("calculateRefund", Booking.class, com.sportvenue.entity.enums.RefundReasonType.class, String.class);
+        method.setAccessible(true);
+
+        booking.setTotalPrice(new java.math.BigDecimal("100000"));
+
+        Object result = method.invoke(refundService, booking, com.sportvenue.entity.enums.RefundReasonType.OWNER_FAULT, "https://proof.url/img.jpg");
+        
+        Method getPercentage = result.getClass().getMethod("getPercentage");
+        Method getAmount = result.getClass().getMethod("getAmount");
+        
+        assertEquals(100, getPercentage.invoke(result));
+        assertEquals(new java.math.BigDecimal("100000"), getAmount.invoke(result));
+    }
+
+    @Test
+    @DisplayName("Should throw BadRequestException for OWNER_FAULT without proof")
+    void calculateRefund_OwnerFault_MissingProof() throws Exception {
+        Method method = RefundServiceImpl.class.getDeclaredMethod("calculateRefund", Booking.class, com.sportvenue.entity.enums.RefundReasonType.class, String.class);
+        method.setAccessible(true);
+
+        java.lang.reflect.InvocationTargetException exception = assertThrows(java.lang.reflect.InvocationTargetException.class, () -> {
+            method.invoke(refundService, booking, com.sportvenue.entity.enums.RefundReasonType.OWNER_FAULT, "  ");
+        });
+        
+        assertTrue(exception.getCause() instanceof com.sportvenue.exception.BadRequestException);
+    }
 }
