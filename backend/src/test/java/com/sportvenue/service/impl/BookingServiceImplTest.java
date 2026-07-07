@@ -41,6 +41,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionCallback;
+import com.sportvenue.service.PaymentService;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -82,6 +85,8 @@ class BookingServiceImplTest {
     @Mock private BookingAccessoryRepository bookingAccessoryRepository;
     @Mock private TimeSlotExceptionRepository timeSlotExceptionRepository;
     @Mock private com.sportvenue.service.MaintenanceScheduleService maintenanceScheduleService;
+    @Mock private PaymentService paymentService;
+    @Mock private TransactionTemplate transactionTemplate;
 
     @InjectMocks private BookingServiceImpl bookingService;
 
@@ -126,6 +131,12 @@ class BookingServiceImplTest {
                 .quantity(20)
                 .isAvailable(true)
                 .build();
+
+        org.mockito.Mockito.lenient().when(transactionTemplate.execute(any(TransactionCallback.class)))
+                .thenAnswer(invocation -> {
+                    TransactionCallback callback = invocation.getArgument(0);
+                    return callback.doInTransaction(null);
+                });
     }
 
     /** Helper: reservationDate 7 ngày trong tương lai → luôn future. */
@@ -719,7 +730,7 @@ class BookingServiceImplTest {
         CreateBookingRequest req = CreateBookingRequest.builder()
                 .stadiumId(stadium.getStadiumId())
                 .slotId(slot.getSlotId())
-                .reservationDate(LocalDate.of(2026, 7, 6))
+                .reservationDate(futureDate())
                 .accessories(List.of())
                 .build();
 
@@ -748,7 +759,7 @@ class BookingServiceImplTest {
         CreateBookingRequest req = CreateBookingRequest.builder()
                 .stadiumId(stadium.getStadiumId())
                 .slotId(slot.getSlotId())
-                .reservationDate(LocalDate.of(2026, 7, 6))
+                .reservationDate(futureDate())
                 .accessories(List.of())
                 .build();
 
