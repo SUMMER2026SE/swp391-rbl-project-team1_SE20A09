@@ -165,20 +165,7 @@ export const publicApi = axios.create({
   paramsSerializer: { indexes: null },
 })
 
-// Request interceptor: đính token nếu có (tuỳ chọn, không bắt buộc cho public API)
-publicApi.interceptors.request.use(
-  async (config) => {
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('access_token')
-      if (token) {
-        config.headers = config.headers ?? {}
-        config.headers['Authorization'] = `Bearer ${token}`
-      }
-    }
-    return config
-  },
-  (error) => Promise.reject(error)
-)
+
 
 // Response interceptor: chỉ reject lỗi — KHÔNG signOut khi 401
 publicApi.interceptors.response.use(
