@@ -6,6 +6,7 @@ import com.sportvenue.service.ai.AiChatService;
 import io.github.bucket4j.Bucket;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -35,8 +36,13 @@ public class AiChatController {
     private final Executor aiTaskExecutor;
     private final Map<String, RateLimitEntry> rateLimitBuckets = new ConcurrentHashMap<>();
 
-    private static final int CUSTOMER_REQUESTS_PER_MINUTE = 10;
-    private static final int GUEST_REQUESTS_PER_MINUTE = 5;
+    // Configurable qua .env cá nhân (vd để nới lỏng khi test local) — default giữ nguyên giá trị cũ.
+    @Value("${app.ai.rate-limit.customer-per-minute:10}")
+    private int customerRequestsPerMinute;
+
+    @Value("${app.ai.rate-limit.guest-per-minute:5}")
+    private int guestRequestsPerMinute;
+
     private static final long BUCKET_IDLE_EXPIRY_MILLIS = Duration.ofMinutes(10).toMillis();
 
     public AiChatController(AiChatService aiChatService,
@@ -77,7 +83,7 @@ public class AiChatController {
         // (data 3 tool hiện có đều public nên không cần bắt đăng nhập, nhưng vẫn
         // phải giới hạn riêng để tránh 1 IP ẩn danh spam free-tier Groq key).
         String rateLimitKey = userId != null ? "u:" + userId : "ip:" + getClientIp(httpRequest);
-        int limitPerMinute = userId != null ? CUSTOMER_REQUESTS_PER_MINUTE : GUEST_REQUESTS_PER_MINUTE;
+        int limitPerMinute = userId != null ? customerRequestsPerMinute : guestRequestsPerMinute;
 
         RateLimitEntry entry = rateLimitBuckets.computeIfAbsent(rateLimitKey, key -> new RateLimitEntry(Bucket.builder()
                 .addLimit(limit -> limit.capacity(limitPerMinute).refillGreedy(limitPerMinute, Duration.ofMinutes(1)))
@@ -86,10 +92,15 @@ public class AiChatController {
 
         if (!entry.bucket.tryConsume(1)) {
             log.warn("Rate limit exceeded for: {}", rateLimitKey);
-            response.setStatus(429); // TOO_MANY_REQUESTS
+            // Trả 200 + SSE event "error" cùng format với AiChatServiceImpl (AI SDK v5) thay vì
+            // status 429 + format data-stream cũ ("3:..."): DefaultChatTransport ném lỗi ngay khi
+            // gặp non-2xx và hiển thị body thô cho người dùng — vừa sai format vừa lộ tiếng Anh.
+            response.setHeader("X-Vercel-AI-Data-Stream", "v1");
+            response.setContentType("text/event-stream");
+            response.setCharacterEncoding("UTF-8");
             ResponseBodyEmitter emitter = new ResponseBodyEmitter();
             try {
-                emitter.send("3:\"Rate limit exceeded\"\n");
+                emitter.send("event: error\ndata: {\"type\":\"error\",\"errorText\":\"Bạn gửi tin nhắn hơi nhanh. Vui lòng chờ khoảng 1 phút rồi thử lại nhé.\"}\n\n");
                 emitter.complete();
             } catch (Exception e) {
                 emitter.completeWithError(e);

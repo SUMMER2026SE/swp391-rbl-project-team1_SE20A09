@@ -30,7 +30,9 @@ interface StadiumResult {
   stadiumName: string;
   address: string;
   sportName?: string;
-  status?: string;
+  /** Tên field đúng theo StadiumResponse của BE — trước đây khai báo `status` (không tồn tại)
+   *  khiến mọi card đều rơi vào nhánh "Bảo trì". */
+  stadiumStatus?: string;
   pricePerHour?: number;
 }
 
@@ -138,9 +140,15 @@ export function ToolResultParts({ parts, compact = false }: ToolResultPartsProps
                         <Badge variant="secondary" className="bg-teal-500/10 text-teal-600 dark:text-teal-400 border-none px-1.5 py-0 text-[10px]">
                           {stadium.sportName || 'Thể thao'}
                         </Badge>
-                        <span className="text-[10px] font-medium text-emerald-600">
-                          {stadium.status === 'AVAILABLE' ? 'Đang hoạt động' : 'Bảo trì'}
-                        </span>
+                        {stadium.stadiumStatus && (
+                          <span
+                            className={`text-[10px] font-medium ${
+                              stadium.stadiumStatus === 'AVAILABLE' ? 'text-emerald-600' : 'text-destructive'
+                            }`}
+                          >
+                            {stadium.stadiumStatus === 'AVAILABLE' ? 'Đang hoạt động' : 'Bảo trì'}
+                          </span>
+                        )}
                       </div>
                       <div className="border-t pt-2 flex items-center justify-between">
                         <div>

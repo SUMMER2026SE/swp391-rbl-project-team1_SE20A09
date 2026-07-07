@@ -12,8 +12,16 @@ import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { MessageScroller } from "@/components/ai/MessageScroller";
 import { ToolResultParts } from "@/components/ai/ToolResultParts";
+import { friendlyAiError } from "@/components/ai/aiError";
 import { getSession } from 'next-auth/react';
 import { Bot, Send, Search, Calendar, TrendingUp, AlertCircle, StopCircle } from "lucide-react";
+
+/** Message chỉ có tool parts (đang gọi tool / lỗi tool) — không render bubble text rỗng. */
+function messageHasText(msg: UIMessage) {
+  return msg.parts.some(
+    (part: any) => part.type === 'text' && typeof part.text === 'string' && part.text.trim().length > 0
+  );
+}
 
 function formatMessageContent(content: string) {
   const lines = content.split('\n');
@@ -177,6 +185,7 @@ function AIAssistantPageInner({ token, sessionLoaded }: PageInnerProps) {
                   key={msg.id}
                   className={`flex flex-col gap-3`}
                 >
+                  {(msg.role === "user" || messageHasText(msg)) && (
                   <div className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
                     <Avatar className="h-10 w-10 flex-shrink-0 border border-border">
                       {msg.role === "assistant" ? (
@@ -207,6 +216,7 @@ function AIAssistantPageInner({ token, sessionLoaded }: PageInnerProps) {
                       </div>
                     </div>
                   </div>
+                  )}
 
                   {/* Trạng thái/card kết quả tool-call — logic dùng chung ở ToolResultParts */}
                   {msg.role === "assistant" && msg.parts && (
@@ -238,7 +248,7 @@ function AIAssistantPageInner({ token, sessionLoaded }: PageInnerProps) {
               {error && (
                 <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive text-sm rounded-lg max-w-md mx-auto justify-center">
                   <AlertCircle className="h-4 w-4" />
-                  <span>{error.message || 'Đã xảy ra lỗi khi kết nối với máy chủ AI.'}</span>
+                  <span>{friendlyAiError(error)}</span>
                 </div>
               )}
 

@@ -11,6 +11,7 @@ import { Card, CardFooter, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { MessageScroller } from "./MessageScroller";
 import { ToolResultParts } from "./ToolResultParts";
+import { friendlyAiError } from "./aiError";
 import { Bot, Send, X, MessageSquare, Search, Calendar, TrendingUp, AlertCircle } from "lucide-react";
 
 function getMessageText(msg: UIMessage) {
@@ -18,6 +19,11 @@ function getMessageText(msg: UIMessage) {
     .filter(part => part.type === 'text')
     .map(part => (part as any).text)
     .join('');
+}
+
+/** Message chỉ có tool parts (đang gọi tool / lỗi tool) — không render bubble text rỗng. */
+function messageHasText(msg: UIMessage) {
+  return getMessageText(msg).trim().length > 0;
 }
 
 function formatMessageContent(content: string) {
@@ -191,6 +197,7 @@ function AIAssistantWidgetInner({ token, sessionLoaded, isOpen, setIsOpen }: Wid
             <div className="space-y-4 pb-2">
               {messages.map((msg) => (
                 <div key={msg.id} className="flex flex-col gap-2">
+                  {(msg.role === "user" || messageHasText(msg)) && (
                   <div
                     className={`flex gap-2.5 ${
                       msg.role === "user" ? "flex-row-reverse" : ""
@@ -224,6 +231,7 @@ function AIAssistantWidgetInner({ token, sessionLoaded, isOpen, setIsOpen }: Wid
                       </div>
                     </div>
                   </div>
+                  )}
 
                   {msg.role === "assistant" && msg.parts && (
                     <div className="pl-10 space-y-2">
@@ -254,7 +262,7 @@ function AIAssistantWidgetInner({ token, sessionLoaded, isOpen, setIsOpen }: Wid
               {error && (
                 <div className="flex items-center gap-1.5 p-2 bg-destructive/10 text-destructive text-[11px] rounded-lg max-w-[90%] mx-auto justify-center">
                   <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                  <span>Lỗi kết nối máy chủ AI.</span>
+                  <span>{friendlyAiError(error)}</span>
                 </div>
               )}
 

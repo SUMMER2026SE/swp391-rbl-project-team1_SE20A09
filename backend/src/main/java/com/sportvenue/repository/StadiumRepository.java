@@ -214,7 +214,17 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
             """)
     List<CourtFacilityNameProjection> findAllCourtFacilityNames();
 
+    /**
+     * IDs đầu vào hiện đã được lọc AVAILABLE ở {@link #findAllCourtFacilityNames}, nhưng vẫn
+     * filter lại ở đây (defense-in-depth) — tránh AI gợi ý sân bảo trì nếu status đổi giữa
+     * 2 query hoặc method này được tái sử dụng từ path khác trong tương lai.
+     */
     @EntityGraph(attributePaths = {"sportType", "images", "amenities", "parentStadium", "complex"})
-    @Query("SELECT s FROM Stadium s WHERE s.stadiumId IN :ids AND s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT")
+    @Query("""
+            SELECT s FROM Stadium s
+            WHERE s.stadiumId IN :ids
+            AND s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT
+            AND s.stadiumStatus = com.sportvenue.entity.enums.StadiumStatus.AVAILABLE
+            """)
     List<Stadium> findCourtsForAiToolByIds(@Param("ids") List<Integer> ids);
 }

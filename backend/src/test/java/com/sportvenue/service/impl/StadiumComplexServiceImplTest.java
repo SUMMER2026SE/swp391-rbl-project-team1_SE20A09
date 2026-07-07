@@ -17,6 +17,7 @@ import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.repository.StadiumComplexImageRepository;
 import com.sportvenue.repository.StadiumComplexRepository;
+import com.sportvenue.util.location.VietnamLocationResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -63,7 +64,8 @@ class StadiumComplexServiceImplTest {
                 ownerRepository,
                 sportTypeRepository,
                 amenityRepository,
-                stadiumComplexImageRepository
+                stadiumComplexImageRepository,
+                new VietnamLocationResolver()
         );
 
         user = User.builder().userId(1).email("owner@sportvenue.com").build();

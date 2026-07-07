@@ -314,7 +314,7 @@ class AiChatServiceImplTest {
 
         // verify that the emitter receives "Max tool calls exceeded" error and completes
         verify(sseEmitter, atLeastOnce()).send(contains("event: error"));
-        verify(sseEmitter, atLeastOnce()).send(contains("Max tool calls exceeded"));
+        verify(sseEmitter, atLeastOnce()).send(contains("cần quá nhiều bước tra cứu"));
         verify(sseEmitter).complete();
     }
 
@@ -345,7 +345,10 @@ class AiChatServiceImplTest {
 
         verify(sseEmitter, atLeastOnce()).send(contains("event: error"));
         verify(sseEmitter, atLeastOnce()).send(contains("LLM Stream Error: Failed to call a function. Please adjust your prompt."));
-        verify(sseEmitter).completeWithError(any(RuntimeException.class));
+        // complete() thay vì completeWithError(): lỗi đã báo qua SSE event có cấu trúc, dispatch
+        // exception lên response đã committed sẽ sinh output rác phía client (bug #11).
+        verify(sseEmitter).complete();
+        verify(sseEmitter, never()).completeWithError(any());
     }
 
     @Test
@@ -368,7 +371,8 @@ class AiChatServiceImplTest {
         verify(sseEmitter, atLeastOnce()).send(contains("event: error"));
         verify(sseEmitter, atLeastOnce()).send(contains("sự cố cấu hình"));
         verify(sseEmitter, never()).send(contains("Invalid API Key"));
-        verify(sseEmitter).completeWithError(any(LlmGatewayException.class));
+        verify(sseEmitter).complete();
+        verify(sseEmitter, never()).completeWithError(any());
     }
 
     @Test
@@ -390,7 +394,8 @@ class AiChatServiceImplTest {
 
         verify(sseEmitter, atLeastOnce()).send(contains("event: error"));
         verify(sseEmitter, atLeastOnce()).send(contains("giới hạn tốc độ"));
-        verify(sseEmitter).completeWithError(any(LlmGatewayException.class));
+        verify(sseEmitter).complete();
+        verify(sseEmitter, never()).completeWithError(any());
     }
 
     @Test
@@ -416,6 +421,37 @@ class AiChatServiceImplTest {
         verify(sseEmitter, atLeastOnce()).send(contains("event: error"));
         verify(sseEmitter, atLeastOnce()).send(contains("diễn đạt lại câu hỏi"));
         verify(sseEmitter, never()).send(contains("did not match schema"));
-        verify(sseEmitter).completeWithError(any(LlmGatewayException.class));
+        verify(sseEmitter).complete();
+        verify(sseEmitter, never()).completeWithError(any());
+    }
+
+    @Test
+    void testHandleChatStream_ErrorMidStream_ClosesDanglingTextPartBeforeErrorEvent() throws Exception {
+        // Groq trả error chunk 429 SAU KHI đã stream một phần text — text part phải được đóng
+        // (text-end) trước khi gửi event error, tránh client giữ part dở dang (bug #11).
+        String errorMidStreamContent =
+                "data: {\"choices\":[{\"delta\":{\"content\":\"Đang tìm sân cho bạn\"}}]}\n" +
+                "data: {\"error\":{\"message\":\"Rate limit reached for model\",\"type\":\"tokens\"}}\n";
+
+        InputStream inputStream = new ByteArrayInputStream(errorMidStreamContent.getBytes(StandardCharsets.UTF_8));
+
+        doReturn(httpResponse).when(httpClient).send(any(), any());
+        when(httpResponse.statusCode()).thenReturn(200);
+        when(httpResponse.body()).thenReturn(inputStream);
+
+        AiChatRequest request = AiChatRequest.builder()
+                .messages(List.of(AiChatRequest.Message.builder().role("user").content("Tìm sân").build()))
+                .build();
+
+        AtomicReference<InputStream> activeStreamRef = new AtomicReference<>();
+
+        aiChatService.handleChatStream(request, sseEmitter, userPrincipal, activeStreamRef);
+
+        verify(sseEmitter, atLeastOnce()).send(contains("event: text-start"));
+        verify(sseEmitter, atLeastOnce()).send(contains("event: text-end"));
+        verify(sseEmitter, atLeastOnce()).send(contains("event: error"));
+        verify(sseEmitter, atLeastOnce()).send(contains("giới hạn tốc độ"));
+        verify(sseEmitter).complete();
+        verify(sseEmitter, never()).completeWithError(any());
     }
 }

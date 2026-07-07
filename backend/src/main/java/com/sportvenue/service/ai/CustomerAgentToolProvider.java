@@ -13,9 +13,11 @@ import com.sportvenue.entity.enums.StadiumNodeType;
 import com.sportvenue.mapper.StadiumMapper;
 import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.repository.StadiumRepository;
+import com.sportvenue.service.BookingService;
+import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.MatchRequestService;
 import com.sportvenue.service.PublicStadiumService;
-import com.sportvenue.service.TimeSlotService;
+import com.sportvenue.util.location.VietnamLocationResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -39,21 +41,69 @@ import java.util.Optional;
 public class CustomerAgentToolProvider implements AgentToolProvider {
 
     private final PublicStadiumService publicStadiumService;
-    private final TimeSlotService timeSlotService;
+    private final BookingService bookingService;
+    private final MaintenanceScheduleService maintenanceScheduleService;
     private final MatchRequestService matchRequestService;
     private final SportTypeRepository sportTypeRepository;
     private final StadiumRepository stadiumRepository;
     private final StadiumMapper stadiumMapper;
+    private final VietnamLocationResolver locationResolver;
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+
+    /** Giới hạn kết quả tool search — card UI trong khung chat không bị quá dài. */
+    static final int AI_SEARCH_RESULT_LIMIT = 5;
+
+    /**
+     * Giờ Việt Nam cho việc lọc slot quá khứ — KHÔNG dùng system default vì server chạy
+     * Docker thường là UTC (lệch 7 tiếng). Không final để test override được.
+     */
+    private java.time.Clock clock = java.time.Clock.system(java.time.ZoneId.of("Asia/Ho_Chi_Minh"));
+
+    void setClock(java.time.Clock clock) {
+        this.clock = clock;
+    }
 
     private static final String CUSTOMER_SYSTEM_PROMPT =
             "Bạn là trợ lý ảo AI chính thức của SportHub, một nền tảng đặt sân thể thao trực tuyến tại Việt Nam. " +
             "Nhiệm vụ của bạn là giúp khách hàng tìm kiếm sân đấu, xem lịch trống, tìm kèo ghép và trả lời các thông tin liên quan đến đặt sân. " +
             "Hãy luôn thân thiện, chuyên nghiệp và trả lời bằng tiếng Việt. " +
-            "Khi gọi công cụ (tools), hãy sử dụng thông tin trả về từ công cụ để trả lời chính xác nhất. Nếu công cụ trả về danh sách sân đấu, hãy cung cấp chi tiết như tên sân, địa chỉ, giá cả cho người dùng. " +
-            "Công cụ getStadiumSlots trả về TẤT CẢ khung giờ trong ngày, không lọc theo khung giờ người dùng hỏi — bạn PHẢI tự lọc lại danh sách trả về, chỉ liệt kê các khung giờ thực sự nằm trong khoảng người dùng yêu cầu (đã quy đổi đúng sang hệ 24 giờ) trước khi trả lời, không liệt kê nhầm khung giờ khác. " +
+            // Đồng bộ text <-> card UI: danh sách sân/kèo đã được hệ thống render thành card,
+            // AI tự liệt kê lại 1-2 sân trong text sẽ lệch với card hiển thị (bug #2).
+            "Khi công cụ searchStadiums hoặc findMatchRequests trả về danh sách kết quả, hệ thống sẽ TỰ ĐỘNG hiển thị đầy đủ danh sách dưới dạng thẻ (card) trên giao diện. " +
+            "Vì vậy phần text của bạn chỉ nói ngắn gọn kiểu 'Dưới đây là các sân phù hợp với yêu cầu của bạn:' — TUYỆT ĐỐI KHÔNG tự chọn lọc, liệt kê lại hay mô tả chi tiết từng sân trong text để tránh lệch với danh sách card. " +
+            // Kết quả rỗng: model từng nói "Dưới đây là các sân phù hợp" trong khi card báo
+            // "Không tìm thấy" — text và UI đá nhau ngay trong 1 câu trả lời.
+            "Câu đó CHỈ dùng khi công cụ trả về danh sách CÓ kết quả. Nếu công cụ trả về danh sách RỖNG, hãy nói rõ là chưa tìm thấy sân phù hợp và gợi ý người dùng đổi khu vực, môn thể thao hoặc kiểm tra lại tên sân — KHÔNG được nói như thể có kết quả. " +
+            // Model từng tự gọi getStadiumSlots với stadiumId=0 khi search rỗng.
+            "KHÔNG BAO GIỜ tự bịa stadiumId (kể cả 0 hay 1) — chỉ được dùng stadiumId đọc từ kết quả searchStadiums trong hội thoại này; chưa có thì phải gọi searchStadiums trước. " +
+            "Nếu công cụ không ra kết quả, KHÔNG lặp lại cùng lệnh gọi với tham số y hệt — hãy đổi tham số hoặc hỏi lại người dùng. " +
+            // Cấm đoán bừa tham số (bug #8).
+            "TUYỆT ĐỐI KHÔNG tự đoán môn thể thao, ngày giờ hay khu vực nếu người dùng chưa cung cấp. " +
+            "Nếu câu hỏi quá chung chung (ví dụ 'có sân nào trống không'), BẮT BUỘC hỏi lại người dùng muốn tìm môn thể thao gì và ở khu vực nào trước khi gọi công cụ. " +
+            // Xử lý "gần nhất" khi chưa biết vị trí (bug #3 — ngắn hạn).
+            "Nếu người dùng muốn tìm sân 'gần nhất' hoặc 'gần đây' mà chưa nói rõ họ đang ở quận/khu vực nào, BẠN PHẢI HỎI LẠI vị trí hiện tại của họ trước khi tìm kiếm. " +
+            "KHÔNG BAO GIỜ gợi ý hoặc khuyên khách đặt sân đang ở trạng thái bảo trì (MAINTENANCE) hoặc đóng cửa (CLOSED). " +
+            "Công cụ getStadiumSlots trả về khung giờ của MỘT NGÀY cụ thể, mỗi khung giờ có cờ available: true nghĩa là còn trống đặt được, false nghĩa là đã có người đặt hoặc sân đóng khung giờ đó — CHỈ gợi ý khách các khung giờ available=true, có thể nhắc thêm khung giờ đã kín nếu khách hỏi đúng giờ đó. " +
+            "Tool không lọc theo khoảng giờ người dùng hỏi — bạn PHẢI tự lọc danh sách, chỉ liệt kê khung giờ nằm trong khoảng người dùng yêu cầu (quy đổi đúng hệ 24 giờ). " +
             "Bạn CHỈ trả lời các câu hỏi liên quan đến SportHub (tìm sân, đặt sân, kèo ghép, thanh toán, chính sách sử dụng dịch vụ). " +
             "Nếu người dùng hỏi về chủ đề hoàn toàn không liên quan (viết code, giải toán, kiến thức chung, chuyện phiếm...), hãy từ chối lịch sự và nhắc rằng bạn chỉ hỗ trợ các vấn đề về đặt sân thể thao trên SportHub.";
+
+    /**
+     * FAQ nghiệp vụ nhúng vào prompt — nội dung lấy từ logic thật trong code
+     * (BookingServiceImpl: PAYMENT_HOLD_MINUTES=5, SERVICE_FEE=20000, cancelBooking;
+     * PaymentMethod enum). Có luật chống bịa để model không tự chế chính sách.
+     */
+    private static final String FAQ_PROMPT =
+            " THÔNG TIN NGHIỆP VỤ CHÍNH THỨC (chỉ dùng đúng thông tin dưới đây, KHÔNG tự suy diễn thêm): " +
+            "1) Quy trình đặt sân: tìm sân -> mở trang chi tiết sân -> chọn ngày và khung giờ trống -> xác nhận đặt -> thanh toán. " +
+            "Sau khi xác nhận, đơn được GIỮ CHỖ 5 PHÚT để thanh toán; quá 5 phút chưa thanh toán, đơn tự hủy và slot được trả lại. " +
+            "2) Thanh toán: hỗ trợ VNPay, MoMo, chuyển khoản ngân hàng và tiền mặt tại sân. Mỗi đơn có phí dịch vụ 20.000đ. " +
+            "3) Hủy đặt sân: vào mục 'Đơn đặt sân của tôi' trên website, chọn đơn và bấm Hủy kèm lý do. " +
+            "Chỉ hủy được đơn CHƯA hoàn thành và CHƯA bị hủy trước đó. Nếu đơn đã thanh toán, hệ thống ghi nhận hoàn tiền; " +
+            "tiền hoàn về qua kênh thanh toán ban đầu và có thể cần thời gian xử lý. " +
+            "4) Khiếu nại/hỗ trợ: dùng mục Khiếu nại trên website để được Chủ sân hoặc Quản trị viên hỗ trợ. " +
+            "QUAN TRỌNG: nếu người dùng hỏi về chính sách, mức phí, thời hạn... KHÔNG có trong tài liệu này, hãy nói thẳng là bạn " +
+            "chưa có thông tin chính xác và hướng dẫn họ gửi khiếu nại/liên hệ hỗ trợ — TUYỆT ĐỐI KHÔNG tự bịa con số hay chính sách.";
 
     private static final String GUEST_SYSTEM_PROMPT_SUFFIX =
             " Người dùng hiện tại CHƯA đăng nhập (khách vãng lai). Bạn vẫn có thể giúp họ tìm sân, xem lịch trống và tìm kèo ghép bình thường. " +
@@ -70,9 +120,22 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
 
     @Override
     public String getSystemPrompt(Integer userId) {
-        return userId != null
-                ? CUSTOMER_SYSTEM_PROMPT + LOGGED_IN_SYSTEM_PROMPT_SUFFIX
-                : CUSTOMER_SYSTEM_PROMPT + GUEST_SYSTEM_PROMPT_SUFFIX;
+        String roleSuffix = userId != null ? LOGGED_IN_SYSTEM_PROMPT_SUFFIX : GUEST_SYSTEM_PROMPT_SUFFIX;
+        return CUSTOMER_SYSTEM_PROMPT + FAQ_PROMPT + buildCurrentTimeContext() + roleSuffix;
+    }
+
+    /**
+     * Model không biết "hôm nay" là ngày nào — thiếu dòng này thì "tối mai", "thứ 7 tuần này"
+     * sẽ bị đoán sai ngày (thường sai cả năm) khi điền tham số date/targetDate cho tool.
+     */
+    private String buildCurrentTimeContext() {
+        LocalDate today = LocalDate.now(clock);
+        LocalTime now = LocalTime.now(clock);
+        String dayOfWeekVi = today.getDayOfWeek().getDisplayName(
+                java.time.format.TextStyle.FULL, java.util.Locale.of("vi", "VN"));
+        return " Bây giờ là " + now.format(DateTimeFormatter.ofPattern("HH:mm"))
+                + " " + dayOfWeekVi + ", ngày " + today.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                + " (giờ Việt Nam). Hãy dùng mốc này để quy đổi 'hôm nay', 'ngày mai', 'tối nay', 'cuối tuần'... sang ngày YYYY-MM-DD khi gọi công cụ.";
     }
 
     @Override
@@ -89,7 +152,9 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
 
         propertiesSearch.put("keyword", Map.of(
             "type", "string",
-            "description", "Tên riêng hoặc một phần tên của sân đấu, nếu người dùng nhắc đến một sân cụ thể (ví dụ: 'Sân vận động Cẩm Lệ')."
+            "description", "Tên riêng của sân nếu người dùng nhắc một sân cụ thể — CHỈ truyền phần tên riêng (ví dụ: 'Vĩnh Hoàng', 'Cẩm Lệ'). " +
+                    "KHÔNG kèm các từ chung như 'sân', 'sân bóng', tên môn thể thao hay tên quận/khu vực vào keyword — môn và khu vực đã có tham số sportName/district riêng. " +
+                    "Bỏ trống nếu người dùng không nhắc tên sân cụ thể nào."
         ));
 
         propertiesSearch.put("sportName", Map.of(
@@ -99,7 +164,8 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
 
         propertiesSearch.put("district", Map.of(
             "type", "string",
-            "description", "Tên quận hoặc khu vực tại TP.HCM (ví dụ: Quận 9, Thủ Đức, Quận 1, Bình Thạnh)."
+            "description", "Tên quận/huyện hoặc khu vực tại TP.HCM hoặc Đà Nẵng (ví dụ: Quận 9, Thủ Đức, Cẩm Lệ, Hải Châu). " +
+                    "Có thể truyền tên thành phố (vd 'Hồ Chí Minh', 'Đà Nẵng') để lọc theo cả tỉnh/thành."
         ));
 
         propertiesSearch.put("minPrice", Map.of(
@@ -129,6 +195,12 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
             "description", "Giờ kết thúc dưới định dạng HH:mm theo hệ 24 giờ — áp dụng cùng quy tắc quy đổi như startTime."
         ));
 
+        propertiesSearch.put("sortBy", Map.of(
+            "type", "string",
+            "enum", List.of("price", "rating"),
+            "description", "Tiêu chí sắp xếp kết quả: 'price' = giá thuê thấp nhất trước (mặc định), 'rating' = đánh giá cao nhất trước. Dùng 'rating' khi người dùng hỏi sân tốt nhất/uy tín nhất."
+        ));
+
         Map<String, Object> parametersSearch = new HashMap<>();
         parametersSearch.put("type", "object");
         parametersSearch.put("properties", propertiesSearch);
@@ -150,6 +222,10 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
         propertiesSlots.put("stadiumId", Map.of(
             "type", List.of("integer", "string"),
             "description", "ID số nguyên của sân đấu (lấy từ kết quả searchStadiums), cần lấy khung giờ."
+        ));
+        propertiesSlots.put("date", Map.of(
+            "type", "string",
+            "description", "Ngày muốn xem khung giờ, định dạng YYYY-MM-DD. Bỏ trống nếu người dùng muốn xem cho hôm nay."
         ));
 
         Map<String, Object> parametersSlots = new HashMap<>();
@@ -185,7 +261,7 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
         ));
         propertiesMatches.put("size", Map.of(
             "type", List.of("integer", "string"),
-            "description", "Số lượng phần tử mỗi trang (mặc định 10)."
+            "description", "Số lượng phần tử mỗi trang (mặc định 5, tối đa 10)."
         ));
 
         Map<String, Object> parametersMatches = new HashMap<>();
@@ -240,9 +316,11 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
         applyDistrictFilter(builder, args);
         applyPriceFilters(builder, args);
         applyDateTimeFilters(builder, args);
+        applySort(builder, args);
 
         builder.page(0);
-        builder.size(10);
+        // Giữ 5 kết quả để card UI trong khung chat không quá dài (bug #2).
+        builder.size(AI_SEARCH_RESULT_LIMIT);
 
         StadiumSearchRequest searchRequest = builder.build();
         PageResponse<StadiumResponse> result = publicStadiumService.searchStadiums(searchRequest);
@@ -250,11 +328,87 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
         if (result.getContent().isEmpty()) {
             List<StadiumResponse> fallback = findStadiumsByParentFacilityNameFallback(searchRequest.getKeyword());
             if (!fallback.isEmpty()) {
-                return fallback;
+                return postProcessSearchResults(fallback);
+            }
+            List<StadiumResponse> retried = retrySearchWithoutNoisyKeyword(searchRequest);
+            if (!retried.isEmpty()) {
+                return postProcessSearchResults(retried);
             }
         }
 
-        return result.getContent();
+        return postProcessSearchResults(result.getContent());
+    }
+
+    /**
+     * Model hay nhét cả cụm người dùng gõ vào keyword (vd "sân bóng Thủ Đức") khiến LIKE theo
+     * tên sân rỗng, dù sportName/district đã mang đủ ý định tìm kiếm. Khi search + fallback đều
+     * rỗng mà vẫn còn filter khác, thử lại 1 lần bỏ keyword — deterministic, không phụ thuộc
+     * model có nghe lời prompt hay không.
+     */
+    private List<StadiumResponse> retrySearchWithoutNoisyKeyword(StadiumSearchRequest request) {
+        boolean hasOtherFilters = request.getSportTypeId() != null || request.getAddress() != null
+                || request.getProvince() != null || request.getDistrict() != null
+                || request.getMinPrice() != null || request.getMaxPrice() != null
+                || request.getTargetDate() != null || request.getStartTime() != null;
+        if (request.getKeyword() == null || request.getKeyword().isBlank() || !hasOtherFilters) {
+            return List.of();
+        }
+        log.info("AI search rỗng với keyword '{}' — thử lại không keyword (giữ các filter còn lại)", request.getKeyword());
+        request.setKeyword(null);
+        return publicStadiumService.searchStadiums(request).getContent();
+    }
+
+    /**
+     * Mặc định sort giá thấp nhất trước — kết quả hữu ích ngay cho người hỏi giá (bug #6).
+     * "rating" khi người dùng hỏi sân tốt nhất. Field đã được whitelist ở PublicStadiumServiceImpl.
+     */
+    private void applySort(StadiumSearchRequest.StadiumSearchRequestBuilder builder, JsonNode args) {
+        String sortBy = args.hasNonNull("sortBy") ? args.get("sortBy").asText() : "price";
+        if ("rating".equalsIgnoreCase(sortBy)) {
+            builder.sortBy("averageRating");
+            builder.sortDirection("DESC");
+        } else {
+            builder.sortBy("pricePerHour");
+            builder.sortDirection("ASC");
+        }
+    }
+
+    /**
+     * Post-process kết quả search cho AI (fetch entity 1 lần bằng EntityGraph, dùng cho cả 2 việc):
+     * 1. Ghép tên "Facility - Court" — Court con thường chỉ tên "Sân 1"/"Sân 2", card UI không
+     *    phân biệt được (bug #5). Làm ở tầng AI tool thay vì StadiumMapper để không lây tên ghép
+     *    sang các endpoint owner/public khác đang dùng chung mapper/DTO.
+     * 2. Loại sân có LỊCH BẢO TRÌ (MaintenanceSchedule) trùm hôm nay — cơ chế bảo trì theo khung
+     *    ngày cố tình KHÔNG đổi stadiumStatus nên mọi filter AVAILABLE đều không bắt được.
+     */
+    private List<StadiumResponse> postProcessSearchResults(List<StadiumResponse> stadiums) {
+        if (stadiums.isEmpty()) {
+            return stadiums;
+        }
+        List<Integer> ids = stadiums.stream().map(StadiumResponse::getStadiumId).toList();
+        Map<Integer, Stadium> courtById = new HashMap<>();
+        for (Stadium court : stadiumRepository.findCourtsForAiToolByIds(ids)) {
+            courtById.put(court.getStadiumId(), court);
+        }
+
+        LocalDate today = LocalDate.now(clock);
+        List<StadiumResponse> processed = new ArrayList<>();
+        for (StadiumResponse response : stadiums) {
+            Stadium court = courtById.get(response.getStadiumId());
+            if (court != null && maintenanceScheduleService.isStadiumUnderMaintenance(court, today)) {
+                log.debug("AI search: bỏ sân {} khỏi kết quả — đang có lịch bảo trì hôm nay", response.getStadiumId());
+                continue;
+            }
+            String facilityName = (court != null && court.getParentStadium() != null)
+                    ? court.getParentStadium().getStadiumName()
+                    : null;
+            if (facilityName != null && response.getStadiumName() != null
+                    && !response.getStadiumName().toLowerCase().contains(facilityName.toLowerCase())) {
+                response.setStadiumName(facilityName + " - " + response.getStadiumName());
+            }
+            processed.add(response);
+        }
+        return processed;
     }
 
     private Object applySportNameFilter(StadiumSearchRequest.StadiumSearchRequestBuilder builder, JsonNode args) {
@@ -264,19 +418,50 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
         String rawSportName = args.get("sportName").asText();
         Integer sportTypeId = resolveSportTypeId(rawSportName);
         if (sportTypeId == null) {
-            return Map.of("error", "Không tìm thấy loại môn thể thao: " + rawSportName + ". Hãy chọn một trong các môn thể thao được hỗ trợ.");
+            return buildUnknownSportError(rawSportName);
         }
         builder.sportTypeId(sportTypeId);
         return null;
     }
 
+    /**
+     * Trả object có cấu trúc kèm danh sách môn hợp lệ (thay vì chỉ chuỗi lỗi cứng) để AI
+     * tự diễn đạt lại tự nhiên và gợi ý đúng các môn hệ thống hỗ trợ (bug #4).
+     * Key "error" giữ message thân thiện vì FE card render trực tiếp giá trị này.
+     */
+    private Map<String, Object> buildUnknownSportError(String rawSportName) {
+        List<String> supportedSports = sportTypeRepository.findAll().stream()
+                .map(SportType::getSportName)
+                .toList();
+        return Map.of(
+                "error", "Không tìm thấy môn thể thao \"" + rawSportName + "\" trong hệ thống.",
+                "availableSports", supportedSports,
+                "hint", "Hãy diễn đạt lại cho người dùng một cách tự nhiên và gợi ý họ chọn một trong các môn trong availableSports."
+        );
+    }
+
+    /**
+     * Dùng deriveFromAddress thay vì resolveDistrict đơn thuần vì model đôi khi truyền cả tên
+     * thành phố lẫn quận trong cùng 1 chuỗi (vd "Quận 1, Hồ Chí Minh") — deriveFromAddress đã xử
+     * lý tách segment theo dấu phẩy để tránh false-positive giữa Quận 1/Quận 10/Quận 12.
+     */
     private void applyDistrictFilter(StadiumSearchRequest.StadiumSearchRequestBuilder builder, JsonNode args) {
         if (!args.hasNonNull("district")) {
             return;
         }
         String rawDistrict = args.get("district").asText();
-        String normalizedDistrict = normalizeDistrict(rawDistrict);
-        builder.address(normalizedDistrict != null ? normalizedDistrict : rawDistrict);
+        VietnamLocationResolver.LocationMatch match = locationResolver.deriveFromAddress(rawDistrict);
+        if (match.province() != null) {
+            builder.province(match.province());
+        }
+        if (match.district() != null) {
+            builder.district(match.district());
+        }
+        if (match.province() == null && match.district() == null) {
+            // Ngoài 2 thành phố hỗ trợ (hoặc tên đường/địa danh cụ thể) — giữ hành vi cũ, fallback
+            // về free-text address LIKE thay vì bỏ qua hoàn toàn.
+            builder.address(rawDistrict);
+        }
     }
 
     private void applyPriceFilters(StadiumSearchRequest.StadiumSearchRequestBuilder builder, JsonNode args) {
@@ -326,23 +511,43 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
         List<Stadium> fallbackCourts = stadiumRepository.findCourtsByParentFacilityNameKeyword(rawKeyword);
 
         if (fallbackCourts.isEmpty()) {
-            String strippedKeyword = stripDiacritics(rawKeyword).toLowerCase();
-            List<Integer> matchedIds = stadiumRepository.findAllCourtFacilityNames().stream()
-                    .filter(p -> p.getFacilityName() != null
-                            && stripDiacritics(p.getFacilityName()).toLowerCase().contains(strippedKeyword))
-                    .map(StadiumRepository.CourtFacilityNameProjection::getStadiumId)
-                    .distinct()
-                    .limit(10)
-                    .toList();
-            if (!matchedIds.isEmpty()) {
-                fallbackCourts = stadiumRepository.findCourtsForAiToolByIds(matchedIds);
+            // So khớp theo TOKEN thay vì contains cả cụm: "San bong Vinh Hoang" phải match được
+            // facility "Sân bóng đá Vĩnh Hoàng" (contains cả cụm fail vì thiếu chữ "đá" ở giữa).
+            // Bỏ các từ chung (sân, bóng, đá...) trước — chỉ giữ phần tên riêng để so.
+            List<String> tokens = meaningfulKeywordTokens(rawKeyword);
+            if (!tokens.isEmpty()) {
+                List<Integer> matchedIds = stadiumRepository.findAllCourtFacilityNames().stream()
+                        .filter(p -> p.getFacilityName() != null && containsAllTokens(p.getFacilityName(), tokens))
+                        .map(StadiumRepository.CourtFacilityNameProjection::getStadiumId)
+                        .distinct()
+                        .limit(AI_SEARCH_RESULT_LIMIT)
+                        .toList();
+                if (!matchedIds.isEmpty()) {
+                    fallbackCourts = stadiumRepository.findCourtsForAiToolByIds(matchedIds);
+                }
             }
         }
 
         return fallbackCourts.stream()
-                .limit(10)
+                .limit(AI_SEARCH_RESULT_LIMIT)
                 .map(stadiumMapper::toResponse)
                 .toList();
+    }
+
+    /** Từ chung chung trong tên sân — bỏ đi để chỉ so phần tên riêng khi fallback theo token. */
+    private static final java.util.Set<String> GENERIC_KEYWORD_TOKENS = java.util.Set.of(
+            "san", "bong", "da", "banh", "cau", "long", "ro", "chuyen", "tennis", "futsal", "pickleball",
+            "van", "dong", "nha", "thi", "dau", "the", "thao", "court", "stadium", "field", "arena");
+
+    private List<String> meaningfulKeywordTokens(String rawKeyword) {
+        return java.util.Arrays.stream(locationResolver.stripDiacritics(rawKeyword).toLowerCase().split("\\s+"))
+                .filter(t -> !t.isBlank() && !GENERIC_KEYWORD_TOKENS.contains(t))
+                .toList();
+    }
+
+    private boolean containsAllTokens(String facilityName, List<String> tokens) {
+        String stripped = locationResolver.stripDiacritics(facilityName).toLowerCase();
+        return tokens.stream().allMatch(stripped::contains);
     }
 
     private Object handleGetStadiumSlots(JsonNode args) {
@@ -350,6 +555,11 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
             return Map.of("error", "Missing required parameter: stadiumId");
         }
         int stadiumId = args.get("stadiumId").asInt();
+        // Model từng tự bịa ID 0 khi search rỗng — chặn sớm với hướng dẫn rõ ràng.
+        if (stadiumId <= 0) {
+            return Map.of("error", "stadiumId " + stadiumId + " không hợp lệ — KHÔNG được tự bịa ID. "
+                    + "Hãy gọi searchStadiums trước và dùng đúng stadiumId trong kết quả trả về.");
+        }
 
         // Guardrail: model đôi khi tự bịa/nhầm ID (vd truyền ID của Facility cha thay vì Court
         // con) — validate đúng loại trước khi query, tránh trả mảng rỗng gây hiểu lầm "sân
@@ -363,19 +573,65 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
                     + "Hãy gọi searchStadiums để lấy đúng stadiumId của sân lẻ trước khi tra khung giờ.");
         }
 
-        List<TimeSlotResponse> slots = timeSlotService.getSlotsByStadiumId(stadiumId);
+        // Bug #7: sân bảo trì/đóng cửa không được trả slot để AI gợi ý đặt.
+        if (stadiumOpt.get().getStadiumStatus() != com.sportvenue.entity.enums.StadiumStatus.AVAILABLE) {
+            return Map.of("error", "Sân này hiện đang bảo trì hoặc tạm đóng cửa, không thể đặt lịch. "
+                    + "Hãy thông báo cho người dùng và gợi ý tìm sân khác.");
+        }
+
+        // Bug #9: mặc định hôm nay theo giờ Việt Nam — không dùng giờ hệ thống
+        // (server Docker thường chạy UTC, lệch 7 tiếng).
+        LocalDate today = LocalDate.now(clock);
+        LocalDate requestedDate = today;
+        if (args.hasNonNull("date")) {
+            try {
+                requestedDate = LocalDate.parse(args.get("date").asText());
+            } catch (Exception e) {
+                log.warn("Invalid date format for getStadiumSlots: {}", args.get("date").asText());
+            }
+        }
+        if (requestedDate.isBefore(today)) {
+            return Map.of("error", "Ngày " + requestedDate + " đã qua, không thể xem khung giờ cho ngày trong quá khứ.");
+        }
+
+        // Sân có lịch bảo trì (MaintenanceSchedule) trùm ngày này — kể cả khi stadiumStatus
+        // vẫn AVAILABLE (bảo trì theo khung ngày cố tình không đổi status). Re-fetch bằng
+        // EntityGraph để parentStadium/complex đã initialize, tránh LazyInitializationException.
+        Stadium court = stadiumRepository.findCourtsForAiToolByIds(List.of(stadiumId)).stream()
+                .findFirst().orElse(stadiumOpt.get());
+        if (maintenanceScheduleService.isStadiumUnderMaintenance(court, requestedDate)) {
+            return Map.of("error", "Sân này có lịch bảo trì vào ngày " + requestedDate + ", không thể đặt. "
+                    + "Hãy thông báo cho người dùng và gợi ý chọn ngày khác hoặc sân khác.");
+        }
+
+        // Availability THẬT theo ngày: getSlotsByDate đối chiếu booking (PENDING/CONFIRMED),
+        // TimeSlotException (đóng/đổi giờ/đổi giá) — không phải khung giờ mẫu tĩnh như trước.
+        List<TimeSlotResponse> slots = bookingService.getSlotsByDate(stadiumId, requestedDate);
+        if (requestedDate.isEqual(today)) {
+            LocalTime nowVietnam = LocalTime.now(clock);
+            slots = slots.stream()
+                    .filter(slot -> slot.getStartTime() == null || slot.getStartTime().isAfter(nowVietnam))
+                    .toList();
+        }
         return slots;
     }
 
     private Object handleFindMatchRequests(JsonNode args) {
         int page = args.hasNonNull("page") ? args.get("page").asInt() : 0;
-        int size = args.hasNonNull("size") ? args.get("size").asInt() : 10;
+        // Mặc định 5, chặn trần 10 — card UI trong khung chat không bị quá dài (đồng bộ searchStadiums).
+        int size = args.hasNonNull("size") ? Math.min(args.get("size").asInt(), 10) : AI_SEARCH_RESULT_LIMIT;
 
         String location = null;
         if (args.hasNonNull("location")) {
             String rawLocation = args.get("location").asText();
-            String normalized = normalizeDistrict(rawLocation);
-            location = normalized != null ? normalized : rawLocation;
+            VietnamLocationResolver.LocationMatch match = locationResolver.deriveFromAddress(rawLocation);
+            if (match.district() != null) {
+                location = match.district();
+            } else if (match.province() != null) {
+                location = match.province();
+            } else {
+                location = rawLocation;
+            }
         }
 
         Integer sportTypeId = null;
@@ -383,7 +639,7 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
             String rawSportName = args.get("sportName").asText();
             sportTypeId = resolveSportTypeId(rawSportName);
             if (sportTypeId == null) {
-                return Map.of("error", "Không tìm thấy loại môn thể thao: " + rawSportName + ". Hãy chọn một trong các môn thể thao được hỗ trợ.");
+                return buildUnknownSportError(rawSportName);
             }
         }
 
@@ -392,41 +648,60 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
         return matches.getContent();
     }
 
+    /**
+     * So khớp không phân biệt dấu tiếng Việt — model hay đánh sai dấu ("Bông đá") hoặc dùng
+     * cách gọi dân dã ("đá banh") khiến so khớp chính xác dấu trước đây thất bại (bug #4).
+     */
     private Integer resolveSportTypeId(String sportName) {
         if (sportName == null || sportName.isBlank()) {
             return null;
         }
-        
+
         List<SportType> sportTypes = sportTypeRepository.findAll();
-        String searchKey = sportName.toLowerCase().trim();
-        
-        // Direct matching
+        String searchKey = locationResolver.stripDiacritics(sportName).toLowerCase().trim();
+
+        // Direct matching (đã bỏ dấu cả hai phía)
         for (SportType st : sportTypes) {
-            if (st.getSportName().toLowerCase().equals(searchKey) ||
+            if (locationResolver.stripDiacritics(st.getSportName()).toLowerCase().equals(searchKey) ||
                 st.getSportCode().toLowerCase().equals(searchKey) ||
                 (st.getNameEn() != null && st.getNameEn().toLowerCase().equals(searchKey))) {
                 return st.getSportTypeId();
             }
         }
-        
-        // Fuzzy matching logic for common Vietnamese sports
-        if (searchKey.contains("bóng đá") || searchKey.contains("da bong") || searchKey.contains("football") || searchKey.contains("soccer")) {
+
+        // Fuzzy matching theo alias phổ biến — searchKey đã bỏ dấu nên chỉ cần so key không dấu
+        if (containsAny(searchKey, "bong da", "da bong", "da banh", "football", "soccer", "futsal")) {
             return findSportTypeByCode(sportTypes, "FOOTBALL");
         }
-        if (searchKey.contains("cầu lông") || searchKey.contains("cau long") || searchKey.contains("badminton")) {
+        if (containsAny(searchKey, "cau long", "badminton")) {
             return findSportTypeByCode(sportTypes, "BADMINTON");
         }
-        if (searchKey.contains("bóng rổ") || searchKey.contains("basketball")) {
+        if (containsAny(searchKey, "bong ro", "basketball")) {
             return findSportTypeByCode(sportTypes, "BASKETBALL");
         }
-        if (searchKey.contains("volleyball") || searchKey.contains("bóng chuyền")) {
+        if (containsAny(searchKey, "bong chuyen", "volleyball")) {
             return findSportTypeByCode(sportTypes, "VOLLEYBALL");
         }
-        if (searchKey.contains("tennis") || searchKey.contains("quần vợt")) {
+        if (containsAny(searchKey, "tennis", "quan vot")) {
             return findSportTypeByCode(sportTypes, "TENNIS");
+        }
+        if (containsAny(searchKey, "pickleball", "pickle ball")) {
+            return findSportTypeByCode(sportTypes, "PICKLEBALL");
+        }
+        if (containsAny(searchKey, "bong ban", "table tennis", "ping pong")) {
+            return findSportTypeByCode(sportTypes, "TABLE_TENNIS");
         }
 
         return null;
+    }
+
+    private boolean containsAny(String key, String... aliases) {
+        for (String alias : aliases) {
+            if (key.contains(alias)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Integer findSportTypeByCode(List<SportType> list, String code) {
@@ -437,112 +712,4 @@ public class CustomerAgentToolProvider implements AgentToolProvider {
                 .orElse(null);
     }
 
-    private String normalizeDistrict(String district) {
-        if (district == null || district.isBlank()) {
-            return null;
-        }
-
-        // Bỏ dấu trước khi so khớp — model đôi khi tự đánh dấu tiếng Việt sai/không ổn định
-        // giữa các lần gọi (vd "Thù Đùc" thay vì "Thủ Đức"), khiến so khớp dấu chính xác trước
-        // đây thất bại dù ý người dùng rõ ràng là đúng quận đó.
-        String key = stripDiacritics(district).toLowerCase().replaceAll("\\s+", "");
-
-        if (key.contains("thuduc")) {
-            return "Thủ Đức";
-        }
-        if (key.contains("binhthanh")) {
-            return "Bình Thạnh";
-        }
-        if (key.contains("phunhuan")) {
-            return "Phú Nhuận";
-        }
-        if (key.contains("govap")) {
-            return "Gò Vấp";
-        }
-        if (key.contains("tanbinh")) {
-            return "Tân Bình";
-        }
-        if (key.contains("tanphu")) {
-            return "Tân Phú";
-        }
-        if (key.contains("binhtan")) {
-            return "Bình Tân";
-        }
-        if (key.contains("binhchanh")) {
-            return "Bình Chánh";
-        }
-        if (key.contains("hocmon")) {
-            return "Hóc Môn";
-        }
-        if (key.contains("cuchi")) {
-            return "Củ Chi";
-        }
-        if (key.contains("nhabe")) {
-            return "Nhà Bè";
-        }
-        if (key.contains("cangio")) {
-            return "Cần Giờ";
-        }
-
-        return matchDistrictNumber(key);
-    }
-
-    /**
-     * Handle District numbers (e.g., q1, q.1, quan 1, d1) — tách riêng để normalizeDistrict gọn hơn.
-     * {@code key} đã được stripDiacritics ở normalizeDistrict nên chỉ cần so "quan", không cần "quận".
-     */
-    private String matchDistrictNumber(String key) {
-        if (key.matches(".*(q|quan|district|d)\\.?0?1$") || key.equals("1")) {
-            return "Quận 1";
-        }
-        if (key.matches(".*(q|quan|district|d)\\.?0?2$") || key.equals("2")) {
-            return "Quận 2";
-        }
-        if (key.matches(".*(q|quan|district|d)\\.?0?3$") || key.equals("3")) {
-            return "Quận 3";
-        }
-        if (key.matches(".*(q|quan|district|d)\\.?0?4$") || key.equals("4")) {
-            return "Quận 4";
-        }
-        if (key.matches(".*(q|quan|district|d)\\.?0?5$") || key.equals("5")) {
-            return "Quận 5";
-        }
-        if (key.matches(".*(q|quan|district|d)\\.?0?6$") || key.equals("6")) {
-            return "Quận 6";
-        }
-        if (key.matches(".*(q|quan|district|d)\\.?0?7$") || key.equals("7")) {
-            return "Quận 7";
-        }
-        if (key.matches(".*(q|quan|district|d)\\.?0?8$") || key.equals("8")) {
-            return "Quận 8";
-        }
-        if (key.matches(".*(q|quan|district|d)\\.?0?9$") || key.equals("9")) {
-            return "Quận 9";
-        }
-        if (key.matches(".*(q|quan|district|d)\\.?10$") || key.equals("10")) {
-            return "Quận 10";
-        }
-        if (key.matches(".*(q|quan|district|d)\\.?11$") || key.equals("11")) {
-            return "Quận 11";
-        }
-        if (key.matches(".*(q|quan|district|d)\\.?12$") || key.equals("12")) {
-            return "Quận 12";
-        }
-
-        return null;
-    }
-
-    /**
-     * Bỏ dấu tiếng Việt để so khớp không phân biệt dấu — Groq/Llama đôi khi tự đánh sai dấu
-     * không ổn định giữa các lần gọi (vd "Sân vân đơng" thay vì "Sân vận động"), khiến LIKE
-     * match diacritic-sensitive ở DB thất bại dù tên thật khớp về bản chất.
-     */
-    private String stripDiacritics(String input) {
-        if (input == null) {
-            return "";
-        }
-        String normalized = java.text.Normalizer.normalize(input, java.text.Normalizer.Form.NFD);
-        String withoutMarks = normalized.replaceAll("\\p{M}", "");
-        return withoutMarks.replace('đ', 'd').replace('Đ', 'D');
-    }
 }

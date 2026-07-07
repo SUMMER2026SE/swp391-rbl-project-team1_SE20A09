@@ -130,7 +130,11 @@ public class AiChatServiceImpl implements AiChatService {
             } catch (Exception ex) {
                 log.error("Failed to stream error to emitter", ex);
             }
-            emitter.completeWithError(e);
+            // complete() thay vì completeWithError(): lỗi đã được báo cho client qua SSE event
+            // "error" có cấu trúc ở trên. completeWithError() sẽ dispatch exception lên Spring MVC
+            // trên response ĐÃ committed (SSE headers + partial body đã gửi) — GlobalExceptionHandler
+            // không thể ghi JSON ErrorResponse nữa, sinh output rác/stream đứt ngang phía client.
+            emitter.complete();
         }
     }
 
@@ -263,58 +267,72 @@ public class AiChatServiceImpl implements AiChatService {
         String textPartId = "text-" + UUID.randomUUID().toString();
         boolean textStarted = false;
 
-        while ((line = reader.readLine()) != null) {
-            log.debug("Raw response line from LLM: {}", line);
-            if (!line.startsWith("data: ")) {
-                continue;
-            }
-
-            String data = line.substring(6).trim();
-            if ("[DONE]".equals(data)) {
-                break;
-            }
-
-            JsonNode chunkNode = objectMapper.readTree(data);
-            if (chunkNode.hasNonNull("error")) {
-                JsonNode errorNode = chunkNode.get("error");
-                String errorMsg = errorNode.hasNonNull("message") ? errorNode.get("message").asText() : "Unknown LLM stream error";
-                throw new LlmGatewayException(classifyStreamError(errorNode, errorMsg), "LLM Stream Error: " + errorMsg);
-            }
-
-            if (chunkNode.hasNonNull("usage")) {
-                JsonNode usage = chunkNode.get("usage");
-                log.info("LLM token usage — prompt: {}, completion: {}, total: {}",
-                        usage.path("prompt_tokens").asInt(0),
-                        usage.path("completion_tokens").asInt(0),
-                        usage.path("total_tokens").asInt(0));
-            }
-
-            if (!chunkNode.hasNonNull("choices") || chunkNode.get("choices").isEmpty()) {
-                continue;
-            }
-            JsonNode choice = chunkNode.get("choices").get(0);
-            if (!choice.hasNonNull("delta")) {
-                continue;
-            }
-            JsonNode delta = choice.get("delta");
-
-            if (delta.hasNonNull("content")) {
-                String contentText = delta.get("content").asText();
-                assistantText.append(contentText);
-                if (!textStarted) {
-                    textStarted = true;
-                    emitTextStart(emitter, textPartId);
+        try {
+            while ((line = reader.readLine()) != null) {
+                log.debug("Raw response line from LLM: {}", line);
+                if (!line.startsWith("data: ")) {
+                    continue;
                 }
-                emitTextDelta(emitter, textPartId, contentText);
-            }
 
-            if (delta.hasNonNull("tool_calls")) {
-                accumulateToolCallDeltas(delta.get("tool_calls"), accumulatorMap);
+                String data = line.substring(6).trim();
+                if ("[DONE]".equals(data)) {
+                    break;
+                }
+
+                JsonNode chunkNode = objectMapper.readTree(data);
+                if (chunkNode.hasNonNull("error")) {
+                    JsonNode errorNode = chunkNode.get("error");
+                    String errorMsg = errorNode.hasNonNull("message") ? errorNode.get("message").asText() : "Unknown LLM stream error";
+                    throw new LlmGatewayException(classifyStreamError(errorNode, errorMsg), "LLM Stream Error: " + errorMsg);
+                }
+
+                if (chunkNode.hasNonNull("usage")) {
+                    JsonNode usage = chunkNode.get("usage");
+                    log.info("LLM token usage — prompt: {}, completion: {}, total: {}",
+                            usage.path("prompt_tokens").asInt(0),
+                            usage.path("completion_tokens").asInt(0),
+                            usage.path("total_tokens").asInt(0));
+                }
+
+                if (!chunkNode.hasNonNull("choices") || chunkNode.get("choices").isEmpty()) {
+                    continue;
+                }
+                JsonNode choice = chunkNode.get("choices").get(0);
+                if (!choice.hasNonNull("delta")) {
+                    continue;
+                }
+                JsonNode delta = choice.get("delta");
+
+                if (delta.hasNonNull("content")) {
+                    String contentText = delta.get("content").asText();
+                    assistantText.append(contentText);
+                    if (!textStarted) {
+                        textStarted = true;
+                        emitTextStart(emitter, textPartId);
+                    }
+                    emitTextDelta(emitter, textPartId, contentText);
+                }
+
+                if (delta.hasNonNull("tool_calls")) {
+                    accumulateToolCallDeltas(delta.get("tool_calls"), accumulatorMap);
+                }
             }
+        } catch (Exception streamException) {
+            // Exception giữa stream (vd Groq trả error chunk 429) khi đã gửi text-start:
+            // đóng part text đàng hoàng trước khi ném lên — tránh client giữ part dở dang
+            // hiển thị text rác đứt ngang (bug #11).
+            if (textStarted) {
+                try {
+                    emitTextEnd(emitter, textPartId);
+                } catch (Exception ignored) {
+                    log.warn("Failed to close dangling text part before propagating stream error");
+                }
+            }
+            throw streamException;
+        } finally {
+            reader.close();
+            is.close();
         }
-
-        reader.close();
-        is.close();
 
         if (textStarted) {
             emitTextEnd(emitter, textPartId);
@@ -467,7 +485,8 @@ public class AiChatServiceImpl implements AiChatService {
     }
 
     private void emitMaxToolCallsError(ResponseBodyEmitter emitter) throws Exception {
-        Map<String, Object> error = Map.of("type", "error", "errorText", "Max tool calls exceeded");
+        Map<String, Object> error = Map.of("type", "error",
+                "errorText", "Yêu cầu này cần quá nhiều bước tra cứu nên mình chưa xử lý hết được. Bạn thử tách nhỏ hoặc diễn đạt lại câu hỏi nhé.");
         emitter.send("event: error\ndata: " + objectMapper.writeValueAsString(error) + "\n\n");
     }
 

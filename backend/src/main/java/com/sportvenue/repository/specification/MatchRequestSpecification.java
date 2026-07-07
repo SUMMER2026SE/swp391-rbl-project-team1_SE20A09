@@ -49,12 +49,26 @@ public class MatchRequestSpecification {
                     cb.and(cb.equal(root.get("playDate"), nowDate), cb.greaterThan(root.get("startTime"), nowTime))
             ));
 
+            // `location` được chuẩn hoá (province/district canonical) trước khi truyền vào đây
+            // (xem CustomerAgentToolProvider.handleFindMatchRequests) khi khớp được 1 trong 2
+            // thành phố hỗ trợ — nên thử exact-match trước, LIKE address chỉ là fallback cho
+            // input lạ ngoài 2 thành phố hoặc tên đường/địa danh cụ thể.
             if (StringUtils.hasText(location)) {
-                String likePattern = "%" + location.toLowerCase() + "%";
-                predicates.add(cb.or(
+                String exactMatch = location.toLowerCase();
+                String likePattern = "%" + exactMatch + "%";
+                Predicate provinceMatch = cb.or(
+                        cb.equal(cb.lower(complexJoin.get("province")), exactMatch),
+                        cb.equal(cb.lower(stadiumJoin.get("complex").get("province")), exactMatch)
+                );
+                Predicate districtMatch = cb.or(
+                        cb.equal(cb.lower(complexJoin.get("district")), exactMatch),
+                        cb.equal(cb.lower(stadiumJoin.get("complex").get("district")), exactMatch)
+                );
+                Predicate addressFallback = cb.or(
                         cb.like(cb.lower(stadiumJoin.get("address")), likePattern),
                         cb.like(cb.lower(complexJoin.get("address")), likePattern)
-                ));
+                );
+                predicates.add(cb.or(provinceMatch, districtMatch, addressFallback));
             }
 
             if (sportTypeId != null) {
