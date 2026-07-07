@@ -49,14 +49,16 @@ function getActionButtons(
           <Button asChild variant="outline" className={secondaryBtnClass}>
             <Link href={detailLink}>Xem chi tiết</Link>
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className={`${primaryBtnClass} border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700`}
-            onClick={() => onRequestCancel(booking.id)}
-          >
-            Hủy đơn
-          </Button>
+          {!isOwner && (
+            <Button
+              type="button"
+              variant="outline"
+              className={`${primaryBtnClass} border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700`}
+              onClick={() => onRequestCancel(booking.id)}
+            >
+              Hủy đơn
+            </Button>
+          )}
         </>
       );
     case "completed":
@@ -225,10 +227,11 @@ function EmptyState({
 }
 
 interface BookingHistoryListProps {
-  isOwner?: boolean;
+  viewMode?: "CUSTOMER_VIEW" | "VENUE_MANAGEMENT";
 }
 
-export function BookingHistoryList({ isOwner = false }: BookingHistoryListProps) {
+export function BookingHistoryList({ viewMode = "CUSTOMER_VIEW" }: BookingHistoryListProps) {
+  const isOwner = viewMode === "VENUE_MANAGEMENT";
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("all");
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
