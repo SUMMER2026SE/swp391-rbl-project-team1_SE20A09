@@ -39,8 +39,11 @@ public class LocationBackfillRunner implements CommandLineRunner {
             if (match.province() != null || match.district() != null) {
                 complex.setProvince(match.province());
                 complex.setDistrict(match.district());
-                resolved.add(complex);
+            } else {
+                complex.setProvince("UNKNOWN");
+                complex.setDistrict("UNKNOWN");
             }
+            resolved.add(complex);
         }
         if (!resolved.isEmpty()) {
             stadiumComplexRepository.saveAll(resolved);
