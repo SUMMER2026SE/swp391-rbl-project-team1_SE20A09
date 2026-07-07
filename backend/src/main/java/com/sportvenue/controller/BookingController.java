@@ -199,11 +199,39 @@ public class BookingController {
     public ResponseEntity<BookingDetailResponse> cancelBooking(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @PathVariable("id") Integer bookingId,
-            @Valid @RequestBody(required = false) CancelBookingRequest request) {
-        String reason = request != null ? request.getReason() : null;
-        BookingDetailResponse response = bookingService.cancelBooking(
-                userPrincipal, bookingId, reason);
-        return ResponseEntity.ok(response);
+            @Valid @RequestBody(required = false) CancelBookingRequest request,
+            @RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKey) {
+        
+        Integer userId = userPrincipal.getUser().getUserId();
+
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Optional<Integer> existing = idempotencyService.getExistingBookingId(userId, idempotencyKey);
+            if (existing.isPresent()) {
+                log.info("[Idempotency] Retry cancel booking — userId={}, key={}, existingBookingId={}",
+                        userId, idempotencyKey, existing.get());
+                BookingDetailResponse cached = bookingService.getBookingDetail(userPrincipal, existing.get());
+                return ResponseEntity.status(HttpStatus.OK).body(cached);
+            }
+            if (!idempotencyService.tryAcquire(userId, idempotencyKey)) {
+                log.warn("[Idempotency] Concurrent duplicate cancel — userId={}, key={}", userId, idempotencyKey);
+                return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            }
+        }
+
+        try {
+            String reason = request != null ? request.getReason() : null;
+            BookingDetailResponse response = bookingService.cancelBooking(
+                    userPrincipal, bookingId, reason);
+            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                idempotencyService.complete(userId, idempotencyKey, response.getBookingId());
+            }
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException ex) {
+            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+                idempotencyService.release(userId, idempotencyKey);
+            }
+            throw ex;
+        }
     }
 
     /**

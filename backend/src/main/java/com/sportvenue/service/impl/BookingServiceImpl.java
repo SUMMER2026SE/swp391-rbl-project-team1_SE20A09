@@ -58,6 +58,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * UC-CUS-01: Triển khai single booking cho Customer.
@@ -95,6 +96,7 @@ public class BookingServiceImpl implements BookingService {
     private final TimeSlotExceptionRepository timeSlotExceptionRepository;
     private final MaintenanceScheduleService maintenanceScheduleService;
     private final PaymentService paymentService;
+    private final TransactionTemplate transactionTemplate;
 
     @Override
     @Transactional
@@ -307,71 +309,106 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    @Transactional
     public BookingDetailResponse cancelBooking(UserPrincipal principal, Integer bookingId, String reason) {
-        Booking booking = bookingRepository.findDetailById(bookingId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Không tìm thấy booking với ID " + bookingId));
+        
+        CancelProcessContext ctx = transactionTemplate.execute(status -> {
+            Booking booking = bookingRepository.findDetailById(bookingId)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Không tìm thấy booking với ID " + bookingId));
 
-        // UC-CUS-03: chỉ customer của booking hoặc owner của sân mới có quyền hủy.
-        Integer currentUserId = principal.getUser().getUserId();
-        boolean isCustomer = booking.getUser() != null
-                && booking.getUser().getUserId().equals(currentUserId);
-        boolean isVenueOwner = booking.getStadium() != null
-                && booking.getStadium().getOwner() != null
-                && booking.getStadium().getOwner().getUser() != null
-                && booking.getStadium().getOwner().getUser().getUserId().equals(currentUserId);
-        if (!isCustomer && !isVenueOwner) {
-            throw new BadRequestException("Bạn không có quyền hủy đơn đặt sân này");
+            Integer currentUserId = principal.getUser().getUserId();
+            boolean isCustomer = booking.getUser() != null
+                    && booking.getUser().getUserId().equals(currentUserId);
+            boolean isVenueOwner = booking.getStadium() != null
+                    && booking.getStadium().getOwner() != null
+                    && booking.getStadium().getOwner().getUser() != null
+                    && booking.getStadium().getOwner().getUser().getUserId().equals(currentUserId);
+            if (!isCustomer && !isVenueOwner) {
+                throw new BadRequestException("Bạn không có quyền hủy đơn đặt sân này");
+            }
+
+            BookingStatus currentStatus = booking.getBookingStatus();
+            if (currentStatus == BookingStatus.COMPLETED || currentStatus == BookingStatus.CANCELLED) {
+                throw new BadRequestException(
+                        "Không thể hủy đơn đặt sân ở trạng thái " + currentStatus);
+            }
+
+            boolean wasReallyPaid = booking.getPaymentStatus() == PaymentStatus.PAID
+                    || booking.getPaymentStatus() == PaymentStatus.DEPOSITED;
+            booking.setBookingStatus(BookingStatus.CANCELLED);
+            booking.setCancelReason(reason);
+            if (wasReallyPaid) {
+                booking.setPaymentStatus(PaymentStatus.REFUNDED);
+            }
+            booking.setExpiredAt(null);
+
+            TimeSlot slot = booking.getSlot();
+            if (slot != null && slot.getSlotStatus() == SlotStatus.BOOKED) {
+                slot.setSlotStatus(SlotStatus.AVAILABLE);
+                timeSlotRepository.save(slot);
+            }
+
+            Booking saved = bookingRepository.save(booking);
+            Payment refundPayment = null;
+            Payment originalPayment = null;
+
+            if (wasReallyPaid) {
+                originalPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
+                        .stream().findFirst().orElse(null);
+                
+                if (originalPayment != null) {
+                    refundPayment = Payment.builder()
+                        .booking(saved)
+                        .paymentMethod(originalPayment.getPaymentMethod())
+                        .amount(originalPayment.getAmount().negate())
+                        .transactionCode("RFND_CUST_" + originalPayment.getTransactionCode())
+                        .paymentStatus(TransactionStatus.PENDING)
+                        .paidAt(LocalDateTime.now())
+                        .build();
+                    refundPayment = paymentRepository.save(refundPayment);
+                }
+            }
+
+            log.info("[UC-CUS-03] Booking #{} was cancelled by userId={}, reason={}",
+                    saved.getBookingId(), currentUserId, reason);
+
+            return new CancelProcessContext(saved, originalPayment, refundPayment);
+        });
+
+        if (ctx.refundPayment != null && ctx.originalPayment != null) {
+            boolean gatewaySuccess = false;
+            try {
+                paymentService.processRefund(ctx.originalPayment, ctx.originalPayment.getAmount(), reason != null ? reason : "Khách hàng tự hủy");
+                gatewaySuccess = true;
+            } catch (Exception e) {
+                log.error("Refund gateway failed for customer cancel booking {}", bookingId, e);
+            }
+
+            final boolean finalSuccess = gatewaySuccess;
+            transactionTemplate.execute(status -> {
+                Payment payment = paymentRepository.findById(ctx.refundPayment.getPaymentId()).orElse(null);
+                if (payment != null) {
+                    payment.setPaymentStatus(finalSuccess ? TransactionStatus.SUCCESS : TransactionStatus.FAILED);
+                    paymentRepository.save(payment);
+                }
+                return null;
+            });
+            
+            if (!gatewaySuccess) {
+                throw new BadRequestException("Lỗi hoàn tiền qua cổng thanh toán. Đơn đã được hủy nhưng tiền chưa được hoàn. Vui lòng thử lại sau.");
+            }
         }
 
-        // UC-CUS-03: không cho hủy booking đã hoàn thành hoặc đã hủy trước đó.
-        BookingStatus currentStatus = booking.getBookingStatus();
-        if (currentStatus == BookingStatus.COMPLETED || currentStatus == BookingStatus.CANCELLED) {
-            throw new BadRequestException(
-                    "Không thể hủy đơn đặt sân ở trạng thái " + currentStatus);
-        }
+        Booking finalBooking = transactionTemplate.execute(status -> 
+                bookingRepository.findDetailById(bookingId).orElse(ctx.booking));
+        return toBookingDetailResponse(finalBooking, finalBooking.getStadium(), finalBooking.getSlot());
+    }
 
-        boolean wasReallyPaid = booking.getPaymentStatus() == PaymentStatus.PAID
-                || booking.getPaymentStatus() == PaymentStatus.DEPOSITED;
-        booking.setBookingStatus(BookingStatus.CANCELLED);
-        booking.setCancelReason(reason);
-        if (wasReallyPaid) {
-            booking.setPaymentStatus(PaymentStatus.REFUNDED);
-        }
-        // Clear expiredAt nếu có (PENDING_PAYMENT sẽ được set lúc tạo).
-        booking.setExpiredAt(null);
-
-        // Restore slot về AVAILABLE nếu đã bị set BOOKED bởi owner confirmation
-        TimeSlot slot = booking.getSlot();
-        if (slot != null && slot.getSlotStatus() == SlotStatus.BOOKED) {
-            slot.setSlotStatus(SlotStatus.AVAILABLE);
-            timeSlotRepository.save(slot);
-        }
-
-        Booking saved = bookingRepository.save(booking);
-
-        // Tạo bản ghi refund âm để tracking — tiền thực tế hoàn qua VNPay/MoMo
-        if (wasReallyPaid) {
-            paymentRepository.findSuccessPaymentsByBookingId(bookingId)
-                    .stream().findFirst()
-                    .ifPresent(original -> {
-                        paymentService.processRefund(original, original.getAmount(), reason != null ? reason : "Khách hàng tự hủy");
-                        paymentRepository.save(Payment.builder()
-                            .booking(saved)
-                            .paymentMethod(original.getPaymentMethod())
-                            .amount(original.getAmount().negate())
-                            .transactionCode("RFND_CUST_" + original.getTransactionCode())
-                            .paymentStatus(TransactionStatus.SUCCESS)
-                            .paidAt(LocalDateTime.now())
-                            .build());
-                    });
-        }
-
-        log.info("[UC-CUS-03] Booking #{} was cancelled by userId={}, reason={}",
-                saved.getBookingId(), currentUserId, reason);
-
-        return toBookingDetailResponse(saved, saved.getStadium(), saved.getSlot());
+    @RequiredArgsConstructor
+    private static class CancelProcessContext {
+        final Booking booking;
+        final Payment originalPayment;
+        final Payment refundPayment;
     }
 
     @Override
