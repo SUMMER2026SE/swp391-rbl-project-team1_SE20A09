@@ -272,12 +272,14 @@ public class StadiumServiceImpl implements StadiumService {
 
         boolean imagesChanged = !new java.util.HashSet<>(currentImageUrls).equals(new java.util.HashSet<>(newImageUrls));
         
-        stadium.getImages().clear();
-        for (String url : newImageUrls) {
-            stadium.getImages().add(com.sportvenue.entity.StadiumImage.builder()
-                    .stadium(stadium)
-                    .imageUrl(url)
-                    .build());
+        if (imagesChanged) {
+            stadium.getImages().clear();
+            for (String url : newImageUrls) {
+                stadium.getImages().add(com.sportvenue.entity.StadiumImage.builder()
+                        .stadium(stadium)
+                        .imageUrl(url)
+                        .build());
+            }
         }
         return imagesChanged;
     }
