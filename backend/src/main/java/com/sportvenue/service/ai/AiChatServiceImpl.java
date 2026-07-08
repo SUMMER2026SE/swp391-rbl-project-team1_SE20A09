@@ -8,6 +8,8 @@ import com.sportvenue.service.ai.handler.MatchRequestHandler;
 import com.sportvenue.service.ai.handler.PolicyHandler;
 import com.sportvenue.service.ai.handler.SlotAvailabilityHandler;
 import com.sportvenue.service.ai.handler.StadiumSearchHandler;
+import com.sportvenue.entity.AiUsageLog;
+import com.sportvenue.repository.AiUsageLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,6 +40,7 @@ public class AiChatServiceImpl implements AiChatService {
     private final SlotAvailabilityHandler slotAvailabilityHandler;
     private final MatchRequestHandler matchRequestHandler;
     private final PolicyHandler policyHandler;
+    private final AiUsageLogRepository aiUsageLogRepository;
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @Value("${app.ai.model:llama-3.3-70b-versatile}")
@@ -67,19 +70,40 @@ public class AiChatServiceImpl implements AiChatService {
         List<GroqClient.ChatMessage> history = toGroqHistory(request.getHistory());
 
         ExtractedIntentResult intentResult;
+        GroqClient.GroqResult result = null;
+        long startTime = System.currentTimeMillis();
+        long latencyMs = 0;
+
         try {
-            GroqClient.GroqResult result = groqClient.chatJson(model, systemPrompt, history, request.getMessage());
+            result = groqClient.chatJson(model, systemPrompt, history, request.getMessage());
+            latencyMs = System.currentTimeMillis() - startTime;
             log.debug("Groq raw JSON cho message '{}': {}", request.getMessage(), result.text());
-            intentResult = objectMapper.readValue(result.text(), ExtractedIntentResult.class);
-            log.info("Intent nhận diện: '{}' -> '{}'", request.getMessage(), intentResult.getIntent());
         } catch (LlmGatewayException e) {
             log.error("Lỗi gọi Groq gateway (kind={}): {}", e.getKind(), e.getMessage());
             return AiChatTurnResponse.messageOnly(FALLBACK_MESSAGE, "unknown");
+        }
+
+        try {
+            intentResult = objectMapper.readValue(result.text(), ExtractedIntentResult.class);
+            log.info("Intent nhận diện: '{}' -> '{}'", request.getMessage(), intentResult.getIntent());
         } catch (Exception e) {
-            // Groq JSON Mode chỉ đảm bảo output là JSON hợp lệ, KHÔNG đảm bảo đúng schema —
-            // model có thể bỏ sót field/trả sai kiểu. Không để lỗi parse crash cả request.
             log.warn("Không parse được JSON intent từ Groq, dùng fallback unknown", e);
             intentResult = ExtractedIntentResult.unknown();
+        }
+
+        // Lưu AiUsageLog
+        try {
+            AiUsageLog usageLog = AiUsageLog.builder()
+                    .userId(userId)
+                    .feature(intentResult.getIntent())
+                    .modelUsed(model)
+                    .inputTokens(result.inputTokens())
+                    .outputTokens(result.outputTokens())
+                    .latencyMs(latencyMs)
+                    .build();
+            aiUsageLogRepository.save(usageLog);
+        } catch (Exception e) {
+            log.error("Không thể ghi log AI usage", e);
         }
 
         return dispatch(intentResult, conversationKey);

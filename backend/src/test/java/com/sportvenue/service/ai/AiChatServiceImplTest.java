@@ -36,13 +36,15 @@ class AiChatServiceImplTest {
     private MatchRequestHandler matchRequestHandler;
     @Mock
     private PolicyHandler policyHandler;
+    @Mock
+    private com.sportvenue.repository.AiUsageLogRepository aiUsageLogRepository;
 
     private AiChatServiceImpl service;
 
     @BeforeEach
     void setUp() {
         service = new AiChatServiceImpl(groqClient, stadiumSearchHandler, slotAvailabilityHandler,
-                matchRequestHandler, policyHandler);
+                matchRequestHandler, policyHandler, aiUsageLogRepository);
     }
 
     private AiChatTurnRequest request(String message) {
