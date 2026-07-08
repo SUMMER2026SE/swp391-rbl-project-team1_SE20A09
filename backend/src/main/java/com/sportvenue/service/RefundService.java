@@ -3,6 +3,7 @@ package com.sportvenue.service;
 import com.sportvenue.dto.request.RefundRequest;
 import com.sportvenue.dto.response.OwnerBookingResponse;
 import com.sportvenue.dto.response.RefundResponse;
+import com.sportvenue.entity.enums.RefundReasonType;
 
 import java.util.List;
 
@@ -22,10 +23,11 @@ public interface RefundService {
      * Xem trước số tiền hoàn lại trước khi xác nhận hủy sân (Owner).
      *
      * @param bookingId ID của đơn đặt sân cần xem trước hoàn tiền
+     * @param reasonType Nguyên nhân hoàn tiền (Khách yêu cầu hay do sự cố sân)
      * @param ownerEmail Email của Owner đang thực hiện thao tác
      * @return Kết quả hoàn tiền ước tính chi tiết
      */
-    RefundResponse previewRefund(Integer bookingId, String ownerEmail);
+    RefundResponse previewRefund(Integer bookingId, RefundReasonType reasonType, String ownerEmail);
 
     /**
      * Lấy toàn bộ danh sách đặt sân của Owner để hiển thị trên Dashboard.

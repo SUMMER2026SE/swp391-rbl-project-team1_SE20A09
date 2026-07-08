@@ -1,10 +1,21 @@
 package com.sportvenue.service.impl;
 
+import com.sportvenue.dto.request.RefundRequest;
+import com.sportvenue.dto.response.RefundResponse;
 import com.sportvenue.entity.Booking;
+import com.sportvenue.entity.Owner;
+import com.sportvenue.entity.Payment;
+import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.TimeSlot;
+import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
+import com.sportvenue.entity.enums.PaymentMethod;
 import com.sportvenue.entity.enums.PaymentStatus;
+import com.sportvenue.entity.enums.RefundReasonType;
 import com.sportvenue.entity.enums.SlotStatus;
+import com.sportvenue.entity.enums.TransactionStatus;
+import com.sportvenue.exception.BadRequestException;
+import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.PaymentRepository;
@@ -18,10 +29,16 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.lang.reflect.Method;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class RefundServiceTest {
@@ -42,78 +59,240 @@ class RefundServiceTest {
 
     private Booking booking;
     private TimeSlot slot;
+    private User ownerUser;
+    private Owner owner;
+    private Stadium stadium;
+    private Payment originalPayment;
 
     @BeforeEach
     void setUp() {
         slot = new TimeSlot();
         slot.setSlotStatus(SlotStatus.BOOKED);
+        slot.setStartTime(LocalTime.of(18, 0));
+        slot.setEndTime(LocalTime.of(19, 0));
+
+        ownerUser = User.builder()
+                .userId(1)
+                .email("owner@example.com")
+                .firstName("John")
+                .lastName("Doe")
+                .build();
+
+        owner = Owner.builder()
+                .ownerId(1)
+                .user(ownerUser)
+                .build();
+
+        stadium = Stadium.builder()
+                .stadiumId(10)
+                .owner(owner)
+                .stadiumName("San Bong Thu Duc")
+                .build();
 
         booking = new Booking();
         booking.setBookingId(1);
         booking.setSlot(slot);
+        booking.setStadium(stadium);
+        booking.setUser(ownerUser);
         booking.setBookingStatus(BookingStatus.CONFIRMED);
         booking.setPaymentStatus(PaymentStatus.PAID);
+        booking.setTotalPrice(new BigDecimal("150000"));
+
+        originalPayment = Payment.builder()
+                .paymentId(100)
+                .amount(new BigDecimal("150000"))
+                .paymentMethod(PaymentMethod.VNPAY)
+                .transactionCode("TXN123")
+                .paymentStatus(TransactionStatus.SUCCESS)
+                .build();
     }
 
     @Test
-    @DisplayName("Should update booking status and save refund reason into note")
-    void updateBookingAndReleaseSlot_WithReason() throws Exception {
-        Method method = RefundServiceImpl.class.getDeclaredMethod("updateBookingAndReleaseSlot", Booking.class, String.class);
-        method.setAccessible(true);
+    @DisplayName("previewRefund: OWNER_FAULT should return 100% refund regardless of time")
+    void previewRefund_OwnerFault_Returns100Percent() {
+        // Arrange: Booking is today (too close for normal 100% customer refund)
+        booking.setReservationDate(LocalDate.now());
+        slot.setStartTime(LocalTime.now().plusHours(2));
 
-        String reason = "Customer requested refund";
-        method.invoke(refundService, booking, reason);
+        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(bookingRepository.findById(1)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
 
+        // Act
+        RefundResponse response = refundService.previewRefund(1, RefundReasonType.OWNER_FAULT, "owner@example.com");
+
+        // Assert
+        assertEquals(100, response.getRefundPercentage());
+        assertEquals(new BigDecimal("150000"), response.getRefundAmount());
+    }
+
+    @Test
+    @DisplayName("previewRefund: CUSTOMER_REQUEST >= 24 hours should return 100% refund")
+    void previewRefund_CustomerRequest_MoreThan24Hours_Returns100Percent() {
+        // Arrange: 2 days in advance
+        booking.setReservationDate(LocalDate.now().plusDays(2));
+
+        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(bookingRepository.findById(1)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
+
+        // Act
+        RefundResponse response = refundService.previewRefund(1, RefundReasonType.CUSTOMER_REQUEST, "owner@example.com");
+
+        // Assert
+        assertEquals(100, response.getRefundPercentage());
+        assertEquals(new BigDecimal("150000"), response.getRefundAmount());
+    }
+
+    @Test
+    @DisplayName("previewRefund: CUSTOMER_REQUEST between 12 and 24 hours should return 50% refund")
+    void previewRefund_CustomerRequest_Between12And24Hours_Returns50Percent() {
+        // Arrange: 15 hours in advance
+        LocalDateTime target = LocalDateTime.now().plusHours(15);
+        booking.setReservationDate(target.toLocalDate());
+        slot.setStartTime(target.toLocalTime());
+
+        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(bookingRepository.findById(1)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
+
+        // Act
+        RefundResponse response = refundService.previewRefund(1, RefundReasonType.CUSTOMER_REQUEST, "owner@example.com");
+
+        // Assert
+        assertEquals(50, response.getRefundPercentage());
+        assertEquals(new BigDecimal("75000.0"), response.getRefundAmount());
+    }
+
+    @Test
+    @DisplayName("previewRefund: CUSTOMER_REQUEST < 12 hours should return 0% refund")
+    void previewRefund_CustomerRequest_LessThan12Hours_Returns0Percent() {
+        // Arrange: 2 hours in advance
+        LocalDateTime target = LocalDateTime.now().plusHours(2);
+        booking.setReservationDate(target.toLocalDate());
+        slot.setStartTime(target.toLocalTime());
+
+        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(bookingRepository.findById(1)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
+
+        // Act
+        RefundResponse response = refundService.previewRefund(1, RefundReasonType.CUSTOMER_REQUEST, "owner@example.com");
+
+        // Assert
+        assertEquals(0, response.getRefundPercentage());
+        assertEquals(BigDecimal.ZERO, response.getRefundAmount());
+    }
+
+    @Test
+    @DisplayName("processRefund: OWNER_FAULT with valid proof should succeed")
+    void processRefund_OwnerFault_WithProof_Succeeds() {
+        // Arrange
+        booking.setReservationDate(LocalDate.now());
+        slot.setStartTime(LocalTime.now().plusHours(2));
+
+        RefundRequest request = new RefundRequest();
+        request.setReason("San ngap nuoc");
+        request.setReasonType(RefundReasonType.OWNER_FAULT);
+        request.setProofUrl("https://proof.url/flood.jpg");
+
+        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
+
+        // Act
+        RefundResponse response = refundService.processRefund(1, request, "owner@example.com");
+
+        // Assert
+        assertEquals(100, response.getRefundPercentage());
+        assertEquals(new BigDecimal("150000"), response.getRefundAmount());
         assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
         assertEquals(PaymentStatus.REFUNDED, booking.getPaymentStatus());
-        assertEquals("Lý do hủy hoàn tiền: " + reason, booking.getNote());
+        assertEquals("Lý do hủy hoàn tiền: San ngap nuoc", booking.getNote());
         assertEquals(SlotStatus.AVAILABLE, slot.getSlotStatus());
-        
+
         verify(bookingRepository).save(booking);
+        verify(timeSlotRepository).save(slot);
+        verify(paymentRepository).save(any(Payment.class));
     }
 
     @Test
-    @DisplayName("Should update booking status without note if reason is null or blank")
-    void updateBookingAndReleaseSlot_EmptyReason() throws Exception {
-        Method method = RefundServiceImpl.class.getDeclaredMethod("updateBookingAndReleaseSlot", Booking.class, String.class);
-        method.setAccessible(true);
+    @DisplayName("processRefund: OWNER_FAULT without proof should throw BadRequestException")
+    void processRefund_OwnerFault_WithoutProof_ThrowsBadRequestException() {
+        // Arrange
+        RefundRequest request = new RefundRequest();
+        request.setReason("San ngap nuoc");
+        request.setReasonType(RefundReasonType.OWNER_FAULT);
+        request.setProofUrl("   "); // blank proof
 
-        method.invoke(refundService, booking, "  ");
+        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
 
-        assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
-        assertNull(booking.getNote());
-        assertEquals(SlotStatus.AVAILABLE, slot.getSlotStatus());
-        
-        verify(bookingRepository).save(booking);
-    }
-
-    @Test
-    @DisplayName("Should return 100% refund for OWNER_FAULT with proof")
-    void calculateRefund_OwnerFault_Success() throws Exception {
-        Method method = RefundServiceImpl.class.getDeclaredMethod("calculateRefund", Booking.class, com.sportvenue.entity.enums.RefundReasonType.class, String.class);
-        method.setAccessible(true);
-
-        booking.setTotalPrice(new java.math.BigDecimal("100000"));
-
-        Object result = method.invoke(refundService, booking, com.sportvenue.entity.enums.RefundReasonType.OWNER_FAULT, "https://proof.url/img.jpg");
-        
-        Method getPercentage = result.getClass().getMethod("getPercentage");
-        Method getAmount = result.getClass().getMethod("getAmount");
-        
-        assertEquals(100, getPercentage.invoke(result));
-        assertEquals(new java.math.BigDecimal("100000"), getAmount.invoke(result));
-    }
-
-    @Test
-    @DisplayName("Should throw BadRequestException for OWNER_FAULT without proof")
-    void calculateRefund_OwnerFault_MissingProof() throws Exception {
-        Method method = RefundServiceImpl.class.getDeclaredMethod("calculateRefund", Booking.class, com.sportvenue.entity.enums.RefundReasonType.class, String.class);
-        method.setAccessible(true);
-
-        java.lang.reflect.InvocationTargetException exception = assertThrows(java.lang.reflect.InvocationTargetException.class, () -> {
-            method.invoke(refundService, booking, com.sportvenue.entity.enums.RefundReasonType.OWNER_FAULT, "  ");
+        // Act & Assert
+        BadRequestException exception = assertThrows(BadRequestException.class, () -> {
+            refundService.processRefund(1, request, "owner@example.com");
         });
-        
-        assertTrue(exception.getCause() instanceof com.sportvenue.exception.BadRequestException);
+        assertEquals("Bắt buộc phải cung cấp bằng chứng (ảnh/mô tả) khi lỗi do chủ sân", exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("processRefund: CUSTOMER_REQUEST with 0% refund should not save negative payment")
+    void processRefund_CustomerRequest_ZeroRefund_DoesNotSavePayment() {
+        // Arrange: 2 hours in advance
+        LocalDateTime target = LocalDateTime.now().plusHours(2);
+        booking.setReservationDate(target.toLocalDate());
+        slot.setStartTime(target.toLocalTime());
+
+        RefundRequest request = new RefundRequest();
+        request.setReason("Customer changed mind");
+        request.setReasonType(RefundReasonType.CUSTOMER_REQUEST);
+
+        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
+
+        // Act
+        RefundResponse response = refundService.processRefund(1, request, "owner@example.com");
+
+        // Assert
+        assertEquals(0, response.getRefundPercentage());
+        assertEquals(BigDecimal.ZERO, response.getRefundAmount());
+        assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
+        assertEquals(PaymentStatus.REFUNDED, booking.getPaymentStatus());
+        assertEquals(SlotStatus.AVAILABLE, slot.getSlotStatus());
+
+        verify(bookingRepository).save(booking);
+        verify(timeSlotRepository).save(slot);
+        verify(paymentRepository, never()).save(any(Payment.class));
+    }
+
+    @Test
+    @DisplayName("processRefund: booking belonging to another owner should throw ForbiddenException")
+    void processRefund_WrongOwner_ThrowsForbiddenException() {
+        // Arrange: Resolved owner id is 99 (different from owner ID 1)
+        Owner otherOwner = Owner.builder().ownerId(99).user(ownerUser).build();
+        stadium.setOwner(otherOwner); // Change stadium owner
+
+        RefundRequest request = new RefundRequest();
+        request.setReason("Some reason");
+        request.setReasonType(RefundReasonType.CUSTOMER_REQUEST);
+
+        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
+
+        // Act & Assert
+        ForbiddenException exception = assertThrows(ForbiddenException.class, () -> {
+            refundService.processRefund(1, request, "owner@example.com");
+        });
+        assertEquals("Bạn không có quyền quản lý đơn đặt sân này!", exception.getMessage());
     }
 }

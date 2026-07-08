@@ -15,7 +15,9 @@ import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.entity.enums.TransactionStatus;
+import com.sportvenue.entity.enums.RefundReasonType;
 import com.sportvenue.exception.BadRequestException;
+import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.OwnerRepository;
@@ -68,7 +70,7 @@ public class RefundServiceImpl implements RefundService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán ban đầu"));
 
         // 5. Áp dụng chính sách hoàn tiền
-        RefundCalculation calculation = calculateRefund(booking, request.getReasonType(), request.getProofUrl());
+        RefundCalculation calculation = calculateRefund(booking, originalPayment, request.getReasonType(), request.getProofUrl(), false);
 
         // 6. Cập nhật dữ liệu
         updateBookingAndReleaseSlot(booking, request.getReason());
@@ -92,7 +94,7 @@ public class RefundServiceImpl implements RefundService {
             log.warn("Security Alert! Owner ID {} tried to access booking ID {} of Owner ID {}",
                     owner.getOwnerId(), booking.getBookingId(),
                     resolvedOwner != null ? resolvedOwner.getOwnerId() : null);
-            throw new BadRequestException("Bạn không có quyền quản lý đơn đặt sân này!");
+            throw new ForbiddenException("Bạn không có quyền quản lý đơn đặt sân này!");
         }
 
         if (booking.getBookingStatus() == BookingStatus.CANCELLED) {
@@ -111,13 +113,15 @@ public class RefundServiceImpl implements RefundService {
         return LocalDateTime.of(booking.getReservationDate(), booking.getSlot().getStartTime());
     }
 
-    private RefundCalculation calculateRefund(Booking booking, com.sportvenue.entity.enums.RefundReasonType reasonType,
-            String proofUrl) {
-        if (reasonType == com.sportvenue.entity.enums.RefundReasonType.OWNER_FAULT) {
-            if (proofUrl == null || proofUrl.trim().isEmpty()) {
+    private RefundCalculation calculateRefund(Booking booking, Payment originalPayment,
+            RefundReasonType reasonType, String proofUrl, boolean isPreview) {
+        BigDecimal baseAmount = originalPayment != null ? originalPayment.getAmount() : booking.getTotalPrice();
+
+        if (reasonType == RefundReasonType.OWNER_FAULT) {
+            if (!isPreview && (proofUrl == null || proofUrl.trim().isEmpty())) {
                 throw new BadRequestException("Bắt buộc phải cung cấp bằng chứng (ảnh/mô tả) khi lỗi do chủ sân");
             }
-            return new RefundCalculation(100, booking.getTotalPrice());
+            return new RefundCalculation(100, baseAmount);
         }
 
         LocalDateTime playTime = playTime(booking);
@@ -129,10 +133,10 @@ public class RefundServiceImpl implements RefundService {
 
         if (hoursDiff >= 24.0) {
             refundPercentage = 100;
-            refundAmount = booking.getTotalPrice();
+            refundAmount = baseAmount;
         } else if (hoursDiff >= 12.0) {
             refundPercentage = 50;
-            refundAmount = booking.getTotalPrice().multiply(new BigDecimal("0.5"));
+            refundAmount = baseAmount.multiply(new BigDecimal("0.5"));
         } else {
             refundPercentage = 0;
             refundAmount = BigDecimal.ZERO;
@@ -155,7 +159,7 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private void recordRefundTransaction(Booking booking, Payment originalPayment, BigDecimal refundAmount,
-            com.sportvenue.entity.enums.RefundReasonType reasonType, String proofUrl) {
+            RefundReasonType reasonType, String proofUrl) {
         // TODO: Call VNPAY/MoMo refund API here to actually process bank refund in
         // production
         Payment refundPayment = Payment.builder()
@@ -191,7 +195,7 @@ public class RefundServiceImpl implements RefundService {
 
     @Transactional(readOnly = true)
     @Override
-    public RefundResponse previewRefund(Integer bookingId, String ownerEmail) {
+    public RefundResponse previewRefund(Integer bookingId, RefundReasonType reasonType, String ownerEmail) {
         log.info("Starting previewRefund for bookingId: {} by Owner: {}", bookingId, ownerEmail);
 
         // 1. Tìm thông tin User và Owner profile
@@ -208,9 +212,13 @@ public class RefundServiceImpl implements RefundService {
         // 3. Kiểm tra tính hợp lệ và quyền sở hữu
         validateOwnershipAndStatus(booking, owner);
 
-        // 4. Áp dụng chính sách hoàn tiền
-        RefundCalculation calculation = calculateRefund(booking,
-                com.sportvenue.entity.enums.RefundReasonType.CUSTOMER_REQUEST, null);
+        // 4. Tìm giao dịch thanh toán gốc (SUCCESS, amount > 0, mới nhất)
+        Payment originalPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
+                .stream().findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán ban đầu"));
+
+        // 5. Áp dụng chính sách hoàn tiền
+        RefundCalculation calculation = calculateRefund(booking, originalPayment, reasonType, null, true);
 
         return RefundResponse.builder()
                 .bookingId(booking.getBookingId())

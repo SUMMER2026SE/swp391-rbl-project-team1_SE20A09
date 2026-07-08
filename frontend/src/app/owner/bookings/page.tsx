@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -160,26 +160,37 @@ function BookingManagementPage() {
     return bookingList.filter((b) => b.status.toLowerCase() === status.toLowerCase());
   };
 
-  // Mở modal hoàn tiền và lấy kết quả xem trước chính xác từ Backend (Tránh Clock Skew)
-  const handleOpenRefundModal = async (booking: BookingItem) => {
+  // Load preview data mỗi khi mở modal hoặc thay đổi loại nguyên nhân hủy
+  const fetchRefundPreview = useCallback(async (bookingId: number, type: string) => {
+    setIsPreviewLoading(true);
+    try {
+      const data = await get<any>(`/owner/bookings/${bookingId}/refund/preview?reasonType=${type}`);
+      setPreviewData(data);
+    } catch (error: any) {
+      console.error("Error fetching refund preview:", error);
+      toast.error("Không tải được thông tin xem trước hoàn tiền.");
+      setPreviewData(null);
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  }, []);
+
+  const handleOpenRefundModal = (booking: BookingItem) => {
     setSelectedBooking(booking);
     setCancelReason("");
     setReasonType("CUSTOMER_REQUEST");
     setProofUrl("");
     setIsCancelModalOpen(true);
     setPreviewData(null);
-    setIsPreviewLoading(true);
-
-    try {
-      const data = await get<any>(`/owner/bookings/${booking.id}/refund/preview`);
-      setPreviewData(data);
-    } catch (error: any) {
-      console.error("Error fetching refund preview:", error);
-      toast.error("Không thể xem trước thông tin hoàn tiền: " + error.message);
-    } finally {
-      setIsPreviewLoading(false);
-    }
+    fetchRefundPreview(booking.id, "CUSTOMER_REQUEST");
   };
+
+  // Lắng nghe thay đổi của reasonType để fetch lại preview
+  useEffect(() => {
+    if (selectedBooking && isCancelModalOpen) {
+      fetchRefundPreview(selectedBooking.id, reasonType);
+    }
+  }, [reasonType, selectedBooking, isCancelModalOpen, fetchRefundPreview]);
 
   // Hàm gửi Request thực tế lên Backend để thực hiện hoàn tiền
   const handleConfirmRefund = async () => {
