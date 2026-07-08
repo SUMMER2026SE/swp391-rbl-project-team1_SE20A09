@@ -74,6 +74,7 @@ public class BookingController {
 
         Integer userId = userPrincipal.getUser().getUserId();
 
+        boolean acquired = false;
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             // Nếu key đã tồn tại và có kết quả → trả về booking cũ (idempotent retry)
             Optional<Integer> existing = idempotencyService.getExistingBookingId(userId, idempotencyKey);
@@ -88,19 +89,26 @@ public class BookingController {
                 log.warn("[Idempotency] Concurrent duplicate — userId={}, key={}", userId, idempotencyKey);
                 return ResponseEntity.status(HttpStatus.CONFLICT).build();
             }
+            acquired = true;
         }
 
         try {
             BookingDetailResponse response = bookingService.createBooking(userPrincipal, request);
-            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            if (acquired) {
                 idempotencyService.complete(userId, idempotencyKey, response.getBookingId());
             }
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (RuntimeException ex) {
-            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+        } catch (com.sportvenue.exception.PaymentGatewayRefundException ex) {
+            // Lỗi từ Gateway (Timeout/502) -> KHÔNG nhả key để tránh user retry lập tức gây double-refund.
+            throw ex;
+        } catch (Exception ex) {
+            if (acquired) {
                 idempotencyService.release(userId, idempotencyKey);
             }
-            throw ex;
+            if (ex instanceof RuntimeException) {
+                throw (RuntimeException) ex;
+            }
+            throw new RuntimeException(ex);
         }
     }
 
@@ -201,11 +209,46 @@ public class BookingController {
     public ResponseEntity<BookingDetailResponse> cancelBooking(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @PathVariable("id") Integer bookingId,
-            @Valid @RequestBody(required = false) CancelBookingRequest request) {
-        String reason = request != null ? request.getReason() : null;
-        BookingDetailResponse response = bookingService.cancelBooking(
-                userPrincipal, bookingId, reason);
-        return ResponseEntity.ok(response);
+            @Valid @RequestBody(required = false) CancelBookingRequest request,
+            @RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKey) {
+        
+        Integer userId = userPrincipal.getUser().getUserId();
+
+        boolean acquired = false;
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Optional<Integer> existing = idempotencyService.getExistingBookingId(userId, idempotencyKey);
+            if (existing.isPresent()) {
+                log.info("[Idempotency] Retry cancel booking — userId={}, key={}, existingBookingId={}",
+                        userId, idempotencyKey, existing.get());
+                BookingDetailResponse cached = bookingService.getBookingDetail(userPrincipal, existing.get());
+                return ResponseEntity.status(HttpStatus.OK).body(cached);
+            }
+            if (!idempotencyService.tryAcquire(userId, idempotencyKey)) {
+                log.warn("[Idempotency] Concurrent duplicate cancel — userId={}, key={}", userId, idempotencyKey);
+                return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            }
+            acquired = true;
+        }
+
+        try {
+            String reason = request != null ? request.getReason() : null;
+            BookingDetailResponse response = bookingService.cancelBooking(
+                    userPrincipal, bookingId, reason);
+            if (acquired) {
+                idempotencyService.complete(userId, idempotencyKey, response.getBookingId());
+            }
+            return ResponseEntity.ok(response);
+        } catch (com.sportvenue.exception.PaymentGatewayRefundException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            if (acquired) {
+                idempotencyService.release(userId, idempotencyKey);
+            }
+            if (ex instanceof RuntimeException) {
+                throw (RuntimeException) ex;
+            }
+            throw new RuntimeException(ex);
+        }
     }
 
     /**

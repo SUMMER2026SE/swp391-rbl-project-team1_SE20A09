@@ -92,6 +92,8 @@ export interface ComplexSearchParams {
   keyword?: string
   sportTypeId?: number
   address?: string
+  province?: string
+  district?: string
   userLat?: number
   userLng?: number
   radiusInKm?: number

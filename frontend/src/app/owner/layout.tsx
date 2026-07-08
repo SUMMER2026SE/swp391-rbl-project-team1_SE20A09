@@ -39,13 +39,13 @@ export default function OwnerLayout({
   ];
 
   const getPageTitle = (path: string) => {
-    if (path === "/owner/dashboard") return { title: "Dashboard", subtitle: "Tổng quan hệ thống SportHub" };
+    if (path === "/owner/dashboard") return { title: "Dashboard", subtitle: "Tổng quan hệ thống SportsBook" };
     if (path.startsWith("/owner/venues")) return { title: "Sân của tôi", subtitle: "Quản lý danh sách sân thể thao" };
     if (path.startsWith("/owner/bookings")) return { title: "Lịch đặt", subtitle: "Quản lý lịch đặt sân" };
     if (path.startsWith("/owner/revenue")) return { title: "Doanh thu", subtitle: "Thống kê doanh thu" };
     if (path.startsWith("/owner/complaints")) return { title: "Khiếu nại", subtitle: "Quản lý khiếu nại khách hàng" };
     if (path.startsWith("/owner/notifications")) return { title: "Thông báo", subtitle: "Thông báo hệ thống" };
-    return { title: "Chủ sân", subtitle: "Hệ thống SportHub" };
+    return { title: "Chủ sân", subtitle: "Hệ thống SportsBook" };
   };
 
   const { title, subtitle } = getPageTitle(pathname);
@@ -68,7 +68,7 @@ export default function OwnerLayout({
             <div className="p-1.5 bg-emerald-600 rounded-lg">
               <TrendingUp className="h-5 w-5 text-white" />
             </div>
-            <span className="text-xl font-bold tracking-tight">SportHub</span>
+            <span className="text-xl font-bold tracking-tight">SportsBook</span>
           </div>
         </div>
 

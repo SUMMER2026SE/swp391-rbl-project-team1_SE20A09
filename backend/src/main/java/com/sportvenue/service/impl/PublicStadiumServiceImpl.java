@@ -24,12 +24,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -51,13 +53,31 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
             throw new BadRequestException("Giờ kết thúc phải sau giờ bắt đầu");
         }
 
-        Pageable pageable = PageRequest.of(request.getPage(), request.getSize());
+        Pageable pageable = PageRequest.of(request.getPage(), request.getSize(), resolveSort(request));
         Specification<Stadium> spec = StadiumSpecification.withDynamicFilter(request, true);
 
         if (request.getUserLat() != null && request.getUserLng() != null) {
             return handleDistancePagination(request, pageable, spec);
         }
         return handleStandardPagination(request, pageable, spec);
+    }
+
+    /**
+     * Whitelist field được phép sort — sortBy là string từ client/AI tool nên không được
+     * đưa thẳng vào Sort.by (tránh lỗi khi field không tồn tại). Giá trị lạ bị bỏ qua.
+     * Path sort theo khoảng cách (userLat/userLng) không dùng Sort này — đã sort Haversine riêng.
+     */
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("pricePerHour", "averageRating", "stadiumName", "createdAt");
+
+    private Sort resolveSort(StadiumSearchRequest request) {
+        String sortBy = request.getSortBy();
+        if (sortBy == null || !ALLOWED_SORT_FIELDS.contains(sortBy)) {
+            return Sort.unsorted();
+        }
+        Sort.Direction direction = "DESC".equalsIgnoreCase(request.getSortDirection())
+                ? Sort.Direction.DESC
+                : Sort.Direction.ASC;
+        return Sort.by(direction, sortBy);
     }
 
     private PageResponse<StadiumResponse> handleDistancePagination(StadiumSearchRequest request,

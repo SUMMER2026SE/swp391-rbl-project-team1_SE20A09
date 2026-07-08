@@ -19,6 +19,7 @@ import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.repository.StadiumComplexImageRepository;
 import com.sportvenue.repository.StadiumComplexRepository;
 import com.sportvenue.service.StadiumComplexService;
+import com.sportvenue.util.location.VietnamLocationResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -41,6 +42,7 @@ public class StadiumComplexServiceImpl implements StadiumComplexService {
     private final SportTypeRepository sportTypeRepository;
     private final AmenityRepository amenityRepository;
     private final StadiumComplexImageRepository stadiumComplexImageRepository;
+    private final VietnamLocationResolver locationResolver;
 
     @Override
     @Transactional
@@ -64,11 +66,16 @@ public class StadiumComplexServiceImpl implements StadiumComplexService {
             amenities = new HashSet<>(amenityRepository.findAllById(request.getAmenityIds()));
         }
 
+        String trimmedAddress = request.getAddress().trim();
+        VietnamLocationResolver.LocationMatch locationMatch = locationResolver.deriveFromAddress(trimmedAddress);
+
         StadiumComplex complex = StadiumComplex.builder()
                 .owner(owner)
                 .name(request.getName().trim())
                 .description(request.getDescription())
-                .address(request.getAddress().trim())
+                .address(trimmedAddress)
+                .province(locationMatch.province())
+                .district(locationMatch.district())
                 .phone(request.getPhone())
                 .latitude(request.getLatitude() != null ? request.getLatitude().doubleValue() : null)
                 .longitude(request.getLongitude() != null ? request.getLongitude().doubleValue() : null)
@@ -206,9 +213,14 @@ public class StadiumComplexServiceImpl implements StadiumComplexService {
             complex.setApprovedStatus(ApprovedStatus.PENDING);
         }
 
+        String updatedAddress = request.getAddress().trim();
+        VietnamLocationResolver.LocationMatch locationMatch = locationResolver.deriveFromAddress(updatedAddress);
+
         complex.setName(request.getName().trim());
         complex.setDescription(request.getDescription());
-        complex.setAddress(request.getAddress().trim());
+        complex.setAddress(updatedAddress);
+        complex.setProvince(locationMatch.province());
+        complex.setDistrict(locationMatch.district());
         complex.setPhone(request.getPhone());
         complex.setLatitude(request.getLatitude() != null ? request.getLatitude().doubleValue() : null);
         complex.setLongitude(request.getLongitude() != null ? request.getLongitude().doubleValue() : null);

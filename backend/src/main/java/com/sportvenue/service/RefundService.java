@@ -37,6 +37,15 @@ public interface RefundService {
     RefundResponse previewRefundForCustomer(Integer bookingId, String customerEmail);
 
     /**
+     * Lấy trạng thái/kết quả hoàn tiền hiện tại của một đơn (dùng cho idempotency replay).
+     *
+     * @param bookingId ID của đơn đặt sân
+     * @param ownerEmail Email của Owner
+     * @return Kết quả hoàn tiền chi tiết
+     */
+    RefundResponse getRefundResponse(Integer bookingId, String ownerEmail);
+
+    /**
      * Lấy toàn bộ danh sách đặt sân của Owner để hiển thị trên Dashboard.
      *
      * @param ownerEmail Email của Owner đang thực hiện thao tác

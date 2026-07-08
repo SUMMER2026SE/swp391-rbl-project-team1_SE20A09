@@ -25,6 +25,12 @@ public class StadiumComplexSearchRequest {
     private String keyword;
     private Integer sportTypeId;
 
+    /** Tỉnh/thành đã chuẩn hoá (vd "Hồ Chí Minh") — exact-match, khác với keyword (free-text LIKE). */
+    private String province;
+
+    /** Quận/huyện đã chuẩn hoá (vd "Quận 1", "Cẩm Lệ") — exact-match, khác với keyword (free-text LIKE). */
+    private String district;
+
     @DecimalMin(value = "0.0", message = "Minimum price must not be negative")
     private BigDecimal minPrice;
 
@@ -58,7 +64,7 @@ public class StadiumComplexSearchRequest {
     private int page = 0;
 
     @Min(value = 1, message = "Page size must be at least 1")
-    @Max(value = 50, message = "Page size must not exceed 50")
+    @Max(value = 500, message = "Page size must not exceed 500")
     @Builder.Default
     private int size = 12;
 
