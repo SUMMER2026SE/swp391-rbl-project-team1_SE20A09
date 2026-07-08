@@ -16,6 +16,16 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 
+import java.math.BigDecimal;
+import java.text.NumberFormat;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
+
+import org.springframework.web.util.HtmlUtils;
+
+import com.sportvenue.entity.TimeSlot;
+
 /**
  * Reusable email service — dùng chung cho OTP, thông báo booking, v.v.
  */
@@ -270,5 +280,330 @@ public class EmailService {
                 </body>
                 </html>
                 """.formatted(otpCode, expiryMinutes);
+    }
+
+    @Async
+    public void sendBookingConfirmationEmail(
+            String toEmail,
+            String customerName,
+            String stadiumName,
+            Integer bookingId,
+            LocalDate reservationDate,
+            TimeSlot timeSlot,
+            BigDecimal totalPrice
+    ) {
+        if (mockMail) {
+            log.info("[MOCK EMAIL] Booking confirmation to {}: Booking {} at {}", toEmail, bookingId, stadiumName);
+            return;
+        }
+
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setTo(toEmail);
+            helper.setFrom(fromAddress);
+            helper.setSubject("Xác nhận đặt sân thành công — SportVenue");
+            helper.setText(buildBookingConfirmationEmailBody(customerName, stadiumName, bookingId, reservationDate, timeSlot, totalPrice), true);
+            mailSender.send(message);
+            log.info("Sent booking confirmation email to {}", toEmail);
+        } catch (MailException | MessagingException e) {
+            log.error("Failed to send booking confirmation email to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
+    @Async
+    public void sendBookingCancellationEmail(
+            String toEmail,
+            String customerName,
+            String stadiumName,
+            Integer bookingId,
+            String reason,
+            String cancelledBy
+    ) {
+        if (mockMail) {
+            log.info("[MOCK EMAIL] Booking cancellation to {}: Booking {} cancelled by {}", toEmail, bookingId, cancelledBy);
+            return;
+        }
+
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setTo(toEmail);
+            helper.setFrom(fromAddress);
+            helper.setSubject("Thông báo hủy đơn đặt sân — SportVenue");
+            helper.setText(buildBookingCancellationEmailBody(customerName, stadiumName, bookingId, reason, cancelledBy), true);
+            mailSender.send(message);
+            log.info("Sent booking cancellation email to {}", toEmail);
+        } catch (MailException | MessagingException e) {
+            log.error("Failed to send booking cancellation email to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
+    @Async
+    public void sendRefundEmail(
+            String toEmail,
+            String customerName,
+            String stadiumName,
+            Integer bookingId,
+            BigDecimal refundAmount,
+            int refundPercentage,
+            BigDecimal originalAmount
+    ) {
+        if (mockMail) {
+            log.info("[MOCK EMAIL] Refund to {}: Booking {} refunded {}", toEmail, bookingId, refundAmount);
+            return;
+        }
+
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setTo(toEmail);
+            helper.setFrom(fromAddress);
+            helper.setSubject("Thông báo hoàn tiền — SportVenue");
+            helper.setText(buildRefundEmailBody(customerName, stadiumName, bookingId, refundAmount, refundPercentage, originalAmount), true);
+            mailSender.send(message);
+            log.info("Sent refund email to {}", toEmail);
+        } catch (MailException | MessagingException e) {
+            log.error("Failed to send refund email to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
+    @Async
+    public void sendComplaintCreatedEmail(
+            String toEmail,
+            String ownerName,
+            String stadiumName,
+            Integer complaintId,
+            String customerName,
+            String subject
+    ) {
+        if (mockMail) {
+            log.info("[MOCK EMAIL] Complaint created to {}: Complaint {} by {}", toEmail, complaintId, customerName);
+            return;
+        }
+
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setTo(toEmail);
+            helper.setFrom(fromAddress);
+            helper.setSubject("Khách hàng khiếu nại mới — SportVenue");
+            helper.setText(buildComplaintCreatedEmailBody(ownerName, stadiumName, complaintId, customerName, subject), true);
+            mailSender.send(message);
+            log.info("Sent complaint created email to {}", toEmail);
+        } catch (MailException | MessagingException e) {
+            log.error("Failed to send complaint created email to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
+    @Async
+    public void sendComplaintResolvedEmail(
+            String toEmail,
+            String customerName,
+            Integer complaintId,
+            String resolution
+    ) {
+        if (mockMail) {
+            log.info("[MOCK EMAIL] Complaint resolved to {}: Complaint {} resolved", toEmail, complaintId);
+            return;
+        }
+
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setTo(toEmail);
+            helper.setFrom(fromAddress);
+            helper.setSubject("Phản hồi xử lý khiếu nại — SportVenue");
+            helper.setText(buildComplaintResolvedEmailBody(customerName, complaintId, resolution), true);
+            mailSender.send(message);
+            log.info("Sent complaint resolved email to {}", toEmail);
+        } catch (MailException | MessagingException e) {
+            log.error("Failed to send complaint resolved email to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
+    @Async
+    public void sendReviewRequestEmail(
+            String toEmail,
+            String customerName,
+            String stadiumName,
+            Integer bookingId,
+            LocalDate reservationDate
+    ) {
+        if (mockMail) {
+            log.info("[MOCK EMAIL] Review request to {}: Booking {}", toEmail, bookingId);
+            return;
+        }
+
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setTo(toEmail);
+            helper.setFrom(fromAddress);
+            helper.setSubject("Đánh giá trải nghiệm sân " + stadiumName + " — SportVenue");
+            helper.setText(buildReviewRequestEmailBody(customerName, stadiumName, bookingId, reservationDate), true);
+            mailSender.send(message);
+            log.info("Sent review request email to {}", toEmail);
+        } catch (MailException | MessagingException e) {
+            log.error("Failed to send review request email to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
+    private String buildBookingConfirmationEmailBody(String customerName, String stadiumName, Integer bookingId, LocalDate reservationDate, TimeSlot timeSlot, BigDecimal totalPrice) {
+        String formattedDate = reservationDate != null ? reservationDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "";
+        String formattedTime = timeSlot != null ? (timeSlot.getStartTime().format(DateTimeFormatter.ofPattern("HH:mm")) + " - " + timeSlot.getEndTime().format(DateTimeFormatter.ofPattern("HH:mm"))) : "";
+        String formattedPrice = totalPrice != null ? NumberFormat.getInstance(new Locale("vi", "VN")).format(totalPrice) + " VNĐ" : "";
+        
+        return """
+                <!DOCTYPE html>
+                <html lang="vi">
+                <head><meta charset="UTF-8" /></head>
+                <body style="font-family:Arial,sans-serif;color:#333;">
+                    <div style="background:linear-gradient(135deg,#1a73e8,#0d47a1);color:white;padding:20px;text-align:center;">
+                        <h2>SportVenue</h2>
+                    </div>
+                    <div style="padding:20px;">
+                        <p>Xin chào %s,</p>
+                        <p>Bạn đã đặt sân thành công tại <strong>%s</strong>.</p>
+                        <ul>
+                            <li><strong>Mã đặt sân:</strong> %d</li>
+                            <li><strong>Ngày:</strong> %s</li>
+                            <li><strong>Khung giờ:</strong> %s</li>
+                            <li><strong>Tổng tiền:</strong> %s</li>
+                        </ul>
+                        <p>Chúc bạn có buổi chơi thể thao vui vẻ!</p>
+                    </div>
+                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
+                        © SportVenue
+                    </div>
+                </body>
+                </html>
+                """.formatted(HtmlUtils.htmlEscape(customerName), HtmlUtils.htmlEscape(stadiumName), bookingId, formattedDate, formattedTime, formattedPrice);
+    }
+
+    private String buildBookingCancellationEmailBody(String customerName, String stadiumName, Integer bookingId, String reason, String cancelledBy) {
+        return """
+                <!DOCTYPE html>
+                <html lang="vi">
+                <head><meta charset="UTF-8" /></head>
+                <body style="font-family:Arial,sans-serif;color:#333;">
+                    <div style="background:linear-gradient(135deg,#1a73e8,#0d47a1);color:white;padding:20px;text-align:center;">
+                        <h2>SportVenue</h2>
+                    </div>
+                    <div style="padding:20px;">
+                        <p>Xin chào %s,</p>
+                        <p>Đơn đặt sân <strong>#%d</strong> của bạn tại <strong>%s</strong> đã bị hủy.</p>
+                        <p><strong>Người hủy:</strong> %s</p>
+                        <p><strong>Lý do hủy:</strong> %s</p>
+                        <p>Nếu có bất kỳ thắc mắc nào, vui lòng liên hệ bộ phận hỗ trợ.</p>
+                    </div>
+                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
+                        © SportVenue
+                    </div>
+                </body>
+                </html>
+                """.formatted(HtmlUtils.htmlEscape(customerName), bookingId, HtmlUtils.htmlEscape(stadiumName), HtmlUtils.htmlEscape(cancelledBy), HtmlUtils.htmlEscape(reason));
+    }
+
+    private String buildRefundEmailBody(String customerName, String stadiumName, Integer bookingId, BigDecimal refundAmount, int refundPercentage, BigDecimal originalAmount) {
+        String formattedRefund = refundAmount != null ? NumberFormat.getInstance(new Locale("vi", "VN")).format(refundAmount) + " VNĐ" : "";
+        String formattedOriginal = originalAmount != null ? NumberFormat.getInstance(new Locale("vi", "VN")).format(originalAmount) + " VNĐ" : "";
+        
+        return """
+                <!DOCTYPE html>
+                <html lang="vi">
+                <head><meta charset="UTF-8" /></head>
+                <body style="font-family:Arial,sans-serif;color:#333;">
+                    <div style="background:linear-gradient(135deg,#1a73e8,#0d47a1);color:white;padding:20px;text-align:center;">
+                        <h2>SportVenue</h2>
+                    </div>
+                    <div style="padding:20px;">
+                        <p>Xin chào %s,</p>
+                        <p>Đơn đặt sân <strong>#%d</strong> của bạn tại <strong>%s</strong> đã được xử lý hoàn tiền.</p>
+                        <ul>
+                            <li><strong>Tổng tiền ban đầu:</strong> %s</li>
+                            <li><strong>Tỷ lệ hoàn:</strong> %d%%</li>
+                            <li><strong>Số tiền hoàn lại:</strong> %s</li>
+                        </ul>
+                        <p>Tiền sẽ được hoàn vào tài khoản của bạn trong thời gian sớm nhất tùy thuộc vào ngân hàng.</p>
+                    </div>
+                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
+                        © SportVenue
+                    </div>
+                </body>
+                </html>
+                """.formatted(HtmlUtils.htmlEscape(customerName), bookingId, HtmlUtils.htmlEscape(stadiumName), formattedOriginal, refundPercentage, formattedRefund);
+    }
+
+    private String buildComplaintCreatedEmailBody(String ownerName, String stadiumName, Integer complaintId, String customerName, String subject) {
+        return """
+                <!DOCTYPE html>
+                <html lang="vi">
+                <head><meta charset="UTF-8" /></head>
+                <body style="font-family:Arial,sans-serif;color:#333;">
+                    <div style="background:linear-gradient(135deg,#1a73e8,#0d47a1);color:white;padding:20px;text-align:center;">
+                        <h2>SportVenue</h2>
+                    </div>
+                    <div style="padding:20px;">
+                        <p>Xin chào %s,</p>
+                        <p>Sân <strong>%s</strong> của bạn vừa nhận được một khiếu nại từ khách hàng <strong>%s</strong>.</p>
+                        <p><strong>Mã khiếu nại:</strong> %d</p>
+                        <p><strong>Tiêu đề:</strong> %s</p>
+                        <p>Vui lòng đăng nhập vào hệ thống để xem chi tiết và phản hồi khách hàng trong thời gian sớm nhất.</p>
+                    </div>
+                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
+                        © SportVenue
+                    </div>
+                </body>
+                </html>
+                """.formatted(HtmlUtils.htmlEscape(ownerName), HtmlUtils.htmlEscape(stadiumName), HtmlUtils.htmlEscape(customerName), complaintId, HtmlUtils.htmlEscape(subject));
+    }
+
+    private String buildComplaintResolvedEmailBody(String customerName, Integer complaintId, String resolution) {
+        return """
+                <!DOCTYPE html>
+                <html lang="vi">
+                <head><meta charset="UTF-8" /></head>
+                <body style="font-family:Arial,sans-serif;color:#333;">
+                    <div style="background:linear-gradient(135deg,#1a73e8,#0d47a1);color:white;padding:20px;text-align:center;">
+                        <h2>SportVenue</h2>
+                    </div>
+                    <div style="padding:20px;">
+                        <p>Xin chào %s,</p>
+                        <p>Khiếu nại <strong>#%d</strong> của bạn đã được phản hồi xử lý.</p>
+                        <p><strong>Nội dung phản hồi:</strong></p>
+                        <blockquote style="border-left: 4px solid #ccc; margin: 1.5em 10px; padding: 0.5em 10px;">%s</blockquote>
+                        <p>Cảm ơn bạn đã đóng góp ý kiến để chúng tôi cải thiện dịch vụ tốt hơn.</p>
+                    </div>
+                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
+                        © SportVenue
+                    </div>
+                </body>
+                </html>
+                """.formatted(HtmlUtils.htmlEscape(customerName), complaintId, HtmlUtils.htmlEscape(resolution));
+    }
+
+    private String buildReviewRequestEmailBody(String customerName, String stadiumName, Integer bookingId, LocalDate reservationDate) {
+        String formattedDate = reservationDate != null ? reservationDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "";
+        return """
+                <!DOCTYPE html>
+                <html lang="vi">
+                <head><meta charset="UTF-8" /></head>
+                <body style="font-family:Arial,sans-serif;color:#333;">
+                    <div style="background:linear-gradient(135deg,#1a73e8,#0d47a1);color:white;padding:20px;text-align:center;">
+                        <h2>SportVenue</h2>
+                    </div>
+                    <div style="padding:20px;">
+                        <p>Xin chào %s,</p>
+                        <p>Cảm ơn bạn đã trải nghiệm tại <strong>%s</strong> vào ngày <strong>%s</strong> (Mã đặt sân: %d).</p>
+                        <p>Bạn cảm thấy chất lượng dịch vụ như thế nào? Hãy dành vài phút để đánh giá và để lại nhận xét nhé.</p>
+                        <p>Phản hồi của bạn rất quan trọng để giúp sân cải thiện tốt hơn.</p>
+                    </div>
+                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
+                        © SportVenue
+                    </div>
+                </body>
+                </html>
+                """.formatted(HtmlUtils.htmlEscape(customerName), HtmlUtils.htmlEscape(stadiumName), formattedDate, bookingId);
     }
 }
