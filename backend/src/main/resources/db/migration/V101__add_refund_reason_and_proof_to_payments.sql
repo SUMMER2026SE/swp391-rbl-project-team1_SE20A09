@@ -1,0 +1,2 @@
+ALTER TABLE payments ADD COLUMN reason_type VARCHAR(50);
+ALTER TABLE payments ADD COLUMN proof_url VARCHAR(500);
