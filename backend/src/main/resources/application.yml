@@ -93,6 +93,10 @@ management:
 
 # ── App Config (JWT, OTP, Mail, Google) ─────────────────
 app:
+  ai:
+    base-url: ${AI_BASE_URL:https://api.groq.com/openai/v1}
+    api-key: ${GROQ_API_KEY:}
+    model: ${AI_MODEL:llama-3.3-70b-versatile}
   jwt:
     secret: ${JWT_SECRET:dev_secret_key_please_change_in_production_min_256_bits}
     access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:86400}

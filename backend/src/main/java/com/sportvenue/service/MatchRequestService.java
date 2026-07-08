@@ -31,6 +31,27 @@ public interface MatchRequestService {
     Page<MatchResponse> getActiveMatches(Pageable pageable);
 
     /**
+     * Lấy danh sách các kèo ghép đang mở (OPEN), lọc theo khu vực/thành phố (khớp gần đúng
+     * với địa chỉ sân hoặc tổ hợp sân). Truyền {@code null} để không lọc theo khu vực.
+     *
+     * @param pageable thông tin phân trang
+     * @param location từ khoá khu vực/thành phố (vd "Đà Nẵng", "Quận 9"), có thể null
+     * @return Page<MatchResponse> danh sách kèo ghép phân trang
+     */
+    Page<MatchResponse> getActiveMatches(Pageable pageable, String location);
+
+    /**
+     * Lấy danh sách các kèo ghép đang mở (OPEN), lọc theo khu vực và/hoặc môn thể thao.
+     * Truyền {@code null} cho tham số nào không cần lọc.
+     *
+     * @param pageable thông tin phân trang
+     * @param location từ khoá khu vực/thành phố (vd "Đà Nẵng", "Quận 9"), có thể null
+     * @param sportTypeId ID môn thể thao muốn lọc, có thể null
+     * @return Page<MatchResponse> danh sách kèo ghép phân trang
+     */
+    Page<MatchResponse> getActiveMatches(Pageable pageable, String location, Integer sportTypeId);
+
+    /**
      * Gửi yêu cầu xin tham gia vào một kèo ghép.
      *
      * @param matchId ID của kèo ghép muốn tham gia

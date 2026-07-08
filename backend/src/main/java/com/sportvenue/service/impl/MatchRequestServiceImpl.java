@@ -20,6 +20,7 @@ import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.JoinRequestRepository;
 import com.sportvenue.repository.MatchRequestRepository;
+import com.sportvenue.repository.specification.MatchRequestSpecification;
 import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.StadiumComplexRepository;
@@ -364,6 +365,31 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                 Arrays.asList(MatchStatus.OPEN, MatchStatus.FULL),
                 nowDate,
                 nowTime,
+                pageable
+        );
+        return matches.map(this::mapToResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<MatchResponse> getActiveMatches(Pageable pageable, String location) {
+        return getActiveMatches(pageable, location, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<MatchResponse> getActiveMatches(Pageable pageable, String location, Integer sportTypeId) {
+        log.info("Retrieving active match requests with pagination, location={}, sportTypeId={} and future dates: {}",
+                location, sportTypeId, pageable);
+        LocalDate nowDate = LocalDate.now();
+        LocalTime nowTime = LocalTime.now();
+        Page<MatchRequest> matches = matchRequestRepository.findAll(
+                MatchRequestSpecification.withDynamicFilter(
+                        Arrays.asList(MatchStatus.OPEN, MatchStatus.FULL),
+                        nowDate,
+                        nowTime,
+                        location,
+                        sportTypeId),
                 pageable
         );
         return matches.map(this::mapToResponse);

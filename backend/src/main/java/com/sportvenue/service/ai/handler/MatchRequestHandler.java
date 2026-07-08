@@ -1,0 +1,134 @@
+package com.sportvenue.service.ai.handler;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.sportvenue.dto.response.AiChatTurnResponse;
+import com.sportvenue.dto.response.MatchResponse;
+import com.sportvenue.entity.SportType;
+import com.sportvenue.repository.SportTypeRepository;
+import com.sportvenue.service.MatchRequestService;
+import com.sportvenue.util.location.VietnamLocationResolver;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+
+/**
+ * Xử lý intent "find_match" — port từ CustomerAgentToolProvider.handleFindMatchRequests
+ * (nhánh ai-chatting cũ).
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class MatchRequestHandler {
+
+    private final MatchRequestService matchRequestService;
+    private final SportTypeRepository sportTypeRepository;
+    private final VietnamLocationResolver locationResolver;
+
+    /** Mặc định 5, chặn trần 10 — card UI trong khung chat không bị quá dài. */
+    private static final int DEFAULT_SIZE = 5;
+    private static final int MAX_SIZE = 10;
+
+    public AiChatTurnResponse handle(JsonNode args, String llmMessage) {
+        int page = args.hasNonNull("page") ? args.get("page").asInt() : 0;
+        int size = args.hasNonNull("size") ? Math.min(args.get("size").asInt(), MAX_SIZE) : DEFAULT_SIZE;
+
+        String location = null;
+        if (args.hasNonNull("location")) {
+            String rawLocation = args.get("location").asText();
+            VietnamLocationResolver.LocationMatch match = locationResolver.deriveFromAddress(rawLocation);
+            if (match.district() != null) {
+                location = match.district();
+            } else if (match.province() != null) {
+                location = match.province();
+            } else {
+                location = rawLocation;
+            }
+        }
+
+        Integer sportTypeId = null;
+        if (args.hasNonNull("sportName")) {
+            String rawSportName = args.get("sportName").asText();
+            sportTypeId = resolveSportTypeId(rawSportName);
+            if (sportTypeId == null) {
+                List<String> supportedSports = sportTypeRepository.findAll().stream()
+                        .map(SportType::getSportName)
+                        .toList();
+                return AiChatTurnResponse.builder()
+                        .message("Không tìm thấy môn thể thao \"" + rawSportName + "\" trong hệ thống. Các môn hiện có: "
+                                + String.join(", ", supportedSports) + ".")
+                        .intent("find_match")
+                        .build();
+            }
+        }
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<MatchResponse> matches = matchRequestService.getActiveMatches(pageable, location, sportTypeId);
+
+        if (matches.isEmpty()) {
+            return AiChatTurnResponse.builder()
+                    .message("Chưa tìm thấy kèo ghép nào phù hợp. Bạn có thể thử đổi khu vực hoặc môn thể thao.")
+                    .intent("find_match")
+                    .matches(List.of())
+                    .build();
+        }
+
+        return AiChatTurnResponse.builder()
+                .message(llmMessage)
+                .intent("find_match")
+                .matches(matches.getContent())
+                .build();
+    }
+
+    /** So khớp không phân biệt dấu tiếng Việt — dùng chung alias với StadiumSearchHandler. */
+    private Integer resolveSportTypeId(String sportName) {
+        if (sportName == null || sportName.isBlank()) {
+            return null;
+        }
+        List<SportType> sportTypes = sportTypeRepository.findAll();
+        String searchKey = locationResolver.stripDiacritics(sportName).toLowerCase().trim();
+
+        for (SportType st : sportTypes) {
+            if (locationResolver.stripDiacritics(st.getSportName()).toLowerCase().equals(searchKey) ||
+                    st.getSportCode().toLowerCase().equals(searchKey) ||
+                    (st.getNameEn() != null && st.getNameEn().toLowerCase().equals(searchKey))) {
+                return st.getSportTypeId();
+            }
+        }
+        if (searchKey.contains("bong da") || searchKey.contains("da bong") || searchKey.contains("da banh")
+                || searchKey.contains("football") || searchKey.contains("soccer") || searchKey.contains("futsal")) {
+            return findSportTypeByCode(sportTypes, "FOOTBALL");
+        }
+        if (searchKey.contains("cau long") || searchKey.contains("badminton")) {
+            return findSportTypeByCode(sportTypes, "BADMINTON");
+        }
+        if (searchKey.contains("bong ro") || searchKey.contains("basketball")) {
+            return findSportTypeByCode(sportTypes, "BASKETBALL");
+        }
+        if (searchKey.contains("bong chuyen") || searchKey.contains("volleyball")) {
+            return findSportTypeByCode(sportTypes, "VOLLEYBALL");
+        }
+        if (searchKey.contains("tennis") || searchKey.contains("quan vot")) {
+            return findSportTypeByCode(sportTypes, "TENNIS");
+        }
+        if (searchKey.contains("pickleball") || searchKey.contains("pickle ball")) {
+            return findSportTypeByCode(sportTypes, "PICKLEBALL");
+        }
+        if (searchKey.contains("bong ban") || searchKey.contains("table tennis") || searchKey.contains("ping pong")) {
+            return findSportTypeByCode(sportTypes, "TABLE_TENNIS");
+        }
+        return null;
+    }
+
+    private Integer findSportTypeByCode(List<SportType> list, String code) {
+        return list.stream()
+                .filter(st -> st.getSportCode().equalsIgnoreCase(code))
+                .map(SportType::getSportTypeId)
+                .findFirst()
+                .orElse(null);
+    }
+}

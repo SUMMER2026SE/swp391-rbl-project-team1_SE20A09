@@ -53,6 +53,10 @@ public class SecurityConfig {
             // UC-CUS-02: VNPay redirect về /api/v1/payments/vnpay-return — public vì
             // VNPay gọi browser redirect tới đây (không có Bearer token).
             "/api/v1/payments/vnpay-return",
+            // AI chat: tool chỉ đọc dữ liệu public (tìm sân/giờ trống/kèo ghép) — guest dùng được
+            // như tìm kiếm thường. JwtAuthenticationFilter vẫn set UserPrincipal nếu request có
+            // Bearer token hợp lệ, nên user đã đăng nhập vẫn được nhận diện trong controller.
+            "/api/v1/ai/chat",
             "/actuator/health",
             "/actuator/info",
             "/swagger-ui.html",
