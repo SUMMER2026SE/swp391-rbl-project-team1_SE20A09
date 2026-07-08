@@ -20,10 +20,13 @@ import {
   Send,
   CheckCircle2,
   Clock,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { get, post } from "@/lib/api";
 import { toast } from "sonner";
 import { useComplaintWebSocket, type ComplaintChatEvent } from "@/hooks/useComplaintWebSocket";
+import type { PageResponse } from "@/types/common";
 
 type ResponseItem = {
   from: string;
@@ -62,13 +65,21 @@ function AdminComplaintsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
 
   const fetchComplaints = useCallback(async () => {
     try {
-      const data = await get<{ content: Complaint[] }>("/admin/complaints");
+      setIsLoading(true);
+      const data = await get<PageResponse<Complaint>>(
+        `/admin/complaints?page=${page}&size=20`
+      );
       const list = data.content;
       if (Array.isArray(list)) {
         setComplaints(list);
+        setTotalPages(data.totalPages);
+        setTotalElements(data.totalElements);
         setError(null);
         setSelectedComplaint(prev => {
           if (prev) {
@@ -82,7 +93,7 @@ function AdminComplaintsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     fetchComplaints();
@@ -169,7 +180,7 @@ function AdminComplaintsPage() {
     }
   };
 
-  const totalCount = complaints.length;
+  const totalCount = totalElements;
   const openCount = complaints.filter(c => c.status === "open").length;
   const progressCount = complaints.filter(c => c.status === "in_progress").length;
   const resolvedCount = complaints.filter(c => c.status === "resolved").length;
@@ -315,6 +326,33 @@ function AdminComplaintsPage() {
                 </Card>
               );
             })
+          )}
+          {totalPages > 1 && (
+            <div className="sticky bottom-0 flex items-center justify-center gap-3 rounded-lg border bg-card p-3 shadow-sm">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setPage(current => Math.max(0, current - 1))}
+                disabled={page === 0 || isLoading}
+                aria-label="Trang khiếu nại trước"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs font-medium text-muted-foreground">
+                Trang {page + 1} / {totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
+                disabled={page >= totalPages - 1 || isLoading}
+                aria-label="Trang khiếu nại sau"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           )}
         </div>
 

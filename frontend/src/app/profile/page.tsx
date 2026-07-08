@@ -103,7 +103,6 @@ function UserProfilePage() {
   const [profile, setProfile] = useState<UserProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [reviews, setReviews] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState("info");
 
   const [isChangingPassword, setIsChangingPassword] = useState(false);
@@ -316,27 +315,6 @@ function UserProfilePage() {
       }
     }
   }, []);
-
-  useEffect(() => {
-    const fetchReviews = async () => {
-      try {
-        if (!profile) return;
-        const endpoint = profile.roleName === 'Owner' ? '/owner/reviews' : '/reviews/me';
-        // Backend GET /api/v1/reviews/me trả về Page<ReviewResponse>,
-        // unwrap `.content`. Nếu response là mảng phẳng thì fallback raw data.
-        const data: any = await get<any>(endpoint);
-        const list = Array.isArray(data) ? data : (data?.content ?? []);
-        setReviews(list);
-      } catch (e) {
-        // Silent fallback — review fetch failure should not block profile rendering
-        console.error("Failed to load reviews", e);
-      }
-    };
-
-    if (profile) {
-      fetchReviews();
-    }
-  }, [profile]);
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {

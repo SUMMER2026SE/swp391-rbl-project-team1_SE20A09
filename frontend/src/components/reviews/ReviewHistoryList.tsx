@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { get } from "@/lib/api";
-import { Star, Loader2, MessageSquare } from "lucide-react";
+import { Star, Loader2, MessageSquare, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 interface ReviewResponse {
   reviewId: number;
@@ -29,13 +30,19 @@ export function ReviewHistoryList() {
   const [reviews, setReviews] = useState<ReviewResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   useEffect(() => {
     const fetchReviews = async () => {
       try {
         setLoading(true);
-        const data = await get<PageResponse<ReviewResponse>>("/reviews/me?page=0&size=50&sort=createdAt,desc");
+        const data = await get<PageResponse<ReviewResponse>>(
+          `/reviews/me?page=${page}&size=10&sort=createdAt,desc`
+        );
         setReviews(data.content);
+        setTotalPages(data.totalPages);
+        setError(null);
       } catch (err: any) {
         setError(err.message || "Không thể tải danh sách đánh giá");
       } finally {
@@ -43,7 +50,7 @@ export function ReviewHistoryList() {
       }
     };
     fetchReviews();
-  }, []);
+  }, [page]);
 
   if (loading) {
     return (
@@ -108,6 +115,33 @@ export function ReviewHistoryList() {
           </CardContent>
         </Card>
       ))}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => setPage(current => Math.max(0, current - 1))}
+            disabled={page === 0 || loading}
+            aria-label="Trang đánh giá trước"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm font-medium text-slate-600">
+            Trang {page + 1} / {totalPages}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
+            disabled={page >= totalPages - 1 || loading}
+            aria-label="Trang đánh giá sau"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

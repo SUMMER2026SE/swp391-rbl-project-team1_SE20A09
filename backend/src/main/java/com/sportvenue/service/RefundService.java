@@ -3,8 +3,10 @@ package com.sportvenue.service;
 import com.sportvenue.dto.request.RefundRequest;
 import com.sportvenue.dto.response.OwnerBookingResponse;
 import com.sportvenue.dto.response.RefundResponse;
+import com.sportvenue.entity.enums.BookingStatus;
 
-import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface RefundService {
     
@@ -37,10 +39,13 @@ public interface RefundService {
     RefundResponse getRefundResponse(Integer bookingId, String ownerEmail);
 
     /**
-     * Lấy toàn bộ danh sách đặt sân của Owner để hiển thị trên Dashboard.
+     * Lấy danh sách đặt sân có phân trang của Owner.
      *
      * @param ownerEmail Email của Owner đang thực hiện thao tác
-     * @return Danh sách DTO chứa thông tin đặt sân
+     * @param status trạng thái cần lọc, null để lấy tất cả
+     * @param pageable thông tin phân trang
+     * @return Trang DTO chứa thông tin đặt sân
      */
-    List<OwnerBookingResponse> getOwnerBookings(String ownerEmail);
+    Page<OwnerBookingResponse> getOwnerBookings(
+            String ownerEmail, BookingStatus status, Pageable pageable);
 }

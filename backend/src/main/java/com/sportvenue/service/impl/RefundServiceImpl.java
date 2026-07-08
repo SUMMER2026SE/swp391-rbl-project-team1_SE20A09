@@ -29,6 +29,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -316,12 +318,16 @@ public class RefundServiceImpl implements RefundService {
 
     @Transactional(readOnly = true)
     @Override
-    public List<OwnerBookingResponse> getOwnerBookings(String ownerEmail) {
-        log.info("Fetching all bookings for owner: {}", ownerEmail);
+    public Page<OwnerBookingResponse> getOwnerBookings(
+            String ownerEmail, BookingStatus status, Pageable pageable) {
+        log.info("Fetching bookings for owner: {}, status: {}, page: {}",
+                ownerEmail, status, pageable.getPageNumber());
 
-        List<Booking> bookings = bookingRepository.findByStadiumOwnerUserEmailOrderByBookingDateDesc(ownerEmail);
+        Page<Booking> bookings = bookingRepository.findByOwnerEmailAndStatus(
+                ownerEmail, status, pageable);
 
-        List<Integer> bookingIds = bookings.stream().map(Booking::getBookingId).toList();
+        List<Integer> bookingIds = bookings.getContent().stream()
+                .map(Booking::getBookingId).toList();
         java.util.Map<Integer, BigDecimal> refundMap = new java.util.HashMap<>();
         if (!bookingIds.isEmpty()) {
             List<Payment> refundPayments = paymentRepository.findRefundPaymentsByBookingIds(bookingIds);
@@ -334,7 +340,7 @@ public class RefundServiceImpl implements RefundService {
             }
         }
 
-        return bookings.stream().map(b -> {
+        return bookings.map(b -> {
             String customerName = b.getUser().getFirstName() + " " + b.getUser().getLastName();
             OwnerBookingResponse.CustomerInfo customerInfo = OwnerBookingResponse.CustomerInfo.builder()
                     .name(customerName)
@@ -361,7 +367,7 @@ public class RefundServiceImpl implements RefundService {
                     .notes(b.getNote() != null ? b.getNote() : "")
                     .playTimeRaw(playTime(b).toString())
                     .build();
-        }).collect(java.util.stream.Collectors.toList());
+        });
     }
 
     @Getter
