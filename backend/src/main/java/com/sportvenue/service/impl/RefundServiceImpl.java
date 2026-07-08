@@ -16,6 +16,7 @@ import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.entity.enums.TransactionStatus;
 import com.sportvenue.exception.BadRequestException;
+import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.OwnerRepository;
@@ -232,7 +233,7 @@ public class RefundServiceImpl implements RefundService {
 
         // 3. Kiểm tra tính hợp lệ
         if (!booking.getUser().getUserId().equals(user.getUserId())) {
-            throw new BadRequestException("Bạn không có quyền xem trước hoàn tiền đơn đặt sân này");
+            throw new ForbiddenException("Bạn không có quyền xem trước hoàn tiền đơn đặt sân này");
         }
         if (booking.getBookingStatus() == BookingStatus.CANCELLED) {
             throw new BadRequestException("Đơn đặt sân này đã ở trạng thái Hủy (CANCELLED)");

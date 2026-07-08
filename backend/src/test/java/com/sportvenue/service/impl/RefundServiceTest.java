@@ -10,6 +10,7 @@ import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.dto.response.RefundResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -88,28 +89,41 @@ class RefundServiceTest {
     }
 
     @Test
-    @DisplayName("Should refund 100% of the deposit amount instead of the total price when cancelled >= 24 hours")
-    void Refund_DepositBooking_ShouldRefundCorrectPercentageOfDeposit() throws Exception {
-        Method method = RefundServiceImpl.class.getDeclaredMethod("calculateRefund", Booking.class, com.sportvenue.entity.Payment.class);
-        method.setAccessible(true);
-
-        Booking depositBooking = new Booking();
-        depositBooking.setTotalPrice(new java.math.BigDecimal("1000000"));
-        depositBooking.setReservationDate(java.time.LocalDate.now().plusDays(2)); // > 24 hours
+    @DisplayName("previewRefundForCustomer: Should refund 100% of the deposit amount instead of total price when cancelled >= 24 hours")
+    void previewRefundForCustomer_DepositBooking_ShouldRefundCorrectPercentageOfDeposit() {
+        // Arrange
+        com.sportvenue.entity.User customer = com.sportvenue.entity.User.builder()
+                .userId(1).email("customer@example.com").build();
+        booking.setUser(customer);
+        booking.setTotalPrice(new java.math.BigDecimal("1000000"));
+        booking.setReservationDate(java.time.LocalDate.now().plusDays(2)); // > 24h
+        booking.setPaymentStatus(PaymentStatus.DEPOSITED);
+        
+        com.sportvenue.entity.Stadium stadium = new com.sportvenue.entity.Stadium();
+        stadium.setStadiumName("Test Stadium");
+        booking.setStadium(stadium);
         
         TimeSlot ts = new TimeSlot();
         ts.setStartTime(java.time.LocalTime.now());
-        depositBooking.setSlot(ts);
+        booking.setSlot(ts);
 
-        com.sportvenue.entity.Payment originalPayment = new com.sportvenue.entity.Payment();
-        originalPayment.setAmount(new java.math.BigDecimal("300000")); // 30% deposit
+        com.sportvenue.entity.Payment depositPayment = com.sportvenue.entity.Payment.builder()
+                .paymentId(1).booking(booking).amount(new java.math.BigDecimal("300000")) // 30% deposit
+                .transactionCode("TXN123").paymentStatus(com.sportvenue.entity.enums.TransactionStatus.SUCCESS).build();
 
-        Object result = method.invoke(refundService, depositBooking, originalPayment);
-        
-        Method getAmountMethod = result.getClass().getDeclaredMethod("getAmount");
-        getAmountMethod.setAccessible(true);
-        java.math.BigDecimal refundAmount = (java.math.BigDecimal) getAmountMethod.invoke(result);
+        org.mockito.Mockito.lenient().when(userRepository.findByEmail("customer@example.com"))
+                .thenReturn(java.util.Optional.of(customer));
+        org.mockito.Mockito.lenient().when(bookingRepository.findById(1))
+                .thenReturn(java.util.Optional.of(booking));
+        org.mockito.Mockito.lenient().when(paymentRepository.findSuccessPaymentsByBookingId(1))
+                .thenReturn(java.util.List.of(depositPayment));
 
-        assertEquals(0, new java.math.BigDecimal("300000").compareTo(refundAmount), "Refund amount should be exactly the deposit amount (300000)");
+        // Act
+        RefundResponse response = refundService.previewRefundForCustomer(1, "customer@example.com");
+
+        // Assert
+        assertEquals(100, response.getRefundPercentage());
+        assertEquals(0, new java.math.BigDecimal("300000").compareTo(response.getRefundAmount()), 
+                "Refund amount should be exactly the deposit amount (300000)");
     }
 }
