@@ -60,4 +60,5 @@ CLAUDE.md
 .claude/settings.json
 .gemini/settings.json
 *.txt
+!ai-eval/requirements.txt
 node_modules/
