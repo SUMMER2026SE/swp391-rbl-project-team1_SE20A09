@@ -10,7 +10,7 @@ export type BookingHistoryItem = {
   time: string;
   location: string;
   price: number;
-  status: "pending" | "confirmed" | "completed" | "cancelled";
+  status: "pending" | "pending_payment" | "confirmed" | "completed" | "cancelled";
 };
 
 /** Cấu trúc PageResponse trả về từ backend */
@@ -226,7 +226,7 @@ export async function getSlotsByDate(
 // ── UC-CUS-01: Weekly schedule ──────────────────────────────────────────────
 
 /** Trạng thái của một slot trong weekly grid. */
-export type WeeklySlotStatus = "AVAILABLE" | "BOOKED" | "PAST" | "OWNER_CLOSED" | "MAINTENANCE";
+export type WeeklySlotStatus = "AVAILABLE" | "HELD" | "BOOKED" | "PAST" | "OWNER_CLOSED" | "MAINTENANCE";
 
 /** Một khung giờ của sân trong weekly grid — kèm trạng thái cho một ngày cụ thể. */
 export type WeeklySlotItem = {
@@ -237,6 +237,8 @@ export type WeeklySlotItem = {
   endTime: string;
   price: number;
   status: WeeklySlotStatus;
+  /** ISO local date-time; present while payment temporarily holds the slot. */
+  heldUntil?: string | null;
 };
 
 /** Một ngày trong weekly grid — kèm tên thứ tiếng Việt. */

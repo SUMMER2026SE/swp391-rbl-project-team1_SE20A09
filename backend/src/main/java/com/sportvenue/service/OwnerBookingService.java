@@ -15,6 +15,7 @@ import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.TimeSlotRepository;
+import com.sportvenue.util.StadiumUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -187,7 +188,7 @@ public class OwnerBookingService {
                 .stadium(BookingResponse.StadiumInfo.builder()
                         .stadiumId(stadium.getStadiumId())
                         .stadiumName(stadium.getStadiumName())
-                        .address(stadium.getAddress())
+                        .address(StadiumUtils.resolveAddress(stadium))
                         .sportType(stadium.getSportType().getSportName())
                         .build())
                 .slot(BookingResponse.SlotInfo.builder()

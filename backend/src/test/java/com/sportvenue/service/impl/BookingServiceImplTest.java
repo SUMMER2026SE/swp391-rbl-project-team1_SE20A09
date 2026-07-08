@@ -464,6 +464,35 @@ class BookingServiceImplTest {
     }
 
     @Test
+    @DisplayName("getWeeklySlots: PENDING_PAYMENT hiển thị HELD cùng hạn giữ chỗ")
+    void getWeeklySlots_pendingPaymentDisplaysHeld() {
+        LocalDate reservationDate = futureDate();
+        LocalDateTime heldUntil = LocalDateTime.now().plusMinutes(5).withNano(0);
+        Booking heldBooking = Booking.builder()
+                .bookingId(50)
+                .stadium(stadium)
+                .slot(slot)
+                .user(customer)
+                .reservationDate(reservationDate)
+                .bookingStatus(BookingStatus.PENDING_PAYMENT)
+                .expiredAt(heldUntil)
+                .build();
+
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(timeSlotRepository.findByStadiumStadiumIdAndSlotStatus(10, SlotStatus.AVAILABLE))
+                .thenReturn(List.of(slot));
+        when(bookingRepository.findWeeklyBookings(eq(10), any(LocalDate.class), any(LocalDate.class), anyList()))
+                .thenReturn(List.of(heldBooking));
+
+        var result = bookingService.getWeeklySlots(10, reservationDate);
+        int dayIndex = reservationDate.getDayOfWeek().getValue() - 1;
+        var heldSlot = result.getDays().get(dayIndex).getSlots().get(0);
+
+        assertEquals("HELD", heldSlot.getStatus());
+        assertEquals(heldUntil.toString(), heldSlot.getHeldUntil());
+    }
+
+    @Test
     @DisplayName("getWeeklySlots: sân đang bảo trì → slot tương lai được đánh dấu MAINTENANCE")
     void getWeeklySlots_stadiumUnderMaintenance_marksFutureSlotsAsMaintenance() {
         LocalDate weekStart = LocalDate.now().plusWeeks(2);
