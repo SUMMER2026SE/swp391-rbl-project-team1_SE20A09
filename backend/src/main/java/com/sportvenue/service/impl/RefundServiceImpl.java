@@ -248,10 +248,12 @@ public class RefundServiceImpl implements RefundService {
         // 3. Kiểm tra tính hợp lệ và quyền sở hữu
         validateOwnershipAndStatus(booking, owner);
 
-        // 4. Áp dụng chính sách hoàn tiền
+        // 4. Tìm giao dịch thanh toán gốc (SUCCESS, amount > 0, mới nhất)
         Payment originalPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
                 .stream().findFirst()
-                .orElse(null);
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán ban đầu"));
+
+        // 5. Áp dụng chính sách hoàn tiền
         RefundCalculation calculation = calculateRefund(booking, originalPayment);
 
         return RefundResponse.builder()
@@ -296,10 +298,12 @@ public class RefundServiceImpl implements RefundService {
             throw new BadRequestException("Chỉ có thể hoàn tiền cho những đơn đặt sân đã thanh toán (PAID hoặc DEPOSITED)");
         }
 
-        // 4. Áp dụng chính sách hoàn tiền
+        // 4. Tìm giao dịch thanh toán gốc
         Payment originalPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
                 .stream().findFirst()
-                .orElse(null);
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán ban đầu"));
+
+        // 5. Áp dụng chính sách hoàn tiền
         RefundCalculation calculation = calculateRefund(booking, originalPayment);
 
         return RefundResponse.builder()
@@ -316,7 +320,6 @@ public class RefundServiceImpl implements RefundService {
                 .reason("Xem trước hoàn tiền")
                 .build();
     }
-
 
     @Transactional(readOnly = true)
     @Override
