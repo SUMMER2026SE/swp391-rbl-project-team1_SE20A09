@@ -49,6 +49,7 @@ export interface StadiumResponse {
   averageRating: number;
   totalReviews?: number;
   imageUrls: string[];
+  firstImageUrl?: string | null;
   approvedStatus: string;
   nodeType?: 'FACILITY' | 'COURT' | null;
   complexId?: number | null;

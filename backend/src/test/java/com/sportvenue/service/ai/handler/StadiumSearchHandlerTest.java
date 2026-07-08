@@ -221,12 +221,22 @@ class StadiumSearchHandlerTest {
                 .content(List.of()).pageNumber(0).pageSize(5).totalElements(0).totalPages(0).last(true).build();
         when(publicStadiumService.searchStadiums(any())).thenReturn(pageResponse);
 
-        handler.handle(json("{\"sortBy\":\"rating\"}"), "...", "s:test");
+        // keyword bat buoc phai co de khong bi chan boi guardrail "khong co sport/district/keyword"
+        handler.handle(json("{\"keyword\":\"Cẩm Lệ\",\"sortBy\":\"rating\"}"), "...", "s:test");
 
         ArgumentCaptor<StadiumSearchRequest> captor = ArgumentCaptor.forClass(StadiumSearchRequest.class);
         verify(publicStadiumService).searchStadiums(captor.capture());
         assertEquals("averageRating", captor.getValue().getSortBy());
         assertEquals("DESC", captor.getValue().getSortDirection());
+    }
+
+    @Test
+    void noSportDistrictOrKeyword_returnsNeedMoreInfo_withoutCallingSearch() throws Exception {
+        AiChatTurnResponse response = handler.handle(json("{}"), "...", "s:test");
+
+        assertThat(response.getIntent()).isEqualTo("need_more_info");
+        assertThat(response.getStadiums()).isNull();
+        org.mockito.Mockito.verifyNoInteractions(publicStadiumService);
     }
 
     @Test

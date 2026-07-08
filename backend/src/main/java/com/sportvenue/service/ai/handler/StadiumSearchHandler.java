@@ -60,6 +60,18 @@ public class StadiumSearchHandler {
     }
 
     public AiChatTurnResponse handle(JsonNode args, String llmMessage, String conversationKey) {
+        // Guardrail cứng bằng code — không chỉ dựa vào system prompt: LLM đôi khi bỏ qua chỉ
+        // dẫn "phải hỏi lại khi câu hỏi quá chung chung" (quan sát thực tế: dispatch
+        // search_stadiums dù không có sportName/district/keyword nào, dẫn tới search rỗng bộ
+        // lọc, trả kết quả ngẫu nhiên khắp cả nước). Chặn cứng ở đây đảm bảo hành vi đúng dù
+        // LLM có tuân thủ prompt hay không.
+        if (!args.hasNonNull("sportName") && !args.hasNonNull("district") && !args.hasNonNull("keyword")) {
+            return AiChatTurnResponse.builder()
+                    .message("Bạn muốn tìm sân ở khu vực nào và chơi môn thể thao gì? Cho mình biết cụ thể hơn để tìm chính xác nhé.")
+                    .intent("need_more_info")
+                    .build();
+        }
+
         StadiumSearchRequest.StadiumSearchRequestBuilder builder = StadiumSearchRequest.builder();
 
         if (args.hasNonNull("keyword")) {

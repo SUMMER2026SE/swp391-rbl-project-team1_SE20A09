@@ -69,7 +69,9 @@ public class AiChatServiceImpl implements AiChatService {
         ExtractedIntentResult intentResult;
         try {
             GroqClient.GroqResult result = groqClient.chatJson(model, systemPrompt, history, request.getMessage());
+            log.debug("Groq raw JSON cho message '{}': {}", request.getMessage(), result.text());
             intentResult = objectMapper.readValue(result.text(), ExtractedIntentResult.class);
+            log.info("Intent nhận diện: '{}' -> '{}'", request.getMessage(), intentResult.getIntent());
         } catch (LlmGatewayException e) {
             log.error("Lỗi gọi Groq gateway (kind={}): {}", e.getKind(), e.getMessage());
             return AiChatTurnResponse.messageOnly(FALLBACK_MESSAGE, "unknown");
