@@ -3,6 +3,7 @@ package com.sportvenue.controller;
 import com.sportvenue.dto.request.RefundRequest;
 import com.sportvenue.dto.response.OwnerBookingResponse;
 import com.sportvenue.dto.response.RefundResponse;
+import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.security.RequireApprovedOwner;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.IdempotencyService;
@@ -23,9 +24,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import com.sportvenue.entity.enums.RefundReasonType;
 
-import java.util.List;
 import java.util.Optional;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 
 @RestController
 @RequestMapping("/api/v1/owner/bookings")
@@ -40,13 +44,18 @@ public class RefundController {
     @GetMapping
     @PreAuthorize("hasRole('Owner')")
     @Operation(
-            summary = "Lấy danh sách tất cả đơn đặt sân của chủ sân (Owner)",
-            description = "Yêu cầu tài khoản đăng nhập có vai trò Owner. Trả về toàn bộ danh sách đơn đặt sân để hiển thị trên Dashboard."
+            summary = "Lấy danh sách đơn đặt sân có phân trang của Owner",
+            description = "Hỗ trợ lọc trạng thái và phân trang để tránh tải toàn bộ lịch sử."
     )
-    public ResponseEntity<List<OwnerBookingResponse>> listOwnerBookings(
-            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+    public ResponseEntity<Page<OwnerBookingResponse>> listOwnerBookings(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestParam(required = false) BookingStatus status,
+            @org.springdoc.core.annotations.ParameterObject
+            @PageableDefault(size = 20, sort = "bookingDate",
+                    direction = Sort.Direction.DESC) Pageable pageable) {
 
-        List<OwnerBookingResponse> response = refundService.getOwnerBookings(userPrincipal.getUsername());
+        Page<OwnerBookingResponse> response = refundService.getOwnerBookings(
+                userPrincipal.getUsername(), status, pageable);
         return ResponseEntity.ok(response);
     }
 

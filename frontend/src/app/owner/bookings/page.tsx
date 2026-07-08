@@ -25,7 +25,9 @@ import {
   User, 
   Calendar,
   AlertCircle,
-  HelpCircle
+  HelpCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   Dialog,
@@ -38,6 +40,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { get, post } from "@/lib/api";
+import type { PageResponse } from "@/types/common";
 
 interface BookingItem {
   id: number;
@@ -80,24 +83,52 @@ function BookingManagementPage() {
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState("all");
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
 
   // Fetch danh sách đặt sân thực tế từ Backend
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await get<BookingItem[]>("/owner/bookings");
-      setBookingList(data);
+      const query = new URLSearchParams({
+        page: String(page),
+        size: "20",
+      });
+      if (activeTab !== "all") {
+        query.set("status", activeTab.toUpperCase());
+      }
+      const data = await get<any>(
+        `/owner/bookings?${query.toString()}`
+      );
+
+      // Defensive: hỗ trợ cả mảng phẳng (API cũ) và PageResponse (API mới),
+      // đồng thời không đưa dữ liệu sai kiểu vào state.
+      const list: BookingItem[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.content)
+          ? data.content
+          : [];
+      setBookingList(list);
+      setTotalPages(data?.totalPages ?? 0);
+      setTotalElements(data?.totalElements ?? list.length);
     } catch (error: any) {
       console.error("Error fetching bookings:", error);
       toast.error("Không thể tải danh sách đặt sân từ máy chủ: " + error.message);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [activeTab, page]);
 
   useEffect(() => {
     fetchBookings();
-  }, []);
+  }, [fetchBookings]);
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    setPage(0);
+    setExpandedRow(null);
+  };
 
   // Hàm tính toán dự phóng hoàn tiền ở Frontend (Hiển thị dự báo nhanh)
   const calculateExpectedRefund = (playTimeStr: string, price: number) => {
@@ -156,8 +187,10 @@ function BookingManagementPage() {
   };
 
   const filterBookings = (status?: string) => {
-    if (!status) return bookingList;
-    return bookingList.filter((b) => b.status.toLowerCase() === status.toLowerCase());
+    // Defensive: không bao giờ gọi .filter trên null/undefined/object.
+    const list = Array.isArray(bookingList) ? bookingList : [];
+    if (!status) return list;
+    return list.filter((b) => b.status && b.status.toLowerCase() === status.toLowerCase());
   };
 
   // Load preview data mỗi khi mở modal hoặc thay đổi loại nguyên nhân hủy
@@ -522,23 +555,23 @@ function BookingManagementPage() {
         </div>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b pb-2">
             <TabsList className="bg-muted/70 p-1 rounded-lg w-full lg:w-auto overflow-x-auto flex-nowrap whitespace-nowrap justify-start">
               <TabsTrigger value="all" className="font-semibold text-sm">
-                Tất cả ({bookingList.length})
+                Tất cả
               </TabsTrigger>
               <TabsTrigger value="pending" className="font-semibold text-sm">
-                Chờ duyệt ({filterBookings("pending").length})
+                Chờ duyệt
               </TabsTrigger>
               <TabsTrigger value="confirmed" className="font-semibold text-sm">
-                Đã xác nhận ({filterBookings("confirmed").length})
+                Đã xác nhận
               </TabsTrigger>
               <TabsTrigger value="completed" className="font-semibold text-sm">
-                Hoàn thành ({filterBookings("completed").length})
+                Hoàn thành
               </TabsTrigger>
               <TabsTrigger value="cancelled" className="font-semibold text-sm">
-                Đã hủy ({filterBookings("cancelled").length})
+                Đã hủy
               </TabsTrigger>
             </TabsList>
 
@@ -666,6 +699,31 @@ function BookingManagementPage() {
               </div>
             </CardContent>
           </Card>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(current => Math.max(0, current - 1))}
+                disabled={page === 0 || isLoading}
+              >
+                <ChevronLeft className="mr-1 h-4 w-4" /> Trang trước
+              </Button>
+              <span className="text-sm font-medium text-muted-foreground">
+                Trang {page + 1} / {totalPages} · {totalElements} đơn
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
+                disabled={page >= totalPages - 1 || isLoading}
+              >
+                Trang sau <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </Tabs>
       </div>
 

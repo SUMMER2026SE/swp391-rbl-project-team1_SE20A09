@@ -13,8 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertCircle, MessageSquare, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
+import { AlertCircle, MessageSquare, ChevronDown, ChevronUp, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { get, post } from "@/lib/api";
+import type { PageResponse } from "@/types/common";
 import { toast } from "sonner";
 import { useComplaintWebSocket, type ComplaintChatEvent } from "@/hooks/useComplaintWebSocket";
 
@@ -47,6 +48,8 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
   const [resolveText, setResolveText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showDetails, setShowDetails] = useState(true);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   useEffect(() => {
     if (selectedComplaint) {
@@ -77,16 +80,26 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
   const fetchComplaints = useCallback(async () => {
     try {
       const endpoint = isOwner ? "/owner/complaints" : "/complaints";
-      const data = await get<Complaint[] | { content: Complaint[] }>(endpoint);
-      const list = Array.isArray(data) ? data : data?.content;
+      const data = await get<PageResponse<Complaint>>(
+        `${endpoint}?page=${page}&size=10`
+      );
+      const list = data.content;
       if (list && Array.isArray(list)) {
         setComplaints(list);
+        setTotalPages(data.totalPages);
+        setSelectedComplaint(current => current
+          ? list.find(item => item.complaintId === current.complaintId) ?? null
+          : null);
       } else {
         setComplaints([]);
       }
     } catch (error) {
       console.error("Failed to load complaints", error);
     }
+  }, [isOwner, page]);
+
+  useEffect(() => {
+    setPage(0);
   }, [isOwner]);
 
   useEffect(() => {
@@ -207,6 +220,30 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
             <p>{isOwner ? "Bạn chưa có khiếu nại nào từ khách hàng" : "Bạn chưa tạo khiếu nại nào"}</p>
           </CardContent>
         </Card>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setPage(current => Math.max(0, current - 1))}
+            disabled={page === 0}
+          >
+            <ChevronLeft className="mr-1 h-4 w-4" /> Trang trước
+          </Button>
+          <span className="text-sm text-muted-foreground">Trang {page + 1} / {totalPages}</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
+            disabled={page >= totalPages - 1}
+          >
+            Trang sau <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
+        </div>
       )}
 
       {/* Complaint Detail Dialog */}
