@@ -70,6 +70,12 @@ class OwnerRegistrationServiceImplTest {
     @Mock
     private AdminDashboardService adminDashboardService;
 
+    @Mock
+    private com.sportvenue.service.EmailService emailService;
+
+    @Mock
+    private com.sportvenue.util.AfterCommitExecutor afterCommitExecutor;
+
     @InjectMocks
     private OwnerRegistrationServiceImpl ownerRegistrationService;
 

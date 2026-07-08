@@ -54,6 +54,8 @@ public class StadiumServiceImpl implements StadiumService {
     private final com.sportvenue.repository.UserRepository userRepository;
     private final Environment env;
     private final StadiumComplexRepository stadiumComplexRepository;
+    private final EmailService emailService;
+    private final com.sportvenue.util.AfterCommitExecutor afterCommitExecutor;
 
     @Override
     @Transactional
@@ -292,6 +294,20 @@ public class StadiumServiceImpl implements StadiumService {
                 .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
         stadium.setApprovedStatus(ApprovedStatus.APPROVED);
         Stadium saved = stadiumRepository.save(stadium);
+        afterCommitExecutor.execute(() -> {
+            try {
+                String ownerName = saved.getOwner().getUser().getFirstName() + " " + saved.getOwner().getUser().getLastName();
+                emailService.sendStadiumApprovalResultEmail(
+                        saved.getOwner().getUser().getEmail(),
+                        ownerName,
+                        saved.getStadiumName(),
+                        true,
+                        null
+                );
+            } catch (Exception e) {
+                log.error("Failed to send stadium approval email for stadium {}", stadiumId, e);
+            }
+        });
         return stadiumMapper.toResponse(saved);
     }
 
@@ -303,6 +319,20 @@ public class StadiumServiceImpl implements StadiumService {
                 .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
         stadium.setApprovedStatus(ApprovedStatus.REJECTED);
         Stadium saved = stadiumRepository.save(stadium);
+        afterCommitExecutor.execute(() -> {
+            try {
+                String ownerName = saved.getOwner().getUser().getFirstName() + " " + saved.getOwner().getUser().getLastName();
+                emailService.sendStadiumApprovalResultEmail(
+                        saved.getOwner().getUser().getEmail(),
+                        ownerName,
+                        saved.getStadiumName(),
+                        false,
+                        "Hồ sơ không đáp ứng đủ yêu cầu hoặc vi phạm quy định." // Currently no explicit reason field in DB for stadiums
+                );
+            } catch (Exception e) {
+                log.error("Failed to send stadium rejection email for stadium {}", stadiumId, e);
+            }
+        });
         return stadiumMapper.toResponse(saved);
     }
 

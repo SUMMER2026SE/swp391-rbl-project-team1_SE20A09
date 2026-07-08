@@ -36,6 +36,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.sportvenue.util.AfterCommitExecutor;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
@@ -57,6 +58,7 @@ public class AuthServiceImpl implements AuthService {
     private final OtpService otpService;
     private final StringRedisTemplate redisTemplate;
     private final EmailService emailService;
+    private final AfterCommitExecutor afterCommitExecutor;
 
     @Value("${app.google.client-id:}")
     private String googleClientId;
@@ -112,6 +114,13 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
 
         String jwt = tokenProvider.generateTokenFromEmail(user.getEmail());
+        
+        if ("Customer".equals(user.getRole().getRoleName())) {
+            afterCommitExecutor.execute(() -> 
+                emailService.sendCustomerRegistrationSuccessEmail(user.getEmail(), user.getFullName())
+            );
+        }
+        
         return AuthResponse.builder()
                 .accessToken(jwt)
                 .user(mapToUserResponse(user))

@@ -475,6 +475,23 @@ public class BookingServiceImpl implements BookingService {
             } catch (Exception e) {
                 log.error("Failed to send cancellation email for booking {}", booking.getBookingId(), e);
             }
+            if ("Khách hàng".equals(cancelledBy)) {
+                try {
+                    String ownerName = booking.getStadium().getOwner().getUser().getFirstName() + " " + booking.getStadium().getOwner().getUser().getLastName();
+                    String ownerEmail = booking.getStadium().getOwner().getUser().getEmail();
+                    emailService.sendOwnerBookingCancelledEmail(
+                            ownerEmail,
+                            ownerName,
+                            booking.getBookingId(),
+                            booking.getStadium().getStadiumName(),
+                            booking.getReservationDate(),
+                            booking.getSlot().getStartTime(),
+                            reason
+                    );
+                } catch (Exception e) {
+                    log.error("Failed to send owner cancellation email for booking {}", booking.getBookingId(), e);
+                }
+            }
             try {
                 notificationService.publishNotificationEvent(
                         booking.getUser().getUserId(),

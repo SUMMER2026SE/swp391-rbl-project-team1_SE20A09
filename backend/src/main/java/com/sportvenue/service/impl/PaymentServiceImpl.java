@@ -249,6 +249,22 @@ public class PaymentServiceImpl implements PaymentService {
                     } catch (Exception e) {
                         log.error("Failed to publish payment notification for booking {}", finalBookingForCallback.getBookingId(), e);
                     }
+                    try {
+                        String ownerName = finalBookingForCallback.getStadium().getOwner().getUser().getFirstName() + " " + finalBookingForCallback.getStadium().getOwner().getUser().getLastName();
+                        String ownerEmail = finalBookingForCallback.getStadium().getOwner().getUser().getEmail();
+                        String customerName = finalBookingForCallback.getUser().getFirstName() + " " + finalBookingForCallback.getUser().getLastName();
+                        emailService.sendOwnerNewBookingEmail(
+                                ownerEmail,
+                                ownerName,
+                                finalBookingForCallback.getBookingId(),
+                                finalBookingForCallback.getStadium().getStadiumName(),
+                                finalBookingForCallback.getReservationDate(),
+                                finalBookingForCallback.getSlot().getStartTime(),
+                                customerName
+                        );
+                    } catch (Exception e) {
+                        log.error("Failed to send owner new booking email for booking {}", finalBookingForCallback.getBookingId(), e);
+                    }
                 });
             }
             log.info("VNPay thanh toán THÀNH CÔNG — txnRef={}, booking={}",
@@ -260,6 +276,21 @@ public class PaymentServiceImpl implements PaymentService {
             if (booking != null) {
                 // Giữ nguyên bookingStatus = PENDING — không confirm khi chưa trả tiền
                 bookingRepository.save(booking);
+                
+                final Booking finalBookingForCallback = booking;
+                afterCommitExecutor.execute(() -> {
+                    try {
+                        String customerName = finalBookingForCallback.getUser().getFirstName() + " " + finalBookingForCallback.getUser().getLastName();
+                        emailService.sendPaymentFailedEmail(
+                                finalBookingForCallback.getUser().getEmail(),
+                                customerName,
+                                finalBookingForCallback.getBookingId(),
+                                finalBookingForCallback.getStadium().getStadiumName()
+                        );
+                    } catch (Exception e) {
+                        log.error("Failed to send payment failed email for booking {}", finalBookingForCallback.getBookingId(), e);
+                    }
+                });
             }
             log.warn("VNPay thanh toán THẤT BẠI — txnRef={}, responseCode={}",
                     txnRef, responseCode);
