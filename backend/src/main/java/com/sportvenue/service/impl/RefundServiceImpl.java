@@ -25,6 +25,9 @@ import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.RefundService;
 import com.sportvenue.service.PaymentService;
+import com.sportvenue.service.EmailService;
+import com.sportvenue.service.NotificationService;
+import com.sportvenue.util.AfterCommitExecutor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +50,9 @@ public class RefundServiceImpl implements RefundService {
     private final OwnerRepository ownerRepository;
     private final PaymentService paymentService;
     private final TransactionTemplate transactionTemplate;
+    private final EmailService emailService;
+    private final NotificationService notificationService;
+    private final AfterCommitExecutor afterCommitExecutor;
 
     @Override
     public RefundResponse processRefund(Integer bookingId, RefundRequest request, String ownerEmail) {
@@ -63,6 +69,37 @@ public class RefundServiceImpl implements RefundService {
 
         Booking finalBooking = transactionTemplate
                 .execute(status -> bookingRepository.findById(bookingId).orElse(ctx.booking));
+
+        afterCommitExecutor.execute(() -> {
+            try {
+                emailService.sendRefundEmail(
+                        finalBooking.getUser().getEmail(),
+                        finalBooking.getUser().getFirstName() + " " + finalBooking.getUser().getLastName(),
+                        finalBooking.getStadium().getStadiumName(),
+                        finalBooking.getBookingId(),
+                        ctx.calculation.getAmount(),
+                        ctx.calculation.getPercentage(),
+                        finalBooking.getTotalPrice()
+                );
+            } catch (Exception e) {
+                log.error("Failed to send refund email for booking {}", finalBooking.getBookingId(), e);
+            }
+
+            try {
+                notificationService.publishNotificationEvent(
+                        finalBooking.getUser().getUserId(),
+                        "Hoàn tiền thành công",
+                        String.format("Đơn đặt sân #%d đã được hoàn tiền %s VNĐ.", 
+                                finalBooking.getBookingId(), 
+                                java.text.NumberFormat.getInstance(new java.util.Locale("vi", "VN")).format(ctx.calculation.getAmount())),
+                        com.sportvenue.entity.enums.NotificationType.PAYMENT,
+                        String.valueOf(finalBooking.getBookingId())
+                );
+            } catch (Exception e) {
+                log.error("Failed to publish refund notification for booking {}", finalBooking.getBookingId(), e);
+            }
+        });
+
         return buildRefundResponse(finalBooking, ctx.calculation, request.getReason());
     }
 

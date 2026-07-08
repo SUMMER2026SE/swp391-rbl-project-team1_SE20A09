@@ -39,6 +39,9 @@ import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.BookingService;
 import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.PaymentService;
+import com.sportvenue.service.EmailService;
+import com.sportvenue.service.NotificationService;
+import com.sportvenue.util.AfterCommitExecutor;
 import com.sportvenue.util.StadiumUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -99,6 +102,9 @@ public class BookingServiceImpl implements BookingService {
     private final MaintenanceScheduleService maintenanceScheduleService;
     private final PaymentService paymentService;
     private final TransactionTemplate transactionTemplate;
+    private final EmailService emailService;
+    private final NotificationService notificationService;
+    private final AfterCommitExecutor afterCommitExecutor;
 
     @Override
     @Transactional
@@ -319,7 +325,7 @@ public class BookingServiceImpl implements BookingService {
 
         // 2. Gọi Gateway và Transaction 2: Cập nhật trạng thái SUCCESS/FAILED
         if (ctx.refundPayment != null && ctx.originalPayment != null) {
-            processGatewayRefundTx(ctx, bookingId, reason);
+            processGatewayRefundTx(ctx, bookingId, reason, currentUserId);
         }
 
         // 3. Fetch lại Booking mới nhất để build response
@@ -375,6 +381,8 @@ public class BookingServiceImpl implements BookingService {
                     timeSlotRepository.save(slot);
                 }
                 booking = bookingRepository.save(booking);
+                
+                sendCancellationEmailAndNotification(booking, reason, currentUserId);
             }
 
             log.info("[UC-CUS-03] Booking #{} was locally checked for cancellation by userId={}, reason={}",
@@ -403,7 +411,7 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
-    private void processGatewayRefundTx(CancelProcessContext ctx, Integer bookingId, String reason) {
+    private void processGatewayRefundTx(CancelProcessContext ctx, Integer bookingId, String reason, Integer currentUserId) {
         boolean gatewaySuccess = false;
         try {
             paymentService.processRefund(ctx.originalPayment, ctx.originalPayment.getAmount(), 
@@ -434,6 +442,7 @@ public class BookingServiceImpl implements BookingService {
                         timeSlotRepository.save(slot);
                     }
                     bookingRepository.save(booking);
+                    sendCancellationEmailAndNotification(booking, reason, currentUserId);
                 }
             }
             return null;
@@ -449,6 +458,35 @@ public class BookingServiceImpl implements BookingService {
         final Booking booking;
         final Payment originalPayment;
         final Payment refundPayment;
+    }
+
+    private void sendCancellationEmailAndNotification(Booking booking, String reason, Integer currentUserId) {
+        String cancelledBy = booking.getUser().getUserId().equals(currentUserId) ? "Khách hàng" : "Chủ sân";
+        afterCommitExecutor.execute(() -> {
+            try {
+                emailService.sendBookingCancellationEmail(
+                        booking.getUser().getEmail(),
+                        booking.getUser().getFirstName() + " " + booking.getUser().getLastName(),
+                        booking.getStadium().getStadiumName(),
+                        booking.getBookingId(),
+                        reason,
+                        cancelledBy
+                );
+            } catch (Exception e) {
+                log.error("Failed to send cancellation email for booking {}", booking.getBookingId(), e);
+            }
+            try {
+                notificationService.publishNotificationEvent(
+                        booking.getUser().getUserId(),
+                        "Đơn đặt sân bị hủy",
+                        "Đơn đặt sân #" + booking.getBookingId() + " tại " + booking.getStadium().getStadiumName() + " đã bị hủy bởi " + cancelledBy + ".",
+                        com.sportvenue.entity.enums.NotificationType.BOOKING,
+                        String.valueOf(booking.getBookingId())
+                );
+            } catch (Exception e) {
+                log.error("Failed to publish cancellation notification for booking {}", booking.getBookingId(), e);
+            }
+        });
     }
 
     @Override

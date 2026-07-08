@@ -14,6 +14,9 @@ import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.PaymentService;
+import com.sportvenue.service.EmailService;
+import com.sportvenue.service.NotificationService;
+import com.sportvenue.util.AfterCommitExecutor;
 import com.sportvenue.util.VNPayUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +57,9 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final VNPayConfig vnPayConfig;
     private final com.sportvenue.service.AdminDashboardService adminDashboardService;
+    private final EmailService emailService;
+    private final NotificationService notificationService;
+    private final AfterCommitExecutor afterCommitExecutor;
 
     @Override
     @Transactional
@@ -216,6 +222,34 @@ public class PaymentServiceImpl implements PaymentService {
                     booking.setPaymentStatus(PaymentStatus.DEPOSITED);
                 }
                 bookingRepository.save(booking);
+
+                final Booking finalBookingForCallback = booking;
+                afterCommitExecutor.execute(() -> {
+                    try {
+                        emailService.sendBookingConfirmationEmail(
+                                finalBookingForCallback.getUser().getEmail(),
+                                finalBookingForCallback.getUser().getFirstName() + " " + finalBookingForCallback.getUser().getLastName(),
+                                finalBookingForCallback.getStadium().getStadiumName(),
+                                finalBookingForCallback.getBookingId(),
+                                finalBookingForCallback.getReservationDate(),
+                                finalBookingForCallback.getSlot(),
+                                finalBookingForCallback.getTotalPrice()
+                        );
+                    } catch (Exception e) {
+                        log.error("Failed to send confirmation email for booking {}", finalBookingForCallback.getBookingId(), e);
+                    }
+                    try {
+                        notificationService.publishNotificationEvent(
+                                finalBookingForCallback.getUser().getUserId(),
+                                "Thanh toán thành công",
+                                "Đơn đặt sân #" + finalBookingForCallback.getBookingId() + " tại " + finalBookingForCallback.getStadium().getStadiumName() + " đã được xác nhận.",
+                                com.sportvenue.entity.enums.NotificationType.PAYMENT,
+                                String.valueOf(finalBookingForCallback.getBookingId())
+                        );
+                    } catch (Exception e) {
+                        log.error("Failed to publish payment notification for booking {}", finalBookingForCallback.getBookingId(), e);
+                    }
+                });
             }
             log.info("VNPay thanh toán THÀNH CÔNG — txnRef={}, booking={}",
                     txnRef, booking != null ? booking.getBookingId() : null);
