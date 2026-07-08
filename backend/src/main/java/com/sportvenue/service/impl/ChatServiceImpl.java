@@ -650,7 +650,7 @@ public class ChatServiceImpl implements ChatService {
         }
 
         if (lower.contains("xin chào") || lower.contains("hello") || lower.contains("hi") || lower.contains("chào")) {
-            return "👋 Xin chào! Tôi là trợ lý AI của SportHub.\n\n"
+            return "👋 Xin chào! Tôi là trợ lý AI của SportsBook.\n\n"
                     + "Tôi có thể giúp bạn:\n"
                     + "• Tìm và đặt sân thể thao\n"
                     + "• Giải đáp thắc mắc về thanh toán\n"
@@ -662,7 +662,7 @@ public class ChatServiceImpl implements ChatService {
         if (lower.contains("liên hệ") || lower.contains("hotline") || lower.contains("support")) {
             return "📞 Thông tin liên hệ:\n"
                     + "• Hotline: 1900 xxxx (8:00 - 22:00)\n"
-                    + "• Email: support@sporthub.vn\n"
+                    + "• Email: support@sportsbook.vn\n"
                     + "• Chat trực tiếp với đội ngũ hỗ trợ qua hệ thống này\n\n"
                     + "Hoặc bạn có thể mô tả vấn đề, tôi sẽ cố gắng giúp!";
         }
@@ -671,7 +671,7 @@ public class ChatServiceImpl implements ChatService {
     }
 
     private String defaultSmartReply() {
-        return "🤖 Cảm ơn bạn đã liên hệ! Tôi là trợ lý AI của SportHub.\n\n"
+        return "🤖 Cảm ơn bạn đã liên hệ! Tôi là trợ lý AI của SportsBook.\n\n"
                 + "Tôi có thể giúp bạn với:\n"
                 + "• 🏟️ Đặt sân thể thao\n"
                 + "• 💰 Thông tin giá cả\n"

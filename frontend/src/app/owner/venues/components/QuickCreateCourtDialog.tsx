@@ -13,6 +13,7 @@ import { X, Upload, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { FootballFieldType, StadiumResponse } from '@/types/stadium'
+import { FOOTBALL_FIELD_TYPE_OPTIONS } from '@/lib/constants/football-field-types'
 
 interface QuickCreateCourtDialogProps {
   isOpen: boolean
@@ -122,10 +123,9 @@ export function QuickCreateCourtDialog({ isOpen, onClose, parentFacility, onSucc
                   <SelectValue placeholder="Chọn loại sân (nếu là sân bóng đá)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="FIVE_A_SIDE">Sân 5 người</SelectItem>
-                  <SelectItem value="SEVEN_A_SIDE">Sân 7 người</SelectItem>
-                  <SelectItem value="ELEVEN_A_SIDE">Sân 11 người</SelectItem>
-                  <SelectItem value="FUTSAL">Sân Futsal</SelectItem>
+                  {FOOTBALL_FIELD_TYPE_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

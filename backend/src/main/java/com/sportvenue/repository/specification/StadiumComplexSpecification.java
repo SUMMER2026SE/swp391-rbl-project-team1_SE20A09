@@ -41,6 +41,15 @@ public class StadiumComplexSpecification {
                 predicates.add(cb.or(nameLike, descLike, addressLike));
             }
 
+            // 2b. Province/district exact-match — root đã là StadiumComplex nên truy cập trực tiếp,
+            // không cần join. Thay cho keyword LIKE vốn hay miss khi user gõ dài hơn address lưu DB.
+            if (StringUtils.hasText(req.getProvince())) {
+                predicates.add(cb.equal(cb.lower(root.get("province")), req.getProvince().toLowerCase()));
+            }
+            if (StringUtils.hasText(req.getDistrict())) {
+                predicates.add(cb.equal(cb.lower(root.get("district")), req.getDistrict().toLowerCase()));
+            }
+
             // 3. SportType Filter
             if (req.getSportTypeId() != null) {
                 Join<StadiumComplex, SportType> sportTypeJoin = root.join("sportTypes");

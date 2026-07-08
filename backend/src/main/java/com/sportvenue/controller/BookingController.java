@@ -10,6 +10,7 @@ import com.sportvenue.dto.response.WeeklySlotResponse;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.BookingService;
 import com.sportvenue.service.IdempotencyService;
+import com.sportvenue.service.RefundService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -55,6 +56,7 @@ public class BookingController {
     private final BookingService bookingService;
     private final PaymentService paymentService;
     private final IdempotencyService idempotencyService;
+    private final RefundService refundService;
 
     @PostMapping("/api/v1/bookings")
     @PreAuthorize("hasRole('Customer')")
@@ -72,6 +74,7 @@ public class BookingController {
 
         Integer userId = userPrincipal.getUser().getUserId();
 
+        boolean acquired = false;
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             // Nếu key đã tồn tại và có kết quả → trả về booking cũ (idempotent retry)
             Optional<Integer> existing = idempotencyService.getExistingBookingId(userId, idempotencyKey);
@@ -86,19 +89,26 @@ public class BookingController {
                 log.warn("[Idempotency] Concurrent duplicate — userId={}, key={}", userId, idempotencyKey);
                 return ResponseEntity.status(HttpStatus.CONFLICT).build();
             }
+            acquired = true;
         }
 
         try {
             BookingDetailResponse response = bookingService.createBooking(userPrincipal, request);
-            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            if (acquired) {
                 idempotencyService.complete(userId, idempotencyKey, response.getBookingId());
             }
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (RuntimeException ex) {
-            if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+        } catch (com.sportvenue.exception.PaymentGatewayRefundException ex) {
+            // Lỗi từ Gateway (Timeout/502) -> KHÔNG nhả key để tránh user retry lập tức gây double-refund.
+            throw ex;
+        } catch (Exception ex) {
+            if (acquired) {
                 idempotencyService.release(userId, idempotencyKey);
             }
-            throw ex;
+            if (ex instanceof RuntimeException) {
+                throw (RuntimeException) ex;
+            }
+            throw new RuntimeException(ex);
         }
     }
 
@@ -199,11 +209,60 @@ public class BookingController {
     public ResponseEntity<BookingDetailResponse> cancelBooking(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @PathVariable("id") Integer bookingId,
-            @Valid @RequestBody(required = false) CancelBookingRequest request) {
-        String reason = request != null ? request.getReason() : null;
-        BookingDetailResponse response = bookingService.cancelBooking(
-                userPrincipal, bookingId, reason);
-        return ResponseEntity.ok(response);
+            @Valid @RequestBody(required = false) CancelBookingRequest request,
+            @RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKey) {
+        
+        Integer userId = userPrincipal.getUser().getUserId();
+
+        boolean acquired = false;
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Optional<Integer> existing = idempotencyService.getExistingBookingId(userId, idempotencyKey);
+            if (existing.isPresent()) {
+                log.info("[Idempotency] Retry cancel booking — userId={}, key={}, existingBookingId={}",
+                        userId, idempotencyKey, existing.get());
+                BookingDetailResponse cached = bookingService.getBookingDetail(userPrincipal, existing.get());
+                return ResponseEntity.status(HttpStatus.OK).body(cached);
+            }
+            if (!idempotencyService.tryAcquire(userId, idempotencyKey)) {
+                log.warn("[Idempotency] Concurrent duplicate cancel — userId={}, key={}", userId, idempotencyKey);
+                return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            }
+            acquired = true;
+        }
+
+        try {
+            String reason = request != null ? request.getReason() : null;
+            BookingDetailResponse response = bookingService.cancelBooking(
+                    userPrincipal, bookingId, reason);
+            if (acquired) {
+                idempotencyService.complete(userId, idempotencyKey, response.getBookingId());
+            }
+            return ResponseEntity.ok(response);
+        } catch (com.sportvenue.exception.PaymentGatewayRefundException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            if (acquired) {
+                idempotencyService.release(userId, idempotencyKey);
+            }
+            if (ex instanceof RuntimeException) {
+                throw (RuntimeException) ex;
+            }
+            throw new RuntimeException(ex);
+        }
+    }
+
+    /**
+     * Xem trước số tiền hoàn lại trước khi hủy.
+     */
+    @GetMapping("/api/v1/bookings/{id}/refund-preview")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Xem trước số tiền hoàn lại trước khi hủy (Customer)",
+            description = "Trả về số tiền hoàn dự kiến cho khách hàng.")
+    public ResponseEntity<com.sportvenue.dto.response.RefundResponse> previewRefundForCustomer(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable("id") Integer bookingId) {
+        return ResponseEntity.ok(refundService.previewRefundForCustomer(bookingId, userPrincipal.getUsername()));
     }
 
     /**

@@ -1,4 +1,4 @@
-import { get, post, put } from "@/lib/api";
+import { get, post, put, publicApi } from "@/lib/api";
 
 export type BookingHistoryItem = {
   id: string;
@@ -10,7 +10,7 @@ export type BookingHistoryItem = {
   time: string;
   location: string;
   price: number;
-  status: "pending" | "confirmed" | "completed" | "cancelled";
+  status: "pending" | "pending_payment" | "confirmed" | "completed" | "cancelled";
 };
 
 /** Cấu trúc PageResponse trả về từ backend */
@@ -213,16 +213,20 @@ export async function getSlotsByDate(
   stadiumId: number,
   date: string
 ): Promise<SlotAvailability[]> {
-  const data = await get<SlotAvailability[]>(
-    `/stadiums/${stadiumId}/slots?date=${encodeURIComponent(date)}`
-  );
-  return data ?? [];
+  try {
+    const res = await publicApi.get<SlotAvailability[]>(
+      `/stadiums/${stadiumId}/slots?date=${encodeURIComponent(date)}`
+    );
+    return res.data ?? [];
+  } catch {
+    return [];
+  }
 }
 
 // ── UC-CUS-01: Weekly schedule ──────────────────────────────────────────────
 
 /** Trạng thái của một slot trong weekly grid. */
-export type WeeklySlotStatus = "AVAILABLE" | "BOOKED" | "PAST" | "OWNER_CLOSED" | "MAINTENANCE";
+export type WeeklySlotStatus = "AVAILABLE" | "HELD" | "BOOKED" | "PAST" | "OWNER_CLOSED" | "MAINTENANCE";
 
 /** Một khung giờ của sân trong weekly grid — kèm trạng thái cho một ngày cụ thể. */
 export type WeeklySlotItem = {
@@ -233,6 +237,8 @@ export type WeeklySlotItem = {
   endTime: string;
   price: number;
   status: WeeklySlotStatus;
+  /** ISO local date-time; present while payment temporarily holds the slot. */
+  heldUntil?: string | null;
 };
 
 /** Một ngày trong weekly grid — kèm tên thứ tiếng Việt. */
@@ -269,9 +275,10 @@ export async function getWeeklySlots(
   stadiumId: number,
   weekStart: string
 ): Promise<WeeklySlotsResponse> {
-  return get<WeeklySlotsResponse>(
+  const res = await publicApi.get<WeeklySlotsResponse>(
     `/stadiums/${stadiumId}/weekly-slots?weekStart=${encodeURIComponent(weekStart)}`
   );
+  return res.data;
 }
 
 /**
@@ -312,5 +319,26 @@ export async function cancelBooking(
     `/bookings/${bookingId}/cancel`,
     { reason: reason || null }
   );
+}
+
+export type RefundPreviewResponse = {
+  bookingId: number;
+  stadiumName: string;
+  customerName: string;
+  playTime: string;
+  originalPrice: number;
+  refundAmount: number;
+  refundPercentage: number;
+  bookingStatus: string;
+  paymentStatus: string;
+  processedAt: string;
+  reason: string;
+};
+
+/**
+ * Lấy thông tin xem trước hoàn tiền cho customer.
+ */
+export async function previewRefund(bookingId: number): Promise<RefundPreviewResponse> {
+  return get<RefundPreviewResponse>(`/bookings/${bookingId}/refund-preview`);
 }
 

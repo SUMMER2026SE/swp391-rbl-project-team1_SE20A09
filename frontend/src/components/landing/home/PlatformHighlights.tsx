@@ -27,7 +27,7 @@ export function PlatformHighlights() {
             Một ứng dụng cho mọi nhu cầu thể thao
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            SportHub giúp bạn từ tìm sân, đặt lịch đến kết nối cộng đồng — trải nghiệm
+            SportsBook giúp bạn từ tìm sân, đặt lịch đến kết nối cộng đồng — trải nghiệm
             mượt mà cho người chơi và chủ sân.
           </p>
         </div>

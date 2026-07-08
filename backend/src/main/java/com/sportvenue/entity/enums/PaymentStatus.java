@@ -8,5 +8,6 @@ public enum PaymentStatus {
     UNPAID,   // Chưa thanh toán
     PAID,     // Đã thanh toán
     REFUNDED, // Đã hoàn tiền
-    DEPOSITED // Đã đặt cọc
+    DEPOSITED, // Đã đặt cọc
+    AWAITING_CASH_PAYMENT // Đang chờ thanh toán tiền mặt
 }

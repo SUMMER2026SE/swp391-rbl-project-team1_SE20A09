@@ -5,6 +5,7 @@ import com.sportvenue.dto.response.OwnerBookingResponse;
 import com.sportvenue.dto.response.RefundResponse;
 import com.sportvenue.security.RequireApprovedOwner;
 import com.sportvenue.security.UserPrincipal;
+import com.sportvenue.service.IdempotencyService;
 import com.sportvenue.service.RefundService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,6 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.sportvenue.entity.enums.RefundReasonType;
 
 import java.util.List;
+import java.util.Optional;
+import org.springframework.http.HttpStatus;
 
 @RestController
 @RequestMapping("/api/v1/owner/bookings")
@@ -32,6 +35,7 @@ import java.util.List;
 public class RefundController {
 
     private final RefundService refundService;
+    private final IdempotencyService idempotencyService;
 
     @GetMapping
     @PreAuthorize("hasRole('Owner')")
@@ -70,9 +74,41 @@ public class RefundController {
     public ResponseEntity<RefundResponse> processRefund(
             @PathVariable Integer bookingId,
             @Valid @RequestBody RefundRequest request,
-            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKey) {
 
-        RefundResponse response = refundService.processRefund(bookingId, request, userPrincipal.getUsername());
-        return ResponseEntity.ok(response);
+        Integer userId = userPrincipal.getUser().getUserId();
+
+        boolean acquired = false;
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Optional<Integer> existing = idempotencyService.getExistingBookingId(userId, idempotencyKey);
+            if (existing.isPresent()) {
+                // Return cached response (just a basic 200 OK since we don't cache the whole RefundResponse)
+                RefundResponse cached = refundService.getRefundResponse(existing.get(), userPrincipal.getUsername());
+                return ResponseEntity.status(HttpStatus.OK).body(cached);
+            }
+            if (!idempotencyService.tryAcquire(userId, idempotencyKey)) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            }
+            acquired = true;
+        }
+
+        try {
+            RefundResponse response = refundService.processRefund(bookingId, request, userPrincipal.getUsername());
+            if (acquired) {
+                idempotencyService.complete(userId, idempotencyKey, response.getBookingId());
+            }
+            return ResponseEntity.ok(response);
+        } catch (com.sportvenue.exception.PaymentGatewayRefundException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            if (acquired) {
+                idempotencyService.release(userId, idempotencyKey);
+            }
+            if (ex instanceof RuntimeException) {
+                throw (RuntimeException) ex;
+            }
+            throw new RuntimeException(ex);
+        }
     }
 }

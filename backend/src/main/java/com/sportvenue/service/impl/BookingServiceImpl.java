@@ -22,6 +22,7 @@ import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.DuplicateResourceException;
+import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.entity.Payment;
 import com.sportvenue.entity.enums.TransactionStatus;
@@ -37,6 +38,8 @@ import com.sportvenue.entity.TimeSlotException;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.BookingService;
 import com.sportvenue.service.MaintenanceScheduleService;
+import com.sportvenue.service.PaymentService;
+import com.sportvenue.util.StadiumUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -57,6 +60,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * UC-CUS-01: Triển khai single booking cho Customer.
@@ -93,6 +97,8 @@ public class BookingServiceImpl implements BookingService {
     private final BookingAccessoryRepository bookingAccessoryRepository;
     private final TimeSlotExceptionRepository timeSlotExceptionRepository;
     private final MaintenanceScheduleService maintenanceScheduleService;
+    private final PaymentService paymentService;
+    private final TransactionTemplate transactionTemplate;
 
     @Override
     @Transactional
@@ -305,68 +311,144 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    @Transactional
     public BookingDetailResponse cancelBooking(UserPrincipal principal, Integer bookingId, String reason) {
-        Booking booking = bookingRepository.findDetailById(bookingId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Không tìm thấy booking với ID " + bookingId));
-
-        // UC-CUS-03: chỉ customer của booking hoặc owner của sân mới có quyền hủy.
         Integer currentUserId = principal.getUser().getUserId();
+        
+        // 1. Transaction 1: Khóa DB, cập nhật trạng thái Booking và tạo Refund Payment (PENDING)
+        CancelProcessContext ctx = processLocalCancellationTx(bookingId, currentUserId, reason);
+
+        // 2. Gọi Gateway và Transaction 2: Cập nhật trạng thái SUCCESS/FAILED
+        if (ctx.refundPayment != null && ctx.originalPayment != null) {
+            processGatewayRefundTx(ctx, bookingId, reason);
+        }
+
+        // 3. Fetch lại Booking mới nhất để build response
+        Booking finalBooking = transactionTemplate.execute(status -> 
+                bookingRepository.findDetailById(bookingId).orElse(ctx.booking));
+        return toBookingDetailResponse(finalBooking, finalBooking.getStadium(), finalBooking.getSlot());
+    }
+
+    private CancelProcessContext processLocalCancellationTx(Integer bookingId, Integer currentUserId, String reason) {
+        return transactionTemplate.execute(status -> {
+            Booking booking = bookingRepository.findByIdForUpdate(bookingId)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Không tìm thấy booking với ID " + bookingId));
+
+            validateCancellation(booking, currentUserId);
+
+            boolean wasReallyPaid = booking.getPaymentStatus() == PaymentStatus.PAID
+                    || booking.getPaymentStatus() == PaymentStatus.DEPOSITED;
+            
+            Payment refundPayment = null;
+            Payment originalPayment = null;
+
+            if (wasReallyPaid) {
+                // Kiểm tra xem đã có giao dịch hoàn tiền nào (PENDING hoặc SUCCESS) đang tồn tại chưa để tránh Double Refund
+                paymentRepository.findRefundPaymentByBookingId(bookingId).ifPresent(p -> {
+                    if (p.getPaymentStatus() == TransactionStatus.PENDING || p.getPaymentStatus() == TransactionStatus.SUCCESS) {
+                        throw new BadRequestException("Yêu cầu hủy đơn và hoàn tiền đang được xử lý hoặc đã thành công.");
+                    }
+                });
+
+                originalPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
+                        .stream().findFirst().orElse(null);
+                
+                if (originalPayment != null) {
+                    refundPayment = Payment.builder()
+                        .booking(booking)
+                        .paymentMethod(originalPayment.getPaymentMethod())
+                        .amount(originalPayment.getAmount().negate())
+                        .transactionCode("RFND_CUST_" + originalPayment.getTransactionCode())
+                        .paymentStatus(TransactionStatus.PENDING)
+                        .paidAt(LocalDateTime.now())
+                        .build();
+                    refundPayment = paymentRepository.save(refundPayment);
+                }
+            } else {
+                booking.setBookingStatus(BookingStatus.CANCELLED);
+                booking.setCancelReason(reason);
+                booking.setExpiredAt(null);
+
+                TimeSlot slot = booking.getSlot();
+                if (slot != null && slot.getSlotStatus() == SlotStatus.BOOKED) {
+                    slot.setSlotStatus(SlotStatus.AVAILABLE);
+                    timeSlotRepository.save(slot);
+                }
+                booking = bookingRepository.save(booking);
+            }
+
+            log.info("[UC-CUS-03] Booking #{} was locally checked for cancellation by userId={}, reason={}",
+                    booking.getBookingId(), currentUserId, reason);
+
+            return new CancelProcessContext(booking, originalPayment, refundPayment);
+        });
+    }
+
+    private void validateCancellation(Booking booking, Integer currentUserId) {
         boolean isCustomer = booking.getUser() != null
                 && booking.getUser().getUserId().equals(currentUserId);
         boolean isVenueOwner = booking.getStadium() != null
                 && booking.getStadium().getOwner() != null
                 && booking.getStadium().getOwner().getUser() != null
                 && booking.getStadium().getOwner().getUser().getUserId().equals(currentUserId);
+                
         if (!isCustomer && !isVenueOwner) {
-            throw new BadRequestException("Bạn không có quyền hủy đơn đặt sân này");
+            throw new ForbiddenException("Bạn không có quyền hủy đơn đặt sân này");
         }
 
-        // UC-CUS-03: không cho hủy booking đã hoàn thành hoặc đã hủy trước đó.
         BookingStatus currentStatus = booking.getBookingStatus();
         if (currentStatus == BookingStatus.COMPLETED || currentStatus == BookingStatus.CANCELLED) {
             throw new BadRequestException(
                     "Không thể hủy đơn đặt sân ở trạng thái " + currentStatus);
         }
+    }
 
-        boolean wasReallyPaid = booking.getPaymentStatus() == PaymentStatus.PAID
-                || booking.getPaymentStatus() == PaymentStatus.DEPOSITED;
-        booking.setBookingStatus(BookingStatus.CANCELLED);
-        booking.setCancelReason(reason);
-        if (wasReallyPaid) {
-            booking.setPaymentStatus(PaymentStatus.REFUNDED);
-        }
-        // Clear expiredAt nếu có (PENDING_PAYMENT sẽ được set lúc tạo).
-        booking.setExpiredAt(null);
-
-        // Restore slot về AVAILABLE nếu đã bị set BOOKED bởi owner confirmation
-        TimeSlot slot = booking.getSlot();
-        if (slot != null && slot.getSlotStatus() == SlotStatus.BOOKED) {
-            slot.setSlotStatus(SlotStatus.AVAILABLE);
-            timeSlotRepository.save(slot);
+    private void processGatewayRefundTx(CancelProcessContext ctx, Integer bookingId, String reason) {
+        boolean gatewaySuccess = false;
+        try {
+            paymentService.processRefund(ctx.originalPayment, ctx.originalPayment.getAmount(), 
+                    reason != null ? reason : "Khách hàng tự hủy");
+            gatewaySuccess = true;
+        } catch (Exception e) {
+            log.error("Refund gateway failed for customer cancel booking {}", bookingId, e);
         }
 
-        Booking saved = bookingRepository.save(booking);
-
-        // Tạo bản ghi refund âm để tracking — tiền thực tế hoàn qua VNPay cần xử lý thêm
-        if (wasReallyPaid) {
-            paymentRepository.findSuccessPaymentsByBookingId(bookingId)
-                    .stream().findFirst()
-                    .ifPresent(original -> paymentRepository.save(Payment.builder()
-                            .booking(saved)
-                            .paymentMethod(original.getPaymentMethod())
-                            .amount(original.getAmount().negate())
-                            .transactionCode("RFND_CUST_" + original.getTransactionCode())
-                            .paymentStatus(TransactionStatus.SUCCESS)
-                            .paidAt(LocalDateTime.now())
-                            .build()));
+        final boolean finalSuccess = gatewaySuccess;
+        transactionTemplate.execute(status -> {
+            Payment payment = paymentRepository.findById(ctx.refundPayment.getPaymentId()).orElse(null);
+            if (payment != null) {
+                payment.setPaymentStatus(finalSuccess ? TransactionStatus.SUCCESS : TransactionStatus.FAILED);
+                paymentRepository.save(payment);
+            }
+            if (finalSuccess) {
+                Booking booking = bookingRepository.findById(bookingId).orElse(null);
+                if (booking != null) {
+                    booking.setBookingStatus(BookingStatus.CANCELLED);
+                    booking.setCancelReason(reason);
+                    booking.setPaymentStatus(PaymentStatus.REFUNDED);
+                    booking.setExpiredAt(null);
+                    
+                    TimeSlot slot = booking.getSlot();
+                    if (slot != null && slot.getSlotStatus() == SlotStatus.BOOKED) {
+                        slot.setSlotStatus(SlotStatus.AVAILABLE);
+                        timeSlotRepository.save(slot);
+                    }
+                    bookingRepository.save(booking);
+                }
+            }
+            return null;
+        });
+        
+        if (!gatewaySuccess) {
+            throw new BadRequestException("Lỗi hoàn tiền qua cổng thanh toán. Giao dịch hủy đơn thất bại. Vui lòng thử lại sau.");
         }
+    }
 
-        log.info("[UC-CUS-03] Booking #{} was cancelled by userId={}, reason={}",
-                saved.getBookingId(), currentUserId, reason);
-
-        return toBookingDetailResponse(saved, saved.getStadium(), saved.getSlot());
+    @RequiredArgsConstructor
+    private static class CancelProcessContext {
+        final Booking booking;
+        final Payment originalPayment;
+        final Payment refundPayment;
     }
 
     @Override
@@ -449,13 +531,16 @@ public class BookingServiceImpl implements BookingService {
 
         List<TimeSlotException> exceptions = timeSlotExceptionRepository.findByStadiumAndDateRange(stadiumId, monday, sunday);
 
-        // Map (date → tập slotId đã được đặt active)
-        Map<LocalDate, Set<Integer>> bookedByDate = weeklyBookings.stream()
+        // Map (date → slotId → booking). PENDING_PAYMENT is a temporary hold;
+        // PENDING/CONFIRMED are displayed as booked.
+        Map<LocalDate, Map<Integer, Booking>> bookingsByDate = weeklyBookings.stream()
                 .collect(Collectors.groupingBy(
                         Booking::getReservationDate,
-                        Collectors.mapping(
+                        Collectors.toMap(
                                 b -> b.getSlot().getSlotId(),
-                                Collectors.toSet())));
+                                b -> b,
+                                (left, right) -> left.getBookingStatus() == BookingStatus.PENDING_PAYMENT
+                                        ? right : left)));
 
         // Map (date → Map<slotId → exception>)
         Map<LocalDate, Map<Integer, TimeSlotException>> exceptionsByDate = exceptions.stream()
@@ -477,11 +562,11 @@ public class BookingServiceImpl implements BookingService {
         List<WeeklySlotDayDto> days = new ArrayList<>(7);
         for (int i = 0; i < 7; i++) {
             LocalDate date = monday.plusDays(i);
-            Set<Integer> bookedSlotIds = bookedByDate.getOrDefault(date, Set.of());
+            Map<Integer, Booking> dayBookings = bookingsByDate.getOrDefault(date, Map.of());
             Map<Integer, TimeSlotException> dayExceptions = exceptionsByDate.getOrDefault(date, Map.of());
             MaintenanceScheduleService.DayMaintenance dayMaintenance =
                     dayMaintenanceByDate.getOrDefault(date, MaintenanceScheduleService.DayMaintenance.NONE);
-            days.add(buildWeeklySlotDay(date, stadium, slots, bookedSlotIds, dayExceptions, dayMaintenance, now, hhmm));
+            days.add(buildWeeklySlotDay(date, stadium, slots, dayBookings, dayExceptions, dayMaintenance, now, hhmm));
         }
 
         log.info("📅 UC-CUS-01: Stadium {} weekly slots — {}..{} ({} bookings)",
@@ -498,7 +583,7 @@ public class BookingServiceImpl implements BookingService {
             LocalDate date,
             Stadium stadium,
             List<TimeSlot> slots,
-            Set<Integer> bookedSlotIds,
+            Map<Integer, Booking> dayBookings,
             Map<Integer, TimeSlotException> dayExceptions,
             MaintenanceScheduleService.DayMaintenance dayMaintenance,
             LocalDateTime now,
@@ -531,10 +616,14 @@ public class BookingServiceImpl implements BookingService {
                             ? exception.getPriceOverride()
                             : slot.getPricePerSlot();
 
+                    Booking activeBooking = dayBookings.get(slot.getSlotId());
                     String status;
                     if (isClosed) {
                         status = "OWNER_CLOSED";
-                    } else if (bookedSlotIds.contains(slot.getSlotId())) {
+                    } else if (activeBooking != null
+                            && activeBooking.getBookingStatus() == BookingStatus.PENDING_PAYMENT) {
+                        status = "HELD";
+                    } else if (activeBooking != null) {
                         status = "BOOKED";
                     } else if (!slotStart.isAfter(now)) {
                         status = "PAST";
@@ -550,6 +639,8 @@ public class BookingServiceImpl implements BookingService {
                             .endTime(endT != null ? endT.format(hhmm) : null)
                             .price(price)
                             .status(status)
+                            .heldUntil("HELD".equals(status) && activeBooking.getExpiredAt() != null
+                                    ? activeBooking.getExpiredAt().toString() : null)
                             .build();
                 })
                 .toList();
@@ -660,7 +751,7 @@ public class BookingServiceImpl implements BookingService {
                 .imageUrl(imageUrl != null ? imageUrl : "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=300&auto=format&fit=crop")
                 .date(dateStr)
                 .time(timeStr)
-                .location(stadium != null ? stadium.getAddress() : null)
+                .location(StadiumUtils.resolveAddress(stadium))
                 .price(booking.getTotalPrice())
                 .status(booking.getBookingStatus() != null
                         ? booking.getBookingStatus().name().toLowerCase()
@@ -716,7 +807,7 @@ public class BookingServiceImpl implements BookingService {
                 .stadium(BookingDetailResponse.StadiumInfo.builder()
                         .stadiumId(stadium.getStadiumId())
                         .stadiumName(stadium.getStadiumName())
-                        .address(stadium.getAddress())
+                        .address(StadiumUtils.resolveAddress(stadium))
                         .sportType(sportType)
                         .imageUrl(imageUrl)
                         .build())

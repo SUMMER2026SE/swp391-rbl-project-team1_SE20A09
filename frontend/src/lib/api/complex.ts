@@ -1,4 +1,4 @@
-import api from '../api'
+import api, { publicApi } from '../api'
 import type {
   StadiumComplexDto,
   FacilityDto,
@@ -13,7 +13,7 @@ import type { ReviewDto, PageResponse as ReviewPageResponse } from './venue'
  * Uses ISR revalidation on the server side.
  */
 export async function getComplexDetail(id: number): Promise<StadiumComplexDto> {
-  const res = await api.get<StadiumComplexDto>(`/public/complexes/${id}`)
+  const res = await publicApi.get<StadiumComplexDto>(`/public/complexes/${id}`)
   return res.data
 }
 
@@ -25,7 +25,7 @@ export async function getComplexCourts(
   complexId: number,
   date?: string
 ): Promise<CourtWithSlotsDto[]> {
-  const res = await api.get<CourtWithSlotsDto[]>(
+  const res = await publicApi.get<CourtWithSlotsDto[]>(
     `/public/complexes/${complexId}/courts`,
     { params: date ? { date } : undefined }
   )
@@ -41,7 +41,7 @@ export async function getFacilityCourts(
   facilityId: number,
   date?: string
 ): Promise<CourtWithSlotsDto[]> {
-  const res = await api.get<CourtWithSlotsDto[]>(
+  const res = await publicApi.get<CourtWithSlotsDto[]>(
     `/public/facilities/${facilityId}/courts`,
     { params: date ? { date } : undefined }
   )
@@ -52,7 +52,7 @@ export async function getFacilityCourts(
  * Fetch facilities (L2) grouped under a complex.
  */
 export async function getComplexFacilities(complexId: number): Promise<FacilityDto[]> {
-  const res = await api.get<FacilityDto[]>(`/public/complexes/${complexId}/facilities`)
+  const res = await publicApi.get<FacilityDto[]>(`/public/complexes/${complexId}/facilities`)
   return res.data
 }
 
@@ -62,7 +62,7 @@ export async function getComplexFacilities(complexId: number): Promise<FacilityD
 export async function searchComplexes(
   params: ComplexSearchParams
 ): Promise<PageResponse<StadiumComplexDto>> {
-  const res = await api.get<PageResponse<StadiumComplexDto>>(
+  const res = await publicApi.get<PageResponse<StadiumComplexDto>>(
     '/public/complexes',
     { params }
   )
@@ -78,7 +78,7 @@ export async function getComplexReviews(
   page: number = 0,
   size: number = 5
 ): Promise<ReviewPageResponse<ReviewDto>> {
-  const res = await api.get<ReviewPageResponse<ReviewDto>>(
+  const res = await publicApi.get<ReviewPageResponse<ReviewDto>>(
     `/public/complexes/${complexId}/reviews`,
     { params: { page, size } }
   )
@@ -93,11 +93,12 @@ export async function getCourtWithComplex(
   courtId: number
 ): Promise<{ complexId: number | null; stadiumId: number } | null> {
   try {
-    const res = await api.get<{ complexId: number | null; stadiumId: number }>(
+    const res = await publicApi.get<{ complexId: number | null; stadiumId: number }>(
       `/public/stadiums/${courtId}/complex-ref`
     )
     return res.data
   } catch {
+
     return null
   }
 }

@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { AddressPicker } from "@/components/AddressPicker";
 import { Badge } from "@/components/ui/badge";
 import { FootballFieldType } from "@/types/stadium";
+import { FOOTBALL_FIELD_TYPE_OPTIONS } from "@/lib/constants/football-field-types";
 
 const updateStadiumSchema = z.object({
   stadiumName: z.string()
@@ -243,10 +244,9 @@ export default function EditVenuePage() {
                       <SelectValue placeholder="Chọn loại sân (nếu là sân bóng đá)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="FIVE_A_SIDE">Sân 5 người</SelectItem>
-                      <SelectItem value="SEVEN_A_SIDE">Sân 7 người</SelectItem>
-                      <SelectItem value="ELEVEN_A_SIDE">Sân 11 người</SelectItem>
-                      <SelectItem value="FUTSAL">Sân Futsal</SelectItem>
+                      {FOOTBALL_FIELD_TYPE_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

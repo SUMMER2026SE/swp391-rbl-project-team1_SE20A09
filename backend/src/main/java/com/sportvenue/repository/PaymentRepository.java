@@ -94,5 +94,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
     java.math.BigDecimal sumTotalRevenueByDateRange(
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT p FROM Payment p WHERE p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.PENDING AND p.amount < 0 AND p.paidAt <= :threshold")
+    List<Payment> findPendingRefundsOlderThan(@Param("threshold") LocalDateTime threshold);
 }
 

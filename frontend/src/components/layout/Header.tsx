@@ -182,7 +182,7 @@ function OwnerNavSheet({ user }: { user?: Session["user"] }) {
               <SheetTitle className="text-sm font-bold leading-none text-slate-900 dark:text-white">
                 Quản lý sân của tôi
               </SheetTitle>
-              <p className="text-[11px] text-muted-foreground mt-0.5">SportHub</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">SportsBook</p>
             </div>
           </div>
         </SheetHeader>
@@ -384,7 +384,7 @@ export function Header() {
                 SH
               </div>
               <span className="text-xl font-bold text-primary group-hover:text-primary/80 transition-colors duration-200">
-                SportHub
+                SportsBook
               </span>
             </Link>
           </div>
