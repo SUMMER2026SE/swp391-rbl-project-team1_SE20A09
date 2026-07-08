@@ -39,6 +39,7 @@ import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.BookingService;
 import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.PaymentService;
+import com.sportvenue.util.StadiumUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -530,13 +531,16 @@ public class BookingServiceImpl implements BookingService {
 
         List<TimeSlotException> exceptions = timeSlotExceptionRepository.findByStadiumAndDateRange(stadiumId, monday, sunday);
 
-        // Map (date → tập slotId đã được đặt active)
-        Map<LocalDate, Set<Integer>> bookedByDate = weeklyBookings.stream()
+        // Map (date → slotId → booking). PENDING_PAYMENT is a temporary hold;
+        // PENDING/CONFIRMED are displayed as booked.
+        Map<LocalDate, Map<Integer, Booking>> bookingsByDate = weeklyBookings.stream()
                 .collect(Collectors.groupingBy(
                         Booking::getReservationDate,
-                        Collectors.mapping(
+                        Collectors.toMap(
                                 b -> b.getSlot().getSlotId(),
-                                Collectors.toSet())));
+                                b -> b,
+                                (left, right) -> left.getBookingStatus() == BookingStatus.PENDING_PAYMENT
+                                        ? right : left)));
 
         // Map (date → Map<slotId → exception>)
         Map<LocalDate, Map<Integer, TimeSlotException>> exceptionsByDate = exceptions.stream()
@@ -558,11 +562,11 @@ public class BookingServiceImpl implements BookingService {
         List<WeeklySlotDayDto> days = new ArrayList<>(7);
         for (int i = 0; i < 7; i++) {
             LocalDate date = monday.plusDays(i);
-            Set<Integer> bookedSlotIds = bookedByDate.getOrDefault(date, Set.of());
+            Map<Integer, Booking> dayBookings = bookingsByDate.getOrDefault(date, Map.of());
             Map<Integer, TimeSlotException> dayExceptions = exceptionsByDate.getOrDefault(date, Map.of());
             MaintenanceScheduleService.DayMaintenance dayMaintenance =
                     dayMaintenanceByDate.getOrDefault(date, MaintenanceScheduleService.DayMaintenance.NONE);
-            days.add(buildWeeklySlotDay(date, stadium, slots, bookedSlotIds, dayExceptions, dayMaintenance, now, hhmm));
+            days.add(buildWeeklySlotDay(date, stadium, slots, dayBookings, dayExceptions, dayMaintenance, now, hhmm));
         }
 
         log.info("📅 UC-CUS-01: Stadium {} weekly slots — {}..{} ({} bookings)",
@@ -579,7 +583,7 @@ public class BookingServiceImpl implements BookingService {
             LocalDate date,
             Stadium stadium,
             List<TimeSlot> slots,
-            Set<Integer> bookedSlotIds,
+            Map<Integer, Booking> dayBookings,
             Map<Integer, TimeSlotException> dayExceptions,
             MaintenanceScheduleService.DayMaintenance dayMaintenance,
             LocalDateTime now,
@@ -612,10 +616,14 @@ public class BookingServiceImpl implements BookingService {
                             ? exception.getPriceOverride()
                             : slot.getPricePerSlot();
 
+                    Booking activeBooking = dayBookings.get(slot.getSlotId());
                     String status;
                     if (isClosed) {
                         status = "OWNER_CLOSED";
-                    } else if (bookedSlotIds.contains(slot.getSlotId())) {
+                    } else if (activeBooking != null
+                            && activeBooking.getBookingStatus() == BookingStatus.PENDING_PAYMENT) {
+                        status = "HELD";
+                    } else if (activeBooking != null) {
                         status = "BOOKED";
                     } else if (!slotStart.isAfter(now)) {
                         status = "PAST";
@@ -631,6 +639,8 @@ public class BookingServiceImpl implements BookingService {
                             .endTime(endT != null ? endT.format(hhmm) : null)
                             .price(price)
                             .status(status)
+                            .heldUntil("HELD".equals(status) && activeBooking.getExpiredAt() != null
+                                    ? activeBooking.getExpiredAt().toString() : null)
                             .build();
                 })
                 .toList();
@@ -741,7 +751,7 @@ public class BookingServiceImpl implements BookingService {
                 .imageUrl(imageUrl != null ? imageUrl : "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=300&auto=format&fit=crop")
                 .date(dateStr)
                 .time(timeStr)
-                .location(stadium != null ? stadium.getAddress() : null)
+                .location(StadiumUtils.resolveAddress(stadium))
                 .price(booking.getTotalPrice())
                 .status(booking.getBookingStatus() != null
                         ? booking.getBookingStatus().name().toLowerCase()
@@ -797,7 +807,7 @@ public class BookingServiceImpl implements BookingService {
                 .stadium(BookingDetailResponse.StadiumInfo.builder()
                         .stadiumId(stadium.getStadiumId())
                         .stadiumName(stadium.getStadiumName())
-                        .address(stadium.getAddress())
+                        .address(StadiumUtils.resolveAddress(stadium))
                         .sportType(sportType)
                         .imageUrl(imageUrl)
                         .build())

@@ -19,6 +19,24 @@ public class StadiumUtils {
                 .orElse("https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800");
     }
 
+    /** Resolve the address inherited by a Facility/Court from its Complex. */
+    public static String resolveAddress(Stadium stadium) {
+        if (stadium == null) {
+            return null;
+        }
+        if (stadium.getAddress() != null && !stadium.getAddress().isBlank()) {
+            return stadium.getAddress();
+        }
+        if (stadium.getComplex() != null) {
+            return stadium.getComplex().getAddress();
+        }
+        if (stadium.getParentStadium() != null
+                && stadium.getParentStadium().getComplex() != null) {
+            return stadium.getParentStadium().getComplex().getAddress();
+        }
+        return null;
+    }
+
     public static String toSportLabel(String sportName) {
         return switch (sportName) {
             case "Football" -> "Bóng đá";
