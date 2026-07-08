@@ -96,7 +96,6 @@ function BookingManagementPage() {
       if (activeTab !== "all") {
         query.set("status", activeTab.toUpperCase());
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = await get<any>(
         `/owner/bookings?${query.toString()}`
       );
