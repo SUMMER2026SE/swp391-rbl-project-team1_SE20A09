@@ -150,18 +150,26 @@ function OwnerDashboardPage() {
       const endDateStr = formatDate(end);
 
       // 2. Fetch Báo cáo doanh thu, Booking và Dashboard Summary
-      const [reportRes, bookingsList, summaryRes] = await Promise.all([
+      const [reportRes, bookingsResponse, summaryRes] = await Promise.all([
         get<ApiResponse<RevenueReportResponse>>(`/owner/reports/revenue?startDate=${startDateStr}&endDate=${endDateStr}`),
-        get<BookingItem[]>("/owner/bookings"),
+        get<BookingItem[] | { content?: BookingItem[] }>(
+          "/owner/bookings?page=0&size=100&status=PENDING"
+        ),
         get<ApiResponse<OwnerDashboardSummaryResponse>>("/owner/reports/summary"),
       ]);
 
       setReport(reportRes.result);
       setSummary(summaryRes.result);
 
-      // Lọc các booking có trạng thái pending để hiển thị ở bảng chờ duyệt
+      // Hỗ trợ cả API cũ trả mảng phẳng và API mới trả PageResponse.
+      // Query đã lọc PENDING ở server; filter phía client giữ tương thích với API cũ.
+      const bookingsList: BookingItem[] = Array.isArray(bookingsResponse)
+        ? bookingsResponse
+        : Array.isArray(bookingsResponse?.content)
+          ? bookingsResponse.content
+          : [];
       const pending = bookingsList.filter(
-        (b) => b.status.toLowerCase() === "pending"
+        (booking) => booking.status?.toLowerCase() === "pending"
       );
       setPendingBookings(pending);
 

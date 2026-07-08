@@ -100,8 +100,13 @@ function BookingManagementPage() {
         `/owner/bookings?${query.toString()}`
       );
 
-      // ✅ Defensive: Hỗ trợ cả mảng phẳng (API cũ) và PageResponse (API mới)
-      const list = Array.isArray(data) ? data : (data?.content ?? []);
+      // Defensive: hỗ trợ cả mảng phẳng (API cũ) và PageResponse (API mới),
+      // đồng thời không đưa dữ liệu sai kiểu vào state.
+      const list: BookingItem[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.content)
+          ? data.content
+          : [];
       setBookingList(list);
       setTotalPages(data?.totalPages ?? 0);
       setTotalElements(data?.totalElements ?? list.length);
@@ -180,8 +185,8 @@ function BookingManagementPage() {
   };
 
   const filterBookings = (status?: string) => {
-    // ✅ Defensive: Chống null/undefined crash
-    const list = bookingList || [];
+    // Defensive: không bao giờ gọi .filter trên null/undefined/object.
+    const list = Array.isArray(bookingList) ? bookingList : [];
     if (!status) return list;
     return list.filter((b) => b.status && b.status.toLowerCase() === status.toLowerCase());
   };
