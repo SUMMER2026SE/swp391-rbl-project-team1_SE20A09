@@ -25,7 +25,9 @@ function BookingContent() {
   const venueId = venueIdParam ? parseInt(venueIdParam) : 1;
 
   const [selectedDate, setSelectedDate] = useState<string>(() => {
-    return searchParams.get("date") || new Date().toISOString().split("T")[0];
+    const today = new Date();
+    const localDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    return searchParams.get("date") || localDate;
   });
 
   // Support slotId from QuickBookDrawer redirect (URL param "slotId")
@@ -51,10 +53,18 @@ function BookingContent() {
   useEffect(() => {
     if (!slotAvailabilities || !selectedSlot) return
 
-    const targetSlotId = parseInt(selectedSlot)
-    if (isNaN(targetSlotId)) return
+    const isNumericId = !isNaN(Number(selectedSlot)) && !String(selectedSlot).includes(":");
+    let found;
+    if (isNumericId) {
+      const targetSlotId = parseInt(selectedSlot);
+      found = slotAvailabilities.find(s => s.slotId === targetSlotId);
+    } else {
+      found = slotAvailabilities.find(s => {
+        const timePart = s.startTime.includes("T") ? s.startTime.split("T")[1] : s.startTime;
+        return timePart.substring(0, 5) === selectedSlot;
+      });
+    }
 
-    const found = slotAvailabilities.find(s => s.slotId === targetSlotId)
     if (!found) return
 
     if (!found.available) {
@@ -160,11 +170,16 @@ function BookingContent() {
 
   const accessoryItems = venue.accessories || [];
 
-  // Find the slot ID from the selected slot (hour string like "08:00")
+  // Find the slot ID from the selected slot (hour string like "08:00" or slot ID)
+  const isNumericId = !isNaN(Number(selectedSlot)) && !String(selectedSlot).includes(":");
+  const numericSlotId = isNumericId ? parseInt(selectedSlot) : null;
+
   const matchedSlot = slotAvailabilities?.find((s) => {
+    if (numericSlotId) return s.slotId === numericSlotId;
     const timePart = s.startTime.includes("T") ? s.startTime.split("T")[1] : s.startTime;
     return timePart.substring(0, 5) === selectedSlot;
   }) || venue.timeSlots?.find((s) => {
+    if (numericSlotId) return s.slotId === numericSlotId;
     const timePart = s.startTime.includes("T") ? s.startTime.split("T")[1] : s.startTime;
     return timePart.substring(0, 5) === selectedSlot;
   });
