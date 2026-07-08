@@ -10,6 +10,7 @@ import com.sportvenue.dto.response.WeeklySlotResponse;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.BookingService;
 import com.sportvenue.service.IdempotencyService;
+import com.sportvenue.service.RefundService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -55,6 +56,7 @@ public class BookingController {
     private final BookingService bookingService;
     private final PaymentService paymentService;
     private final IdempotencyService idempotencyService;
+    private final RefundService refundService;
 
     @PostMapping("/api/v1/bookings")
     @PreAuthorize("hasRole('Customer')")
@@ -247,6 +249,20 @@ public class BookingController {
             }
             throw new RuntimeException(ex);
         }
+    }
+
+    /**
+     * Xem trước số tiền hoàn lại trước khi hủy.
+     */
+    @GetMapping("/api/v1/bookings/{id}/refund-preview")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Xem trước số tiền hoàn lại trước khi hủy (Customer)",
+            description = "Trả về số tiền hoàn dự kiến cho khách hàng.")
+    public ResponseEntity<com.sportvenue.dto.response.RefundResponse> previewRefundForCustomer(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable("id") Integer bookingId) {
+        return ResponseEntity.ok(refundService.previewRefundForCustomer(bookingId, userPrincipal.getUsername()));
     }
 
     /**

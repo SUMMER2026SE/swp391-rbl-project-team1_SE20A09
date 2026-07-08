@@ -16,6 +16,7 @@ import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.entity.enums.TransactionStatus;
 import com.sportvenue.exception.BadRequestException;
+import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.OwnerRepository;
@@ -247,10 +248,62 @@ public class RefundServiceImpl implements RefundService {
         // 3. Kiểm tra tính hợp lệ và quyền sở hữu
         validateOwnershipAndStatus(booking, owner);
 
-        // 4. Áp dụng chính sách hoàn tiền
+        // 4. Tìm giao dịch thanh toán gốc (SUCCESS, amount > 0, mới nhất)
         Payment originalPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
                 .stream().findFirst()
-                .orElse(null);
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán ban đầu"));
+
+        // 5. Áp dụng chính sách hoàn tiền
+        RefundCalculation calculation = calculateRefund(booking, originalPayment);
+
+        return RefundResponse.builder()
+                .bookingId(booking.getBookingId())
+                .stadiumName(booking.getStadium().getStadiumName())
+                .customerName(booking.getUser().getFirstName() + " " + booking.getUser().getLastName())
+                .playTime(playTime(booking))
+                .originalPrice(booking.getTotalPrice())
+                .refundAmount(calculation.getAmount())
+                .refundPercentage(calculation.getPercentage())
+                .bookingStatus(booking.getBookingStatus().name())
+                .paymentStatus(booking.getPaymentStatus().name())
+                .processedAt(LocalDateTime.now())
+                .reason("Xem trước hoàn tiền")
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public RefundResponse previewRefundForCustomer(Integer bookingId, String customerEmail) {
+        log.info("Starting previewRefundForCustomer for bookingId: {} by Customer: {}", bookingId, customerEmail);
+
+        // 1. Tìm thông tin User
+        User user = userRepository.findByEmail(customerEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng: " + customerEmail));
+
+        // 2. Tìm Booking
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân ID: " + bookingId));
+
+        // 3. Kiểm tra tính hợp lệ
+        if (!booking.getUser().getUserId().equals(user.getUserId())) {
+            throw new ForbiddenException("Bạn không có quyền xem trước hoàn tiền đơn đặt sân này");
+        }
+        if (booking.getBookingStatus() == BookingStatus.CANCELLED) {
+            throw new BadRequestException("Đơn đặt sân này đã ở trạng thái Hủy (CANCELLED)");
+        }
+        if (booking.getBookingStatus() == BookingStatus.COMPLETED) {
+            throw new BadRequestException("Không thể hủy đơn đặt sân đã hoàn thành (COMPLETED)");
+        }
+        if (booking.getPaymentStatus() != PaymentStatus.PAID && booking.getPaymentStatus() != PaymentStatus.DEPOSITED) {
+            throw new BadRequestException("Chỉ có thể hoàn tiền cho những đơn đặt sân đã thanh toán (PAID hoặc DEPOSITED)");
+        }
+
+        // 4. Tìm giao dịch thanh toán gốc
+        Payment originalPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
+                .stream().findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giao dịch thanh toán ban đầu"));
+
+        // 5. Áp dụng chính sách hoàn tiền
         RefundCalculation calculation = calculateRefund(booking, originalPayment);
 
         return RefundResponse.builder()

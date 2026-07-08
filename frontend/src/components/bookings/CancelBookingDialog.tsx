@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cancelBooking } from "@/lib/bookings-api";
+import { cancelBooking, previewRefund, RefundPreviewResponse } from "@/lib/bookings-api";
 
 interface CancelBookingDialogProps {
   /** Id của booking cần hủy — null khi dialog đóng. */
@@ -23,18 +23,6 @@ interface CancelBookingDialogProps {
   onCancelled?: () => void;
 }
 
-/**
- * UC-CUS-03: Dialog xác nhận hủy đơn đặt sân.
- *
- * <p>Flow:
- * <ol>
- *   <li>Customer/Owner mở dialog từ card booking.</li>
- *   <li>Nhập lý do (không bắt buộc) → bấm "Xác nhận hủy".</li>
- *   <li>Gọi {@link cancelBooking}; loading state trên button submit.</li>
- *   <li>Thành công → toast.success, đóng dialog, parent refetch.</li>
- *   <li>Lỗi → toast.error với message từ BE.</li>
- * </ol>
- */
 export function CancelBookingDialog({
   bookingId,
   onOpenChange,
@@ -42,14 +30,26 @@ export function CancelBookingDialog({
 }: CancelBookingDialogProps) {
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [preview, setPreview] = useState<RefundPreviewResponse | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   const open = bookingId !== null;
 
+  useEffect(() => {
+    if (bookingId) {
+      setLoadingPreview(true);
+      previewRefund(bookingId)
+        .then(setPreview)
+        .catch(() => setPreview(null))
+        .finally(() => setLoadingPreview(false));
+    }
+  }, [bookingId]);
+
   const handleOpenChange = (next: boolean) => {
     if (!next) {
-      // reset state khi đóng để lần mở sau luôn sạch
       setReason("");
       setSubmitting(false);
+      setPreview(null);
     }
     onOpenChange(next);
   };
@@ -100,9 +100,25 @@ export function CancelBookingDialog({
             className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-60"
             disabled={submitting}
           />
-          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
-            Nếu bạn đã thanh toán, chính sách hoàn tiền của sân sẽ được áp dụng.
-          </p>
+          {loadingPreview ? (
+            <div className="flex items-center justify-center py-2 text-sm text-slate-500">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Đang tính toán số tiền hoàn...
+            </div>
+          ) : preview ? (
+            <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 flex gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>
+                {preview.refundAmount > 0
+                  ? `Bạn sẽ được hoàn lại: ${preview.refundAmount.toLocaleString("vi-VN")} VND (${preview.refundPercentage}% số tiền thực thu).`
+                  : "Đơn hủy sát giờ hoặc chưa thanh toán, sẽ không được hoàn tiền."}
+              </span>
+            </div>
+          ) : (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+              Nếu bạn đã thanh toán, chính sách hoàn tiền của sân sẽ được áp dụng.
+            </p>
+          )}
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">
