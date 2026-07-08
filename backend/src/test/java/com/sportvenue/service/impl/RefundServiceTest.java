@@ -439,8 +439,8 @@ class RefundServiceTest {
         when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
         when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
         when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
-        when(bookingRepository.findById(1)).thenReturn(Optional.of(booking));
         when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
+
         when(paymentRepository.save(any(Payment.class))).thenAnswer(inv -> {
             Payment p = inv.getArgument(0);
             if (p.getPaymentId() == null) {
