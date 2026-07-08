@@ -42,6 +42,10 @@ class RefundServiceTest {
     @Mock
     private PaymentService paymentService;
 
+    @Mock private com.sportvenue.service.EmailService emailService;
+    @Mock private com.sportvenue.service.NotificationService notificationService;
+    @Mock private com.sportvenue.util.AfterCommitExecutor afterCommitExecutor;
+
     @InjectMocks
     private RefundServiceImpl refundService;
 
