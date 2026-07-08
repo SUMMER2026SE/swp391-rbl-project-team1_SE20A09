@@ -96,12 +96,15 @@ function BookingManagementPage() {
       if (activeTab !== "all") {
         query.set("status", activeTab.toUpperCase());
       }
-      const data = await get<PageResponse<BookingItem>>(
+      const data = await get<any>(
         `/owner/bookings?${query.toString()}`
       );
-      setBookingList(data.content);
-      setTotalPages(data.totalPages);
-      setTotalElements(data.totalElements);
+
+      // ✅ Defensive: Hỗ trợ cả mảng phẳng (API cũ) và PageResponse (API mới)
+      const list = Array.isArray(data) ? data : (data?.content ?? []);
+      setBookingList(list);
+      setTotalPages(data?.totalPages ?? 0);
+      setTotalElements(data?.totalElements ?? list.length);
     } catch (error: any) {
       console.error("Error fetching bookings:", error);
       toast.error("Không thể tải danh sách đặt sân từ máy chủ: " + error.message);
@@ -177,8 +180,10 @@ function BookingManagementPage() {
   };
 
   const filterBookings = (status?: string) => {
-    if (!status) return bookingList;
-    return bookingList.filter((b) => b.status.toLowerCase() === status.toLowerCase());
+    // ✅ Defensive: Chống null/undefined crash
+    const list = bookingList || [];
+    if (!status) return list;
+    return list.filter((b) => b.status && b.status.toLowerCase() === status.toLowerCase());
   };
 
   // Mở modal hoàn tiền và lấy kết quả xem trước chính xác từ Backend (Tránh Clock Skew)
