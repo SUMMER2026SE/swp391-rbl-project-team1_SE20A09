@@ -70,4 +70,13 @@ public class Payment implements Serializable {
     /** Thời điểm thanh toán thành công — null nếu chưa thanh toán. */
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
+
+    /** Loại lý do hoàn tiền. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reason_type", length = 50)
+    private com.sportvenue.entity.enums.RefundReasonType reasonType;
+
+    /** Đường dẫn bằng chứng nếu lỗi do chủ sân. */
+    @Column(name = "proof_url", length = 500)
+    private String proofUrl;
 }
