@@ -1,0 +1,151 @@
+import { useState, useEffect } from "react";
+import { sendChatMessage } from "@/lib/ai-chat-api";
+import { ChatMessage, TimeSlotResponse } from "@/types/aiChat";
+import { StadiumResponse } from "@/types/stadium";
+import { MatchResponse } from "@/types/match";
+
+export interface MessageItem {
+  id: string | number;
+  type: string; // "user" | "assistant"
+  content: string;
+  timestamp: string;
+  stadiums?: StadiumResponse[] | null;
+  slots?: TimeSlotResponse[] | null;
+  matches?: MatchResponse[] | null;
+  policyText?: string | null;
+  isHistory?: boolean; // Cờ đánh dấu tin nhắn load từ lịch sử cũ, không chạy lại typewriter
+}
+
+export function useAiChat() {
+  const [message, setMessage] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [messages, setMessages] = useState<MessageItem[]>([]);
+
+  // Đọc lịch sử trò chuyện từ sessionStorage khi mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = sessionStorage.getItem("ai_chat_messages");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as MessageItem[];
+          setMessages(parsed.map(m => ({ ...m, isHistory: true })));
+          return;
+        } catch (e) {
+          // Fallback to default
+        }
+      }
+    }
+    // Lịch sử mặc định nếu chưa có
+    setMessages([
+      {
+        id: "welcome",
+        type: "assistant",
+        content:
+          "Xin chào! Tôi là trợ lý AI của SportsBook. Tôi có thể giúp bạn tìm sân, đặt lịch, hoặc gợi ý sân phù hợp. Bạn cần tôi giúp gì?",
+        timestamp: new Date().toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      },
+    ]);
+  }, []);
+
+  // Ghi lịch sử trò chuyện vào sessionStorage mỗi khi tin nhắn thay đổi
+  useEffect(() => {
+    if (typeof window !== "undefined" && messages.length > 0) {
+      sessionStorage.setItem("ai_chat_messages", JSON.stringify(messages));
+    }
+  }, [messages]);
+
+  const handleSend = async (customMessage?: string) => {
+    const q = (customMessage !== undefined ? customMessage : message).trim();
+    if (!q || isSearching) return;
+
+    const userTime = new Date().toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const userMessage: MessageItem = {
+      id: "user-" + Date.now(),
+      type: "user",
+      content: q,
+      timestamp: userTime,
+    };
+
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
+    setMessage("");
+    setIsSearching(true);
+
+    try {
+      // Khi gửi tin mới, toàn bộ tin nhắn hiện hữu chuyển thành history
+      const historyPayload: ChatMessage[] = updatedMessages.slice(0, -1).map((m) => ({
+        role: m.type === "assistant" ? "assistant" : "user",
+        content: m.content,
+      }));
+
+      const result = await sendChatMessage(q, historyPayload);
+
+      const aiResponse: MessageItem = {
+        id: "ai-" + Date.now(),
+        type: "assistant",
+        content: result.message || "",
+        timestamp: new Date().toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        stadiums: result.stadiums,
+        slots: result.slots,
+        matches: result.matches,
+        policyText: result.policyText,
+        isHistory: false, // Tin nhắn mới, kích hoạt typewriter
+      };
+
+      setMessages((prev) => [...prev, aiResponse]);
+    } catch (error) {
+      const errorMsg: MessageItem = {
+        id: "err-" + Date.now(),
+        type: "assistant",
+        content: "Không thể kết nối tới máy chủ. Vui lòng kiểm tra lại kết nối mạng của bạn.",
+        timestamp: new Date().toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        isHistory: false,
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleClearHistory = () => {
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("ai_chat_messages");
+      sessionStorage.removeItem("ai_session_id"); // Reset session ID trên Redis context
+    }
+    setMessages([
+      {
+        id: "welcome-" + Date.now(),
+        type: "assistant",
+        content:
+          "Xin chào! Tôi là trợ lý AI của SportsBook. Tôi có thể giúp bạn tìm sân, đặt lịch, hoặc gợi ý sân phù hợp. Bạn cần tôi giúp gì?",
+        timestamp: new Date().toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      },
+    ]);
+  };
+
+  return {
+    message,
+    setMessage,
+    isSearching,
+    messages,
+    setMessages,
+    handleSend,
+    handleClearHistory,
+  };
+}

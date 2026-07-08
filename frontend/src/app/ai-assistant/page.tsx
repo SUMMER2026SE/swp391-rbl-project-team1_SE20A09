@@ -1,249 +1,33 @@
-'use client'
+"use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useRef, useEffect } from "react";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Bot, Send, Trash2 } from "lucide-react";
-import { useTypewriter } from "@/hooks/useTypewriter";
-import { sendChatMessage } from "@/lib/ai-chat-api";
-import { ChatMessage, TimeSlotResponse } from "@/types/aiChat";
-import { StadiumResponse } from "@/types/stadium";
-import { MatchResponse } from "@/types/match";
-import { StadiumResultCard } from "@/components/ai-assistant/StadiumResultCard";
-import { SlotResultCard } from "@/components/ai-assistant/SlotResultCard";
-import { MatchResultCard } from "@/components/ai-assistant/MatchResultCard";
+import { useAiChat } from "@/hooks/useAiChat";
+import { ChatMessageItem } from "@/components/ai-assistant/ChatMessageItem";
 import { SuggestionChips } from "@/components/ai-assistant/SuggestionChips";
 
-interface MessageItem {
-  id: string | number;
-  type: string; // "user" | "assistant"
-  content: string;
-  timestamp: string;
-  stadiums?: StadiumResponse[] | null;
-  slots?: TimeSlotResponse[] | null;
-  matches?: MatchResponse[] | null;
-  policyText?: string | null;
-  isHistory?: boolean; // Cờ đánh dấu tin nhắn load từ lịch sử cũ, không chạy lại typewriter
-}
-
-interface ChatMessageProps {
-  msg: MessageItem;
-  isLatest: boolean;
-}
-
-function ChatMessageItem({ msg, isLatest }: ChatMessageProps) {
-  const isAssistant = msg.type === "assistant";
-  // Chỉ chạy typewriter nếu là tin nhắn AI mới nhất VÀ không phải load từ lịch sử
-  const shouldAnimate = isAssistant && isLatest && !msg.isHistory;
-
-  const { displayText, isTyping } = useTypewriter(
-    shouldAnimate ? msg.content : "",
-    15
-  );
-
-  const displayedContent = shouldAnimate ? (isTyping ? displayText : msg.content) : msg.content;
-
-  return (
-    <div className={`flex gap-3 ${msg.type === "user" ? "flex-row-reverse" : ""}`}>
-      <Avatar className="h-10 w-10 flex-shrink-0">
-        {isAssistant ? (
-          <div className="w-full h-full bg-primary/10 flex items-center justify-center">
-            <Bot className="h-6 w-6 text-primary" />
-          </div>
-        ) : (
-          <AvatarFallback className="bg-primary text-primary-foreground">U</AvatarFallback>
-        )}
-      </Avatar>
-
-      <div className={`flex-1 flex flex-col gap-2 ${msg.type === "user" ? "items-end" : "items-start"}`}>
-        <div>
-          <div
-            className={`inline-block max-w-md md:max-w-lg ${
-              msg.type === "user"
-                ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-sm"
-                : "bg-muted rounded-2xl rounded-tl-sm"
-            } px-4 py-3`}
-          >
-            <p className="text-sm whitespace-pre-line leading-relaxed">{displayedContent}</p>
-          </div>
-          <p className="text-[10px] text-muted-foreground mt-1 px-1">
-            {msg.timestamp}
-          </p>
-        </div>
-
-        {/* Render cards immediately */}
-        {isAssistant && (
-          <div className="w-full flex flex-col gap-3 mt-1">
-            {msg.stadiums && msg.stadiums.length > 0 && (
-              <div className="flex flex-wrap gap-3">
-                {msg.stadiums.map((stadium) => (
-                  <StadiumResultCard key={stadium.stadiumId} stadium={stadium} />
-                ))}
-              </div>
-            )}
-
-            {msg.slots && msg.slots.length > 0 && (
-              <SlotResultCard slots={msg.slots} />
-            )}
-
-            {msg.matches && msg.matches.length > 0 && (
-              <div className="flex flex-wrap gap-3">
-                {msg.matches.map((match) => (
-                  <MatchResultCard key={match.matchId} match={match} />
-                ))}
-              </div>
-            )}
-
-            {/* policyText là nội dung chính sách CHUẨN XÁC từ backend (PolicyHandler) — luôn
-                hiển thị tách biệt, không dựa vào lời LLM tự diễn giải ở content phía trên
-                (LLM có thể nhớ nhầm/diễn giải sai nội dung FAQ). */}
-            {msg.policyText && (
-              <div className="w-full max-w-md md:max-w-lg rounded-xl border border-border/80 bg-muted/30 p-3">
-                <p className="text-xs leading-relaxed text-foreground whitespace-pre-line">
-                  {msg.policyText}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function AIAssistantPage() {
-  const [message, setMessage] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
-  const [messages, setMessages] = useState<MessageItem[]>([]);
-
-  // Đọc lịch sử trò chuyện từ sessionStorage khi trang vừa mount
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = sessionStorage.getItem("ai_chat_messages");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored) as MessageItem[];
-          // Đánh dấu toàn bộ tin nhắn lịch sử là isHistory = true để tránh typewriter lặp lại
-          setMessages(parsed.map(m => ({ ...m, isHistory: true })));
-          return;
-        } catch (e) {
-          // Fallback to default
-        }
-      }
-    }
-    // Lịch sử mặc định nếu chưa có
-    setMessages([
-      {
-        id: "welcome",
-        type: "assistant",
-        content:
-          "Xin chào! Tôi là trợ lý AI của SportsBook. Tôi có thể giúp bạn tìm sân, đặt lịch, hoặc gợi ý sân phù hợp. Bạn cần tôi giúp gì?",
-        timestamp: new Date().toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      },
-    ]);
-  }, []);
-
-  // Ghi lịch sử trò chuyện vào sessionStorage mỗi khi tin nhắn thay đổi
-  useEffect(() => {
-    if (typeof window !== "undefined" && messages.length > 0) {
-      sessionStorage.setItem("ai_chat_messages", JSON.stringify(messages));
-    }
-  }, [messages]);
+  const {
+    message,
+    setMessage,
+    isSearching,
+    messages,
+    handleSend,
+    handleClearHistory,
+  } = useAiChat();
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isSearching]);
-
-  const handleSend = async () => {
-    const q = message.trim();
-    if (!q || isSearching) return;
-
-    const userTime = new Date().toLocaleTimeString("vi-VN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    const userMessage: MessageItem = {
-      id: "user-" + Date.now(),
-      type: "user",
-      content: q,
-      timestamp: userTime,
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setMessage("");
-    setIsSearching(true);
-
-    try {
-      // Khi gửi tin mới, toàn bộ tin nhắn hiện hữu chuyển thành history
-      const historyPayload: ChatMessage[] = messages.map((m) => ({
-        role: m.type === "assistant" ? "assistant" : "user",
-        content: m.content,
-      }));
-
-      const result = await sendChatMessage(q, historyPayload);
-
-      const aiResponse: MessageItem = {
-        id: "ai-" + Date.now(),
-        type: "assistant",
-        content: result.message || "",
-        timestamp: new Date().toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        stadiums: result.stadiums,
-        slots: result.slots,
-        matches: result.matches,
-        policyText: result.policyText,
-        isHistory: false, // Tin nhắn mới, kích hoạt typewriter
-      };
-
-      setMessages((prev) => [...prev, aiResponse]);
-    } catch (error) {
-      const errorMsg: MessageItem = {
-        id: "err-" + Date.now(),
-        type: "assistant",
-        content: "Không thể kết nối tới máy chủ. Vui lòng kiểm tra lại kết nối mạng của bạn.",
-        timestamp: new Date().toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        isHistory: false,
-      };
-      setMessages((prev) => [...prev, errorMsg]);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const handleClearHistory = () => {
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem("ai_chat_messages");
-      sessionStorage.removeItem("ai_session_id"); // Reset session ID trên Redis context
-    }
-    setMessages([
-      {
-        id: "welcome-" + Date.now(),
-        type: "assistant",
-        content:
-          "Xin chào! Tôi là trợ lý AI của SportsBook. Tôi có thể giúp bạn tìm sân, đặt lịch, hoặc gợi ý sân phù hợp. Bạn cần tôi giúp gì?",
-        timestamp: new Date().toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      },
-    ]);
-  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -299,7 +83,7 @@ function AIAssistantPage() {
 
               {/* Hiện Suggestion Chips khi chỉ có 1 lời chào */}
               {messages.length === 1 && !isSearching && (
-                <SuggestionChips onSelect={(text) => setMessage(text)} />
+                <SuggestionChips onSelect={(text) => handleSend(text)} />
               )}
 
               {/* Skeleton loading bubble */}
@@ -338,7 +122,7 @@ function AIAssistantPage() {
                 disabled={isSearching}
                 className="rounded-xl border-border/80 focus-visible:ring-primary h-10"
               />
-              <Button onClick={handleSend} disabled={!message.trim() || isSearching} className="rounded-xl h-10 px-4">
+              <Button onClick={() => handleSend()} disabled={!message.trim() || isSearching} className="rounded-xl h-10 px-4">
                 <Send className="h-4 w-4" />
               </Button>
             </div>

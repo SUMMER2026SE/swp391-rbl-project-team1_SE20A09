@@ -43,7 +43,7 @@ export function MatchResultCard({ match }: { match: MatchResponse }) {
   };
 
   return (
-    <Link href="/community" className="block group w-full max-w-sm">
+    <Link href={`/community?matchId=${match.matchId}`} className="block group w-full max-w-sm">
       <Card className="overflow-hidden border-border/80 transition-all duration-300 hover:-translate-y-1 hover:border-primary/25 hover:shadow-xl hover:shadow-primary/10 h-full flex flex-col justify-between">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-2.5">
