@@ -1,10 +1,5 @@
 package com.sportvenue.service;
 
-import com.sportvenue.exception.EmailDeliveryException;
-import lombok.extern.slf4j.Slf4j;
-import jakarta.annotation.PostConstruct;
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
@@ -13,6 +8,13 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+
+import com.sportvenue.exception.EmailDeliveryException;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Reusable email service — dùng chung cho OTP, thông báo booking, v.v.
@@ -154,6 +156,46 @@ public class EmailService {
             log.info("Account status notification email successfully sent to: {}", toEmail);
         } catch (MailException e) {
             log.error("Failed to send account status notification email to: {}, error: {}", toEmail, e.getMessage());
+        }
+    }
+
+    /**
+     * Gửi email nhắc lịch chơi sắp tới.
+     * Chạy bất đồng bộ (@Async) để không block BookingReminderScheduler.
+     *
+     * @param toEmail         Email người nhận
+     * @param stadiumName     Tên sân (hiển thị trong nội dung)
+     * @param reservationDate Ngày đặt sân đã format, VD: "28/06/2026"
+     * @param timeRange       Khung giờ chơi đã format, VD: "08:00 – 10:00"
+     */
+    @Async
+    public void sendBookingReminderEmail(String toEmail,
+                                         String stadiumName,
+                                         String reservationDate,
+                                         String timeRange) {
+        if (mockMail) {
+            log.info("[MOCK EMAIL] Reminder to {}: {} on {} at {}", toEmail, stadiumName, reservationDate, timeRange);
+            return;
+        }
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(fromAddress);
+            message.setTo(toEmail);
+            message.setSubject("⏰ Nhắc lịch chơi thể thao - " + stadiumName);
+            message.setText(
+                    "Xin chào,\n\n" +
+                    "Bạn có lịch đặt sân sắp tới:\n" +
+                    "  🏟️  Sân:  " + stadiumName + "\n" +
+                    "  📅  Ngày: " + reservationDate + "\n" +
+                    "  🕐  Giờ:  " + timeRange + "\n\n" +
+                    "Vui lòng có mặt đúng giờ. Nếu cần hỗ trợ, liên hệ với chúng tôi qua ứng dụng.\n\n" +
+                    "Chúc bạn có buổi chơi thể thao vui vẻ!\n" +
+                    "Đội ngũ SportVenue"
+            );
+            mailSender.send(message);
+            log.info("Sent booking reminder email to {}", toEmail);
+        } catch (MailException e) {
+            log.error("Failed to send booking reminder email to {}: {}", toEmail, e.getMessage());
         }
     }
 
