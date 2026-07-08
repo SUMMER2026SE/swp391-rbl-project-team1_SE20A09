@@ -155,15 +155,16 @@ class BookingReminderSchedulerTest {
     @Test
     @DisplayName("Booking có playStart đã qua → không nhắc (lọc Java, không phải DB)")
     void sendUpcomingReminders_shouldSkipPastPlayStart() {
+        java.time.LocalDateTime pastStartDT = java.time.LocalDateTime.now().minusHours(1);
         TimeSlot pastSlot = TimeSlot.builder()
-                .startTime(LocalTime.now().minusHours(1)) // 1 giờ trước
-                .endTime(LocalTime.now())
+                .startTime(pastStartDT.toLocalTime()) // 1 giờ trước
+                .endTime(pastStartDT.plusHours(1).toLocalTime())
                 .build();
 
         Booking booking = Booking.builder()
                 .bookingId(102)
                 .bookingStatus(BookingStatus.CONFIRMED)
-                .reservationDate(LocalDate.now())
+                .reservationDate(pastStartDT.toLocalDate())
                 .slot(pastSlot)
                 .user(user)
                 .stadium(stadium)

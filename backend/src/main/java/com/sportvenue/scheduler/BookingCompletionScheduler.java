@@ -46,8 +46,9 @@ public class BookingCompletionScheduler {
     public void completePastBookings() {
         LocalDateTime now = LocalDateTime.now();
         LocalDate today = now.toLocalDate();
+        LocalDate limitDate = today.minusDays(30);
 
-        List<Booking> candidates = bookingRepository.findConfirmedPastPlayTime(today);
+        List<Booking> candidates = bookingRepository.findConfirmedPastPlayTime(limitDate, today);
         List<Booking> toComplete = new ArrayList<>();
 
         for (Booking b : candidates) {

@@ -471,9 +471,12 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     @Query("""
             SELECT b FROM Booking b
             WHERE b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED
+            AND b.reservationDate >= :limitDate
             AND b.reservationDate <= :today
             """)
-    List<Booking> findConfirmedPastPlayTime(@Param("today") java.time.LocalDate today);
+    List<Booking> findConfirmedPastPlayTime(
+            @Param("limitDate") java.time.LocalDate limitDate,
+            @Param("today") java.time.LocalDate today);
 
     /**
      * Lấy các booking CONFIRMED, chưa nhắc (reminderSentAt IS NULL),

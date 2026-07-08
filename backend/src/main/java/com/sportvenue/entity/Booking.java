@@ -131,5 +131,5 @@ public class Booking implements Serializable {
      * Được thêm bởi migration V5.11, dùng bởi {@code BookingReminderScheduler}.
      */
     @Column(name = "reminder_sent_at")
-    private java.time.LocalDateTime reminderSentAt;
+    private LocalDateTime reminderSentAt;
 }

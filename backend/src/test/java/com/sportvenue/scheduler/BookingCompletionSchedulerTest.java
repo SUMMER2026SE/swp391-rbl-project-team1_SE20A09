@@ -60,7 +60,7 @@ class BookingCompletionSchedulerTest {
                 .slot(pastSlot)
                 .build();
 
-        when(bookingRepository.findConfirmedPastPlayTime(any(LocalDate.class)))
+        when(bookingRepository.findConfirmedPastPlayTime(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(List.of(booking));
 
         scheduler.completePastBookings();
@@ -83,7 +83,7 @@ class BookingCompletionSchedulerTest {
                 .slot(futureSlot)                 // 22:00–23:59, giả sử now < 22:00
                 .build();
 
-        when(bookingRepository.findConfirmedPastPlayTime(any(LocalDate.class)))
+        when(bookingRepository.findConfirmedPastPlayTime(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(List.of(booking));
 
         scheduler.completePastBookings();
@@ -102,7 +102,7 @@ class BookingCompletionSchedulerTest {
                 .slot(null)
                 .build();
 
-        when(bookingRepository.findConfirmedPastPlayTime(any(LocalDate.class)))
+        when(bookingRepository.findConfirmedPastPlayTime(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(List.of(booking));
 
         scheduler.completePastBookings();
@@ -113,7 +113,7 @@ class BookingCompletionSchedulerTest {
     @Test
     @DisplayName("Không có booking nào → saveAll không được gọi")
     void completePastBookings_shouldDoNothingWhenNoCandidates() {
-        when(bookingRepository.findConfirmedPastPlayTime(any(LocalDate.class)))
+        when(bookingRepository.findConfirmedPastPlayTime(any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(List.of());
 
         scheduler.completePastBookings();
