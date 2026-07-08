@@ -7,7 +7,7 @@ export function Footer() {
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
-            <h3 className="mb-4">SportHub</h3>
+            <h3 className="mb-4">SportsBook</h3>
             <p className="text-sm text-muted-foreground">
               Nền tảng đặt sân thể thao hàng đầu Việt Nam. Tìm kiếm, đặt lịch và kết nối cộng đồng thể thao.
             </p>
@@ -69,7 +69,7 @@ export function Footer() {
               </li>
               <li className="flex items-center">
                 <Mail className="h-4 w-4 mr-2" />
-                support@sporthub.vn
+                support@sportsbook.vn
               </li>
             </ul>
             <div className="flex space-x-4 mt-4">
@@ -89,7 +89,7 @@ export function Footer() {
         <Separator className="my-8" />
 
         <div className="text-center text-sm text-muted-foreground">
-          © 2026 SportHub. All rights reserved.
+          © 2026 SportsBook. All rights reserved.
         </div>
       </div>
     </footer>

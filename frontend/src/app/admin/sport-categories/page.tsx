@@ -12,12 +12,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Trophy, Loader2, X } from "lucide-react";
+import { Plus, Trash2, Trophy, Loader2, X, Pencil, RotateCcw } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
-import { fetchSportTypes, createSportType, deleteSportType, type SportType, type CreateSportTypeRequest } from "@/lib/api/sport-category";
+import { Switch } from "@/components/ui/switch";
+import { fetchSportTypes, createSportType, updateSportType, deleteSportType, type SportType, type CreateSportTypeRequest } from "@/lib/api/sport-category";
 
 const categorySchema = z.object({
   sportName: z.string()
@@ -30,6 +31,7 @@ const categorySchema = z.object({
     .regex(/^[^<>]*$/, "Không được chứa ký tự đặc biệt < hoặc >")
     .optional()
     .or(z.literal("")),
+  isFootballType: z.boolean().optional(),
 });
 
 type CategoryFormValues = z.infer<typeof categorySchema>;
@@ -65,6 +67,7 @@ const formatSportCode = (name: string) => {
 
 function SportCategoriesPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<SportType | null>(null);
   const [categories, setCategories] = useState<SportType[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -106,6 +109,31 @@ function SportCategoriesPage() {
     }
   };
 
+  const handleEdit = (category: SportType) => {
+    setEditingCategory(category);
+    setValue("sportName", category.sportName);
+    setValue("internalNote", category.description || "");
+    setValue("isFootballType", category.isFootballType || false);
+    setShowCreateDialog(true);
+  };
+
+  const handleRestore = async (category: SportType) => {
+    try {
+      const payload: CreateSportTypeRequest = {
+        sportName: category.sportName,
+        sportCode: category.sportCode,
+        description: category.description,
+        isActive: true,
+        isFootballType: category.isFootballType,
+      };
+      await updateSportType(category.sportTypeId, payload);
+      toast.success("Mở lại môn thể thao thành công");
+      await loadCategories();
+    } catch (error: any) {
+      toast.error(error.message || "Có lỗi xảy ra khi mở lại môn thể thao");
+    }
+  };
+
   const {
     register,
     handleSubmit,
@@ -119,6 +147,7 @@ function SportCategoriesPage() {
       sportName: "",
       fieldTypes: [],
       internalNote: "",
+      isFootballType: false,
     },
   });
 
@@ -151,19 +180,27 @@ function SportCategoriesPage() {
       const code = formatSportCode(values.sportName);
       const payload: CreateSportTypeRequest = {
         sportName: values.sportName,
-        sportCode: code,
+        sportCode: editingCategory ? editingCategory.sportCode : code,
         description: values.internalNote || undefined,
-        isActive: true,
-        isFootballType: code.startsWith("FOOTBALL"),
+        isActive: editingCategory ? editingCategory.isActive : true,
+        isFootballType: values.isFootballType,
       };
-      const newCategory = await createSportType(payload);
-      toast.success("Thêm loại môn thể thao thành công");
+      
+      if (editingCategory) {
+        await updateSportType(editingCategory.sportTypeId, payload);
+        toast.success("Cập nhật loại môn thể thao thành công");
+      } else {
+        await createSportType(payload);
+        toast.success("Thêm loại môn thể thao thành công");
+      }
+      
       setShowCreateDialog(false);
       reset();
       setTagInput("");
-      setCategories((prev) => [...prev, newCategory]);
+      setEditingCategory(null);
+      await loadCategories();
     } catch (error: any) {
-      toast.error(error.message || "Có lỗi xảy ra khi thêm môn thể thao");
+      toast.error(error.message || `Có lỗi xảy ra khi ${editingCategory ? 'cập nhật' : 'thêm'} môn thể thao`);
     } finally {
       setSubmitting(false);
     }
@@ -175,6 +212,7 @@ function SportCategoriesPage() {
         <h1 className="text-3xl font-bold">Quản lý danh mục thể thao</h1>
           <Button onClick={() => {
             reset();
+            setEditingCategory(null);
             setTagInput("");
             setShowCreateDialog(true);
           }}>
@@ -207,20 +245,42 @@ function SportCategoriesPage() {
                     </div>
                     <div>
                       {!category.isActive ? (
-                        <span className="text-xs text-muted-foreground italic px-2 py-1 bg-muted rounded">Đã tạm ngưng</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground italic px-2 py-1 bg-muted rounded">Đã tạm ngưng</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-green-600 hover:bg-green-600/10 hover:text-green-600"
+                            title="Mở lại"
+                            onClick={() => handleRestore(category)}
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        </div>
                       ) : (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                          title="Xóa"
-                          onClick={() => {
-                            setCategoryToDelete(category);
-                            setShowDeleteDialog(true);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-primary hover:bg-primary/10 hover:text-primary"
+                            title="Chỉnh sửa"
+                            onClick={() => handleEdit(category)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            title="Xóa"
+                            onClick={() => {
+                              setCategoryToDelete(category);
+                              setShowDeleteDialog(true);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -257,11 +317,11 @@ function SportCategoriesPage() {
           </div>
         )}
 
-      {/* Create Dialog */}
+      {/* Create/Edit Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Thêm môn thể thao mới</DialogTitle>
+            <DialogTitle>{editingCategory ? "Cập nhật môn thể thao" : "Thêm môn thể thao mới"}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 pt-4">
             <div className="space-y-2">
@@ -325,8 +385,25 @@ function SportCategoriesPage() {
               )}
             </div>
 
+            <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <Label className="text-base">Gắn tag Bóng đá</Label>
+                <p className="text-xs text-muted-foreground">
+                  Đánh dấu nếu đây là môn Bóng đá (hiển thị loại sân 5, 7, 11 người).
+                </p>
+              </div>
+              <Switch
+                checked={watch("isFootballType")}
+                onCheckedChange={(checked) => setValue("isFootballType", checked, { shouldValidate: true })}
+              />
+            </div>
+
             <div className="flex justify-end gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => setShowCreateDialog(false)}>
+              <Button type="button" variant="outline" onClick={() => {
+                setShowCreateDialog(false);
+                setEditingCategory(null);
+                reset();
+              }}>
                 Hủy
               </Button>
               <Button type="submit" disabled={submitting}>
@@ -336,7 +413,7 @@ function SportCategoriesPage() {
                     Đang lưu...
                   </>
                 ) : (
-                  "Thêm mới"
+                  editingCategory ? "Lưu thay đổi" : "Thêm mới"
                 )}
               </Button>
             </div>

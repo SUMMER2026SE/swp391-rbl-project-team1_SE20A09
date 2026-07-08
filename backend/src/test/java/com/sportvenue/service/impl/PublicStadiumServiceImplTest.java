@@ -85,4 +85,41 @@ public class PublicStadiumServiceImplTest {
         assertTrue(response.getContent().get(1).getDistanceInKm() > 0.0);
         assertEquals(java.math.BigDecimal.valueOf(200_000), response.getContent().get(1).getPricePerHour());
     }
+
+    @Test
+    void getComplexRef_ShouldReturnComplexId_WhenStadiumBelongsToComplex() {
+        // Arrange
+        Integer stadiumId = 5;
+        com.sportvenue.entity.StadiumComplex complex = new com.sportvenue.entity.StadiumComplex();
+        complex.setComplexId(42);
+
+        Stadium stadium = new Stadium();
+        stadium.setStadiumId(stadiumId);
+        stadium.setComplex(complex);
+
+        when(stadiumRepository.findByIdWithComplexAndParent(stadiumId)).thenReturn(java.util.Optional.of(stadium));
+
+        // Act
+        com.sportvenue.dto.response.ComplexRefResponse response = publicStadiumService.getComplexRef(stadiumId);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(stadiumId, response.getStadiumId());
+        assertEquals(42, response.getComplexId());
+    }
+
+    @Test
+    void getComplexRef_ShouldReturnNullComplexId_WhenStadiumNotFoundOrNoComplex() {
+        // Arrange
+        Integer stadiumId = 99;
+        when(stadiumRepository.findByIdWithComplexAndParent(stadiumId)).thenReturn(java.util.Optional.empty());
+
+        // Act
+        com.sportvenue.dto.response.ComplexRefResponse response = publicStadiumService.getComplexRef(stadiumId);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(stadiumId, response.getStadiumId());
+        assertNull(response.getComplexId());
+    }
 }

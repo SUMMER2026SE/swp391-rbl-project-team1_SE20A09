@@ -14,6 +14,7 @@ import { type BookingHistoryItem } from "@/lib/bookings-api";
 import { CancelBookingDialog } from "@/components/bookings/CancelBookingDialog";
 
 const STATUS_CONFIG = {
+  pending_payment: { label: "Chờ thanh toán", className: "bg-orange-50 text-orange-700 border-orange-200" },
   confirmed: { label: "Đã xác nhận", className: "bg-green-50 text-green-700 border-green-200" },
   pending: { label: "Chờ xác nhận", className: "bg-amber-50 text-amber-700 border-amber-200" },
   completed: { label: "Hoàn thành", className: "bg-slate-50 text-slate-600 border-slate-200" },
@@ -42,6 +43,7 @@ function getActionButtons(
     : `/booking/${booking.id}`;
 
   switch (booking.status) {
+    case "pending_payment":
     case "pending":
     case "confirmed":
       return (
@@ -49,14 +51,16 @@ function getActionButtons(
           <Button asChild variant="outline" className={secondaryBtnClass}>
             <Link href={detailLink}>Xem chi tiết</Link>
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className={`${primaryBtnClass} border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700`}
-            onClick={() => onRequestCancel(booking.id)}
-          >
-            Hủy đơn
-          </Button>
+          {!isOwner && (
+            <Button
+              type="button"
+              variant="outline"
+              className={`${primaryBtnClass} border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700`}
+              onClick={() => onRequestCancel(booking.id)}
+            >
+              Hủy đơn
+            </Button>
+          )}
         </>
       );
     case "completed":
@@ -225,10 +229,11 @@ function EmptyState({
 }
 
 interface BookingHistoryListProps {
-  isOwner?: boolean;
+  viewMode?: "CUSTOMER_VIEW" | "VENUE_MANAGEMENT";
 }
 
-export function BookingHistoryList({ isOwner = false }: BookingHistoryListProps) {
+export function BookingHistoryList({ viewMode = "CUSTOMER_VIEW" }: BookingHistoryListProps) {
+  const isOwner = viewMode === "VENUE_MANAGEMENT";
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("all");
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);

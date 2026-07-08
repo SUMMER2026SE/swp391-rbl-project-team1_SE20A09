@@ -8,10 +8,14 @@ import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.AccountStatus;
 import com.sportvenue.entity.enums.ApprovedStatus;
+import com.sportvenue.entity.enums.ComplexStatus;
 import com.sportvenue.entity.enums.MatchStatus;
 import com.sportvenue.entity.enums.MatchingType;
 import com.sportvenue.entity.enums.SkillLevel;
 import com.sportvenue.entity.enums.StadiumStatus;
+import com.sportvenue.entity.enums.StadiumNodeType;
+import com.sportvenue.entity.StadiumComplex;
+import com.sportvenue.entity.TimeSlot;
 import com.sportvenue.entity.JoinRequest;
 import com.sportvenue.entity.enums.JoinRequestStatus;
 import com.sportvenue.dto.response.JoinRequestResponse;
@@ -22,7 +26,10 @@ import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.MatchRequestRepository;
 import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.repository.StadiumRepository;
+import com.sportvenue.repository.StadiumComplexRepository;
+import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.service.ChatService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -66,6 +73,18 @@ class MatchRequestServiceImplTest {
     @Mock
     private JoinRequestRepository joinRequestRepository;
 
+    @Mock
+    private ChatService chatService;
+
+    @Mock
+    private StadiumComplexRepository stadiumComplexRepository;
+
+    @Mock
+    private TimeSlotRepository timeSlotRepository;
+
+    @Mock
+    private com.sportvenue.service.MaintenanceScheduleService maintenanceScheduleService;
+
     private MatchRequestServiceImpl matchRequestService;
 
     @BeforeEach
@@ -76,7 +95,11 @@ class MatchRequestServiceImplTest {
                 stadiumRepository,
                 sportTypeRepository,
                 bookingRepository,
-                joinRequestRepository
+                joinRequestRepository,
+                chatService,
+                stadiumComplexRepository,
+                timeSlotRepository,
+                maintenanceScheduleService
         );
     }
 
@@ -108,7 +131,7 @@ class MatchRequestServiceImplTest {
                 .build();
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(stadiumRepository.findById(request.getStadiumId())).thenReturn(Optional.of(stadium));
+        when(stadiumRepository.findByIdWithComplexAndParent(request.getStadiumId())).thenReturn(Optional.of(stadium));
         when(sportTypeRepository.findById(request.getSportTypeId())).thenReturn(Optional.of(sportType));
 
         when(matchRequestRepository.existsOverlappingMatchRequest(any(), any(), any(), any())).thenReturn(false);
@@ -167,7 +190,7 @@ class MatchRequestServiceImplTest {
     void createMatch_StadiumNotFound() {
         User user = User.builder().userId(1).accountStatus(AccountStatus.ACTIVE).build();
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
-        when(stadiumRepository.findById(any())).thenReturn(Optional.empty());
+        when(stadiumRepository.findByIdWithComplexAndParent(any())).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () ->
                 matchRequestService.createMatch(validRequest(), 1));
@@ -181,7 +204,7 @@ class MatchRequestServiceImplTest {
         Stadium stadium = Stadium.builder().stadiumId(10).stadiumStatus(StadiumStatus.MAINTENANCE).build();
 
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
-        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(stadiumRepository.findByIdWithComplexAndParent(10)).thenReturn(Optional.of(stadium));
 
         assertThrows(BadRequestException.class, () ->
                 matchRequestService.createMatch(validRequest(), 1));
@@ -199,7 +222,7 @@ class MatchRequestServiceImplTest {
                 .build();
 
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
-        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(stadiumRepository.findByIdWithComplexAndParent(10)).thenReturn(Optional.of(stadium));
 
         assertThrows(BadRequestException.class, () ->
                 matchRequestService.createMatch(validRequest(), 1));
@@ -221,7 +244,7 @@ class MatchRequestServiceImplTest {
                 .build();
 
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
-        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(stadiumRepository.findByIdWithComplexAndParent(10)).thenReturn(Optional.of(stadium));
         when(sportTypeRepository.findById(1)).thenReturn(Optional.of(sportFootball)); // Kèo bóng đá
 
         assertThrows(BadRequestException.class, () ->
@@ -242,7 +265,7 @@ class MatchRequestServiceImplTest {
                 .build();
 
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
-        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(stadiumRepository.findByIdWithComplexAndParent(10)).thenReturn(Optional.of(stadium));
         when(sportTypeRepository.findById(1)).thenReturn(Optional.of(sport));
 
         // Có kèo khác trùng lịch
@@ -266,7 +289,7 @@ class MatchRequestServiceImplTest {
                 .build();
 
         when(userRepository.findById(1)).thenReturn(Optional.of(user));
-        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(stadiumRepository.findByIdWithComplexAndParent(10)).thenReturn(Optional.of(stadium));
         when(sportTypeRepository.findById(1)).thenReturn(Optional.of(sport));
 
         when(matchRequestRepository.existsOverlappingMatchRequest(any(), any(), any(), any())).thenReturn(false);
@@ -348,7 +371,7 @@ class MatchRequestServiceImplTest {
                 .build();
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(stadiumRepository.findById(request.getStadiumId())).thenReturn(Optional.of(stadium));
+        when(stadiumRepository.findByIdWithComplexAndParent(request.getStadiumId())).thenReturn(Optional.of(stadium));
         when(sportTypeRepository.findById(request.getSportTypeId())).thenReturn(Optional.of(sportType));
 
         when(matchRequestRepository.existsOverlappingMatchRequest(any(), any(), any(), any())).thenReturn(false);
@@ -632,5 +655,176 @@ class MatchRequestServiceImplTest {
 
         assertThrows(BadRequestException.class, () ->
                 matchRequestService.cancelMatch(matchId, hostUserId, "Lý do cá nhân"));
+    }
+
+    @Test
+    void createMatch_Complex_Success() {
+        Integer userId = 1;
+        
+        CreateMatchRequest request = CreateMatchRequest.builder()
+                .complexId(5)
+                .sportTypeId(1)
+                .title("Kèo bóng đá 5v5")
+                .description("Vui vẻ")
+                .playDate(LocalDate.now().plusDays(2))
+                .startTime(LocalTime.of(18, 0))
+                .endTime(LocalTime.of(19, 0))
+                .maxPlayers(10)
+                .skillLevel(SkillLevel.INTERMEDIATE)
+                .splitPrice(false)
+                .matchingType(MatchingType.INDIVIDUAL)
+                .build();
+
+        User user = User.builder()
+                .userId(userId)
+                .accountStatus(AccountStatus.ACTIVE)
+                .firstName("Nguyen")
+                .lastName("An")
+                .build();
+
+        SportType sportType = SportType.builder()
+                .sportTypeId(1)
+                .sportName("Football")
+                .build();
+
+        StadiumComplex complex = StadiumComplex.builder()
+                .complexId(5)
+                .name("Tổ hợp Tuyên Sơn")
+                .address("Đà Nẵng")
+                .complexStatus(ComplexStatus.AVAILABLE)
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .sportTypes(java.util.Set.of(sportType))
+                .build();
+
+        Stadium court = Stadium.builder()
+                .stadiumId(20)
+                .stadiumName("Sân số 1")
+                .nodeType(StadiumNodeType.COURT)
+                .complex(complex)
+                .sportType(sportType)
+                .build();
+
+        TimeSlot slot = TimeSlot.builder()
+                .slotId(50)
+                .stadium(court)
+                .startTime(LocalTime.of(18, 0))
+                .endTime(LocalTime.of(19, 0))
+                .slotStatus(com.sportvenue.entity.enums.SlotStatus.AVAILABLE)
+                .build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(stadiumComplexRepository.findById(5)).thenReturn(Optional.of(complex));
+        when(sportTypeRepository.findById(1)).thenReturn(Optional.of(sportType));
+        when(stadiumRepository.findCourtsByComplexId(5)).thenReturn(List.of(court));
+        when(timeSlotRepository.findOverlappingSlotsByStadiumIds(any(), any(), any())).thenReturn(List.of(slot));
+        when(bookingRepository.findActiveBookingKeysByStadiumIds(any(), any(), any())).thenReturn(List.of());
+
+        when(matchRequestRepository.existsOverlappingMatchRequest(any(), any(), any(), any())).thenReturn(false);
+        when(bookingRepository.existsOverlappingBooking(any(), any(), any(), any(), any())).thenReturn(false);
+
+        when(matchRequestRepository.save(any(MatchRequest.class))).thenAnswer(invocation -> {
+            MatchRequest mr = invocation.getArgument(0);
+            mr.setMatchId(300);
+            mr.setCreatedAt(LocalDateTime.now());
+            return mr;
+        });
+
+        MatchResponse response = matchRequestService.createMatch(request, userId);
+
+        assertNotNull(response);
+        assertEquals(300, response.getMatchId());
+        assertEquals("Nguyen An", response.getHostName());
+    }
+
+    @Test
+    void createMatch_Complex_NoAvailableCourt_ThrowsException() {
+        Integer userId = 1;
+        
+        CreateMatchRequest request = CreateMatchRequest.builder()
+                .complexId(5)
+                .sportTypeId(1)
+                .title("Kèo bóng đá 5v5")
+                .playDate(LocalDate.now().plusDays(2))
+                .startTime(LocalTime.of(18, 0))
+                .endTime(LocalTime.of(19, 0))
+                .maxPlayers(10)
+                .skillLevel(SkillLevel.INTERMEDIATE)
+                .splitPrice(false)
+                .build();
+
+        User user = User.builder()
+                .userId(userId)
+                .accountStatus(AccountStatus.ACTIVE)
+                .build();
+
+        SportType sportType = SportType.builder()
+                .sportTypeId(1)
+                .sportName("Football")
+                .build();
+
+        StadiumComplex complex = StadiumComplex.builder()
+                .complexId(5)
+                .complexStatus(ComplexStatus.AVAILABLE)
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .sportTypes(java.util.Set.of(sportType))
+                .build();
+
+        Stadium court = Stadium.builder()
+                .stadiumId(20)
+                .nodeType(StadiumNodeType.COURT)
+                .complex(complex)
+                .sportType(sportType)
+                .build();
+
+        // Không có slot trùng hoặc slot bận
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(stadiumComplexRepository.findById(5)).thenReturn(Optional.of(complex));
+        when(sportTypeRepository.findById(1)).thenReturn(Optional.of(sportType));
+        when(stadiumRepository.findCourtsByComplexId(5)).thenReturn(List.of(court));
+        when(timeSlotRepository.findOverlappingSlotsByStadiumIds(any(), any(), any())).thenReturn(List.of()); // slot rỗng
+
+        assertThrows(BadRequestException.class, () ->
+                matchRequestService.createMatch(request, userId));
+    }
+
+    @Test
+    void createMatch_Complex_SportTypeNotSupported_ThrowsException() {
+        Integer userId = 1;
+        
+        CreateMatchRequest request = CreateMatchRequest.builder()
+                .complexId(5)
+                .sportTypeId(2) // Cầu lông
+                .title("Kèo cầu lông")
+                .playDate(LocalDate.now().plusDays(2))
+                .startTime(LocalTime.of(18, 0))
+                .endTime(LocalTime.of(19, 0))
+                .maxPlayers(10)
+                .skillLevel(SkillLevel.INTERMEDIATE)
+                .splitPrice(false)
+                .build();
+
+        User user = User.builder()
+                .userId(userId)
+                .accountStatus(AccountStatus.ACTIVE)
+                .build();
+
+        SportType sportType = SportType.builder()
+                .sportTypeId(2)
+                .sportName("Badminton")
+                .build();
+
+        StadiumComplex complex = StadiumComplex.builder()
+                .complexId(5)
+                .complexStatus(ComplexStatus.AVAILABLE)
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .sportTypes(java.util.Set.of()) // Không hỗ trợ môn nào
+                .build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(stadiumComplexRepository.findById(5)).thenReturn(Optional.of(complex));
+        when(sportTypeRepository.findById(2)).thenReturn(Optional.of(sportType));
+
+        assertThrows(BadRequestException.class, () ->
+                matchRequestService.createMatch(request, userId));
     }
 }

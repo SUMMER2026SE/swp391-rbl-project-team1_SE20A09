@@ -1,4 +1,4 @@
-import { get, post, put } from "@/lib/api";
+import { get, post, put, publicApi } from "@/lib/api";
 
 export type BookingHistoryItem = {
   id: string;
@@ -10,7 +10,7 @@ export type BookingHistoryItem = {
   time: string;
   location: string;
   price: number;
-  status: "pending" | "confirmed" | "completed" | "cancelled";
+  status: "pending" | "pending_payment" | "confirmed" | "completed" | "cancelled";
 };
 
 /** Cấu trúc PageResponse trả về từ backend */
@@ -101,7 +101,7 @@ export async function fetchOwnerBookings(
     displayId: `#${b.bookingId}`,
     venue: b.stadium?.stadiumName || "Sân chưa biết",
     sportType: b.stadium?.sportType || "Khác",
-    imageUrl: "/images/stadium1.jpg", // Placeholder if no image provided
+    imageUrl: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=300&auto=format&fit=crop",
     date: b.slot?.startTime ? new Date(b.slot.startTime).toLocaleDateString("vi-VN") : "Chưa có",
     time: b.slot?.startTime && b.slot?.endTime 
           ? `${new Date(b.slot.startTime).toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })} - ${new Date(b.slot.endTime).toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}`
@@ -147,7 +147,7 @@ export async function fetchBookingDetail(id: string | number): Promise<BookingDe
     displayId: data.displayId,
     venueName: data.stadium?.stadiumName || "Sân chưa biết",
     sportType: data.stadium?.sportType || "Khác",
-    imageUrl: data.stadium?.imageUrl || "/images/stadium1.jpg",
+    imageUrl: data.stadium?.imageUrl || "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=300&auto=format&fit=crop",
     playDate: data.reservationDate || "Chưa rõ",
     startTime: data.slot?.startTime || "Chưa rõ",
     endTime: data.slot?.endTime || "Chưa rõ",
@@ -213,16 +213,20 @@ export async function getSlotsByDate(
   stadiumId: number,
   date: string
 ): Promise<SlotAvailability[]> {
-  const data = await get<SlotAvailability[]>(
-    `/stadiums/${stadiumId}/slots?date=${encodeURIComponent(date)}`
-  );
-  return data ?? [];
+  try {
+    const res = await publicApi.get<SlotAvailability[]>(
+      `/stadiums/${stadiumId}/slots?date=${encodeURIComponent(date)}`
+    );
+    return res.data ?? [];
+  } catch {
+    return [];
+  }
 }
 
 // ── UC-CUS-01: Weekly schedule ──────────────────────────────────────────────
 
 /** Trạng thái của một slot trong weekly grid. */
-export type WeeklySlotStatus = "AVAILABLE" | "BOOKED" | "PAST";
+export type WeeklySlotStatus = "AVAILABLE" | "HELD" | "BOOKED" | "PAST" | "OWNER_CLOSED" | "MAINTENANCE";
 
 /** Một khung giờ của sân trong weekly grid — kèm trạng thái cho một ngày cụ thể. */
 export type WeeklySlotItem = {
@@ -233,6 +237,8 @@ export type WeeklySlotItem = {
   endTime: string;
   price: number;
   status: WeeklySlotStatus;
+  /** ISO local date-time; present while payment temporarily holds the slot. */
+  heldUntil?: string | null;
 };
 
 /** Một ngày trong weekly grid — kèm tên thứ tiếng Việt. */
@@ -269,19 +275,26 @@ export async function getWeeklySlots(
   stadiumId: number,
   weekStart: string
 ): Promise<WeeklySlotsResponse> {
-  return get<WeeklySlotsResponse>(
+  const res = await publicApi.get<WeeklySlotsResponse>(
     `/stadiums/${stadiumId}/weekly-slots?weekStart=${encodeURIComponent(weekStart)}`
   );
+  return res.data;
 }
 
 /**
  * Tạo đơn đặt sân đơn lẻ — POST /api/v1/bookings.
  * Trả 409 nếu slot đã bị đặt active trên cùng ngày; 400 nếu đã qua giờ.
+ *
+ * @param idempotencyKey UUID sinh 1 lần khi mở form — dùng generateIdempotencyKey().
+ *   Server dùng key này để dedup double-submit: nếu gửi lại cùng key, trả booking cũ thay vì tạo mới.
  */
 export async function createBooking(
-  payload: CreateBookingPayload
+  payload: CreateBookingPayload,
+  idempotencyKey?: string
 ): Promise<CreateBookingResponse> {
-  return post<CreateBookingResponse>("/bookings", payload);
+  return post<CreateBookingResponse>("/bookings", payload, {
+    headers: idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : undefined,
+  });
 }
 
 export type BookingDetailResponse = CreateBookingResponse;
@@ -306,5 +319,26 @@ export async function cancelBooking(
     `/bookings/${bookingId}/cancel`,
     { reason: reason || null }
   );
+}
+
+export type RefundPreviewResponse = {
+  bookingId: number;
+  stadiumName: string;
+  customerName: string;
+  playTime: string;
+  originalPrice: number;
+  refundAmount: number;
+  refundPercentage: number;
+  bookingStatus: string;
+  paymentStatus: string;
+  processedAt: string;
+  reason: string;
+};
+
+/**
+ * Lấy thông tin xem trước hoàn tiền cho customer.
+ */
+export async function previewRefund(bookingId: number): Promise<RefundPreviewResponse> {
+  return get<RefundPreviewResponse>(`/bookings/${bookingId}/refund-preview`);
 }
 

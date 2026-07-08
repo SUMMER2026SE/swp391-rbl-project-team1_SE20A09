@@ -20,6 +20,8 @@ import { uploadStadiumImage } from "@/lib/api";
 import { toast } from "sonner";
 import { AddressPicker } from "@/components/AddressPicker";
 import { Badge } from "@/components/ui/badge";
+import { FootballFieldType } from "@/types/stadium";
+import { FOOTBALL_FIELD_TYPE_OPTIONS } from "@/lib/constants/football-field-types";
 
 const updateStadiumSchema = z.object({
   stadiumName: z.string()
@@ -42,6 +44,7 @@ const updateStadiumSchema = z.object({
   description: z.string().max(2000, "Mô tả không được quá 2000 ký tự").optional(),
   openTime: z.string().min(1, "Vui lòng chọn giờ mở cửa"),
   closeTime: z.string().min(1, "Vui lòng chọn giờ đóng cửa"),
+  footballFieldType: z.nativeEnum(FootballFieldType).optional().nullable(),
 }).refine(
   (data) => {
     if (!data.openTime || !data.closeTime) return true;
@@ -98,6 +101,7 @@ export default function EditVenuePage() {
       description: "",
       openTime: "06:00",
       closeTime: "22:00",
+      footballFieldType: null,
     },
   });
 
@@ -119,7 +123,7 @@ export default function EditVenuePage() {
           };
           form.reset({
             stadiumName: stadiumData.stadiumName,
-            address: stadiumData.address,
+            address: stadiumData.address || "Địa chỉ mặc định theo Tổ hợp",
             latitude: stadiumData.latitude ?? 16.0544,
             longitude: stadiumData.longitude ?? 108.2022,
             sportTypeId: stadiumData.sportTypeId,
@@ -127,6 +131,7 @@ export default function EditVenuePage() {
             description: stadiumData.description || "",
             openTime: normalizeTime(stadiumData.openTime),
             closeTime: normalizeTime(stadiumData.closeTime),
+            footballFieldType: stadiumData.footballFieldType || null,
           });
         })
         .catch((err) => {
@@ -228,27 +233,48 @@ export default function EditVenuePage() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <AddressPicker
-                  initialAddress={stadium.address}
-                  initialLat={stadium.latitude}
-                  initialLng={stadium.longitude}
-                  onAddressChange={(data) => {
-                    form.setValue("address", data.addressText, { shouldValidate: true });
-                    form.setValue("latitude", data.lat, { shouldValidate: true });
-                    form.setValue("longitude", data.lng, { shouldValidate: true });
-                  }}
-                />
-                {form.formState.errors.address && (
-                  <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>
-                )}
-                {form.formState.errors.latitude && (
-                  <p className="text-sm text-destructive">{form.formState.errors.latitude.message}</p>
-                )}
-                {form.formState.errors.longitude && (
-                  <p className="text-sm text-destructive">{form.formState.errors.longitude.message}</p>
-                )}
-              </div>
+              {stadium?.nodeType === 'COURT' && sportTypes.find(t => t.sportTypeId === form.watch("sportTypeId"))?.isFootballType && (
+                <div className="space-y-2">
+                  <Label>Loại sân bóng đá (tuỳ chọn)</Label>
+                  <Select
+                    value={form.watch("footballFieldType")?.toString() || ""}
+                    onValueChange={(val) => form.setValue("footballFieldType", val as FootballFieldType, { shouldValidate: true })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn loại sân (nếu là sân bóng đá)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FOOTBALL_FIELD_TYPE_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {stadium?.nodeType !== 'COURT' && (
+                <div className="space-y-2">
+                  <AddressPicker
+                    initialAddress={stadium.address}
+                    initialLat={stadium.latitude}
+                    initialLng={stadium.longitude}
+                    onAddressChange={(data) => {
+                      form.setValue("address", data.addressText, { shouldValidate: true });
+                      form.setValue("latitude", data.lat, { shouldValidate: true });
+                      form.setValue("longitude", data.lng, { shouldValidate: true });
+                    }}
+                  />
+                  {form.formState.errors.address && (
+                    <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>
+                  )}
+                  {form.formState.errors.latitude && (
+                    <p className="text-sm text-destructive">{form.formState.errors.latitude.message}</p>
+                  )}
+                  {form.formState.errors.longitude && (
+                    <p className="text-sm text-destructive">{form.formState.errors.longitude.message}</p>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="description">Mô tả</Label>

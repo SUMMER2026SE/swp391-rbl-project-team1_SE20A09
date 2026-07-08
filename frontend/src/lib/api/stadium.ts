@@ -18,7 +18,8 @@ export interface StadiumResponse {
   longitude?: number
   distanceInKm?: number
   sportName: string
-  firstImageUrl: string
+  isFootballType?: boolean
+  firstImageUrl: string | null
   amenities: Amenity[]
 }
 

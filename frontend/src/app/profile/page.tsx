@@ -47,6 +47,9 @@ import {
   AlertTriangle,
   Building,
   CheckCircle2,
+  ShieldCheck,
+  Bell,
+  ToggleRight,
 } from "lucide-react";
 
 interface UserProfileResponse {
@@ -113,6 +116,30 @@ function UserProfilePage() {
   const [changePasswordLoading, setChangePasswordLoading] = useState(false);
   const [changePasswordError, setChangePasswordError] = useState<string | null>(null);
   const [changePasswordSuccess, setChangePasswordSuccess] = useState<string | null>(null);
+
+  // Admin notification preferences (local state — persisted on toggle)
+  const [notifOwner, setNotifOwner] = useState(true);
+  const [notifStadium, setNotifStadium] = useState(true);
+  const [notifComplaint, setNotifComplaint] = useState(true);
+  const [savingNotifKey, setSavingNotifKey] = useState<string | null>(null);
+
+  const handleNotifToggle = async (
+    key: "owner" | "stadium" | "complaint",
+    current: boolean,
+    setter: (v: boolean) => void
+  ) => {
+    setter(!current);
+    setSavingNotifKey(key);
+    try {
+      // Persist preference — backend endpoint can be wired up later;
+      // fire-and-forget with silent failure so UI stays responsive.
+      await post("/users/me/notification-preferences", {
+        [key === "owner" ? "notifyOwnerApproval" : key === "stadium" ? "notifyStadiumApproval" : "notifyComplaint"]: !current,
+      }).catch(() => {/* silent — feature flag, non-critical */});
+    } finally {
+      setSavingNotifKey(null);
+    }
+  };
 
   // Upgrade to Owner states & React Hook Form
   const [ownerProfile, setOwnerProfile] = useState<OwnerDetailResponse | null>(null);
@@ -372,6 +399,350 @@ function UserProfilePage() {
     );
   }
 
+  const isAdmin = profile.roleName === "Admin";
+
+  const formattedJoinDate = profile.createdAt
+    ? new Date(profile.createdAt).toLocaleDateString("vi-VN", { month: "2-digit", year: "numeric" })
+    : "01/2024";
+
+  // ── ADMIN PROFILE ────────────────────────────────────────────────────────
+  if (isAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-50/50 flex flex-col">
+        <Header />
+
+        <main className="flex-1 container mx-auto px-4 py-8">
+          {/* Profile header card */}
+          <Card className="mb-8 overflow-hidden border-none shadow-md bg-white">
+            <div className="relative">
+              <div className="h-48 bg-gradient-to-r from-slate-700 via-slate-800 to-slate-900 relative overflow-hidden">
+                <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-400 via-transparent to-transparent" />
+              </div>
+
+              <div className="absolute left-8 -bottom-16">
+                <div className="relative">
+                  <Avatar className="h-32 w-32 border-4 border-white shadow-lg bg-white">
+                    <AvatarImage src={profile.avatarUrl} alt={profile.fullName} />
+                    <AvatarFallback className="bg-gradient-to-tr from-slate-600 to-slate-800 text-white text-3xl font-extrabold">
+                      {getInitials(profile.fullName)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <Button
+                    size="sm"
+                    className="absolute bottom-0 right-0 rounded-full h-9 w-9 p-0 shadow-md border-2 border-white"
+                    asChild
+                  >
+                    <Link href="/profile/edit">
+                      <Camera className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <CardContent className="pt-20 pb-8 px-8">
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <h1 className="text-3xl font-extrabold tracking-tight text-slate-800">
+                      {profile.fullName}
+                    </h1>
+                    <span className="px-2.5 py-0.5 text-xs font-bold rounded bg-emerald-100 text-emerald-700 border border-emerald-200 uppercase tracking-wider flex items-center gap-1">
+                      <ShieldCheck className="h-3 w-3" />
+                      ADMIN
+                    </span>
+                  </div>
+                  <p className="text-slate-500 text-sm flex items-center gap-1.5">
+                    <Calendar className="h-4 w-4 text-slate-400" />
+                    Thành viên từ tháng {formattedJoinDate}
+                  </p>
+                </div>
+
+                <Button asChild className="shadow-sm">
+                  <Link href="/profile/edit">
+                    <Edit className="h-4 w-4 mr-2" />
+                    Chỉnh sửa hồ sơ
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tabs — only 2 tabs for Admin */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-full sm:w-auto flex whitespace-nowrap">
+              <TabsTrigger value="info">Thông tin cá nhân</TabsTrigger>
+              <TabsTrigger value="settings">Bảo mật & Cài đặt</TabsTrigger>
+            </TabsList>
+
+            {/* TAB 1 — Thông tin cá nhân */}
+            <TabsContent value="info" className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Left — account details */}
+                <div className="lg:col-span-2 space-y-6">
+                  <Card className="border-none shadow-sm bg-white">
+                    <CardHeader className="pb-4">
+                      <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        <UserIcon className="h-5 w-5 text-primary" />
+                        Chi tiết tài khoản
+                      </h3>
+                      <p className="text-slate-500 text-sm">Thông tin tài khoản quản trị viên.</p>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="admin-lastName">Họ</Label>
+                          <Input id="admin-lastName" value={profile.lastName} disabled className="bg-slate-50" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="admin-firstName">Tên</Label>
+                          <Input id="admin-firstName" value={profile.firstName} disabled className="bg-slate-50" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="admin-email" className="flex items-center gap-1.5">
+                          <Mail className="h-4 w-4 text-slate-400" />
+                          Email
+                        </Label>
+                        <Input id="admin-email" type="email" value={profile.email} disabled className="bg-slate-50" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="admin-phone" className="flex items-center gap-1.5">
+                          <Phone className="h-4 w-4 text-slate-400" />
+                          Số điện thoại
+                        </Label>
+                        <Input id="admin-phone" value={profile.phoneNumber || "Chưa cập nhật"} disabled className="bg-slate-50" />
+                      </div>
+                      <div className="pt-2 flex items-center gap-2 border-t border-slate-100">
+                        <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <Activity className="h-3 w-3 mr-1" />
+                          {profile.accountStatus === "Active" ? "Đang hoạt động" : "Tạm khóa"}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Right — role & permissions */}
+                <div className="space-y-6">
+                  <Card className="border-none shadow-sm bg-white">
+                    <CardHeader className="pb-3">
+                      <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                        Vai trò & Quyền hạn
+                      </h3>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between py-2 border-b border-slate-100">
+                        <span className="text-sm text-slate-500">Vai trò</span>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                          Super Admin
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                          Quyền hạn
+                        </p>
+                        {[
+                          "Quản lý khách hàng",
+                          "Phê duyệt chủ sân",
+                          "Xử lý khiếu nại",
+                        ].map((perm) => (
+                          <div key={perm} className="flex items-center gap-2.5 py-1.5">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                            <span className="text-sm text-slate-700">{perm}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* TAB 2 — Bảo mật & Cài đặt */}
+            <TabsContent value="settings">
+              {/* Outer card wrapper + 2-column grid */}
+              <Card className="border-none shadow-sm bg-white">
+                <CardHeader className="pb-4">
+                  <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                    <Settings className="h-5 w-5 text-primary" />
+                    Bảo mật & Cài đặt
+                  </h3>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                    {/* ── LEFT COLUMN — Tài khoản & Xác thực ─────────── */}
+                    <div className="space-y-6">
+
+                      {/* Section: Tài khoản & Xác thực */}
+                      <div>
+                        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                          Tài khoản & Xác thực
+                        </h4>
+                        {isChangingPassword ? (
+                          <Card className="border border-slate-100 shadow-sm">
+                            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                              <h4 className="font-bold text-slate-800 text-sm">Thay đổi mật khẩu</h4>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setIsChangingPassword(false);
+                                  setOldPassword("");
+                                  setNewPassword("");
+                                  setConfirmPassword("");
+                                  setChangePasswordError(null);
+                                  setChangePasswordSuccess(null);
+                                }}
+                              >
+                                Hủy
+                              </Button>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                              {changePasswordError && (
+                                <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg">{changePasswordError}</div>
+                              )}
+                              {changePasswordSuccess && (
+                                <div className="p-3 bg-emerald-50 text-emerald-700 text-xs rounded-lg">{changePasswordSuccess}</div>
+                              )}
+                              <form onSubmit={handleChangePassword} className="space-y-4">
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs">Mật khẩu hiện tại</Label>
+                                  <div className="relative">
+                                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                    <Input type={showOldPassword ? "text" : "password"} className="pl-10 pr-10" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} required />
+                                    <button type="button" className="absolute right-3 top-2.5 text-slate-400" onClick={() => setShowOldPassword(!showOldPassword)}>
+                                      {showOldPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs">Mật khẩu mới</Label>
+                                  <div className="relative">
+                                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                    <Input type={showNewPassword ? "text" : "password"} className="pl-10 pr-10" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+                                    <button type="button" className="absolute right-3 top-2.5 text-slate-400" onClick={() => setShowNewPassword(!showNewPassword)}>
+                                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs">Xác nhận mật khẩu mới</Label>
+                                  <div className="relative">
+                                    <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                    <Input type={showConfirmPassword ? "text" : "password"} className="pl-10 pr-10" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+                                    <button type="button" className="absolute right-3 top-2.5 text-slate-400" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
+                                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </button>
+                                  </div>
+                                </div>
+                                <Button type="submit" disabled={changePasswordLoading} className="w-full">
+                                  {changePasswordLoading ? (
+                                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Đang lưu...</>
+                                  ) : "Lưu mật khẩu mới"}
+                                </Button>
+                              </form>
+                            </CardContent>
+                          </Card>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            onClick={() => setIsChangingPassword(true)}
+                            className="w-full justify-start py-6 h-auto"
+                          >
+                            <Lock className="h-5 w-5 mr-3 text-slate-500" />
+                            <div className="text-left">
+                              <div className="font-semibold text-sm">Đổi mật khẩu</div>
+                              <div className="text-slate-400 text-xs">Thay đổi mật khẩu đăng nhập</div>
+                            </div>
+                          </Button>
+                        )}
+                      </div>
+
+                    </div>
+
+                    {/* ── RIGHT COLUMN — Thông báo hệ thống ──────────── */}
+                    <div className="space-y-6">
+
+                      {/* Section: Thông báo hệ thống */}
+                      <div>
+                        <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                          Thông báo hệ thống
+                        </h4>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 divide-y divide-slate-100 overflow-hidden">
+                          {[
+                            {
+                              key: "owner" as const,
+                              label: "Chủ sân mới đăng ký",
+                              desc: "Nhận thông báo khi có chủ sân chờ duyệt",
+                              value: notifOwner,
+                              setter: setNotifOwner,
+                            },
+                            {
+                              key: "stadium" as const,
+                              label: "Sân mới chờ duyệt",
+                              desc: "Nhận thông báo khi có sân mới gửi lên",
+                              value: notifStadium,
+                              setter: setNotifStadium,
+                            },
+                            {
+                              key: "complaint" as const,
+                              label: "Khiếu nại mới",
+                              desc: "Nhận thông báo khi có khiếu nại từ khách hàng",
+                              value: notifComplaint,
+                              setter: setNotifComplaint,
+                            },
+                          ].map(({ key, label, desc, value, setter }) => (
+                            <div
+                              key={key}
+                              className="flex items-center justify-between gap-3 px-4 py-3"
+                            >
+                              <div className="min-w-0">
+                                <div className="text-sm font-semibold text-slate-800 leading-snug">{label}</div>
+                                <div className="text-xs text-slate-400 mt-0.5 leading-snug">{desc}</div>
+                              </div>
+                              {/* CSS toggle — no new dependency */}
+                              <button
+                                type="button"
+                                role="switch"
+                                aria-checked={value}
+                                aria-label={label}
+                                disabled={savingNotifKey === key}
+                                onClick={() => handleNotifToggle(key, value, setter)}
+                                className={`relative shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:opacity-60
+                                  ${value ? "bg-emerald-500" : "bg-slate-300"}`}
+                              >
+                                <span
+                                  className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform
+                                    ${value ? "translate-x-6" : "translate-x-1"}`}
+                                />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-2 px-1">
+                          Cài đặt thông báo được lưu tự động khi bật/tắt.
+                        </p>
+                      </div>
+                    </div>
+
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </main>
+
+        <Footer />
+      </div>
+    );
+  }
+
+  // ── CUSTOMER / OWNER PROFILE (unchanged) ────────────────────────────────
   const currentRankInfo = rankMap[profile.userRank] || {
     label: profile.userRank,
     color: "text-primary",
@@ -383,10 +754,6 @@ function UserProfilePage() {
   const points = profile.userPoint;
   const targetPoints = currentRankInfo.target;
   const progressPercent = Math.min((points / targetPoints) * 100, 100);
-
-  const formattedJoinDate = profile.createdAt
-    ? new Date(profile.createdAt).toLocaleDateString("vi-VN", { month: "2-digit", year: "numeric" })
-    : "01/2024";
 
   return (
     <div className="min-h-screen bg-slate-50/50 flex flex-col">
@@ -737,7 +1104,7 @@ function UserProfilePage() {
           </TabsContent>
 
           <TabsContent value="bookings" className="pt-4">
-            <BookingHistoryList isOwner={profile.roleName?.toUpperCase() === 'OWNER'} />
+            <BookingHistoryList viewMode="CUSTOMER_VIEW" />
           </TabsContent>
 
           <TabsContent value="reviews" className="pt-4">

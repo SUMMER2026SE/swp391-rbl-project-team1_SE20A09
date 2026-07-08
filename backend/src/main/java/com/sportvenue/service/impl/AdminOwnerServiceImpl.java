@@ -35,12 +35,14 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
     private final EmailService emailService;
 
     @Override
-    public PageResponse<AdminOwnerResponse> getOwners(String search, String accountStatusStr, String approvedStatusStr, int page, int size, String sortBy, String sortDir) {
-        log.info("Fetching owners list with search: {}, accountStatus: {}, approvedStatus: {}, page: {}, size: {}, sortBy: {}, sortDir: {}",
+    public PageResponse<AdminOwnerResponse> getOwners(String search, String accountStatusStr, String approvedStatusStr,
+            int page, int size, String sortBy, String sortDir) {
+        log.info(
+                "Fetching owners list with search: {}, accountStatus: {}, approvedStatus: {}, page: {}, size: {}, sortBy: {}, sortDir: {}",
                 search, accountStatusStr, approvedStatusStr, page, size, sortBy, sortDir);
 
         Sort.Direction direction = sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
-        
+
         // Handle sorting column mapping
         String sortColumn = "createdAt"; // default
         if ("fullName".equals(sortBy)) {
@@ -77,7 +79,8 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
 
         String searchPattern = (search != null && !search.isBlank()) ? search.trim() : null;
 
-        Page<AdminOwnerResponse> ownerPage = ownerRepository.findOwnersForAdmin(searchPattern, accStatus, appStatus, pageable);
+        Page<AdminOwnerResponse> ownerPage = ownerRepository.findOwnersForAdmin(searchPattern, accStatus, appStatus,
+                pageable);
 
         PageResponse<AdminOwnerResponse> response = new PageResponse<>();
         response.setContent(ownerPage.getContent());
@@ -96,7 +99,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
         log.info("Request to {} account for ownerId: {}", isEnabled ? "unlock" : "lock", ownerId);
         Owner owner = ownerRepository.findById(ownerId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-                
+
         if (owner.getApprovedStatus() != ApprovedStatus.APPROVED) {
             throw new AppException(ErrorCode.OWNER_PROFILE_NOT_APPROVED);
         }
@@ -104,7 +107,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
         User user = owner.getUser();
         user.setAccountStatus(isEnabled ? AccountStatus.ACTIVE : AccountStatus.BLOCKED);
         user.setLockReason(reason);
-        
+
         // Lock: chỉ set AVAILABLE → MAINTENANCE (CLOSED giữ nguyên)
         // Unlock: chỉ set MAINTENANCE → AVAILABLE (CLOSED giữ nguyên)
         List<Stadium> stadiums = stadiumRepository.findByOwnerOwnerId(ownerId);

@@ -10,12 +10,14 @@ import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.Role;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.TimeSlot;
+import com.sportvenue.entity.TimeSlotException;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.DuplicateResourceException;
+import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.AccessoryRepository;
 import com.sportvenue.repository.BookingAccessoryRepository;
@@ -24,7 +26,9 @@ import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.repository.TimeSlotExceptionRepository;
 import com.sportvenue.security.UserPrincipal;
+import com.sportvenue.service.MaintenanceScheduleService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,6 +42,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionCallback;
+import com.sportvenue.service.PaymentService;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -45,6 +52,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -76,6 +84,10 @@ class BookingServiceImplTest {
     @Mock private PaymentRepository paymentRepository;
     @Mock private AccessoryRepository accessoryRepository;
     @Mock private BookingAccessoryRepository bookingAccessoryRepository;
+    @Mock private TimeSlotExceptionRepository timeSlotExceptionRepository;
+    @Mock private com.sportvenue.service.MaintenanceScheduleService maintenanceScheduleService;
+    @Mock private PaymentService paymentService;
+    @Mock private TransactionTemplate transactionTemplate;
 
     @InjectMocks private BookingServiceImpl bookingService;
 
@@ -120,6 +132,14 @@ class BookingServiceImplTest {
                 .quantity(20)
                 .isAvailable(true)
                 .build();
+
+        org.mockito.Mockito.lenient().when(transactionTemplate.execute(any(TransactionCallback.class)))
+                .thenAnswer(invocation -> {
+                    TransactionCallback callback = invocation.getArgument(0);
+                    return callback.doInTransaction(null);
+                });
+        org.mockito.Mockito.lenient().when(bookingRepository.findByIdForUpdate(any(Integer.class)))
+                .thenAnswer(invocation -> bookingRepository.findDetailById(invocation.getArgument(0)));
     }
 
     /** Helper: reservationDate 7 ngày trong tương lai → luôn future. */
@@ -266,6 +286,23 @@ class BookingServiceImplTest {
 
         assertThrows(BadRequestException.class,
                 () -> bookingService.createBooking(principal, request));
+    }
+
+    @Test
+    @DisplayName("createBooking: slot đang bảo trì (isSlotUnderMaintenance=true) → BadRequestException")
+    void createBooking_stadiumUnderMaintenance_throwsBadRequest() {
+        CreateBookingRequest request = CreateBookingRequest.builder()
+                .stadiumId(10).slotId(20).reservationDate(futureDate()).build();
+
+        when(userRepository.findById(1)).thenReturn(Optional.of(customer));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(timeSlotRepository.findByIdForUpdate(20)).thenReturn(Optional.of(slot));
+        when(maintenanceScheduleService.isSlotUnderMaintenance(eq(stadium), any(LocalDate.class), any(LocalTime.class), any(LocalTime.class)))
+                .thenReturn(true);
+
+        assertThrows(BadRequestException.class,
+                () -> bookingService.createBooking(principal, request));
+        verify(bookingRepository, never()).save(any());
     }
 
     @Test
@@ -427,6 +464,91 @@ class BookingServiceImplTest {
     }
 
     @Test
+    @DisplayName("getWeeklySlots: PENDING_PAYMENT hiển thị HELD cùng hạn giữ chỗ")
+    void getWeeklySlots_pendingPaymentDisplaysHeld() {
+        LocalDate reservationDate = futureDate();
+        LocalDateTime heldUntil = LocalDateTime.now().plusMinutes(5).withNano(0);
+        Booking heldBooking = Booking.builder()
+                .bookingId(50)
+                .stadium(stadium)
+                .slot(slot)
+                .user(customer)
+                .reservationDate(reservationDate)
+                .bookingStatus(BookingStatus.PENDING_PAYMENT)
+                .expiredAt(heldUntil)
+                .build();
+
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(timeSlotRepository.findByStadiumStadiumIdAndSlotStatus(10, SlotStatus.AVAILABLE))
+                .thenReturn(List.of(slot));
+        when(bookingRepository.findWeeklyBookings(eq(10), any(LocalDate.class), any(LocalDate.class), anyList()))
+                .thenReturn(List.of(heldBooking));
+
+        var result = bookingService.getWeeklySlots(10, reservationDate);
+        int dayIndex = reservationDate.getDayOfWeek().getValue() - 1;
+        var heldSlot = result.getDays().get(dayIndex).getSlots().get(0);
+
+        assertEquals("HELD", heldSlot.getStatus());
+        assertEquals(heldUntil.toString(), heldSlot.getHeldUntil());
+    }
+
+    @Test
+    @DisplayName("getWeeklySlots: sân đang bảo trì → slot tương lai được đánh dấu MAINTENANCE")
+    void getWeeklySlots_stadiumUnderMaintenance_marksFutureSlotsAsMaintenance() {
+        LocalDate weekStart = LocalDate.now().plusWeeks(2);
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(timeSlotRepository.findByStadiumStadiumIdAndSlotStatus(10, SlotStatus.AVAILABLE))
+                .thenReturn(List.of(slot));
+        when(bookingRepository.findWeeklyBookings(eq(10), any(LocalDate.class), any(LocalDate.class), anyList()))
+                .thenReturn(List.of());
+        when(maintenanceScheduleService.getDayMaintenanceForDateRange(eq(stadium), any(LocalDate.class), any(LocalDate.class)))
+                .thenAnswer(invocation -> allDaysInRangeMappedTo(invocation, true));
+
+        var result = bookingService.getWeeklySlots(10, weekStart);
+
+        result.getDays().forEach(day -> day.getSlots().forEach(item ->
+                assertEquals("MAINTENANCE", item.getStatus(),
+                        "Ngày " + day.getDate() + " phải là MAINTENANCE khi cả ngày đang bảo trì")));
+    }
+
+    @Test
+    @DisplayName("getWeeklySlots: không bảo trì → slot tương lai vẫn AVAILABLE")
+    void getWeeklySlots_notUnderMaintenance_slotsStayAvailable() {
+        LocalDate weekStart = LocalDate.now().plusWeeks(2);
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(timeSlotRepository.findByStadiumStadiumIdAndSlotStatus(10, SlotStatus.AVAILABLE))
+                .thenReturn(List.of(slot));
+        when(bookingRepository.findWeeklyBookings(eq(10), any(LocalDate.class), any(LocalDate.class), anyList()))
+                .thenReturn(List.of());
+        when(maintenanceScheduleService.getDayMaintenanceForDateRange(eq(stadium), any(LocalDate.class), any(LocalDate.class)))
+                .thenAnswer(invocation -> allDaysInRangeMappedTo(invocation, false));
+
+        var result = bookingService.getWeeklySlots(10, weekStart);
+
+        result.getDays().forEach(day -> day.getSlots().forEach(item ->
+                assertEquals("AVAILABLE", item.getStatus())));
+    }
+
+    /**
+     * Helper: build 1 {@code Map<LocalDate, DayMaintenance>} phủ đúng [rangeStart, rangeEnd] được
+     * truyền vào mock — dùng cho stub {@code getDayMaintenanceForDateRange}. {@code value=true} ->
+     * cả ngày bảo trì ({@link MaintenanceScheduleService.DayMaintenance#ALL_DAY}).
+     */
+    private static Map<LocalDate, MaintenanceScheduleService.DayMaintenance> allDaysInRangeMappedTo(
+            org.mockito.invocation.InvocationOnMock invocation, boolean value) {
+        LocalDate rangeStart = invocation.getArgument(1);
+        LocalDate rangeEnd = invocation.getArgument(2);
+        Map<LocalDate, MaintenanceScheduleService.DayMaintenance> map = new java.util.LinkedHashMap<>();
+        MaintenanceScheduleService.DayMaintenance dayMaintenance = value
+                ? MaintenanceScheduleService.DayMaintenance.ALL_DAY
+                : MaintenanceScheduleService.DayMaintenance.NONE;
+        for (LocalDate d = rangeStart; !d.isAfter(rangeEnd); d = d.plusDays(1)) {
+            map.put(d, dayMaintenance);
+        }
+        return map;
+    }
+
+    @Test
     @DisplayName("getMyBookings: không filter → lấy tất cả status")
     void getMyBookings_noFilter_usesAllStatusQuery() {
         when(bookingRepository.findByUserUserIdOrderByReservationDateDesc(eq(1), any()))
@@ -515,9 +637,19 @@ class BookingServiceImplTest {
                 .reservationDate(futureDate())
                 .build();
 
+        com.sportvenue.entity.Payment originalPayment = com.sportvenue.entity.Payment.builder()
+                .paymentId(1)
+                .booking(booking)
+                .amount(new BigDecimal("150000"))
+                .transactionCode("TXN123")
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.SUCCESS)
+                .build();
+
         when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        when(bookingRepository.findById(100)).thenReturn(Optional.of(booking));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of());
+        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(originalPayment));
+        when(paymentRepository.save(any(com.sportvenue.entity.Payment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Act
         BookingDetailResponse response = bookingService.cancelBooking(principal, 100, "Customer cancelled due to rain");
@@ -532,8 +664,8 @@ class BookingServiceImplTest {
     }
 
     @Test
-    @DisplayName("cancelBooking: owner cancels booking on their stadium successfully")
-    void cancelBooking_happyPath_ownerSuccess() {
+    @DisplayName("cancelBooking: venue owner can cancel booking successfully -> success")
+    void cancelBooking_byVenueOwner_success() {
         // Arrange
         User ownerUser = User.builder()
                 .userId(99)
@@ -564,22 +696,64 @@ class BookingServiceImplTest {
 
         // Act
         BookingDetailResponse response = bookingService.cancelBooking(ownerPrincipal, 100, "Owner closed court");
-
+        
         // Assert
         assertNotNull(response);
         assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
-        assertEquals(PaymentStatus.UNPAID, booking.getPaymentStatus());
         assertEquals("Owner closed court", booking.getCancelReason());
         verify(bookingRepository, times(1)).save(booking);
     }
 
     @Test
-    @DisplayName("cancelBooking: user has no permission to cancel booking -> throws BadRequestException")
-    void cancelBooking_noPermission_throwsBadRequest() {
+    @DisplayName("cancelBooking: gateway fails -> throws exception and keeps booking intact")
+    void cancelBooking_gatewayFails_keepsBookingIntact() {
+        // Arrange
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("150000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .reservationDate(futureDate())
+                .build();
+        
+        com.sportvenue.entity.Payment originalPayment = com.sportvenue.entity.Payment.builder()
+                .paymentId(1)
+                .booking(booking)
+                .amount(new BigDecimal("150000"))
+                .transactionCode("TXN123")
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.SUCCESS)
+                .build();
+
+        when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(originalPayment));
+        when(paymentRepository.save(any(com.sportvenue.entity.Payment.class))).thenAnswer(inv -> inv.getArgument(0));
+        
+        org.mockito.Mockito.doThrow(new RuntimeException("Gateway error"))
+                .when(paymentService).processRefund(any(), any(), any());
+
+        // Act & Assert
+        BadRequestException ex = assertThrows(BadRequestException.class, 
+                () -> bookingService.cancelBooking(principal, 100, "Customer cancelled"));
+        
+        assertTrue(ex.getMessage().contains("Giao dịch hủy đơn thất bại"));
+        // Confirm booking state is untouched
+        assertEquals(BookingStatus.CONFIRMED, booking.getBookingStatus());
+        assertEquals(PaymentStatus.PAID, booking.getPaymentStatus());
+        // verify save on booking was NEVER called in Tx1 (since it was paid) and Tx2 didn't happen for success
+        verify(bookingRepository, never()).save(booking);
+    }
+
+    @Test
+    @DisplayName("cancelBooking: user has no permission to cancel booking -> throws ForbiddenException")
+    void cancelBooking_byOtherUser_throwsForbiddenException() {
         // Arrange
         User stranger = User.builder()
                 .userId(888)
                 .email("stranger@example.com")
+                .role(Role.builder().roleName("Customer").build())
                 .build();
         UserPrincipal strangerPrincipal = new UserPrincipal(stranger);
 
@@ -594,7 +768,7 @@ class BookingServiceImplTest {
         when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
 
         // Act & Assert
-        BadRequestException ex = assertThrows(BadRequestException.class,
+        ForbiddenException ex = assertThrows(ForbiddenException.class,
                 () -> bookingService.cancelBooking(strangerPrincipal, 100, "No right"));
         assertTrue(ex.getMessage().contains("không có quyền"));
         verify(bookingRepository, never()).save(any());
@@ -631,5 +805,100 @@ class BookingServiceImplTest {
         assertThrows(ResourceNotFoundException.class,
                 () -> bookingService.cancelBooking(principal, 999, "Not exists"));
         verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cancelBooking: refund already pending -> throws BadRequestException")
+    void cancelBooking_refundAlreadyPending_throwsBadRequest() {
+        // Arrange
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .build();
+
+        com.sportvenue.entity.Payment pendingRefund = com.sportvenue.entity.Payment.builder()
+                .paymentId(2)
+                .booking(booking)
+                .amount(new BigDecimal("-150000"))
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.PENDING)
+                .build();
+
+        when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(Optional.of(pendingRefund));
+
+        // Act & Assert
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> bookingService.cancelBooking(principal, 100, "Duplicate cancel"));
+        assertTrue(ex.getMessage().contains("đang được xử lý hoặc đã thành công"));
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createBooking: slot closed by exception -> throws BadRequestException")
+    void createBooking_slotClosedByException_throwsBadRequest() {
+        // Arrange
+        CreateBookingRequest req = CreateBookingRequest.builder()
+                .stadiumId(stadium.getStadiumId())
+                .slotId(slot.getSlotId())
+                .reservationDate(futureDate())
+                .accessories(List.of())
+                .build();
+
+        TimeSlotException exception = TimeSlotException.builder()
+                .slot(slot)
+                .exceptionDate(req.getReservationDate())
+                .closed(true)
+                .build();
+
+        when(userRepository.findById(customer.getUserId())).thenReturn(Optional.of(customer));
+        when(stadiumRepository.findById(stadium.getStadiumId())).thenReturn(Optional.of(stadium));
+        when(timeSlotRepository.findByIdForUpdate(slot.getSlotId())).thenReturn(Optional.of(slot));
+        when(bookingRepository.existsActiveBooking(any(), any(), any(), any())).thenReturn(false);
+        when(timeSlotExceptionRepository.findBySlotSlotIdAndExceptionDate(slot.getSlotId(), req.getReservationDate())).thenReturn(Optional.of(exception));
+
+        // Act & Assert
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> bookingService.createBooking(principal, req));
+        assertTrue(ex.getMessage().contains("tạm đóng"));
+    }
+
+    @Test
+    @DisplayName("createBooking: slot price overridden by exception -> calculates correct totalPrice")
+    void createBooking_slotPriceOverridden_calculatesCorrectTotalPrice() {
+        // Arrange
+        CreateBookingRequest req = CreateBookingRequest.builder()
+                .stadiumId(stadium.getStadiumId())
+                .slotId(slot.getSlotId())
+                .reservationDate(futureDate())
+                .accessories(List.of())
+                .build();
+
+        TimeSlotException exception = TimeSlotException.builder()
+                .slot(slot)
+                .exceptionDate(req.getReservationDate())
+                .closed(false)
+                .priceOverride(new BigDecimal("200000"))
+                .build();
+
+        when(userRepository.findById(customer.getUserId())).thenReturn(Optional.of(customer));
+        when(stadiumRepository.findById(stadium.getStadiumId())).thenReturn(Optional.of(stadium));
+        when(timeSlotRepository.findByIdForUpdate(slot.getSlotId())).thenReturn(Optional.of(slot));
+        when(bookingRepository.existsActiveBooking(any(), any(), any(), any())).thenReturn(false);
+        when(timeSlotExceptionRepository.findBySlotSlotIdAndExceptionDate(slot.getSlotId(), req.getReservationDate())).thenReturn(Optional.of(exception));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> {
+            Booking b = invocation.getArgument(0);
+            b.setBookingId(200);
+            return b;
+        });
+
+        // Act
+        BookingDetailResponse res = bookingService.createBooking(principal, req);
+
+        // Assert: priceOverride (200000) + serviceFee (20000) = 220000
+        assertEquals(new BigDecimal("220000"), res.getTotalPrice());
     }
 }

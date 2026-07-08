@@ -19,6 +19,7 @@ import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.RoleRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.service.AdminDashboardService;
 import com.sportvenue.service.OtpService;
 import com.sportvenue.service.NotificationService;
 import org.junit.jupiter.api.AfterEach;
@@ -65,6 +66,9 @@ class OwnerRegistrationServiceImplTest {
 
     @Mock
     private NotificationService notificationService;
+
+    @Mock
+    private AdminDashboardService adminDashboardService;
 
     @InjectMocks
     private OwnerRegistrationServiceImpl ownerRegistrationService;

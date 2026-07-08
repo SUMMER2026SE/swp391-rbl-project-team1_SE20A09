@@ -83,5 +83,19 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
            "WHERE p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
            "AND p.amount > 0")
     java.math.BigDecimal sumTotalRevenue();
+
+    /**
+     * UC-ADM-01: Tổng gross revenue trong khoảng ngày (paidAt) — dùng khi filter theo date range.
+     */
+    @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p " +
+           "WHERE p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
+           "AND p.amount > 0 " +
+           "AND p.paidAt BETWEEN :startDate AND :endDate")
+    java.math.BigDecimal sumTotalRevenueByDateRange(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT p FROM Payment p WHERE p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.PENDING AND p.amount < 0 AND p.paidAt <= :threshold")
+    List<Payment> findPendingRefundsOlderThan(@Param("threshold") LocalDateTime threshold);
 }
 

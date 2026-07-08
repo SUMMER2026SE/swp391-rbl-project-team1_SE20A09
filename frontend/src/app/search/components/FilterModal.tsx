@@ -2,14 +2,15 @@ import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Filter, X } from 'lucide-react'
-import { StadiumSearchRequest, Amenity } from '@/lib/api/stadium'
+import { Amenity } from '@/lib/api/stadium'
+import { ComplexSearchParams } from '@/types/complex'
 import { useState } from 'react'
 
 interface FilterModalProps {
-  filters: StadiumSearchRequest
+  filters: ComplexSearchParams
   amenitiesList: Amenity[]
   totalResults: number
-  onFilterChange: <K extends keyof StadiumSearchRequest>(key: K, value: StadiumSearchRequest[K]) => void
+  onFilterChange: <K extends keyof ComplexSearchParams>(key: K, value: ComplexSearchParams[K]) => void
   onAmenityToggle: (id: number) => void
   onClearFilters: () => void
 }

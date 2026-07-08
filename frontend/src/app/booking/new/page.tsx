@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { getVenueDetail } from "@/lib/api/venue";
@@ -13,6 +13,10 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Calendar, MapPin, Minus, Plus } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
+import { toast } from "sonner";
+
+
 
 function BookingContent() {
   const router = useRouter();
@@ -24,9 +28,9 @@ function BookingContent() {
     return searchParams.get("date") || new Date().toISOString().split("T")[0];
   });
 
-  const [selectedSlot, setSelectedSlot] = useState<string>(() => {
-    return searchParams.get("slot") || "";
-  });
+  // Support slotId from QuickBookDrawer redirect (URL param "slotId")
+  const slotIdParam = searchParams.get("slotId") || searchParams.get("slot") || ""
+  const [selectedSlot, setSelectedSlot] = useState<string>(() => slotIdParam);
 
   const [accessories, setAccessories] = useState<Record<number, number>>({});
 
@@ -42,6 +46,26 @@ function BookingContent() {
     enabled: !!venueId && !!selectedDate,
     refetchInterval: 5000,
   });
+
+  // ── Re-validate pre-selected slot (from QuickBookDrawer) continuously ──
+  useEffect(() => {
+    if (!slotAvailabilities || !selectedSlot) return
+
+    const targetSlotId = parseInt(selectedSlot)
+    if (isNaN(targetSlotId)) return
+
+    const found = slotAvailabilities.find(s => s.slotId === targetSlotId)
+    if (!found) return
+
+    if (!found.available) {
+      toast.error('Slot này vừa có người đặt, vui lòng chọn slot khác', {
+        description: 'Quay lại trang tìm kiếm để chọn sân và khung giờ khác.',
+        action: { label: 'Tìm sân khác', onClick: () => router.push('/search') },
+        duration: 8000,
+      })
+      setSelectedSlot('')
+    }
+  }, [slotAvailabilities, selectedSlot, router])
 
   if (isLoading) {
     return (
@@ -134,9 +158,26 @@ function BookingContent() {
     });
   };
 
-  const timeSlots = getSlotsForSelectedDate();
   const accessoryItems = venue.accessories || [];
-  const venuePrice = venue.pricePerHour || 0;
+
+  // Find the slot ID from the selected slot (hour string like "08:00")
+  const matchedSlot = slotAvailabilities?.find((s) => {
+    const timePart = s.startTime.includes("T") ? s.startTime.split("T")[1] : s.startTime;
+    return timePart.substring(0, 5) === selectedSlot;
+  }) || venue.timeSlots?.find((s) => {
+    const timePart = s.startTime.includes("T") ? s.startTime.split("T")[1] : s.startTime;
+    return timePart.substring(0, 5) === selectedSlot;
+  });
+
+  const formattedTime = matchedSlot
+    ? `${matchedSlot.startTime.substring(0, 5)} - ${matchedSlot.endTime.substring(0, 5)}`
+    : selectedSlot;
+
+  const rawPrice = matchedSlot && "pricePerSlot" in matchedSlot
+    ? (matchedSlot as any).pricePerSlot
+    : venue.pricePerHour;
+  const venuePrice = rawPrice ?? 0;
+
   const platformFee = 20000;
 
   const calculateAccessoryTotal = () => {
@@ -158,15 +199,6 @@ function BookingContent() {
         price: item.pricePerUnit * accessories[item.accessoryId],
       }));
 
-    // Find the slot ID from the selected slot (hour string like "08:00")
-    const matchedSlot = slotAvailabilities?.find((s) => {
-      const timePart = s.startTime.includes("T") ? s.startTime.split("T")[1] : s.startTime;
-      return timePart.substring(0, 5) === selectedSlot;
-    }) || venue.timeSlots?.find((s) => {
-      const timePart = s.startTime.includes("T") ? s.startTime.split("T")[1] : s.startTime;
-      return timePart.substring(0, 5) === selectedSlot;
-    });
-
     const bookingSummary = {
       venueId: venue.stadiumId,
       stadiumName: venue.stadiumName,
@@ -174,7 +206,7 @@ function BookingContent() {
       address: venue.address,
       sportName: venue.sportName,
       date: selectedDate,
-      time: timeSlots.find((s) => s.id === selectedSlot)?.time || selectedSlot,
+      time: formattedTime,
       venuePrice: venuePrice,
       accessories: selectedAccs,
       accessoryTotal: calculateAccessoryTotal(),
@@ -227,67 +259,40 @@ function BookingContent() {
               </CardContent>
             </Card>
 
-            {/* Date Picker */}
-            <Card>
-              <CardHeader>
-                <h3 className="flex items-center text-lg font-semibold">
-                  <Calendar className="h-5 w-5 mr-2 text-emerald-600" />
-                  Chọn ngày
-                </h3>
-              </CardHeader>
-              <CardContent>
-                <input
-                  type="date"
-                  className="w-full border rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  value={selectedDate}
-                  min={new Date().toISOString().split("T")[0]}
-                  onChange={(e) => {
-                    setSelectedDate(e.target.value);
-                    setSelectedSlot(""); // Clear slot on date change
-                  }}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Time Slots */}
-            <Card>
-              <CardHeader>
-                <h3 className="text-lg font-semibold">Chọn khung giờ</h3>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {timeSlots.map((slot) => {
-                    const isBooked = slot.status === "booked";
-                    const isPast = slot.status === "past";
-                    const isSelected = selectedSlot === slot.id;
-
-                    return (
-                      <button
-                        key={slot.id}
-                        onClick={() =>
-                          slot.status === "available" && setSelectedSlot(slot.id)
-                        }
-                        disabled={isBooked || isPast}
-                        className={`p-4 rounded-lg border-2 transition-all text-center flex flex-col items-center justify-center min-h-[80px] ${
-                          isBooked
-                            ? "bg-red-50 border-red-200 text-red-400 cursor-not-allowed"
-                            : isPast
-                            ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
-                            : isSelected
-                            ? "bg-emerald-600 text-white border-emerald-600 shadow-md"
-                            : "bg-emerald-50/50 border-emerald-100 text-emerald-800 hover:border-emerald-400 hover:bg-emerald-50"
-                        }`}
-                      >
-                        <div className="font-semibold text-sm">{slot.time}</div>
-                        <div className="text-xs mt-1">
-                          {isBooked ? "Đã đặt" : isPast ? "Đã qua" : "Trống"}
-                        </div>
-                      </button>
-                    );
-                  })}
+            {/* Selected Slot Information */}
+            <Card className="bg-emerald-50/20 border-emerald-100 shadow-none">
+              <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+                    <Calendar className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-gray-400 uppercase font-bold tracking-wide">KHUNG GIỜ ĐÃ CHỌN</span>
+                    <span className="text-[14px] font-bold text-gray-800">
+                      Ngày {selectedDate.split('-').reverse().join('/')}
+                    </span>
+                    <span className="block text-[12px] text-gray-500 font-semibold mt-0.5">
+                      Giờ thuê: {formattedTime}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-left sm:text-right sm:border-l sm:border-emerald-100 sm:pl-6">
+                  <span className="block text-[10px] text-gray-400 uppercase font-bold tracking-wide">GIÁ SÂN</span>
+                  <span className="text-[18px] font-extrabold text-[#1a8a4a]">
+                    {venuePrice.toLocaleString('vi-VN')}đ
+                  </span>
                 </div>
               </CardContent>
             </Card>
+
+            <div className="pl-1">
+              <Link
+                href={`/venues/${venueId}`}
+                className="text-xs text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1 font-semibold"
+              >
+                ← Chọn ngày hoặc khung giờ khác
+              </Link>
+            </div>
 
             {/* Accessories */}
             <Card>
@@ -377,7 +382,7 @@ function BookingContent() {
                   <div>
                     <div className="text-xs text-muted-foreground uppercase font-semibold">Khung giờ</div>
                     <div className="text-sm font-medium">
-                      {timeSlots.find((s) => s.id === selectedSlot)?.time}
+                      {formattedTime}
                     </div>
                   </div>
                 )}

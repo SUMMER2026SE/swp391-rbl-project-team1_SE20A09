@@ -28,6 +28,12 @@ public class StadiumSearchRequest {
     private String keyword;
     private Integer sportTypeId;
     private String address;
+
+    /** Tỉnh/thành đã chuẩn hoá (vd "Hồ Chí Minh") — exact-match, khác với {@link #address} (free-text LIKE). */
+    private String province;
+
+    /** Quận/huyện đã chuẩn hoá (vd "Quận 1", "Cẩm Lệ") — exact-match, khác với {@link #address} (free-text LIKE). */
+    private String district;
     @Min(value = 0, message = "Giá thấp nhất không được âm")
     private BigDecimal minPrice;
     
@@ -60,13 +66,20 @@ public class StadiumSearchRequest {
     // Amenities filter
     private List<Integer> amenityIds;
 
+    // Sort (optional) — chỉ chấp nhận field trong whitelist ở PublicStadiumServiceImpl,
+    // giá trị lạ bị bỏ qua (không ném lỗi) để giữ tương thích ngược.
+    private String sortBy;
+
+    /** "ASC" (mặc định) hoặc "DESC". */
+    private String sortDirection;
+
     // Pagination
     @Min(value = 0, message = "Trang phải lớn hơn hoặc bằng 0")
     @Builder.Default
     private int page = 0;
     
     @Min(value = 1, message = "Kích thước trang phải lớn hơn hoặc bằng 1")
-    @Max(value = 100, message = "Kích thước trang không được vượt quá 100")
+    @Max(value = 500, message = "Kích thước trang không được vượt quá 500")
     @Builder.Default
     private int size = 10;
 

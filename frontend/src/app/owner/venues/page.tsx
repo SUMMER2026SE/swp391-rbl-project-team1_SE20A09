@@ -8,13 +8,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -47,26 +40,42 @@ import {
   ImageOff,
   Package,
   CalendarDays,
-  LayoutGrid,
-  List as ListIcon,
-  Search,
+  ChevronDown,
+  ChevronRight,
+  Sliders,
+  Building2,
+  Trophy,
+  Wrench,
 } from "lucide-react";
 import { stadiumService } from "@/lib/services/stadium";
-import { StadiumResponse, SportType } from "@/types/stadium";
+import { StadiumResponse, ComplexResponse, SportType } from "@/types/stadium";
 import { toast } from "sonner";
 import { AccessoryManagerDialog } from "@/components/venues/AccessoryManagerDialog";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useConfirm } from "@/hooks/useConfirm";
+import { MaintenanceScheduleDialog } from "@/components/venues/MaintenanceScheduleDialog";
+
+// Quick Dialogs
+import { QuickCreateFacilityDialog } from './components/QuickCreateFacilityDialog'
+import { QuickCreateCourtDialog } from './components/QuickCreateCourtDialog'
+import { BulkTimeSlotConfigDialog } from './components/BulkSlotConfigDialog'
+import { EditComplexDialog } from './components/EditComplexDialog'
+import { EditFacilityDialog } from './components/EditFacilityDialog'
 
 interface VenueModalData {
   id: number;
   name: string;
+  /** Đối tượng bị tác động — mặc định 'stadium' (Facility/Court) nếu không truyền. */
+  type?: 'stadium' | 'complex';
 }
 
 function VenueManagementPage() {
   const router = useRouter();
+  const [complexes, setComplexes] = useState<ComplexResponse[]>([]);
   const [venues, setVenues] = useState<StadiumResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Modal states for old actions
   const [isAccessoryOpen, setIsAccessoryOpen] = useState(false);
   const [selectedVenueForAccessory, setSelectedVenueForAccessory] = useState<VenueModalData | null>(null);
   
@@ -75,13 +84,20 @@ function VenueManagementPage() {
   const [deleteVenue, setDeleteVenue] = useState<VenueModalData | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingComplex, setEditingComplex] = useState<ComplexResponse | null>(null);
+  const [editingFacility, setEditingFacility] = useState<StadiumResponse | null>(null);
+  const [maintenanceTarget, setMaintenanceTarget] = useState<{ type: 'stadium' | 'complex'; id: number; name: string } | null>(null);
 
-  // Filter and view states
-  const [search, setSearch] = useState("");
-  const [sportTypeId, setSportTypeId] = useState<number | null>(null);
-  const [status, setStatus] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
-  const [sportTypes, setSportTypes] = useState<SportType[]>([]);
+  // Quick action states
+  const [activeComplexIdForFacility, setActiveComplexIdForFacility] = useState<number | null>(null);
+  const [activeFacilityForCourt, setActiveFacilityForCourt] = useState<StadiumResponse | null>(null);
+  const [bulkFacilityId, setBulkFacilityId] = useState<number | null>(null);
+  const [bulkComplexId, setBulkComplexId] = useState<number | null>(null);
+  const [bulkCourtsList, setBulkCourtsList] = useState<StadiumResponse[]>([]);
+
+  // Tree collapse state
+  const [collapsedComplexes, setCollapsedComplexes] = useState<Record<number, boolean>>({});
+  const [collapsedFacilities, setCollapsedFacilities] = useState<Record<number, boolean>>({});
 
   // Custom confirm hook
   const { 
@@ -92,54 +108,51 @@ function VenueManagementPage() {
     execute: executeConfirm 
   } = useConfirm()
 
-  useEffect(() => {
-    stadiumService.getSportTypes()
-      .then(setSportTypes)
-      .catch(() => toast.error("Không thể tải danh sách môn thể thao"));
+  const fetchTreeData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [complexesRes, venuesRes] = await Promise.all([
+        stadiumService.getMyComplexes(),
+        stadiumService.getMyStadiums()
+      ]);
+      setComplexes(complexesRes);
+      setVenues(venuesRes);
+    } catch (error) {
+      toast.error("Không thể tải danh sách tổ hợp và sân.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const fetchVenues = useCallback(() => {
-    setLoading(true);
-    stadiumService.getMyStadiums({
-      search: search || undefined,
-      sportTypeId: sportTypeId || undefined,
-      status: status === "all" ? undefined : status
-    })
-      .then(setVenues)
-      .catch(() => toast.error("Không thể tải danh sách sân"))
-      .finally(() => setLoading(false));
-  }, [search, sportTypeId, status]);
-
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchVenues();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [fetchVenues]);
+    fetchTreeData();
+  }, [fetchTreeData]);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "AVAILABLE":
-        return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Hoạt động</Badge>;
-      case "MAINTENANCE":
-        return <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">Bảo trì</Badge>;
-      case "CLOSED":
-        return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Đóng cửa</Badge>;
-      default:
-        return <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100">{status}</Badge>;
-    }
+  const toggleComplex = (complexId: number) => {
+    setCollapsedComplexes(prev => ({ ...prev, [complexId]: !prev[complexId] }));
+  };
+
+  const toggleFacility = (facilityId: number) => {
+    setCollapsedFacilities(prev => ({ ...prev, [facilityId]: !prev[facilityId] }));
   };
 
   const handleSuspend = async () => {
     if (!suspendVenue) return;
     setIsSubmitting(true);
     try {
-      await stadiumService.suspendStadium(suspendVenue.id);
-      toast.success("Đã tạm ngưng hoạt động sân thành công.");
-      setVenues(venues.map(v => v.stadiumId === suspendVenue.id ? { ...v, stadiumStatus: "MAINTENANCE" } : v));
+      if (suspendVenue.type === 'complex') {
+        await stadiumService.suspendComplex(suspendVenue.id);
+        toast.success("Đã tạm ngưng hoạt động tổ hợp thành công.");
+      } else {
+        await stadiumService.suspendStadium(suspendVenue.id);
+        toast.success("Đã tạm ngưng hoạt động sân thành công.");
+      }
       setSuspendVenue(null);
+      // Refetch thay vì patch state cục bộ — suspend Complex cascade xuống Facility/Court con,
+      // patch cục bộ sẽ không phản ánh đúng các dòng bị ảnh hưởng gián tiếp.
+      await fetchTreeData();
     } catch (error) {
-      toast.error("Có lỗi xảy ra khi tạm ngưng sân.");
+      toast.error("Có lỗi xảy ra khi tạm ngưng.");
     } finally {
       setIsSubmitting(false);
     }
@@ -149,12 +162,17 @@ function VenueManagementPage() {
     if (!activateVenue) return;
     setIsSubmitting(true);
     try {
-      await stadiumService.activateStadium(activateVenue.id);
-      toast.success("Đã mở lại hoạt động sân thành công.");
-      setVenues(venues.map(v => v.stadiumId === activateVenue.id ? { ...v, stadiumStatus: "AVAILABLE" } : v));
+      if (activateVenue.type === 'complex') {
+        await stadiumService.activateComplex(activateVenue.id);
+        toast.success("Đã mở lại hoạt động tổ hợp thành công.");
+      } else {
+        await stadiumService.activateStadium(activateVenue.id);
+        toast.success("Đã mở lại hoạt động sân thành công.");
+      }
       setActivateVenue(null);
+      await fetchTreeData();
     } catch (error) {
-      toast.error("Có lỗi xảy ra khi mở lại sân.");
+      toast.error("Có lỗi xảy ra khi mở lại.");
     } finally {
       setIsSubmitting(false);
     }
@@ -170,13 +188,26 @@ function VenueManagementPage() {
     try {
       await stadiumService.deleteStadium(deleteVenue.id);
       toast.success("Đã xóa sân thành công.");
-      setVenues(venues.filter(v => v.stadiumId !== deleteVenue.id));
+      fetchTreeData();
       setDeleteVenue(null);
       setDeleteConfirmText("");
     } catch (error) {
       toast.error("Có lỗi xảy ra khi xóa sân.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "AVAILABLE":
+        return <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Hoạt động</Badge>;
+      case "MAINTENANCE":
+        return <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-100">Bảo trì</Badge>;
+      case "CLOSED":
+        return <Badge className="bg-red-100 text-red-700 hover:bg-red-100">Đóng cửa</Badge>;
+      default:
+        return <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100">{status}</Badge>;
     }
   };
 
@@ -194,296 +225,366 @@ function VenueManagementPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold">Quản lý sân</h1>
-        <Button onClick={() => router.push("/owner/venues/new")}>
+        <div>
+          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white">Sơ đồ sân của tôi</h1>
+          <p className="text-slate-500 text-sm mt-1">Quản lý phân cấp 3 tầng: Tổ hợp → Khu sân → Sân lẻ</p>
+        </div>
+        <Button onClick={() => router.push("/owner/venues/new")} className="shadow-lg shadow-primary/10">
           <Plus className="mr-2 h-5 w-5" />
-          Thêm sân mới
+          Đăng ký Tổ hợp mới
         </Button>
-      </div>
-
-      {/* Filter and View Toggle Row */}
-      <div className="flex flex-col md:flex-row gap-4 mb-6 items-center justify-between bg-slate-50/50 p-4 rounded-xl border border-slate-100">
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          {/* Search name */}
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Tìm tên sân..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 bg-white"
-            />
-          </div>
-
-          {/* Sport Categories */}
-          <Select
-            value={sportTypeId?.toString() || "all"}
-            onValueChange={(val) => setSportTypeId(val === "all" ? null : parseInt(val))}
-          >
-            <SelectTrigger className="w-full sm:w-48 bg-white">
-              <SelectValue placeholder="Môn thể thao" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả môn thể thao</SelectItem>
-              {sportTypes.map((t) => (
-                <SelectItem key={t.sportTypeId} value={t.sportTypeId.toString()}>
-                  {t.sportName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Stadium Status */}
-          <Select
-            value={status}
-            onValueChange={setStatus}
-          >
-            <SelectTrigger className="w-full sm:w-44 bg-white">
-              <SelectValue placeholder="Trạng thái" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả trạng thái</SelectItem>
-              <SelectItem value="AVAILABLE">Đang hoạt động</SelectItem>
-              <SelectItem value="MAINTENANCE">Bảo trì</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* View Mode Toggle Buttons */}
-        <div className="flex items-center gap-2 border rounded-lg p-1 bg-white self-end md:self-auto shadow-sm">
-          <Button
-            variant={viewMode === "grid" ? "secondary" : "ghost"}
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setViewMode("grid")}
-            title="Dạng lưới"
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={viewMode === "table" ? "secondary" : "ghost"}
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setViewMode("table")}
-            title="Dạng bảng"
-          >
-            <ListIcon className="h-4 w-4" />
-          </Button>
-        </div>
       </div>
 
       {loading ? (
         <div className="flex justify-center items-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      ) : venues.length === 0 ? (
-        <div className="text-center py-20 text-muted-foreground bg-card rounded-xl border border-dashed p-6">
-          <p className="text-lg mb-4">Không tìm thấy sân nào phù hợp.</p>
-          <Button onClick={() => { setSearch(""); setSportTypeId(null); setStatus("all"); }}>
-            Xóa bộ lọc
-          </Button>
-        </div>
-      ) : viewMode === "table" ? (
-        /* Table View */
-        <div className="border rounded-xl bg-card overflow-hidden shadow-sm">
-          <Table>
-            <TableHeader className="bg-slate-50/50">
-              <TableRow>
-                <TableHead className="w-16">Ảnh</TableHead>
-                <TableHead>Tên sân</TableHead>
-                <TableHead>Môn thể thao</TableHead>
-                <TableHead className="hidden md:table-cell">Địa chỉ</TableHead>
-                <TableHead>Giá thuê/giờ</TableHead>
-                <TableHead>Hoạt động</TableHead>
-                <TableHead>Phê duyệt</TableHead>
-                <TableHead className="w-12 text-right">Thao tác</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {venues.map((venue) => (
-                <TableRow key={venue.stadiumId} className="hover:bg-slate-50/50 transition-colors">
-                  <TableCell>
-                    <div className="w-12 h-8 relative rounded bg-muted overflow-hidden shrink-0 border border-slate-100">
-                      {venue.imageUrls && venue.imageUrls.length > 0 ? (
-                        <Image
-                          src={venue.imageUrls[0]}
-                          alt={venue.stadiumName}
-                          fill
-                          className="object-cover"
-                          unoptimized
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                          <ImageOff className="h-4 w-4" />
-                        </div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-semibold truncate max-w-[200px]" title={venue.stadiumName}>
-                    {venue.stadiumName}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="font-normal">{venue.sportName}</Badge>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell truncate max-w-[300px]" title={venue.address}>
-                    {venue.address}
-                  </TableCell>
-                  <TableCell className="font-semibold text-slate-900">
-                    {venue.pricePerHour.toLocaleString('vi-VN')}đ
-                  </TableCell>
-                  <TableCell>{getStatusBadge(venue.stadiumStatus)}</TableCell>
-                  <TableCell>{getApprovedStatusBadge(venue.approvedStatus)}</TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreVertical className="h-5 w-5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem onClick={() => router.push(`/owner/venues/${venue.stadiumId}/edit`)}>
-                          <Edit className="mr-2 h-4 w-4" />
-                          Chỉnh sửa
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => router.push(`/owner/venues/${venue.stadiumId}/slots`)}>
-                          <CalendarDays className="mr-2 h-4 w-4" />
-                          Cấu hình lịch
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => {
-                          setSelectedVenueForAccessory({ id: venue.stadiumId, name: venue.stadiumName });
-                          setIsAccessoryOpen(true);
-                        }}>
-                          <Package className="mr-2 h-4 w-4" />
-                          Quản lý phụ kiện
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
-                          onClick={() => setDeleteVenue({ id: venue.stadiumId, name: venue.stadiumName })}
-                        >
-                          <Trash className="mr-2 h-4 w-4" />
-                          Xóa sân
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+      ) : complexes.length === 0 ? (
+        <div className="text-center py-20 text-muted-foreground bg-white dark:bg-card/50 rounded-3xl border border-dashed p-6 shadow-sm">
+          <Building2 className="h-16 w-16 mx-auto mb-4 text-slate-300" />
+          <p className="text-lg font-bold mb-4">Bạn chưa đăng ký tổ hợp sân nào.</p>
+          <Button onClick={() => router.push("/owner/venues/new")}>Đăng ký ngay</Button>
         </div>
       ) : (
-        /* Grid View */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {venues.map((venue) => (
-            <Card key={venue.stadiumId} className="overflow-hidden border-slate-200 hover:shadow-md transition-shadow">
-              <div className="relative h-48 bg-muted">
-                {venue.imageUrls && venue.imageUrls.length > 0 ? (
-                  <Image
-                    src={venue.imageUrls[0]}
-                    alt={venue.stadiumName}
-                    fill
-                    className="object-cover"
-                    unoptimized
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                    <ImageOff className="h-12 w-12" />
+        <div className="space-y-6">
+          {complexes.map((complex) => {
+            const isComplexCollapsed = collapsedComplexes[complex.complexId];
+            const complexFacilities = venues.filter(v => v.nodeType === 'FACILITY' && v.complexId === complex.complexId);
+
+            return (
+              <Card key={complex.complexId} className="border-slate-100 dark:border-border overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                {/* L1: Complex Node Header */}
+                <div className="bg-slate-50/70 dark:bg-muted/40 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-border">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <button
+                      onClick={() => toggleComplex(complex.complexId)}
+                      className="p-1 hover:bg-slate-200 dark:hover:bg-muted rounded text-slate-500 mt-1 shrink-0"
+                    >
+                      {isComplexCollapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2.5">
+                        <Building2 className="h-5 w-5 text-primary shrink-0" />
+                        <h3 className="font-extrabold text-xl text-slate-900 dark:text-white leading-tight break-words">
+                          {complex.name}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        {getApprovedStatusBadge(complex.approvedStatus)}
+                        {getStatusBadge(complex.complexStatus)}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1.5 flex items-start gap-1.5 whitespace-normal break-words">
+                        <span className="shrink-0">📍</span>
+                        <span>{complex.address}</span>
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Actions for Complex */}
+                  <div className="flex flex-wrap gap-2 md:self-center pl-8 md:pl-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditingComplex(complex)}
+                      className="text-xs font-semibold"
+                    >
+                      <Edit className="mr-1.5 h-3.5 w-3.5" />
+                      Chỉnh sửa
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setBulkComplexId(complex.complexId);
+                        // collect all L3 courts under this complex
+                        const complexFacilityIds = complexFacilities.map(f => f.stadiumId);
+                        const complexCourts = venues.filter(v => v.nodeType === 'COURT' && complexFacilityIds.includes(v.parentStadiumId || 0));
+                        setBulkCourtsList(complexCourts);
+                      }}
+                      className="text-xs font-semibold"
+                    >
+                      <Sliders className="mr-1.5 h-3.5 w-3.5" />
+                      Cấu hình giờ hàng loạt
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => setActiveComplexIdForFacility(complex.complexId)}
+                      className="text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      <Plus className="mr-1.5 h-3.5 w-3.5" />
+                      Thêm Khu sân (L2)
+                    </Button>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-52">
+                        <DropdownMenuItem onClick={() => setMaintenanceTarget({ type: 'complex', id: complex.complexId, name: complex.name })}>
+                          <Wrench className="mr-2 h-4 w-4" />
+                          Đặt bảo trì
+                        </DropdownMenuItem>
+                        {complex.complexStatus === 'AVAILABLE' ? (
+                          <DropdownMenuItem onClick={() => setSuspendVenue({ id: complex.complexId, name: complex.name, type: 'complex' })}>
+                            <Pause className="mr-2 h-4 w-4" />
+                            Tạm dừng tổ hợp
+                          </DropdownMenuItem>
+                        ) : complex.complexStatus === 'MAINTENANCE' ? (
+                          <DropdownMenuItem onClick={() => setActivateVenue({ id: complex.complexId, name: complex.name, type: 'complex' })}>
+                            <PlayCircle className="mr-2 h-4 w-4" />
+                            Hoạt động tổ hợp
+                          </DropdownMenuItem>
+                        ) : null}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+
+                {/* L2 & L3 Nodes (Complex Content) */}
+                {!isComplexCollapsed && (
+                  <CardContent className="p-0">
+                    {complexFacilities.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground text-sm">
+                        Chưa có khu sân (L2) nào thuộc tổ hợp này. Hãy thêm mới môn thể thao!
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-100 dark:divide-border">
+                        {complexFacilities.map((facility) => {
+                          const isFacilityCollapsed = collapsedFacilities[facility.stadiumId];
+                          const facilityCourts = venues.filter(v => v.nodeType === 'COURT' && v.parentStadiumId === facility.stadiumId);
+
+                          return (
+                            <div key={facility.stadiumId} className="bg-white dark:bg-card">
+                              {/* L2: Facility Node Header */}
+                              <div className="p-4 pl-8 md:pl-12 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/20">
+                                <div className="flex items-start gap-3 min-w-0 flex-1">
+                                  <button
+                                    onClick={() => toggleFacility(facility.stadiumId)}
+                                    className="p-1 hover:bg-slate-100 dark:hover:bg-muted rounded text-slate-400 shrink-0 mt-0.5"
+                                  >
+                                    {isFacilityCollapsed ? <ChevronRight className="h-4.5 w-4.5" /> : <ChevronDown className="h-4.5 w-4.5" />}
+                                  </button>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <Trophy className="h-4.5 w-4.5 text-blue-500 shrink-0" />
+                                      <span className="font-bold text-slate-800 dark:text-white break-words">
+                                        {facility.stadiumName}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                      <Badge variant="secondary" className="text-[10px] font-semibold bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 border-0 uppercase">
+                                        {facility.sportName}
+                                      </Badge>
+                                      <span className="text-xs text-muted-foreground">
+                                        ({facility.openTime?.substring(0, 5)} - {facility.closeTime?.substring(0, 5)})
+                                      </span>
+                                      {facility.stadiumStatus === 'AVAILABLE' && facility.underMaintenanceToday && (
+                                        <Badge className="bg-red-100 text-red-700 hover:bg-red-100 text-[10px] font-semibold">
+                                          Đang bảo trì hôm nay
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 pl-8 md:pl-0">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setBulkFacilityId(facility.stadiumId);
+                                      setBulkCourtsList(facilityCourts);
+                                    }}
+                                    className="text-xs font-semibold h-8"
+                                  >
+                                    <Sliders className="mr-1.5 h-3.5 w-3.5" />
+                                    Cấu hình giờ
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setActiveFacilityForCourt(facility)}
+                                    className="text-xs font-semibold h-8 border-primary/20 text-primary hover:bg-primary/5"
+                                  >
+                                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                    Thêm sân lẻ (L3)
+                                  </Button>
+
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                                        <MoreVertical className="h-4.5 w-4.5" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-44">
+                                      <DropdownMenuItem onClick={() => setEditingFacility(facility)}>
+                                        <Edit className="mr-2 h-4 w-4" />
+                                        Chỉnh sửa
+                                      </DropdownMenuItem>
+
+                                      <DropdownMenuItem
+                                        onClick={() => {
+                                          setSelectedVenueForAccessory({ id: facility.stadiumId, name: facility.stadiumName });
+                                          setIsAccessoryOpen(true);
+                                        }}
+                                      >
+                                        <Package className="mr-2 h-4 w-4" />
+                                        Quản lý phụ kiện
+                                      </DropdownMenuItem>
+
+                                      <DropdownMenuItem onClick={() => setMaintenanceTarget({ type: 'stadium', id: facility.stadiumId, name: facility.stadiumName })}>
+                                        <Wrench className="mr-2 h-4 w-4" />
+                                        Đặt bảo trì
+                                      </DropdownMenuItem>
+
+                                      {facility.stadiumStatus === 'AVAILABLE' ? (
+                                        <DropdownMenuItem onClick={() => setSuspendVenue({ id: facility.stadiumId, name: facility.stadiumName })}>
+                                          <Pause className="mr-2 h-4 w-4" />
+                                          Tạm dừng
+                                        </DropdownMenuItem>
+                                      ) : facility.stadiumStatus === 'MAINTENANCE' ? (
+                                        <DropdownMenuItem onClick={() => setActivateVenue({ id: facility.stadiumId, name: facility.stadiumName })}>
+                                          <PlayCircle className="mr-2 h-4 w-4" />
+                                          Hoạt động
+                                        </DropdownMenuItem>
+                                      ) : null}
+
+                                      {facility.stadiumStatus !== 'CLOSED' && (
+                                        <DropdownMenuItem
+                                          onClick={() => {
+                                            setDeleteVenue({ id: facility.stadiumId, name: facility.stadiumName });
+                                            setDeleteConfirmText("");
+                                          }}
+                                          className="text-destructive focus:text-destructive"
+                                        >
+                                          <Trash className="mr-2 h-4 w-4" />
+                                          Xóa khu sân
+                                        </DropdownMenuItem>
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              </div>
+
+                              {/* L3: Court Table Content */}
+                              {!isFacilityCollapsed && (
+                                <div className="pl-12 md:pl-20 pr-4 pb-4">
+                                  {facilityCourts.length === 0 ? (
+                                    <div className="text-xs text-muted-foreground py-4 text-center border border-dashed rounded-lg bg-slate-50/20">
+                                      Chưa đăng ký sân lẻ (L3) nào cho khu vực này.
+                                    </div>
+                                  ) : (
+                                    <div className="border border-slate-100 dark:border-border rounded-xl overflow-hidden bg-white dark:bg-card">
+                                      <Table className="table-fixed">
+                                        <TableHeader className="bg-slate-50/50">
+                                          <TableRow>
+                                            <TableHead className="w-2/5 text-xs font-bold uppercase tracking-wider py-2">Tên sân lẻ</TableHead>
+                                            <TableHead className="w-1/5 text-xs font-bold uppercase tracking-wider py-2">Giá thuê / Giờ</TableHead>
+                                            <TableHead className="w-1/4 text-xs font-bold uppercase tracking-wider py-2">Trạng thái hoạt động</TableHead>
+                                            <TableHead className="w-[15%] text-xs font-bold uppercase tracking-wider py-2 text-right">Tác vụ</TableHead>
+                                          </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                          {facilityCourts.map(court => (
+                                            <TableRow key={court.stadiumId} className="hover:bg-slate-50/30 transition-colors">
+                                              <TableCell className="font-semibold text-slate-800 dark:text-slate-200 truncate">
+                                                <div className="flex flex-col gap-1 items-start">
+                                                  <span className="truncate">{court.stadiumName}</span>
+                                                  {court.footballFieldType && (
+                                                    <Badge variant="outline" className="text-[10px] py-0 font-medium">
+                                                      {court.footballFieldType === 'FIVE_A_SIDE' && 'Sân 5'}
+                                                      {court.footballFieldType === 'SEVEN_A_SIDE' && 'Sân 7'}
+                                                      {court.footballFieldType === 'ELEVEN_A_SIDE' && 'Sân 11'}
+                                                      {court.footballFieldType === 'FUTSAL' && 'Sân Futsal'}
+                                                    </Badge>
+                                                  )}
+                                                </div>
+                                              </TableCell>
+                                              <TableCell className="font-extrabold text-slate-900 dark:text-white text-sm">
+                                                {court.pricePerHour.toLocaleString('vi-VN')}₫
+                                              </TableCell>
+                                              <TableCell className="whitespace-normal">
+                                                <div className="flex flex-col gap-1 items-start">
+                                                  {getStatusBadge(court.stadiumStatus)}
+                                                  {court.stadiumStatus === 'AVAILABLE' && court.underMaintenanceToday && (
+                                                    <Badge className="bg-red-100 text-red-700 hover:bg-red-100 text-[10px] font-semibold whitespace-nowrap">
+                                                      Đang bảo trì hôm nay
+                                                    </Badge>
+                                                  )}
+                                                </div>
+                                              </TableCell>
+                                              <TableCell className="text-right">
+                                                <div className="flex justify-end gap-1">
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 shrink-0 text-slate-500 hover:text-slate-900"
+                                                    onClick={() => router.push(`/owner/venues/${court.stadiumId}/slots`)}
+                                                    title="Xem lịch đặt sân"
+                                                  >
+                                                    <CalendarDays className="h-4.5 w-4.5" />
+                                                  </Button>
+                                                  <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                                                        <MoreVertical className="h-4.5 w-4.5" />
+                                                      </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-44">
+                                                      <DropdownMenuItem onClick={() => router.push(`/owner/venues/${court.stadiumId}/edit`)}>
+                                                        <Edit className="mr-2 h-4 w-4" />
+                                                        Chỉnh sửa
+                                                      </DropdownMenuItem>
+                                                      <DropdownMenuItem onClick={() => setMaintenanceTarget({ type: 'stadium', id: court.stadiumId, name: court.stadiumName })}>
+                                                        <Wrench className="mr-2 h-4 w-4" />
+                                                        Đặt bảo trì
+                                                      </DropdownMenuItem>
+                                                      {court.stadiumStatus === 'AVAILABLE' ? (
+                                                        <DropdownMenuItem onClick={() => setSuspendVenue({ id: court.stadiumId, name: court.stadiumName })}>
+                                                          <Pause className="mr-2 h-4 w-4" />
+                                                          Tạm dừng
+                                                        </DropdownMenuItem>
+                                                      ) : court.stadiumStatus === 'MAINTENANCE' ? (
+                                                        <DropdownMenuItem onClick={() => setActivateVenue({ id: court.stadiumId, name: court.stadiumName })}>
+                                                          <PlayCircle className="mr-2 h-4 w-4" />
+                                                          Hoạt động
+                                                        </DropdownMenuItem>
+                                                      ) : null}
+                                                      {court.stadiumStatus !== 'CLOSED' && (
+                                                        <DropdownMenuItem
+                                                          className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
+                                                          onClick={() => setDeleteVenue({ id: court.stadiumId, name: court.stadiumName })}
+                                                        >
+                                                          <Trash className="mr-2 h-4 w-4" />
+                                                          Xóa sân
+                                                        </DropdownMenuItem>
+                                                      )}
+                                                    </DropdownMenuContent>
+                                                  </DropdownMenu>
+                                                </div>
+                                              </TableCell>
+                                            </TableRow>
+                                          ))}
+                                        </TableBody>
+                                      </Table>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
                 )}
-                <div className="absolute top-3 right-3 flex flex-col gap-1.5 items-end">
-                  {getStatusBadge(venue.stadiumStatus)}
-                  {getApprovedStatusBadge(venue.approvedStatus)}
-                </div>
-              </div>
-
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-lg mb-1 truncate">{venue.stadiumName}</h3>
-                    <Badge variant="outline" className="font-normal">{venue.sportName}</Badge>
-                  </div>
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreVertical className="h-5 w-5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => router.push(`/owner/venues/${venue.stadiumId}/edit`)}>
-                        <Edit className="mr-2 h-4 w-4" />
-                        Chỉnh sửa
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => router.push(`/owner/venues/${venue.stadiumId}/slots`)}>
-                        <CalendarDays className="mr-2 h-4 w-4" />
-                        Cấu hình lịch
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => {
-                        setSelectedVenueForAccessory({ id: venue.stadiumId, name: venue.stadiumName });
-                        setIsAccessoryOpen(true);
-                      }}>
-                        <Package className="mr-2 h-4 w-4" />
-                        Quản lý phụ kiện
-                      </DropdownMenuItem>
-                      {venue.stadiumStatus === 'AVAILABLE' ? (
-                        <DropdownMenuItem onClick={() => setSuspendVenue({ id: venue.stadiumId, name: venue.stadiumName })}>
-                          <Pause className="mr-2 h-4 w-4" />
-                          Tạm dừng
-                        </DropdownMenuItem>
-                      ) : venue.stadiumStatus === 'MAINTENANCE' ? (
-                        <DropdownMenuItem onClick={() => setActivateVenue({ id: venue.stadiumId, name: venue.stadiumName })}>
-                          <PlayCircle className="mr-2 h-4 w-4" />
-                          Mở lại
-                        </DropdownMenuItem>
-                      ) : null}
-                      {venue.stadiumStatus !== 'CLOSED' && (
-                        <DropdownMenuItem 
-                          className="text-destructive focus:bg-destructive focus:text-destructive-foreground" 
-                          onClick={() => setDeleteVenue({ id: venue.stadiumId, name: venue.stadiumName })}
-                        >
-                          <Trash className="mr-2 h-4 w-4" />
-                          Xóa sân
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-
-                <div className="space-y-2 text-sm text-muted-foreground mb-4">
-                  <p className="truncate" title={venue.address}>{venue.address}</p>
-                  <p className="text-primary font-semibold text-base">
-                    {venue.pricePerHour.toLocaleString('vi-VN')}đ / giờ
-                  </p>
-                </div>
-
-                <div className="flex gap-2 mt-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 font-medium"
-                    onClick={() => router.push(`/owner/venues/${venue.stadiumId}/slots`)}
-                  >
-                    <CalendarDays className="mr-1.5 h-4 w-4" />
-                    Lịch sân
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 font-medium text-primary hover:text-primary hover:bg-primary/5 border-primary/20"
-                    onClick={() => {
-                      setSelectedVenueForAccessory({ id: venue.stadiumId, name: venue.stadiumName });
-                      setIsAccessoryOpen(true);
-                    }}
-                  >
-                    <Package className="mr-1.5 h-4 w-4" />
-                    Phụ kiện
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -503,10 +604,12 @@ function VenueManagementPage() {
       <Dialog open={!!suspendVenue} onOpenChange={(open) => !open && setSuspendVenue(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Xác nhận tạm dừng sân</DialogTitle>
+            <DialogTitle>Xác nhận tạm dừng {suspendVenue?.type === 'complex' ? 'tổ hợp' : 'sân'}</DialogTitle>
             <DialogDescription>
-              Bạn có chắc chắn muốn tạm dừng hoạt động sân <strong>{suspendVenue?.name}</strong> không? 
-              Trạng thái sân sẽ chuyển sang bảo trì và khách hàng không thể đặt sân mới.
+              Bạn có chắc chắn muốn tạm dừng hoạt động {suspendVenue?.type === 'complex' ? 'tổ hợp' : 'sân'} <strong>{suspendVenue?.name}</strong> không?
+              {suspendVenue?.type === 'complex'
+                ? ' Toàn bộ khu sân và sân lẻ bên trong tổ hợp sẽ chuyển sang bảo trì và khách hàng không thể đặt sân mới.'
+                : ' Trạng thái sân sẽ chuyển sang bảo trì và khách hàng không thể đặt sân mới.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -523,9 +626,9 @@ function VenueManagementPage() {
       <Dialog open={!!activateVenue} onOpenChange={(open) => !open && setActivateVenue(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Xác nhận mở lại sân</DialogTitle>
+            <DialogTitle>Xác nhận mở lại {activateVenue?.type === 'complex' ? 'tổ hợp' : 'sân'}</DialogTitle>
             <DialogDescription>
-              Sân <strong>{activateVenue?.name}</strong> sẽ được chuyển sang trạng thái hoạt động và khách hàng có thể tiếp tục đặt sân.
+              {activateVenue?.type === 'complex' ? 'Tổ hợp' : 'Sân'} <strong>{activateVenue?.name}</strong> sẽ được chuyển sang trạng thái hoạt động và khách hàng có thể tiếp tục đặt sân.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -575,6 +678,65 @@ function VenueManagementPage() {
         confirmText={confirmOptions?.confirmText}
         variant={confirmOptions?.variant}
       />
+
+      {/* Modals & Dialogs for Quick creations */}
+      <QuickCreateFacilityDialog
+        isOpen={activeComplexIdForFacility !== null}
+        onClose={() => setActiveComplexIdForFacility(null)}
+        complexId={activeComplexIdForFacility}
+        complexSportTypeIds={
+          complexes.find(c => c.complexId === activeComplexIdForFacility)?.sportTypeIds || []
+        }
+        onSuccess={fetchTreeData}
+      />
+
+      <EditComplexDialog
+        isOpen={editingComplex !== null}
+        onClose={() => setEditingComplex(null)}
+        complex={editingComplex}
+        onSuccess={fetchTreeData}
+      />
+
+      <EditFacilityDialog
+        isOpen={editingFacility !== null}
+        onClose={() => setEditingFacility(null)}
+        facility={editingFacility}
+        complexSportTypeIds={
+          complexes.find(c => c.complexId === editingFacility?.complexId)?.sportTypeIds || []
+        }
+        onSuccess={fetchTreeData}
+      />
+
+      <QuickCreateCourtDialog
+        isOpen={activeFacilityForCourt !== null}
+        onClose={() => setActiveFacilityForCourt(null)}
+        parentFacility={activeFacilityForCourt}
+        onSuccess={fetchTreeData}
+      />
+
+      <BulkTimeSlotConfigDialog
+        isOpen={bulkFacilityId !== null || bulkComplexId !== null}
+        onClose={() => {
+          setBulkFacilityId(null);
+          setBulkComplexId(null);
+          setBulkCourtsList([]);
+        }}
+        facilityId={bulkFacilityId}
+        complexId={bulkComplexId}
+        courts={bulkCourtsList}
+        onSuccess={fetchTreeData}
+      />
+
+      {maintenanceTarget && (
+        <MaintenanceScheduleDialog
+          isOpen={maintenanceTarget !== null}
+          onClose={() => setMaintenanceTarget(null)}
+          targetType={maintenanceTarget.type}
+          targetId={maintenanceTarget.id}
+          targetName={maintenanceTarget.name}
+          onSuccess={fetchTreeData}
+        />
+      )}
     </div>
   );
 }

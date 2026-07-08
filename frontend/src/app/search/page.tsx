@@ -2,22 +2,35 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { searchStadiums, getAmenities, getSportTypes, StadiumResponse, StadiumSearchRequest, Amenity } from '@/lib/api/stadium'
+import { getAmenities, getSportTypes, Amenity } from '@/lib/api/stadium'
+import { searchComplexes } from '@/lib/api/complex'
+import { getLocations, SupportedLocationDto } from '@/lib/api/location'
+import type { StadiumComplexDto, ComplexSearchParams } from '@/types/complex'
 import { Button } from '@/components/ui/button'
-import { Map, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import Image from 'next/image'
 import { toast } from 'sonner'
 
 // Import New Components
 import { HorizontalSearch } from './components/HorizontalSearch'
 import { SportTypeTabs } from './components/SportTypeTabs'
 import { FilterModal } from './components/FilterModal'
-import { StadiumCard } from './components/StadiumCard'
+import { ComplexCard } from './components/ComplexCard'
 import { Header } from '@/components/layout/Header'
 
-const StadiumMapModal = dynamic(() => import('./components/StadiumMapModal'), {
+// Import Pagination
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
+
+const ComplexMap = dynamic(() => import('./components/ComplexMap'), {
   ssr: false,
+  loading: () => <div className="w-full h-full bg-muted animate-pulse rounded-2xl" />
 })
 
 // Hook debounce
@@ -28,6 +41,28 @@ function useDebounce<T>(value: T, delay: number): T {
     return () => clearTimeout(handler)
   }, [value, delay])
   return debouncedValue
+}
+
+function buildSearchParams(filters: ComplexSearchParams): URLSearchParams {
+  const params = new URLSearchParams()
+
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '' && key !== 'amenityIds') {
+      if (key === 'minPrice' && Number(value) === 0) return
+      if (key === 'maxPrice' && Number(value) === 1000000) return
+      if (key === 'page' && Number(value) === 0) return
+      if (key === 'size' && Number(value) === 100) return
+      params.append(key, String(value))
+    }
+  })
+
+  if (filters.amenityIds && filters.amenityIds.length > 0) {
+    filters.amenityIds.forEach(id => {
+      params.append('amenityIds', String(id))
+    })
+  }
+
+  return params
 }
 
 export default function SearchPage() {
@@ -43,18 +78,27 @@ function SearchPageContent() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const [stadiums, setStadiums] = useState<StadiumResponse[]>([])
+  const [complexes, setComplexes] = useState<StadiumComplexDto[]>([])
   const [amenitiesList, setAmenitiesList] = useState<Amenity[]>([])
   const [sportTypes, setSportTypes] = useState<{ sportTypeId: number, sportName: string }[]>([])
+  const [locations, setLocations] = useState<SupportedLocationDto[]>([])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [isMapOpen, setIsMapOpen] = useState(false)
   const [isLocating, setIsLocating] = useState(false)
 
+  // Pagination states
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
+
+  // Map Hover State
+  const [hoveredComplexId, setHoveredComplexId] = useState<number | null>(null)
+
   // Local state for UI inputs (initialized safely to avoid SSR Hydration mismatch)
-  const [filters, setFilters] = useState<StadiumSearchRequest>({
+  const [filters, setFilters] = useState<ComplexSearchParams>({
     keyword: '',
     sportTypeId: undefined,
+    province: '',
+    district: '',
     targetDate: '',
     startTime: '',
     endTime: '',
@@ -65,17 +109,20 @@ function SearchPageContent() {
     minPrice: 0,
     maxPrice: 1000000,
     page: 0,
-    size: 12,
+    // [SUGGEST] TODO: Consider separating map endpoint to avoid large payload
+    // Tăng page size lên 100 để hỗ trợ hiển thị markers trên bản đồ
+    size: 100,
   })
 
   const debouncedFilters = useDebounce(filters, 500)
 
-  // 1. Fetch amenities and sports
+  // 1. Fetch amenities, sports and locations
   useEffect(() => {
-    Promise.all([getAmenities(), getSportTypes()])
-      .then(([amenitiesRes, sportTypesRes]) => {
+    Promise.all([getAmenities(), getSportTypes(), getLocations()])
+      .then(([amenitiesRes, sportTypesRes, locationsRes]) => {
         setAmenitiesList(amenitiesRes)
         setSportTypes(sportTypesRes)
+        setLocations(locationsRes)
       })
       .catch((err: unknown) => {
         const msg = err instanceof Error ? err.message : 'Không tải được bộ lọc tìm kiếm.'
@@ -86,32 +133,17 @@ function SearchPageContent() {
 
   // 2. Sync debounced state to URL
   useEffect(() => {
-    const params = new URLSearchParams()
-
-    Object.entries(debouncedFilters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '' && key !== 'amenityIds') {
-        if (key === 'minPrice' && Number(value) === 0) return
-        if (key === 'maxPrice' && Number(value) === 1000000) return
-        if (key === 'page' && Number(value) === 0) return
-        if (key === 'size' && Number(value) === 12) return
-        params.append(key, String(value))
-      }
-    })
-
-    if (debouncedFilters.amenityIds && debouncedFilters.amenityIds.length > 0) {
-      debouncedFilters.amenityIds.forEach(id => {
-        params.append('amenityIds', String(id))
-      })
-    }
-
+    const params = buildSearchParams(debouncedFilters)
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }, [debouncedFilters, pathname, router])
 
   // 3. Single Source of Truth: Fetch from URL changes & Sync UI on Back/Forward
   useEffect(() => {
-    const currentFilters: StadiumSearchRequest = {
+    const currentFilters: ComplexSearchParams = {
       keyword: searchParams.get('keyword') || '',
       sportTypeId: searchParams.get('sportTypeId') ? Number(searchParams.get('sportTypeId')) : undefined,
+      province: searchParams.get('province') || '',
+      district: searchParams.get('district') || '',
       targetDate: searchParams.get('targetDate') || '',
       startTime: searchParams.get('startTime') || '',
       endTime: searchParams.get('endTime') || '',
@@ -122,7 +154,9 @@ function SearchPageContent() {
       minPrice: searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : 0,
       maxPrice: searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : 1000000,
       page: searchParams.has('page') ? Number(searchParams.get('page')) : 0,
-      size: searchParams.has('size') ? Number(searchParams.get('size')) : 12,
+      // [SUGGEST] TODO: Consider separating map endpoint to avoid large payload
+      // Tăng page size lên 100 để hỗ trợ hiển thị markers trên bản đồ
+      size: searchParams.has('size') ? Number(searchParams.get('size')) : 100,
     }
 
     setFilters(prev => {
@@ -133,20 +167,24 @@ function SearchPageContent() {
     })
 
     // Prepare clean filters for API
-    const cleanFilters: Partial<StadiumSearchRequest> = { ...currentFilters }
+    const cleanFilters: Partial<ComplexSearchParams> = { ...currentFilters }
     if (!cleanFilters.targetDate) delete cleanFilters.targetDate
     if (!cleanFilters.startTime) delete cleanFilters.startTime
     if (!cleanFilters.endTime) delete cleanFilters.endTime
     if (!cleanFilters.keyword) delete cleanFilters.keyword
     if (cleanFilters.sportTypeId === undefined) delete cleanFilters.sportTypeId
+    if (!cleanFilters.province) delete cleanFilters.province
+    if (!cleanFilters.district) delete cleanFilters.district
     if (cleanFilters.minPrice === 0) delete cleanFilters.minPrice
     if (cleanFilters.maxPrice === 1000000) delete cleanFilters.maxPrice
 
-    const fetchStadiums = async () => {
+    const fetchComplexesData = async () => {
       setLoading(true)
       try {
-        const res = await searchStadiums(cleanFilters as StadiumSearchRequest)
-        setStadiums(res.content)
+        const res = await searchComplexes(cleanFilters as ComplexSearchParams)
+        setComplexes(res.content)
+        setTotalPages(res.totalPages)
+        setTotalElements(res.totalElements)
       } catch (error) {
         console.error(error)
       } finally {
@@ -154,11 +192,16 @@ function SearchPageContent() {
       }
     }
 
-    fetchStadiums()
+    fetchComplexesData()
   }, [searchParams])
 
-  const handleFilterChange = (key: keyof StadiumSearchRequest, value: StadiumSearchRequest[keyof StadiumSearchRequest]) => {
+  const handleFilterChange = (key: keyof ComplexSearchParams, value: ComplexSearchParams[keyof ComplexSearchParams]) => {
     setFilters(prev => ({ ...prev, [key]: value, page: key !== 'page' ? 0 : value as number }))
+  }
+
+  const handleSearchNow = () => {
+    const params = buildSearchParams(filters)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
   const handleAmenityToggle = (id: number) => {
@@ -173,6 +216,11 @@ function SearchPageContent() {
     setFilters({
       keyword: '',
       sportTypeId: undefined,
+      province: '',
+      district: '',
+      targetDate: '',
+      startTime: '',
+      endTime: '',
       amenityIds: [],
       userLat: undefined,
       userLng: undefined,
@@ -180,7 +228,9 @@ function SearchPageContent() {
       minPrice: 0,
       maxPrice: 1000000,
       page: 0,
-      size: 12,
+      // [SUGGEST] TODO: Consider separating map endpoint to avoid large payload
+      // Tăng page size lên 100 để hỗ trợ hiển thị markers trên bản đồ
+      size: 100,
     })
   }
 
@@ -219,10 +269,10 @@ function SearchPageContent() {
         <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent"></div>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white tracking-tight mb-4 drop-shadow-lg">
-            Khám phá Sân Thể Thao Đỉnh Cao
+            Khám phá Tổ Hợp Thể Thao Đỉnh Cao
           </h1>
           <p className="text-lg md:text-xl text-gray-200 font-medium max-w-2xl drop-shadow-md">
-            Tìm kiếm, xem giá và đặt sân ngay lập tức với hàng trăm lựa chọn tốt nhất xung quanh bạn.
+            Tìm kiếm tổ hợp sân, xem giá và đặt lịch nhanh chóng với đầy đủ các môn thể thao.
           </p>
         </div>
       </div>
@@ -232,7 +282,9 @@ function SearchPageContent() {
         filters={filters}
         onFilterChange={handleFilterChange}
         onGetLocation={getLocation}
+        onSearch={handleSearchNow}
         isLocating={isLocating}
+        locations={locations}
       />
 
       {/* 3. Sport Type Tabs */}
@@ -242,13 +294,11 @@ function SearchPageContent() {
         onSelect={(id) => handleFilterChange('sportTypeId', id)}
       />
 
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-[1600px] mt-6">
 
         {loadError && (
           <div className="mb-6 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            <strong>Lỗi kết nối API:</strong> {loadError}. Đảm bảo backend đang chạy (
-            <code className="text-xs">docker compose up -d backend</code>) và bạn mở đúng cổng (
-            <code className="text-xs">NEXTAUTH_URL</code> khớp URL trình duyệt).
+            <strong>Lỗi kết nối API:</strong> {loadError}. Đảm bảo backend đang chạy và bạn mở đúng cổng.
           </div>
         )}
 
@@ -256,7 +306,9 @@ function SearchPageContent() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Danh sách sân</h2>
-            <p className="text-muted-foreground text-sm mt-1">Tìm thấy <strong className="text-foreground">{stadiums.length}</strong> sân phù hợp với bạn</p>
+            <p className="text-muted-foreground text-sm mt-1">
+              Tìm thấy <strong className="text-foreground">{totalElements}</strong> tổ hợp phù hợp với bạn
+            </p>
           </div>
 
           <div className="flex gap-3">
@@ -267,62 +319,115 @@ function SearchPageContent() {
             <FilterModal
               filters={filters}
               amenitiesList={amenitiesList}
-              totalResults={stadiums.length}
+              totalResults={totalElements}
               onFilterChange={handleFilterChange}
               onAmenityToggle={handleAmenityToggle}
               onClearFilters={handleClearFilters}
             />
-
-            <Button
-              variant="outline"
-              onClick={() => setIsMapOpen(true)}
-              className="border-gray-200 dark:border-border font-semibold hover:bg-gray-50 dark:hover:bg-muted shadow-sm"
-            >
-              <Map className="mr-2 h-4 w-4" /> Bản đồ
-            </Button>
           </div>
         </div>
 
-        {/* 5. Stadium Grid Area */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="animate-pulse bg-card rounded-2xl h-[420px] border border-gray-100 dark:border-border"></div>
-            ))}
-          </div>
-        ) : stadiums.length === 0 ? (
-          <div className="text-center py-20 bg-white dark:bg-card/50 rounded-3xl border border-dashed border-gray-200 dark:border-border shadow-sm flex flex-col items-center justify-center">
-            <div className="w-40 h-40 mb-6 opacity-50">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-gray-400 w-full h-full">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M12 6v6l4 4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <h3 className="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Không tìm thấy sân</h3>
-            <p className="text-muted-foreground mb-8 max-w-md">Rất tiếc, chúng tôi không tìm thấy sân nào khớp với điều kiện lọc của bạn. Vui lòng thử nới lỏng các yêu cầu nhé!</p>
-            <Button onClick={handleClearFilters} className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 rounded-full px-8 py-6 text-base font-bold shadow-lg transition-all hover:scale-105 active:scale-95">
-              Xóa tất cả bộ lọc
-            </Button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {stadiums.map((stadium) => (
-              <StadiumCard
-                key={stadium.stadiumId}
-                stadium={stadium}
-                isUrgent={false}
-              />
-            ))}
-          </div>
-        )}
+        {/* 5. Split-Screen Layout: List + Map */}
+        <div className="flex flex-col lg:flex-row gap-6">
+          
+          {/* Left Column: Complex List */}
+          <div className="flex-1 lg:w-[55%] xl:w-[60%] flex flex-col gap-6">
+            {loading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                  <div key={i} className="animate-pulse bg-card rounded-2xl h-[420px] border border-gray-100 dark:border-border"></div>
+                ))}
+              </div>
+            ) : complexes.length === 0 ? (
+              <div className="text-center py-20 bg-white dark:bg-card/50 rounded-3xl border border-dashed border-gray-200 dark:border-border shadow-sm flex flex-col items-center justify-center">
+                <div className="w-40 h-40 mb-6 opacity-50">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="text-gray-400 w-full h-full">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M12 6v6l4 4" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <h3 className="text-2xl font-bold mb-3 text-gray-900 dark:text-white">Không tìm thấy tổ hợp</h3>
+                <p className="text-muted-foreground mb-8 max-w-md">Rất tiếc, chúng tôi không tìm thấy tổ hợp nào khớp với điều kiện lọc của bạn. Vui lòng thử nới lỏng các yêu cầu nhé!</p>
+                <Button onClick={handleClearFilters} className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 rounded-full px-8 py-6 text-base font-bold shadow-lg transition-all hover:scale-105 active:scale-95">
+                  Xóa tất cả bộ lọc
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {complexes.map((complex) => (
+                    <div
+                      key={complex.complexId}
+                      onMouseEnter={() => setHoveredComplexId(complex.complexId)}
+                      onMouseLeave={() => setHoveredComplexId(null)}
+                      className="h-full"
+                    >
+                      <ComplexCard complex={complex} />
+                    </div>
+                  ))}
+                </div>
 
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="mt-8 flex justify-center pb-6">
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              if (filters.page && filters.page > 0) {
+                                handleFilterChange('page', filters.page - 1)
+                              }
+                            }}
+                            className={filters.page === 0 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                          />
+                        </PaginationItem>
+                        
+                        {Array.from({ length: totalPages }, (_, idx) => (
+                          <PaginationItem key={idx}>
+                            <PaginationLink
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                handleFilterChange('page', idx)
+                              }}
+                              isActive={filters.page === idx}
+                              className="cursor-pointer"
+                            >
+                              {idx + 1}
+                            </PaginationLink>
+                          </PaginationItem>
+                        ))}
+
+                        <PaginationItem>
+                          <PaginationNext
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              if (filters.page !== undefined && filters.page < totalPages - 1) {
+                                handleFilterChange('page', filters.page + 1)
+                              }
+                            }}
+                            className={filters.page === totalPages - 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Right Column: Sticky Map */}
+          <div className="w-full lg:w-[45%] xl:w-[40%] h-[500px] lg:h-[calc(100vh-140px)] lg:sticky lg:top-24 mb-10 lg:mb-0 rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+            <ComplexMap complexes={loading ? [] : complexes} hoveredComplexId={hoveredComplexId} />
+          </div>
+
+        </div>
       </div>
-
-      <StadiumMapModal
-        isOpen={isMapOpen}
-        onClose={() => setIsMapOpen(false)}
-        stadiums={stadiums}
-      />
     </div>
   )
 }

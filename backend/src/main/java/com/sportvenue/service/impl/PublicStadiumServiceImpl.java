@@ -3,12 +3,16 @@ package com.sportvenue.service.impl;
 import com.sportvenue.dto.request.StadiumSearchRequest;
 import com.sportvenue.dto.response.AccessoryResponse;
 import com.sportvenue.dto.response.AmenityResponse;
+import com.sportvenue.dto.response.ComplexRefResponse;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.dto.response.StadiumDetailResponse;
 import com.sportvenue.dto.response.StadiumResponse;
 import com.sportvenue.dto.response.TimeSlotResponse;
 import com.sportvenue.entity.Review;
 import com.sportvenue.entity.Stadium;
+import com.sportvenue.entity.Owner;
+import com.sportvenue.entity.SportType;
+import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.ReviewRepository;
@@ -20,12 +24,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -47,13 +53,31 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
             throw new BadRequestException("Giờ kết thúc phải sau giờ bắt đầu");
         }
 
-        Pageable pageable = PageRequest.of(request.getPage(), request.getSize());
+        Pageable pageable = PageRequest.of(request.getPage(), request.getSize(), resolveSort(request));
         Specification<Stadium> spec = StadiumSpecification.withDynamicFilter(request, true);
 
         if (request.getUserLat() != null && request.getUserLng() != null) {
             return handleDistancePagination(request, pageable, spec);
         }
         return handleStandardPagination(request, pageable, spec);
+    }
+
+    /**
+     * Whitelist field được phép sort — sortBy là string từ client/AI tool nên không được
+     * đưa thẳng vào Sort.by (tránh lỗi khi field không tồn tại). Giá trị lạ bị bỏ qua.
+     * Path sort theo khoảng cách (userLat/userLng) không dùng Sort này — đã sort Haversine riêng.
+     */
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("pricePerHour", "averageRating", "stadiumName", "createdAt");
+
+    private Sort resolveSort(StadiumSearchRequest request) {
+        String sortBy = request.getSortBy();
+        if (sortBy == null || !ALLOWED_SORT_FIELDS.contains(sortBy)) {
+            return Sort.unsorted();
+        }
+        Sort.Direction direction = "DESC".equalsIgnoreCase(request.getSortDirection())
+                ? Sort.Direction.DESC
+                : Sort.Direction.ASC;
+        return Sort.by(direction, sortBy);
     }
 
     private PageResponse<StadiumResponse> handleDistancePagination(StadiumSearchRequest request,
@@ -189,24 +213,43 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                     .toList();
         }
 
+        SportType sportType = stadium.getSportType() != null ? stadium.getSportType() :
+                (stadium.getParentStadium() != null ? stadium.getParentStadium().getSportType() : null);
+
+        String address = stadium.getAddress() != null ? stadium.getAddress() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getAddress() : null);
+
+        Double latitude = stadium.getLatitude() != null ? stadium.getLatitude() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getLatitude() : null);
+
+        Double longitude = stadium.getLongitude() != null ? stadium.getLongitude() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getLongitude() : null);
+
+        ApprovedStatus approvedStatusVal = stadium.getApprovedStatus() != null ? stadium.getApprovedStatus() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getApprovedStatus() : null);
+
         return StadiumResponse.builder()
                 .stadiumId(stadium.getStadiumId())
                 .stadiumName(stadium.getStadiumName())
                 .description(stadium.getDescription())
-                .address(stadium.getAddress())
+                .address(address)
                 .averageRating(stadium.getAverageRating())
-                .latitude(stadium.getLatitude())
-                .longitude(stadium.getLongitude())
+                .latitude(latitude)
+                .longitude(longitude)
                 .distanceInKm(distance)
-                .sportName(stadium.getSportType().getSportName())
-                .sportTypeId(stadium.getSportType().getSportTypeId())
+                .sportName(sportType != null ? sportType.getSportName() : null)
+                .sportTypeId(sportType != null ? sportType.getSportTypeId() : null)
                 .firstImageUrl(firstImageUrl)
                 .imageUrls(imageUrls)
                 .openTime(stadium.getOpenTime())
                 .closeTime(stadium.getCloseTime())
                 .pricePerHour(stadium.getPricePerHour())
                 .stadiumStatus(stadium.getStadiumStatus() != null ? stadium.getStadiumStatus().name() : null)
-                .approvedStatus(stadium.getApprovedStatus() != null ? stadium.getApprovedStatus().name() : null)
+                .approvedStatus(approvedStatusVal != null ? approvedStatusVal.name() : null)
                 .amenities(amenityResponses)
                 .build();
     }
@@ -241,63 +284,119 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
 
         long totalReviews = reviewRepository.countByStadiumStadiumId(stadiumId);
 
+        return buildStadiumDetailResponse(stadium, totalReviews, recentReviews);
+    }
+
+    private StadiumDetailResponse buildStadiumDetailResponse(Stadium stadium, long totalReviews, List<Review> recentReviews) {
+        SportType sportType = stadium.getSportType() != null ? stadium.getSportType() :
+                (stadium.getParentStadium() != null ? stadium.getParentStadium().getSportType() : null);
+
+        String address = stadium.getAddress() != null ? stadium.getAddress() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getAddress() : null);
+
+        Double latitude = stadium.getLatitude() != null ? stadium.getLatitude() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getLatitude() : null);
+
+        Double longitude = stadium.getLongitude() != null ? stadium.getLongitude() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getLongitude() : null);
+
+        ApprovedStatus approvedStatusVal = stadium.getApprovedStatus() != null ? stadium.getApprovedStatus() :
+                (stadium.getParentStadium() != null && stadium.getParentStadium().getComplex() != null ?
+                        stadium.getParentStadium().getComplex().getApprovedStatus() : null);
+
+        Owner owner;
+        try {
+            owner = stadium.resolveOwner();
+        } catch (IllegalStateException e) {
+            log.warn("Cannot resolve owner for stadium {}: {}", stadium.getStadiumId(), e.getMessage());
+            owner = null;
+        }
+
+        java.util.Set<com.sportvenue.entity.Accessory> stadiumAccessories = stadium.getAccessories();
+        if ((stadiumAccessories == null || stadiumAccessories.isEmpty()) && stadium.getParentStadium() != null) {
+            stadiumAccessories = stadium.getParentStadium().getAccessories();
+        }
+        if (stadiumAccessories == null) {
+            stadiumAccessories = java.util.Collections.emptySet();
+        }
+
         return StadiumDetailResponse.builder()
                 .stadiumId(stadium.getStadiumId())
                 .stadiumName(stadium.getStadiumName())
                 .description(stadium.getDescription())
-                .address(stadium.getAddress())
+                .address(address)
                 .pricePerHour(stadium.getPricePerHour())
                 .averageRating(stadium.getAverageRating())
                 .totalReviews(totalReviews)
-                .latitude(stadium.getLatitude())
-                .longitude(stadium.getLongitude())
-                .sportName(stadium.getSportType().getSportName())
+                .latitude(latitude)
+                .longitude(longitude)
+                .sportName(sportType != null ? sportType.getSportName() : null)
                 .imageUrls(stadium.getImages().stream().map(img -> img.getImageUrl()).toList())
                 .openTime(stadium.getOpenTime())
                 .closeTime(stadium.getCloseTime())
                 .stadiumStatus(stadium.getStadiumStatus() != null ? stadium.getStadiumStatus().name() : null)
-                .approvedStatus(stadium.getApprovedStatus() != null ? stadium.getApprovedStatus().name() : null)
-                .amenities(stadium.getAmenities().stream()
-                        .map(a -> AmenityResponse.builder()
-                                .amenityId(a.getAmenityId())
-                                .name(a.getName())
-                                .icon(a.getIcon())
-                                .build())
-                        .toList())
-                .accessories(stadium.getAccessories().stream()
-                        .map(acc -> AccessoryResponse.builder()
-                                .accessoryId(acc.getAccessoryId())
-                                .name(acc.getName())
-                                .pricePerUnit(acc.getPricePerUnit())
-                                .quantity(acc.getQuantity())
-                                .build())
-                        .toList())
-                .timeSlots(stadium.getTimeSlots().stream()
-                        .map(ts -> TimeSlotResponse.builder()
-                                .slotId(ts.getSlotId())
-                                .startTime(ts.getStartTime())
-                                .endTime(ts.getEndTime())
-                                .slotStatus(ts.getSlotStatus() != null ? ts.getSlotStatus().name() : null)
-                                .build())
-                        .toList())
-                .owner(StadiumDetailResponse.OwnerInfoDto.builder()
-                        .ownerId(stadium.getOwner().getOwnerId())
-                        .ownerName(stadium.getOwner().getUser().getFullName())
-                        .phoneNumber(stadium.getOwner().getUser().getPhoneNumber())
-                        .build())
-                .recentReviews(recentReviews.stream()
-                        .map(r -> StadiumDetailResponse.ReviewDto.builder()
-                                .reviewId(r.getReviewId())
-                                .userId(r.getUser().getUserId())
-                                .userName(r.getUser().getFullName())
-                                .userAvatar(r.getUser().getAvatarUrl())
-                                .ratingScore(r.getRatingScore())
-                                .comment(r.getComment())
-                                .ownerResponse(r.getOwnerResponse())
-                                .createdAt(r.getCreatedAt())
-                                .build())
-                        .toList())
+                .approvedStatus(approvedStatusVal != null ? approvedStatusVal.name() : null)
+                .footballFieldType(stadium.getFootballFieldType())
+                .amenities(mapAmenities(stadium))
+                .accessories(mapAccessories(stadiumAccessories))
+                .timeSlots(mapTimeSlots(stadium))
+                .owner(owner != null ? StadiumDetailResponse.OwnerInfoDto.builder()
+                        .ownerId(owner.getOwnerId())
+                        .ownerName(owner.getUser() != null ? owner.getUser().getFullName() : null)
+                        .phoneNumber(owner.getUser() != null ? owner.getUser().getPhoneNumber() : null)
+                        .build() : null)
+                .recentReviews(mapReviews(recentReviews))
                 .build();
+    }
+
+    private List<AmenityResponse> mapAmenities(Stadium stadium) {
+        return stadium.getAmenities().stream()
+                .map(a -> AmenityResponse.builder()
+                        .amenityId(a.getAmenityId())
+                        .name(a.getName())
+                        .icon(a.getIcon())
+                        .build())
+                .toList();
+    }
+
+    private List<AccessoryResponse> mapAccessories(java.util.Set<com.sportvenue.entity.Accessory> accessories) {
+        return accessories.stream()
+                .map(acc -> AccessoryResponse.builder()
+                        .accessoryId(acc.getAccessoryId())
+                        .name(acc.getName())
+                        .pricePerUnit(acc.getPricePerUnit())
+                        .quantity(acc.getQuantity())
+                        .build())
+                .toList();
+    }
+
+    private List<TimeSlotResponse> mapTimeSlots(Stadium stadium) {
+        return stadium.getTimeSlots().stream()
+                .map(ts -> TimeSlotResponse.builder()
+                        .slotId(ts.getSlotId())
+                        .startTime(ts.getStartTime())
+                        .endTime(ts.getEndTime())
+                        .slotStatus(ts.getSlotStatus() != null ? ts.getSlotStatus().name() : null)
+                        .build())
+                .toList();
+    }
+
+    private List<StadiumDetailResponse.ReviewDto> mapReviews(List<Review> recentReviews) {
+        return recentReviews.stream()
+                .map(r -> StadiumDetailResponse.ReviewDto.builder()
+                        .reviewId(r.getReviewId())
+                        .userId(r.getUser().getUserId())
+                        .userName(r.getUser().getFullName())
+                        .userAvatar(r.getUser().getAvatarUrl())
+                        .ratingScore(r.getRatingScore())
+                        .comment(r.getComment())
+                        .ownerResponse(r.getOwnerResponse())
+                        .createdAt(r.getCreatedAt())
+                        .build())
+                .toList();
     }
 
     @Override
@@ -336,5 +435,20 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 .totalPages(reviewPage.getTotalPages())
                 .last(reviewPage.isLast())
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ComplexRefResponse getComplexRef(Integer stadiumId) {
+        log.info("Fetching complex reference for stadium ID: {}", stadiumId);
+        return stadiumRepository.findByIdWithComplexAndParent(stadiumId)
+                .map(s -> ComplexRefResponse.builder()
+                        .stadiumId(s.getStadiumId())
+                        .complexId(s.getComplex() != null ? s.getComplex().getComplexId() : null)
+                        .build())
+                .orElse(ComplexRefResponse.builder()
+                        .stadiumId(stadiumId)
+                        .complexId(null)
+                        .build());
     }
 }

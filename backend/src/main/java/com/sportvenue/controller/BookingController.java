@@ -9,6 +9,8 @@ import com.sportvenue.dto.response.TimeSlotResponse;
 import com.sportvenue.dto.response.WeeklySlotResponse;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.BookingService;
+import com.sportvenue.service.IdempotencyService;
+import com.sportvenue.service.RefundService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -26,12 +28,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * UC-CUS-01: Booking controller cho Customer — single booking flow.
@@ -52,6 +55,8 @@ public class BookingController {
 
     private final BookingService bookingService;
     private final PaymentService paymentService;
+    private final IdempotencyService idempotencyService;
+    private final RefundService refundService;
 
     @PostMapping("/api/v1/bookings")
     @PreAuthorize("hasRole('Customer')")
@@ -60,12 +65,51 @@ public class BookingController {
             description = "Customer chọn (stadium, slot, reservationDate) và tạo 1 đơn. "
                     + "Server trả về 409 nếu slot đã được đặt active (PENDING_PAYMENT/PENDING/CONFIRMED) "
                     + "trên cùng ngày; 400 nếu slot datetime đã qua hoặc slot không thuộc sân. "
-                    + "Booking mới có status=PENDING_PAYMENT, expiredAt = now+5 phút — scheduler sẽ tự huỷ nếu quá hạn.")
+                    + "Booking mới có status=PENDING_PAYMENT, expiredAt = now+5 phút — scheduler sẽ tự huỷ nếu quá hạn. "
+                    + "Header X-Idempotency-Key (UUID) tùy chọn — nếu gửi, server chặn double-submit và trả booking cũ nếu retry.")
     public ResponseEntity<BookingDetailResponse> createBooking(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
-            @Valid @RequestBody CreateBookingRequest request) {
-        BookingDetailResponse response = bookingService.createBooking(userPrincipal, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            @Valid @RequestBody CreateBookingRequest request,
+            @RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKey) {
+
+        Integer userId = userPrincipal.getUser().getUserId();
+
+        boolean acquired = false;
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            // Nếu key đã tồn tại và có kết quả → trả về booking cũ (idempotent retry)
+            Optional<Integer> existing = idempotencyService.getExistingBookingId(userId, idempotencyKey);
+            if (existing.isPresent()) {
+                log.info("[Idempotency] Retry booking — userId={}, key={}, existingBookingId={}",
+                        userId, idempotencyKey, existing.get());
+                BookingDetailResponse cached = bookingService.getBookingDetail(userPrincipal, existing.get());
+                return ResponseEntity.status(HttpStatus.OK).body(cached);
+            }
+            // Key đang PROCESSING (concurrent duplicate) → từ chối
+            if (!idempotencyService.tryAcquire(userId, idempotencyKey)) {
+                log.warn("[Idempotency] Concurrent duplicate — userId={}, key={}", userId, idempotencyKey);
+                return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            }
+            acquired = true;
+        }
+
+        try {
+            BookingDetailResponse response = bookingService.createBooking(userPrincipal, request);
+            if (acquired) {
+                idempotencyService.complete(userId, idempotencyKey, response.getBookingId());
+            }
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (com.sportvenue.exception.PaymentGatewayRefundException ex) {
+            // Lỗi từ Gateway (Timeout/502) -> KHÔNG nhả key để tránh user retry lập tức gây double-refund.
+            throw ex;
+        } catch (Exception ex) {
+            if (acquired) {
+                idempotencyService.release(userId, idempotencyKey);
+            }
+            if (ex instanceof RuntimeException) {
+                throw (RuntimeException) ex;
+            }
+            throw new RuntimeException(ex);
+        }
     }
 
     /**
@@ -165,11 +209,60 @@ public class BookingController {
     public ResponseEntity<BookingDetailResponse> cancelBooking(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @PathVariable("id") Integer bookingId,
-            @Valid @RequestBody(required = false) CancelBookingRequest request) {
-        String reason = request != null ? request.getReason() : null;
-        BookingDetailResponse response = bookingService.cancelBooking(
-                userPrincipal, bookingId, reason);
-        return ResponseEntity.ok(response);
+            @Valid @RequestBody(required = false) CancelBookingRequest request,
+            @RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKey) {
+        
+        Integer userId = userPrincipal.getUser().getUserId();
+
+        boolean acquired = false;
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            Optional<Integer> existing = idempotencyService.getExistingBookingId(userId, idempotencyKey);
+            if (existing.isPresent()) {
+                log.info("[Idempotency] Retry cancel booking — userId={}, key={}, existingBookingId={}",
+                        userId, idempotencyKey, existing.get());
+                BookingDetailResponse cached = bookingService.getBookingDetail(userPrincipal, existing.get());
+                return ResponseEntity.status(HttpStatus.OK).body(cached);
+            }
+            if (!idempotencyService.tryAcquire(userId, idempotencyKey)) {
+                log.warn("[Idempotency] Concurrent duplicate cancel — userId={}, key={}", userId, idempotencyKey);
+                return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            }
+            acquired = true;
+        }
+
+        try {
+            String reason = request != null ? request.getReason() : null;
+            BookingDetailResponse response = bookingService.cancelBooking(
+                    userPrincipal, bookingId, reason);
+            if (acquired) {
+                idempotencyService.complete(userId, idempotencyKey, response.getBookingId());
+            }
+            return ResponseEntity.ok(response);
+        } catch (com.sportvenue.exception.PaymentGatewayRefundException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            if (acquired) {
+                idempotencyService.release(userId, idempotencyKey);
+            }
+            if (ex instanceof RuntimeException) {
+                throw (RuntimeException) ex;
+            }
+            throw new RuntimeException(ex);
+        }
+    }
+
+    /**
+     * Xem trước số tiền hoàn lại trước khi hủy.
+     */
+    @GetMapping("/api/v1/bookings/{id}/refund-preview")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Xem trước số tiền hoàn lại trước khi hủy (Customer)",
+            description = "Trả về số tiền hoàn dự kiến cho khách hàng.")
+    public ResponseEntity<com.sportvenue.dto.response.RefundResponse> previewRefundForCustomer(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable("id") Integer bookingId) {
+        return ResponseEntity.ok(refundService.previewRefundForCustomer(bookingId, userPrincipal.getUsername()));
     }
 
     /**

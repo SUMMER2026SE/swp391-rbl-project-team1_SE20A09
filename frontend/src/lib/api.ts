@@ -1,4 +1,4 @@
-import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosError } from 'axios'
+import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 
 /**
  * Trình duyệt: gọi /api/v1 cùng origin → Next.js proxy (next.config rewrites).
@@ -14,6 +14,35 @@ function resolveApiBaseUrl(): string {
   return `${serverUrl.replace(/\/$/, '')}/api/v1`
 }
 
+/** Config mở rộng để track số lần retry trên mỗi request. */
+type RetryConfig = InternalAxiosRequestConfig & { _retryCount?: number }
+
+/**
+ * Retry với exponential backoff — chỉ cho GET và lỗi transient (5xx / network).
+ * POST/PUT/PATCH/DELETE không được retry tự động để tránh double-submit.
+ */
+async function retryWithBackoff(error: AxiosError): Promise<unknown> {
+  const config = error.config as RetryConfig | undefined
+  if (!config) return Promise.reject(error)
+
+  const method = (config.method ?? '').toUpperCase()
+  const status = error.response?.status
+  const isNetwork = !error.response && Boolean(error.request)
+  const isServerError = status !== undefined && status >= 500
+
+  // Chỉ retry GET, chỉ khi là lỗi mạng hoặc 5xx, tối đa 3 lần
+  if (method !== 'GET' || (!isNetwork && !isServerError)) {
+    return Promise.reject(error)
+  }
+
+  config._retryCount = (config._retryCount ?? 0) + 1
+  if (config._retryCount > 3) return Promise.reject(error)
+
+  const delayMs = 1000 * Math.pow(2, config._retryCount - 1) // 1s, 2s, 4s
+  await new Promise((r) => setTimeout(r, delayMs))
+  return api(config)
+}
+
 /**
  * Axios instance chính — dùng cho tất cả API calls.
  * Tự động đính kèm Bearer token và xử lý 401.
@@ -23,6 +52,9 @@ const api: AxiosInstance = axios.create({
   timeout: 10_000,
   headers: {
     'Content-Type': 'application/json',
+  },
+  paramsSerializer: {
+    indexes: null,
   },
 })
 
@@ -53,10 +85,14 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// ── Response interceptor: xử lý lỗi tập trung ───────────
+// ── Response interceptor: retry + xử lý lỗi tập trung ───
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
+    // Thử retry trước (GET + 5xx/network) — nếu thành công, không xử lý lỗi bên dưới
+    const retryResult = await retryWithBackoff(error).catch(() => null)
+    if (retryResult !== null) return retryResult
+
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean }
 
     // Chỉ 401 (Unauthorized) mới đăng xuất — 403 (Forbidden) là lỗi phân quyền,
@@ -118,6 +154,32 @@ api.interceptors.response.use(
 
 export default api
 
+/**
+ * Public API instance — dùng cho các endpoint không cần auth (/public/...).
+ * Không có response interceptor 401→signOut nên guest user không bị redirect login.
+ */
+export const publicApi = axios.create({
+  baseURL: resolveApiBaseUrl(),
+  timeout: 10_000,
+  headers: { 'Content-Type': 'application/json' },
+  paramsSerializer: { indexes: null },
+})
+
+
+
+// Response interceptor: chỉ reject lỗi — KHÔNG signOut khi 401
+publicApi.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    const data = error.response?.data as { message?: string; error?: string } | undefined
+    const message = data?.message || data?.error || error.message || 'Đã xảy ra lỗi'
+    const customError = new Error(message) as Error & { status?: number }
+    customError.status = error.response?.status
+    return Promise.reject(customError)
+  }
+)
+
+
 export async function get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
   const res = await api.get<T>(url, config)
   return res.data
@@ -173,4 +235,23 @@ export async function uploadDocument(file: File): Promise<FileUploadResult> {
     timeout: 60_000,
   })
   return res.data
+}
+
+/**
+ * Tạo idempotency key (UUID v4 đơn giản) để gắn vào header X-Idempotency-Key.
+ * Gọi một lần khi user mở form đặt sân — không gọi lại mỗi submit.
+ *
+ * @example
+ * const idemKey = useRef(generateIdempotencyKey())
+ * await post('/bookings', body, { headers: { 'X-Idempotency-Key': idemKey.current } })
+ */
+export function generateIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  // Fallback cho môi trường không có crypto.randomUUID (Node.js < 14.17)
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+  })
 }

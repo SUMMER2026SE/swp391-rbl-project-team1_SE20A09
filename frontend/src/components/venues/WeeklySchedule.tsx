@@ -1,17 +1,18 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react'
 import {
   getWeeklySlots,
   type WeeklySlotItem,
   type WeeklySlotsResponse,
 } from '@/lib/bookings-api'
+import WeeklyAgendaGrid from './WeeklyAgendaGrid'
 
 interface WeeklyScheduleProps {
   stadiumId: number
   /** Callback khi user click một slot AVAILABLE — parent dùng để đặt sân. */
-  onSlotSelect: (slotId: number, date: string) => void
+  onSlotSelect: (slotId: number, date: string, startTime?: string, price?: number, endTime?: string) => void
 }
 
 /**
@@ -31,6 +32,12 @@ export default function WeeklySchedule({ stadiumId, onSlotSelect }: WeeklySchedu
   const [weekStart, setWeekStart] = useState<string>(() => mondayOfThisWeek())
   const [data, setData] = useState<WeeklySlotsResponse | null>(null)
   const [loading, setLoading] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -51,36 +58,10 @@ export default function WeeklySchedule({ stadiumId, onSlotSelect }: WeeklySchedu
     }
   }, [stadiumId, weekStart])
 
-  // Tập unique time-slot (startTime) xuất hiện trong tuần — sort theo startTime.
-  // Mỗi slot template có cùng startTime mỗi ngày → 1 row cho mỗi startTime.
-  const uniqueTimeRows = useMemo(() => {
-    const map = new Map<string, { startTime: string; endTime: string }>()
-    for (const day of data?.days ?? []) {
-      for (const slot of day.slots) {
-        if (slot.startTime && !map.has(slot.startTime)) {
-          map.set(slot.startTime, { startTime: slot.startTime, endTime: slot.endTime })
-        }
-      }
-    }
-    return Array.from(map.values()).sort((a, b) => a.startTime.localeCompare(b.startTime))
-  }, [data])
-
-  // Lookup (date, startTime) → WeeklySlotItem — render nhanh từng ô.
-  const cellLookup = useMemo(() => {
-    const map = new Map<string, WeeklySlotItem>()
-    for (const day of data?.days ?? []) {
-      for (const slot of day.slots) {
-        map.set(`${day.date}|${slot.startTime}`, slot)
-      }
-    }
-    return map
-  }, [data])
-
   const handlePrevWeek = () => setWeekStart(addDays(weekStart, -7))
   const handleNextWeek = () => setWeekStart(addDays(weekStart, 7))
   const handleThisWeek = () => setWeekStart(mondayOfThisWeek())
 
-  const days = data?.days ?? []
   const weekEnd = data?.weekEnd ?? addDays(weekStart, 6)
 
   return (
@@ -131,6 +112,10 @@ export default function WeeklySchedule({ stadiumId, onSlotSelect }: WeeklySchedu
           <span>Đã đặt</span>
         </div>
         <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+          <span>Đang giữ chỗ</span>
+        </div>
+        <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-gray-300" />
           <span>Đã qua</span>
         </div>
@@ -141,56 +126,18 @@ export default function WeeklySchedule({ stadiumId, onSlotSelect }: WeeklySchedu
         <div className="py-8 text-center text-[12px] text-gray-400">
           Đang tải lịch tuần…
         </div>
-      ) : uniqueTimeRows.length === 0 ? (
+      ) : !data ? (
         <div className="py-8 text-center text-[12px] text-gray-400">
           Sân chưa có khung giờ nào khả dụng cho tuần này.
         </div>
       ) : (
-        <div className="overflow-x-auto -mx-1 px-1">
-          <table className="w-full border-separate border-spacing-1 min-w-[860px]">
-            <thead>
-              <tr>
-                <th className="w-[90px] min-w-[90px] text-sm text-gray-500 font-semibold text-left pl-2 pr-2 pb-3 pt-2 align-bottom">
-                  Giờ
-                </th>
-                {days.map((day) => (
-                  <th
-                    key={day.date}
-                    className="text-center align-bottom pb-3 pt-2 px-3 min-w-[100px]"
-                  >
-                    <div className="text-sm font-semibold text-gray-700 leading-tight">
-                      {day.dayName}
-                    </div>
-                    <div className="text-[13px] text-gray-500 font-medium leading-tight mt-1">
-                      {formatDayShort(day.date)}
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {uniqueTimeRows.map((time) => (
-                <tr key={time.startTime}>
-                  <td className="text-[13px] text-gray-600 font-semibold align-middle pl-3 pr-3 py-2 whitespace-nowrap">
-                    {time.startTime}–{time.endTime}
-                  </td>
-                  {days.map((day) => {
-                    const slot = cellLookup.get(`${day.date}|${time.startTime}`)
-                    return (
-                      <td key={day.date} className="p-0">
-                        <SlotCell
-                          slot={slot}
-                          date={day.date}
-                          onPick={onSlotSelect}
-                        />
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <WeeklyAgendaGrid
+          data={data}
+          emptyMessage="Sân chưa có khung giờ nào khả dụng cho tuần này."
+          renderSlotBlock={(slot, date) => (
+            <SlotCell slot={slot} date={date} now={now} onPick={onSlotSelect} />
+          )}
+        />
       )}
     </div>
   )
@@ -199,27 +146,61 @@ export default function WeeklySchedule({ stadiumId, onSlotSelect }: WeeklySchedu
 // ── Cell ─────────────────────────────────────────────────────────────────────
 
 interface SlotCellProps {
-  slot: WeeklySlotItem | undefined
+  slot: WeeklySlotItem
   date: string
-  onPick: (slotId: number, date: string) => void
+  now: number
+  onPick: (slotId: number, date: string, startTime: string, price: number, endTime: string) => void
 }
 
-function SlotCell({ slot, date, onPick }: SlotCellProps) {
-  if (!slot) {
-    return (
-      <div className="min-h-[48px] h-[48px] rounded-[6px] bg-gray-50 border-[0.5px] border-gray-100 flex items-center justify-center text-[13px] text-gray-300">
-        —
-      </div>
-    )
-  }
-
+function SlotCell({ slot, date, now, onPick }: SlotCellProps) {
   if (slot.status === 'BOOKED') {
     return (
       <div
         aria-disabled
-        className="min-h-[48px] h-[48px] rounded-[6px] bg-[#fdf0f0] border-[0.5px] border-[#f5b7b7] flex items-center justify-center px-3 text-[13px] font-medium text-[#8a1c1c] select-none cursor-not-allowed"
+        className="h-full w-full rounded-[6px] bg-[#fdf0f0] border-[0.5px] border-[#f5b7b7] flex items-center justify-center px-3 text-[13px] font-medium text-[#8a1c1c] select-none cursor-not-allowed"
       >
         Đã đặt
+      </div>
+    )
+  }
+
+  if (slot.status === 'HELD') {
+    const remainingSeconds = slot.heldUntil
+      ? Math.max(0, Math.ceil((new Date(slot.heldUntil).getTime() - now) / 1000))
+      : null
+    const countdown = remainingSeconds === null
+      ? null
+      : `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`
+    return (
+      <div
+        aria-disabled
+        title="Đơn đang chờ thanh toán; slot sẽ tự mở lại khi hết thời gian giữ chỗ."
+        className="h-full w-full rounded-[6px] bg-amber-50 border-[0.5px] border-amber-300 flex flex-col items-center justify-center px-2 text-[12px] font-medium text-amber-800 select-none cursor-not-allowed leading-tight"
+      >
+        <span>Đang giữ chỗ</span>
+        {countdown && <span className="font-semibold tabular-nums">{countdown}</span>}
+      </div>
+    )
+  }
+
+  if (slot.status === 'OWNER_CLOSED') {
+    return (
+      <div
+        aria-disabled
+        className="h-full w-full rounded-[6px] bg-[#fff7ed] border-[0.5px] border-[#ffedd5] flex items-center justify-center px-3 text-[13px] font-medium text-[#c2410c] select-none cursor-not-allowed"
+      >
+        Tạm đóng
+      </div>
+    )
+  }
+
+  if (slot.status === 'MAINTENANCE') {
+    return (
+      <div
+        aria-disabled
+        className="h-full w-full rounded-[6px] bg-[#f3f4f6] border-[0.5px] border-[#e5e7eb] flex items-center justify-center px-3 text-[13px] font-medium text-gray-500 select-none cursor-not-allowed"
+      >
+        Bảo trì
       </div>
     )
   }
@@ -228,7 +209,7 @@ function SlotCell({ slot, date, onPick }: SlotCellProps) {
     return (
       <div
         aria-disabled
-        className="min-h-[48px] h-[48px] rounded-[6px] bg-gray-50 border-[0.5px] border-gray-200 flex items-center justify-center px-3 text-[13px] font-medium text-gray-400 select-none cursor-not-allowed"
+        className="h-full w-full rounded-[6px] bg-gray-50 border-[0.5px] border-gray-200 flex items-center justify-center px-3 text-[13px] font-medium text-gray-400 select-none cursor-not-allowed"
       >
         Đã qua
       </div>
@@ -239,8 +220,8 @@ function SlotCell({ slot, date, onPick }: SlotCellProps) {
   return (
     <button
       type="button"
-      onClick={() => onPick(slot.slotId, date)}
-      className="min-h-[48px] h-[48px] w-full rounded-[6px] bg-[#e8f7ee] border-[0.5px] border-[#9eddb6] flex flex-col items-center justify-center px-3 cursor-pointer hover:bg-[#d4f0e2] active:bg-[#c0e8d2] transition-colors group"
+      onClick={() => onPick(slot.slotId, date, slot.startTime, slot.price, slot.endTime)}
+      className="h-full w-full rounded-[6px] bg-[#e8f7ee] border-[0.5px] border-[#9eddb6] flex flex-col items-center justify-center px-3 cursor-pointer hover:bg-[#d4f0e2] active:bg-[#c0e8d2] transition-colors group"
       aria-label={`Đặt slot ${slot.startTime}-${slot.endTime} ngày ${date}`}
     >
       <span className="text-[13px] font-semibold text-[#0d5c2e] leading-none">
