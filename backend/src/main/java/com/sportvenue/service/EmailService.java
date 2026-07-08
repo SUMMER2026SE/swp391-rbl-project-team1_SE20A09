@@ -16,12 +16,9 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
-import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Locale;
 
-import org.springframework.web.util.HtmlUtils;
 
 import com.sportvenue.entity.TimeSlot;
 
@@ -82,10 +79,10 @@ public class EmailService {
             message.setTo(toEmail);
             message.setSubject("🔑 Mã OTP Khôi Phục Mật Khẩu — SportsBook");
 
-            String textContent = "Xin chào,\n\n" +
-                    "Bạn đã yêu cầu khôi phục mật khẩu cho tài khoản SportsBook.\n" +
-                    "Mã OTP của bạn là: " + otp + "\n\n" +
-                    "Mã OTP này có hiệu lực trong vòng 5 phút. Vui lòng nhập mã này vào trang khôi phục để đặt lại mật khẩu mới.\n\n" +
+            String textContent = "Xin chào," +
+                    "Bạn đã yêu cầu khôi phục mật khẩu cho tài khoản SportsBook." +
+                    "Mã OTP của bạn là: " + otp + "" +
+                    "Mã OTP này có hiệu lực trong vòng 5 phút. Vui lòng nhập mã này vào trang khôi phục để đặt lại mật khẩu mới." +
                     "Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.";
 
             message.setText(textContent);
@@ -110,22 +107,22 @@ public class EmailService {
             message.setSubject("Thông báo trạng thái tài khoản đối tác — SportsBook");
 
             String status = isEnabled ? "MỞ KHÓA" : "BỊ KHÓA";
-            String textContent = "Xin chào " + businessName + ",\n\n" +
-                    "Tài khoản đối tác của bạn trên hệ thống SportsBook vừa được " + status + ".\n";
+            String textContent = "Xin chào " + businessName + "," +
+                    "Tài khoản đối tác của bạn trên hệ thống SportsBook vừa được " + status + ".";
             
             if (!isEnabled && StringUtils.hasText(reason)) {
-                textContent += "Lý do khóa: " + reason + "\n\n";
+                textContent += "Lý do khóa: " + reason + "";
             } else if (isEnabled && StringUtils.hasText(reason)) {
-                textContent += "Ghi chú: " + reason + "\n\n";
+                textContent += "Ghi chú: " + reason + "";
             }
 
             if (!isEnabled) {
-                textContent += "Khi tài khoản bị khóa, bạn sẽ không thể đăng nhập và toàn bộ sân thể thao của bạn sẽ tạm thời không nhận đặt lịch mới. Vui lòng liên hệ ban quản trị để biết thêm chi tiết.\n\n";
+                textContent += "Khi tài khoản bị khóa, bạn sẽ không thể đăng nhập và toàn bộ sân thể thao của bạn sẽ tạm thời không nhận đặt lịch mới. Vui lòng liên hệ ban quản trị để biết thêm chi tiết.";
             } else {
-                textContent += "Bạn đã có thể đăng nhập bình thường. Chúc bạn kinh doanh thuận lợi!\n\n";
+                textContent += "Bạn đã có thể đăng nhập bình thường. Chúc bạn kinh doanh thuận lợi!";
             }
 
-            textContent += "Trân trọng,\nBan quản trị SportsBook";
+            textContent += "Trân trọng,Ban quản trị SportsBook";
 
             message.setText(textContent);
 
@@ -150,13 +147,13 @@ public class EmailService {
             message.setTo(toEmail);
             message.setSubject("⏰ Nhắc lịch chơi thể thao - " + stadiumName);
             message.setText(
-                    "Xin chào,\n\n" +
-                    "Bạn có lịch đặt sân sắp tới:\n" +
-                    "  🏟️  Sân:  " + stadiumName + "\n" +
-                    "  📅  Ngày: " + reservationDate + "\n" +
-                    "  🕐  Giờ:  " + timeRange + "\n\n" +
-                    "Vui lòng có mặt đúng giờ. Nếu cần hỗ trợ, liên hệ với chúng tôi qua ứng dụng.\n\n" +
-                    "Chúc bạn có buổi chơi thể thao vui vẻ!\n" +
+                    "Xin chào," +
+                    "Bạn có lịch đặt sân sắp tới:" +
+                    "  🏟️  Sân:  " + stadiumName + "" +
+                    "  📅  Ngày: " + reservationDate + "" +
+                    "  🕐  Giờ:  " + timeRange + "" +
+                    "Vui lòng có mặt đúng giờ. Nếu cần hỗ trợ, liên hệ với chúng tôi qua ứng dụng." +
+                    "Chúc bạn có buổi chơi thể thao vui vẻ!" +
                     "Đội ngũ SportsBook"
             );
             mailSender.send(message);
@@ -335,294 +332,14 @@ public class EmailService {
         }
     }
 
-    private String buildCustomerRegistrationSuccessEmailBody(String customerName) {
-        return """
-                <!DOCTYPE html>
-                <html lang="vi">
-                <head><meta charset="UTF-8" /></head>
-                <body style="font-family:Arial,sans-serif;color:#333;">
-                    <div style="background:linear-gradient(135deg,#1a73e8,#0d47a1);color:white;padding:20px;text-align:center;">
-                        <h2>SportsBook</h2>
-                    </div>
-                    <div style="padding:20px;">
-                        <p>Xin chào %s,</p>
-                        <p>Chúc mừng bạn đã đăng ký và xác thực tài khoản thành công trên <strong>SportsBook</strong>!</p>
-                        <p>Giờ đây bạn có thể:</p>
-                        <ul>
-                            <li>Tìm kiếm và đặt sân thể thao nhanh chóng</li>
-                            <li>Theo dõi và quản lý lịch đặt sân</li>
-                            <li>Thanh toán trực tuyến dễ dàng</li>
-                        </ul>
-                        <p>Đăng nhập ngay để bắt đầu trải nghiệm.</p>
-                        <p>Chúc bạn có những giờ phút tập luyện thể thao tuyệt vời!</p>
-                    </div>
-                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
-                        © SportsBook
-                    </div>
-                </body>
-                </html>
-                """.formatted(HtmlUtils.htmlEscape(customerName));
-    }
 
-    private String buildOwnerRegistrationSuccessEmailBody(String ownerName, String businessName) {
-        return """
-                <!DOCTYPE html>
-                <html lang="vi">
-                <head><meta charset="UTF-8" /></head>
-                <body style="font-family:Arial,sans-serif;color:#333;">
-                    <div style="background:linear-gradient(135deg,#1a73e8,#0d47a1);color:white;padding:20px;text-align:center;">
-                        <h2>SportsBook</h2>
-                    </div>
-                    <div style="padding:20px;">
-                        <p>Xin chào %s,</p>
-                        <p>Hồ sơ đối tác cho doanh nghiệp <strong>%s</strong> của bạn đã được Admin phê duyệt thành công!</p>
-                        <p>Tài khoản của bạn hiện đã được cấp quyền Chủ Sân (Owner). Bạn có thể:</p>
-                        <ul>
-                            <li>Đăng tải và quản lý thông tin sân thể thao</li>
-                            <li>Tạo lịch trống và quản lý đơn đặt sân từ khách hàng</li>
-                            <li>Thống kê doanh thu</li>
-                        </ul>
-                        <p>Vui lòng đăng nhập vào hệ thống để bắt đầu kinh doanh.</p>
-                        <p>Chúc bạn kinh doanh hồng phát cùng SportsBook!</p>
-                    </div>
-                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
-                        © SportsBook
-                    </div>
-                </body>
-                </html>
-                """.formatted(HtmlUtils.htmlEscape(ownerName), HtmlUtils.htmlEscape(businessName));
-    }
 
-    private String buildOtpEmailBody(String otpCode, int expiryMinutes) {
-        return """
-                <!DOCTYPE html>
-                <html lang="vi">
-                <head>
-                  <meta charset="UTF-8" />
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-                  <title>Xác thực tài khoản SportsBook</title>
-                </head>
-                <body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;">
-                  <table width="100%%" cellpadding="0" cellspacing="0" style="background-color:#f4f6f9;padding:40px 0;">
-                    <tr>
-                      <td align="center">
-                        <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
-                
-                          <!-- Header -->
-                          <tr>
-                            <td style="background:linear-gradient(135deg,#2563eb,#1d4ed8);padding:36px 40px;text-align:center;">
-                              <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:10px;padding:10px 20px;">
-                                <span style="color:#ffffff;font-size:22px;font-weight:700;letter-spacing:1px;">⚽ SportsBook</span>
-                              </div>
-                              <p style="color:rgba(255,255,255,0.85);margin:12px 0 0;font-size:14px;">Nền tảng đặt sân thể thao trực tuyến</p>
-                            </td>
-                          </tr>
-                
-                          <!-- Body -->
-                          <tr>
-                            <td style="padding:40px 40px 32px;">
-                              <h2 style="margin:0 0 8px;color:#1e293b;font-size:22px;font-weight:600;">Xác thực tài khoản của bạn</h2>
-                              <p style="margin:0 0 28px;color:#64748b;font-size:15px;line-height:1.6;">
-                                Chào mừng bạn đến với SportsBook! Vui lòng sử dụng mã OTP bên dưới để hoàn tất đăng ký tài khoản.
-                              </p>
-                
-                              <!-- OTP Box -->
-                              <div style="background:#f0f7ff;border:2px dashed #2563eb;border-radius:10px;padding:28px;text-align:center;margin-bottom:28px;">
-                                <p style="margin:0 0 8px;color:#64748b;font-size:13px;text-transform:uppercase;letter-spacing:1.5px;font-weight:600;">Mã xác thực OTP</p>
-                                <div style="font-size:42px;font-weight:700;letter-spacing:12px;color:#2563eb;font-family:'Courier New',monospace;">%s</div>
-                                <p style="margin:12px 0 0;color:#94a3b8;font-size:13px;">⏱ Mã có hiệu lực trong <strong style="color:#ef4444;">%d phút</strong></p>
-                              </div>
-                
-                              <!-- Steps -->
-                              <div style="background:#f8fafc;border-radius:8px;padding:20px 24px;margin-bottom:28px;">
-                                <p style="margin:0 0 12px;color:#475569;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Hướng dẫn</p>
-                                <ol style="margin:0;padding-left:20px;color:#64748b;font-size:14px;line-height:2;">
-                                  <li>Quay lại trang xác thực trên SportsBook</li>
-                                  <li>Nhập mã OTP gồm 6 chữ số ở trên</li>
-                                  <li>Nhấn <strong>Xác thực</strong> để kích hoạt tài khoản</li>
-                                </ol>
-                              </div>
-                
-                              <p style="margin:0;color:#94a3b8;font-size:13px;line-height:1.6;border-top:1px solid #e2e8f0;padding-top:20px;">
-                                🔒 Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email này. Mã OTP sẽ tự động hết hạn và tài khoản sẽ không được tạo.
-                              </p>
-                            </td>
-                          </tr>
-                
-                          <!-- Footer -->
-                          <tr>
-                            <td style="background:#f8fafc;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0;">
-                              <p style="margin:0;color:#94a3b8;font-size:12px;">© 2026 SportsBook. Tất cả quyền được bảo lưu.</p>
-                              <p style="margin:6px 0 0;color:#cbd5e1;font-size:11px;">Email này được gửi tự động, vui lòng không trả lời.</p>
-                            </td>
-                          </tr>
-                
-                        </table>
-                      </td>
-                    </tr>
-                  </table>
-                </body>
-                </html>
-                """.formatted(otpCode, expiryMinutes);
-    }
 
-    private String buildBookingConfirmationEmailBody(String customerName, String stadiumName, Integer bookingId, LocalDate reservationDate, TimeSlot timeSlot, BigDecimal totalPrice) {
-        String formattedDate = reservationDate != null ? reservationDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "";
-        String formattedTime = timeSlot != null ? (timeSlot.getStartTime().format(DateTimeFormatter.ofPattern("HH:mm")) + " - " + timeSlot.getEndTime().format(DateTimeFormatter.ofPattern("HH:mm"))) : "";
-        String formattedPrice = totalPrice != null ? NumberFormat.getInstance(new Locale("vi", "VN")).format(totalPrice) + " VNĐ" : "";
-        
-        return """
-                <!DOCTYPE html>
-                <html lang="vi">
-                <head><meta charset="UTF-8" /></head>
-                <body style="font-family:Arial,sans-serif;color:#333;">
-                    <div style="background:linear-gradient(135deg,#1a73e8,#0d47a1);color:white;padding:20px;text-align:center;">
-                        <h2>SportsBook</h2>
-                    </div>
-                    <div style="padding:20px;">
-                        <p>Xin chào %s,</p>
-                        <p>Bạn đã đặt sân thành công tại <strong>%s</strong>.</p>
-                        <ul>
-                            <li><strong>Mã đặt sân:</strong> %d</li>
-                            <li><strong>Ngày:</strong> %s</li>
-                            <li><strong>Khung giờ:</strong> %s</li>
-                            <li><strong>Tổng tiền:</strong> %s</li>
-                        </ul>
-                        <p>Chúc bạn có buổi chơi thể thao vui vẻ!</p>
-                    </div>
-                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
-                        © SportsBook
-                    </div>
-                </body>
-                </html>
-                """.formatted(HtmlUtils.htmlEscape(customerName), HtmlUtils.htmlEscape(stadiumName), bookingId, formattedDate, formattedTime, formattedPrice);
-    }
 
-    private String buildBookingCancellationEmailBody(String customerName, String stadiumName, Integer bookingId, String reason, String cancelledBy) {
-        return """
-                <!DOCTYPE html>
-                <html lang="vi">
-                <head><meta charset="UTF-8" /></head>
-                <body style="font-family:Arial,sans-serif;color:#333;">
-                    <div style="background:linear-gradient(135deg,#1a73e8,#0d47a1);color:white;padding:20px;text-align:center;">
-                        <h2>SportsBook</h2>
-                    </div>
-                    <div style="padding:20px;">
-                        <p>Xin chào %s,</p>
-                        <p>Đơn đặt sân <strong>#%d</strong> của bạn tại <strong>%s</strong> đã bị hủy.</p>
-                        <p><strong>Người hủy:</strong> %s</p>
-                        <p><strong>Lý do hủy:</strong> %s</p>
-                        <p>Nếu có bất kỳ thắc mắc nào, vui lòng liên hệ bộ phận hỗ trợ.</p>
-                    </div>
-                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
-                        © SportsBook
-                    </div>
-                </body>
-                </html>
-                """.formatted(HtmlUtils.htmlEscape(customerName), bookingId, HtmlUtils.htmlEscape(stadiumName), HtmlUtils.htmlEscape(cancelledBy), HtmlUtils.htmlEscape(reason));
-    }
 
-    private String buildRefundEmailBody(String customerName, String stadiumName, Integer bookingId, BigDecimal refundAmount, int refundPercentage, BigDecimal originalAmount) {
-        String formattedRefund = refundAmount != null ? NumberFormat.getInstance(new Locale("vi", "VN")).format(refundAmount) + " VNĐ" : "";
-        String formattedOriginal = originalAmount != null ? NumberFormat.getInstance(new Locale("vi", "VN")).format(originalAmount) + " VNĐ" : "";
-        
-        return """
-                <!DOCTYPE html>
-                <html lang="vi">
-                <head><meta charset="UTF-8" /></head>
-                <body style="font-family:Arial,sans-serif;color:#333;">
-                    <div style="background:linear-gradient(135deg,#1a73e8,#0d47a1);color:white;padding:20px;text-align:center;">
-                        <h2>SportsBook</h2>
-                    </div>
-                    <div style="padding:20px;">
-                        <p>Xin chào %s,</p>
-                        <p>Đơn đặt sân <strong>#%d</strong> của bạn tại <strong>%s</strong> đã được xử lý hoàn tiền.</p>
-                        <ul>
-                            <li><strong>Tổng tiền ban đầu:</strong> %s</li>
-                            <li><strong>Tỷ lệ hoàn:</strong> %d%%</li>
-                            <li><strong>Số tiền hoàn lại:</strong> %s</li>
-                        </ul>
-                        <p>Tiền sẽ được hoàn vào tài khoản của bạn trong thời gian sớm nhất tùy thuộc vào ngân hàng.</p>
-                    </div>
-                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
-                        © SportsBook
-                    </div>
-                </body>
-                </html>
-                """.formatted(HtmlUtils.htmlEscape(customerName), bookingId, HtmlUtils.htmlEscape(stadiumName), formattedOriginal, refundPercentage, formattedRefund);
-    }
 
-    private String buildComplaintCreatedEmailBody(String ownerName, String stadiumName, Integer complaintId, String customerName, String subject) {
-        return """
-                <!DOCTYPE html>
-                <html lang="vi">
-                <head><meta charset="UTF-8" /></head>
-                <body style="font-family:Arial,sans-serif;color:#333;">
-                    <div style="background:linear-gradient(135deg,#1a73e8,#0d47a1);color:white;padding:20px;text-align:center;">
-                        <h2>SportsBook</h2>
-                    </div>
-                    <div style="padding:20px;">
-                        <p>Xin chào %s,</p>
-                        <p>Sân <strong>%s</strong> của bạn vừa nhận được một khiếu nại từ khách hàng <strong>%s</strong>.</p>
-                        <p><strong>Mã khiếu nại:</strong> %d</p>
-                        <p><strong>Tiêu đề:</strong> %s</p>
-                        <p>Vui lòng đăng nhập vào hệ thống để xem chi tiết và phản hồi khách hàng trong thời gian sớm nhất.</p>
-                    </div>
-                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
-                        © SportsBook
-                    </div>
-                </body>
-                </html>
-                """.formatted(HtmlUtils.htmlEscape(ownerName), HtmlUtils.htmlEscape(stadiumName), HtmlUtils.htmlEscape(customerName), complaintId, HtmlUtils.htmlEscape(subject));
-    }
 
-    private String buildComplaintResolvedEmailBody(String customerName, Integer complaintId, String resolution) {
-        return """
-                <!DOCTYPE html>
-                <html lang="vi">
-                <head><meta charset="UTF-8" /></head>
-                <body style="font-family:Arial,sans-serif;color:#333;">
-                    <div style="background:linear-gradient(135deg,#1a73e8,#0d47a1);color:white;padding:20px;text-align:center;">
-                        <h2>SportsBook</h2>
-                    </div>
-                    <div style="padding:20px;">
-                        <p>Xin chào %s,</p>
-                        <p>Khiếu nại <strong>#%d</strong> của bạn đã được phản hồi xử lý.</p>
-                        <p><strong>Nội dung phản hồi:</strong></p>
-                        <blockquote style="border-left: 4px solid #ccc; margin: 1.5em 10px; padding: 0.5em 10px;">%s</blockquote>
-                        <p>Cảm ơn bạn đã đóng góp ý kiến để chúng tôi cải thiện dịch vụ tốt hơn.</p>
-                    </div>
-                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
-                        © SportsBook
-                    </div>
-                </body>
-                </html>
-                """.formatted(HtmlUtils.htmlEscape(customerName), complaintId, HtmlUtils.htmlEscape(resolution));
-    }
 
-    private String buildReviewRequestEmailBody(String customerName, String stadiumName, Integer bookingId, LocalDate reservationDate) {
-        String formattedDate = reservationDate != null ? reservationDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "";
-        return """
-                <!DOCTYPE html>
-                <html lang="vi">
-                <head><meta charset="UTF-8" /></head>
-                <body style="font-family:Arial,sans-serif;color:#333;">
-                    <div style="background:linear-gradient(135deg,#1a73e8,#0d47a1);color:white;padding:20px;text-align:center;">
-                        <h2>SportsBook</h2>
-                    </div>
-                    <div style="padding:20px;">
-                        <p>Xin chào %s,</p>
-                        <p>Cảm ơn bạn đã trải nghiệm tại <strong>%s</strong> vào ngày <strong>%s</strong> (Mã đặt sân: %d).</p>
-                        <p>Bạn cảm thấy chất lượng dịch vụ như thế nào? Hãy dành vài phút để đánh giá và để lại nhận xét nhé.</p>
-                        <p>Phản hồi của bạn rất quan trọng để giúp sân cải thiện tốt hơn.</p>
-                    </div>
-                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
-                        © SportsBook
-                    </div>
-                </body>
-                </html>
-                """.formatted(HtmlUtils.htmlEscape(customerName), HtmlUtils.htmlEscape(stadiumName), formattedDate, bookingId);
-    }
     public void sendPaymentFailedEmail(String toEmail, String customerName, Integer bookingId, String stadiumName) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -687,118 +404,237 @@ public class EmailService {
         }
     }
 
-    private String buildPaymentFailedEmailBody(String customerName, Integer bookingId, String stadiumName) {
+
+
+
+
+    private String safe(String value) {
+        return value != null ? org.springframework.web.util.HtmlUtils.htmlEscape(value) : "";
+    }
+
+    private String formatCurrency(BigDecimal amount) {
+        if (amount == null) {
+            return "0 VNĐ";
+        }
+        java.text.NumberFormat formatter = java.text.NumberFormat.getInstance(new java.util.Locale("vi", "VN"));
+        return formatter.format(amount) + " VNĐ";
+    }
+
+    private String formatDate(LocalDate date) {
+        return date != null ? date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "";
+    }
+
+    private String formatTime(java.time.LocalTime time) {
+        return time != null ? time.format(DateTimeFormatter.ofPattern("HH:mm")) : "";
+    }
+
+    private String formatTimeRange(TimeSlot timeSlot) {
+        if (timeSlot == null) {
+            return "";
+        }
+        return formatTime(timeSlot.getStartTime()) + " - " + formatTime(timeSlot.getEndTime());
+    }
+
+    private String buildEmailLayout(String title, String subtitle, String badgeText, String badgeColor, String bodyContent) {
+        String badgeHtml = (badgeText != null && !badgeText.isBlank()) 
+            ? "<div style=\"margin: 16px 0;text-align:center;\"><span style=\"background-color:" + badgeColor + ";color:white;padding:6px 16px;border-radius:20px;font-size:14px;font-weight:bold;\">" + safe(badgeText) + "</span></div>"
+            : "";
         return """
                 <!DOCTYPE html>
                 <html lang="vi">
                 <head><meta charset="UTF-8" /></head>
-                <body style="font-family:Arial,sans-serif;color:#333;">
-                    <div style="background:linear-gradient(135deg,#e53935,#b71c1c);color:white;padding:20px;text-align:center;">
-                        <h2>SportsBook</h2>
-                    </div>
-                    <div style="padding:20px;">
-                        <p>Xin chào %s,</p>
-                        <p>Rất tiếc, giao dịch thanh toán cho đơn đặt sân <strong>#%d</strong> tại <strong>%s</strong> đã thất bại hoặc bị hủy.</p>
-                        <p>Đơn đặt sân của bạn hiện vẫn ở trạng thái chờ thanh toán. Vui lòng thực hiện lại giao dịch trong thời gian sớm nhất để giữ chỗ.</p>
-                        <p>Nếu bạn gặp sự cố, xin vui lòng liên hệ bộ phận hỗ trợ.</p>
-                    </div>
-                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
-                        © SportsBook
-                    </div>
+                <body style="font-family:Arial,Helvetica,sans-serif;color:#1f2937;background-color:#f3f6fb;margin:0;padding:20px;line-height:1.6;">
+                    <table width="100%%" border="0" cellspacing="0" cellpadding="0">
+                        <tr>
+                            <td align="center">
+                                <table width="100%%" border="0" cellspacing="0" cellpadding="0" style="max-width:640px;background-color:#ffffff;border-radius:16px;box-shadow:0 4px 6px rgba(0,0,0,0.05);overflow:hidden;margin:0 auto;">
+                                    <tr>
+                                        <td style="background:linear-gradient(135deg,#1a73e8,#0d47a1);padding:32px 20px;text-align:center;">
+                                            <h1 style="color:#ffffff;margin:0;font-size:28px;">SportsBook</h1>
+                                            <p style="color:#e0e7ff;margin:8px 0 0 0;font-size:16px;">Nền tảng đặt sân thể thao</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding:28px 32px;">
+                                            <h2 style="margin-top:0;color:#1f2937;font-size:22px;text-align:center;">%s</h2>
+                                            %s
+                                            <p style="text-align:center;color:#4b5563;margin-bottom:24px;">%s</p>
+                                            %s
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="background-color:#f9fafb;padding:20px;text-align:center;border-top:1px solid #e5e7eb;">
+                                            <p style="margin:0;color:#6b7280;font-size:13px;">© SportsBook. Email này được gửi tự động, vui lòng không trả lời trực tiếp.</p>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
                 </body>
                 </html>
-                """.formatted(HtmlUtils.htmlEscape(customerName), bookingId, HtmlUtils.htmlEscape(stadiumName));
+                """.formatted(safe(title), badgeHtml, safe(subtitle), bodyContent);
+    }
+
+    private String detailRow(String label, String value) {
+        return "<tr>" +
+               "<td style=\"padding:12px 16px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-weight:bold;font-size:14px;\" width=\"40%\">" + safe(label) + "</td>" +
+               "<td style=\"padding:12px 16px;border-bottom:1px solid #e5e7eb;color:#1f2937;font-size:15px;font-weight:500;text-align:right;\" width=\"60%\">" + safe(value) + "</td>" +
+               "</tr>";
+    }
+
+    private String getDetailCardStart() {
+        return "<table width=\"100%\" border=\"0\" cellspacing=\"0\" cellpadding=\"0\" style=\"background-color:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;margin-bottom:24px;\">";
+    }
+
+    private String getDetailCardEnd() {
+        return "</table>";
+    }
+
+    private String getButtonHtml(String text) {
+        return "<div style=\"text-align:center;margin-top:16px;\">" +
+               "<span style=\"display:inline-block;background-color:#1a73e8;color:white;padding:12px 24px;border-radius:8px;font-weight:bold;font-size:15px;\">" + safe(text) + "</span>" +
+               "</div>";
+    }
+
+    private String buildCustomerRegistrationSuccessEmailBody(String customerName) {
+        String body = "<p>Chào mừng bạn đã đến với SportsBook! Tài khoản của bạn đã được tạo thành công.</p>" +
+                      getButtonHtml("Bắt đầu đặt sân ngay");
+        return buildEmailLayout("Đăng ký thành công", "Xin chào " + customerName, "Thành viên mới", "#10b981", body);
+    }
+
+    private String buildOwnerRegistrationSuccessEmailBody(String ownerName, String businessName) {
+        String body = "<p>Cảm ơn bạn đã đăng ký trở thành đối tác của SportsBook. Hồ sơ sân <strong>" + safe(businessName) + "</strong> của bạn đã được ghi nhận.</p>" +
+                      "<p>Chúng tôi sẽ liên hệ và xét duyệt trong thời gian sớm nhất.</p>";
+        return buildEmailLayout("Đăng ký đối tác", "Xin chào " + ownerName, "Thành công", "#10b981", body);
+    }
+
+    private String buildOtpEmailBody(String otpCode, int expiryMinutes) {
+        String body = "<p>Bạn đã yêu cầu một mã OTP để xác thực.</p>" +
+                      "<div style=\"text-align:center;margin:24px 0;\"><span style=\"background-color:#f3f4f6;padding:16px 32px;font-size:32px;font-weight:bold;letter-spacing:8px;border-radius:12px;color:#1f2937;\">" + safe(otpCode) + "</span></div>" +
+                      "<p>Mã này có hiệu lực trong vòng " + expiryMinutes + " phút. Vui lòng không chia sẻ mã này cho bất kỳ ai.</p>";
+        return buildEmailLayout("Xác thực OTP", "Mã xác thực của bạn", "Bảo mật", "#3b82f6", body);
+    }
+
+    private String buildBookingConfirmationEmailBody(String customerName, String stadiumName, Integer bookingId, LocalDate reservationDate, TimeSlot timeSlot, BigDecimal totalPrice) {
+        String body = "<p>Cảm ơn bạn đã đặt sân tại SportsBook. Đơn đặt sân của bạn đã được xác nhận thành công.</p>" +
+                      getDetailCardStart() +
+                      detailRow("Mã đặt sân", "#" + bookingId) +
+                      detailRow("Tên sân", stadiumName) +
+                      detailRow("Ngày đặt", formatDate(reservationDate)) +
+                      detailRow("Khung giờ", formatTimeRange(timeSlot)) +
+                      detailRow("Tổng tiền", formatCurrency(totalPrice)) +
+                      getDetailCardEnd() +
+                      "<p style=\"color:#d97706;font-style:italic;text-align:center;\">Vui lòng đến đúng giờ để có trải nghiệm tốt nhất!</p>" +
+                      getButtonHtml("Xem chi tiết đơn");
+        return buildEmailLayout("Xác nhận đặt sân", "Xin chào " + customerName, "Đã xác nhận", "#10b981", body);
+    }
+
+    private String buildBookingCancellationEmailBody(String customerName, String stadiumName, Integer bookingId, String reason, String cancelledBy) {
+        String body = "<p>Đơn đặt sân của bạn đã bị hủy.</p>" +
+                      getDetailCardStart() +
+                      detailRow("Mã đặt sân", "#" + bookingId) +
+                      detailRow("Tên sân", stadiumName) +
+                      detailRow("Người hủy", cancelledBy) +
+                      detailRow("Lý do", reason != null && !reason.isBlank() ? reason : "Không có lý do") +
+                      getDetailCardEnd() +
+                      "<p>Nếu bạn có thắc mắc, vui lòng liên hệ bộ phận hỗ trợ của chúng tôi.</p>" +
+                      getButtonHtml("Liên hệ hỗ trợ");
+        return buildEmailLayout("Hủy đơn đặt sân", "Xin chào " + customerName, "Đã hủy", "#ef4444", body);
+    }
+
+    private String buildRefundEmailBody(String customerName, String stadiumName, Integer bookingId, BigDecimal refundAmount, int refundPercentage, BigDecimal originalAmount) {
+        String body = "<p>Chúng tôi đã tiến hành hoàn tiền cho đơn đặt sân của bạn.</p>" +
+                      getDetailCardStart() +
+                      detailRow("Mã đặt sân", "#" + bookingId) +
+                      detailRow("Tên sân", stadiumName) +
+                      detailRow("Tổng tiền ban đầu", formatCurrency(originalAmount)) +
+                      detailRow("Tỷ lệ hoàn tiền", refundPercentage + "%") +
+                      detailRow("Số tiền hoàn", formatCurrency(refundAmount)) +
+                      getDetailCardEnd() +
+                      "<p style=\"font-size:13px;color:#6b7280;\">Lưu ý: Thời gian tiền về tài khoản có thể phụ thuộc vào ngân hàng hoặc cổng thanh toán của bạn.</p>";
+        return buildEmailLayout("Hoàn tiền thành công", "Xin chào " + customerName, "Đã hoàn tiền", "#8b5cf6", body);
+    }
+
+    private String buildComplaintCreatedEmailBody(String ownerName, String stadiumName, Integer complaintId, String customerName, String subject) {
+        String body = "<p>Có một khiếu nại mới từ khách hàng đối với sân của bạn.</p>" +
+                      getDetailCardStart() +
+                      detailRow("Mã khiếu nại", "#" + complaintId) +
+                      detailRow("Tên sân", stadiumName) +
+                      detailRow("Khách hàng", customerName) +
+                      detailRow("Tiêu đề", subject) +
+                      getDetailCardEnd() +
+                      "<p>Bạn vui lòng kiểm tra và phản hồi khách hàng trong thời gian sớm nhất để đảm bảo chất lượng dịch vụ.</p>" +
+                      getButtonHtml("Xem chi tiết khiếu nại");
+        return buildEmailLayout("Khiếu nại mới", "Xin chào " + ownerName, "Khiếu nại mới", "#f97316", body);
+    }
+
+    private String buildComplaintResolvedEmailBody(String customerName, Integer complaintId, String resolution) {
+        String body = "<p>Khiếu nại của bạn đã được ban quản trị và chủ sân xử lý.</p>" +
+                      getDetailCardStart() +
+                      detailRow("Mã khiếu nại", "#" + complaintId) +
+                      detailRow("Kết quả xử lý", resolution) +
+                      getDetailCardEnd() +
+                      "<p>Cảm ơn bạn đã phản hồi, ý kiến của bạn giúp chúng tôi cải thiện dịch vụ tốt hơn.</p>";
+        return buildEmailLayout("Khiếu nại đã xử lý", "Xin chào " + customerName, "Đã xử lý", "#10b981", body);
+    }
+
+    private String buildReviewRequestEmailBody(String customerName, String stadiumName, Integer bookingId, LocalDate reservationDate) {
+        String body = "<p>Cảm ơn bạn đã sử dụng dịch vụ đặt sân tại SportsBook.</p>" +
+                      getDetailCardStart() +
+                      detailRow("Mã đặt sân", "#" + bookingId) +
+                      detailRow("Tên sân", stadiumName) +
+                      detailRow("Ngày chơi", formatDate(reservationDate)) +
+                      getDetailCardEnd() +
+                      "<p>Bạn cảm thấy chất lượng dịch vụ như thế nào? Hãy dành vài phút đánh giá để giúp sân cải thiện tốt hơn nhé!</p>" +
+                      getButtonHtml("Đánh giá sân");
+        return buildEmailLayout("Mời đánh giá", "Xin chào " + customerName, "Mời đánh giá", "#3b82f6", body);
+    }
+
+    private String buildPaymentFailedEmailBody(String customerName, Integer bookingId, String stadiumName) {
+        String body = "<p>Rất tiếc, giao dịch thanh toán cho đơn đặt sân của bạn đã thất bại hoặc bị hủy.</p>" +
+                      getDetailCardStart() +
+                      detailRow("Mã đặt sân", "#" + bookingId) +
+                      detailRow("Tên sân", stadiumName) +
+                      getDetailCardEnd() +
+                      "<p>Đơn đặt sân hiện vẫn ở trạng thái chờ. Vui lòng thực hiện lại giao dịch sớm nhất để giữ chỗ.</p>" +
+                      getButtonHtml("Thanh toán lại");
+        return buildEmailLayout("Thanh toán thất bại", "Xin chào " + customerName, "Thất bại", "#ef4444", body);
     }
 
     private String buildOwnerNewBookingEmailBody(String ownerName, Integer bookingId, String stadiumName, LocalDate date, java.time.LocalTime time, String customerName) {
-        String formattedDate = date != null ? date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "";
-        String formattedTime = time != null ? time.format(DateTimeFormatter.ofPattern("HH:mm")) : "";
-        return """
-                <!DOCTYPE html>
-                <html lang="vi">
-                <head><meta charset="UTF-8" /></head>
-                <body style="font-family:Arial,sans-serif;color:#333;">
-                    <div style="background:linear-gradient(135deg,#1a73e8,#0d47a1);color:white;padding:20px;text-align:center;">
-                        <h2>SportsBook</h2>
-                    </div>
-                    <div style="padding:20px;">
-                        <p>Xin chào %s,</p>
-                        <p>Bạn vừa có một đơn đặt sân mới đã được xác nhận thanh toán.</p>
-                        <ul>
-                            <li><strong>Sân:</strong> %s</li>
-                            <li><strong>Mã đơn:</strong> %d</li>
-                            <li><strong>Khách hàng:</strong> %s</li>
-                            <li><strong>Thời gian:</strong> %s ngày %s</li>
-                        </ul>
-                        <p>Bạn có thể kiểm tra chi tiết trong bảng điều khiển chủ sân.</p>
-                    </div>
-                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
-                        © SportsBook
-                    </div>
-                </body>
-                </html>
-                """.formatted(HtmlUtils.htmlEscape(ownerName), HtmlUtils.htmlEscape(stadiumName), bookingId, HtmlUtils.htmlEscape(customerName), formattedTime, formattedDate);
+        String body = "<p>Bạn vừa có một đơn đặt sân mới đã được xác nhận thanh toán.</p>" +
+                      getDetailCardStart() +
+                      detailRow("Mã đặt sân", "#" + bookingId) +
+                      detailRow("Khách hàng", customerName) +
+                      detailRow("Thời gian", formatTime(time) + " ngày " + formatDate(date)) +
+                      getDetailCardEnd() +
+                      "<p>Vui lòng kiểm tra chi tiết trong bảng điều khiển chủ sân để chuẩn bị đón khách.</p>";
+        return buildEmailLayout("Đơn đặt sân mới", "Xin chào " + ownerName, "Đơn mới", "#3b82f6", body);
     }
 
     private String buildOwnerBookingCancelledEmailBody(String ownerName, Integer bookingId, String stadiumName, LocalDate date, java.time.LocalTime time, String reason) {
-        String formattedDate = date != null ? date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "";
-        String formattedTime = time != null ? time.format(DateTimeFormatter.ofPattern("HH:mm")) : "";
-        String displayReason = (reason != null && !reason.isBlank()) ? reason : "Không có lý do";
-        return """
-                <!DOCTYPE html>
-                <html lang="vi">
-                <head><meta charset="UTF-8" /></head>
-                <body style="font-family:Arial,sans-serif;color:#333;">
-                    <div style="background:linear-gradient(135deg,#ff9800,#f57c00);color:white;padding:20px;text-align:center;">
-                        <h2>SportsBook</h2>
-                    </div>
-                    <div style="padding:20px;">
-                        <p>Xin chào %s,</p>
-                        <p>Một đơn đặt sân tại <strong>%s</strong> vừa bị khách hàng hủy.</p>
-                        <ul>
-                            <li><strong>Mã đơn:</strong> %d</li>
-                            <li><strong>Thời gian bị hủy:</strong> %s ngày %s</li>
-                            <li><strong>Lý do:</strong> %s</li>
-                        </ul>
-                        <p>Khung giờ này đã được giải phóng và có sẵn cho khách hàng khác đặt.</p>
-                    </div>
-                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
-                        © SportsBook
-                    </div>
-                </body>
-                </html>
-                """.formatted(HtmlUtils.htmlEscape(ownerName), HtmlUtils.htmlEscape(stadiumName), bookingId, formattedTime, formattedDate, HtmlUtils.htmlEscape(displayReason));
+        String body = "<p>Một đơn đặt sân vừa bị khách hàng hủy.</p>" +
+                      getDetailCardStart() +
+                      detailRow("Mã đặt sân", "#" + bookingId) +
+                      detailRow("Thời gian", formatTime(time) + " ngày " + formatDate(date)) +
+                      detailRow("Lý do", reason != null && !reason.isBlank() ? reason : "Không có lý do") +
+                      getDetailCardEnd() +
+                      "<p>Khung giờ này đã được giải phóng và có sẵn cho khách hàng khác đặt.</p>";
+        return buildEmailLayout("Khách hủy đơn", "Xin chào " + ownerName, "Đã hủy", "#ef4444", body);
     }
 
     private String buildStadiumApprovalResultEmailBody(String ownerName, String stadiumName, boolean isApproved, String reason) {
-        String statusText = isApproved ? "được ĐƯỢC DUYỆT" : "bị TỪ CHỐI";
-        String color = isApproved ? "linear-gradient(135deg,#4caf50,#2e7d32)" : "linear-gradient(135deg,#e53935,#b71c1c)";
-        String reasonHtml = (!isApproved && reason != null && !reason.isBlank()) 
-                ? "<p><strong>Lý do từ chối:</strong> " + HtmlUtils.htmlEscape(reason) + "</p>" 
-                : "";
-        String nextSteps = isApproved 
-                ? "<p>Sân của bạn hiện đã hiển thị trên hệ thống và sẵn sàng nhận khách đặt.</p>"
-                : "<p>Vui lòng đăng nhập vào bảng điều khiển, chỉnh sửa thông tin sân theo yêu cầu và gửi lại để được xét duyệt.</p>";
-                
-        return """
-                <!DOCTYPE html>
-                <html lang="vi">
-                <head><meta charset="UTF-8" /></head>
-                <body style="font-family:Arial,sans-serif;color:#333;">
-                    <div style="background:%s;color:white;padding:20px;text-align:center;">
-                        <h2>SportsBook</h2>
-                    </div>
-                    <div style="padding:20px;">
-                        <p>Xin chào %s,</p>
-                        <p>Hồ sơ đăng ký sân <strong>%s</strong> của bạn vừa %s bởi quản trị viên.</p>
-                        %s
-                        %s
-                    </div>
-                    <div style="background:#f4f4f4;padding:10px;text-align:center;font-size:12px;">
-                        © SportsBook
-                    </div>
-                </body>
-                </html>
-                """.formatted(color, HtmlUtils.htmlEscape(ownerName), HtmlUtils.htmlEscape(stadiumName), statusText, reasonHtml, nextSteps);
+        String badge = isApproved ? "Được duyệt" : "Bị từ chối";
+        String color = isApproved ? "#10b981" : "#ef4444";
+        String statusText = isApproved ? "đã được ĐƯỢC DUYỆT" : "đã BỊ TỪ CHỐI";
+        String body = "<p>Hồ sơ đăng ký sân <strong>" + safe(stadiumName) + "</strong> của bạn " + statusText + " bởi quản trị viên.</p>";
+        if (!isApproved) {
+            body += getDetailCardStart() + detailRow("Lý do từ chối", reason != null ? reason : "") + getDetailCardEnd();
+            body += "<p>Vui lòng đăng nhập vào bảng điều khiển, chỉnh sửa thông tin theo yêu cầu và gửi lại để được xét duyệt.</p>";
+        } else {
+            body += "<p>Sân của bạn hiện đã hiển thị trên hệ thống và sẵn sàng nhận khách đặt.</p>";
+        }
+        return buildEmailLayout("Kết quả duyệt sân", "Xin chào " + ownerName, badge, color, body);
     }
 }
