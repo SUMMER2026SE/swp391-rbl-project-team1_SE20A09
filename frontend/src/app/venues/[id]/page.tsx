@@ -69,6 +69,7 @@ export default async function VenueDetailPage({ params }: PageProps) {
       price: a.pricePerUnit,
     })) || [],
     owner: {
+      userId: venue.owner?.ownerUserId,
       name: venue.owner?.ownerName || 'N/A',
       initials: venue.owner?.ownerName
         ? venue.owner.ownerName.split(' ').slice(-2).map((w: string) => w[0]).join('')

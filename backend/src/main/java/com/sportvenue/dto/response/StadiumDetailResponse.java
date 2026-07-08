@@ -50,6 +50,7 @@ public class StadiumDetailResponse {
     @AllArgsConstructor
     public static class OwnerInfoDto {
         private Integer ownerId;
+        private Integer ownerUserId;
         private String ownerName;
         private String phoneNumber;
     }

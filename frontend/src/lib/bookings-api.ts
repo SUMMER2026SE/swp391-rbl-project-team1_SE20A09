@@ -137,6 +137,7 @@ export type BookingDetailItem = {
   paymentStatus: string;
   createdAt: string;
   note: string | null;
+  ownerUserId?: number;
 };
 
 export async function fetchBookingDetail(id: string | number): Promise<BookingDetailItem> {
@@ -157,6 +158,7 @@ export async function fetchBookingDetail(id: string | number): Promise<BookingDe
     paymentStatus: data.paymentStatus,
     createdAt: data.createdAt || "Chưa rõ",
     note: data.note || null,
+    ownerUserId: data.stadium?.ownerUserId,
   };
 }
 
@@ -239,6 +241,9 @@ export type WeeklySlotItem = {
   status: WeeklySlotStatus;
   /** ISO local date-time; present while payment temporarily holds the slot. */
   heldUntil?: string | null;
+  bookingId?: number;
+  customerId?: number;
+  customerDisplayName?: string;
 };
 
 /** Một ngày trong weekly grid — kèm tên thứ tiếng Việt. */
@@ -279,6 +284,12 @@ export async function getWeeklySlots(
     `/stadiums/${stadiumId}/weekly-slots?weekStart=${encodeURIComponent(weekStart)}`
   );
   return res.data;
+}
+
+export async function getOwnerWeeklySlots(stadiumId: number, weekStart: string): Promise<WeeklySlotsResponse> {
+  return get<WeeklySlotsResponse>(
+    `/owner/bookings/stadiums/${stadiumId}/weekly-slots?weekStart=${encodeURIComponent(weekStart)}`
+  );
 }
 
 /**

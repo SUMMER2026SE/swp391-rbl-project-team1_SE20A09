@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import type { Session } from "next-auth";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/landing/Footer";
@@ -62,6 +63,8 @@ import {
 } from "@/lib/api/stadium";
 import { useConfirm } from "@/hooks/useConfirm";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { chatUrl, createContextualConversation } from "@/lib/contextual-chat";
+import { getMatchConversation } from "@/lib/chat-api";
 
 // Helper functions for MatchStatus display
 const isMatchEnded = (playDate: string, endTime: string) => {
@@ -97,6 +100,7 @@ const getMatchStatusBadgeClass = (m: MatchResponse) => {
 };
 
 function MatchRequestFeedPage() {
+  const router = useRouter();
   const { data: session } = useSession();
   const { isOpen, options, confirm, close, execute, isLoading: confirming } = useConfirm();
 
@@ -107,6 +111,24 @@ function MatchRequestFeedPage() {
   );
   const [showJoinedDetailDialog, setShowJoinedDetailDialog] = useState(false);
   const [selectedJoinedRequest, setSelectedJoinedRequest] = useState<JoinRequestResponse | null>(null);
+  const [openingChat, setOpeningChat] = useState(false);
+
+  const openJoinedRequestChat = async (group: boolean) => {
+    if (!selectedJoinedRequest) return;
+    try {
+      setOpeningChat(true);
+      const result = group
+        ? await getMatchConversation(selectedJoinedRequest.matchId)
+        : { conversationId: await createContextualConversation(selectedJoinedRequest.hostUserId!, {
+            action: 'match_referral', matchId: selectedJoinedRequest.matchId,
+            title: selectedJoinedRequest.matchTitle || `Kèo #${selectedJoinedRequest.matchId}`,
+            sportName: selectedJoinedRequest.sportName, playDate: selectedJoinedRequest.playDate,
+          }) };
+      setShowJoinedDetailDialog(false);
+      router.push(chatUrl(result.conversationId));
+    } catch { toast.error('Không thể mở cuộc trò chuyện'); }
+    finally { setOpeningChat(false); }
+  };
 
   // Host manage dialog states
   const [showManageDialog, setShowManageDialog] = useState(false);
@@ -1537,7 +1559,18 @@ function MatchRequestFeedPage() {
                       <span className="text-slate-800 font-bold">{selectedJoinedRequest.hostEmail || "N/A"}</span>
                     </div>
                   </div>
+                  <Button type="button" className="w-full" disabled={openingChat}
+                    onClick={() => openJoinedRequestChat(true)}>
+                    {openingChat ? 'Đang mở...' : 'Vào nhóm chat của kèo'}
+                  </Button>
                 </div>
+              )}
+
+              {selectedJoinedRequest.requestStatus === "PENDING" && selectedJoinedRequest.hostUserId && (
+                <Button type="button" variant="outline" className="w-full" disabled={openingChat}
+                  onClick={() => openJoinedRequestChat(false)}>
+                  {openingChat ? 'Đang mở...' : 'Nhắn tin hỏi Host'}
+                </Button>
               )}
 
               <div className="border-t pt-4 mt-2 flex justify-end">

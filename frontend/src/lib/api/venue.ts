@@ -57,6 +57,7 @@ export interface VenueDetail {
   timeSlots: TimeSlotItem[]
   owner: {
     ownerId: number
+    ownerUserId: number
     ownerName: string
     phoneNumber: string
   }

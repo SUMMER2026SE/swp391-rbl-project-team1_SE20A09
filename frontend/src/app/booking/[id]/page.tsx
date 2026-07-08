@@ -17,6 +17,7 @@ import Image from "next/image";
 import { useParams, useRouter } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/landing/Footer';
+import { chatUrl, createContextualConversation } from '@/lib/contextual-chat';
 
 const STATUS_CONFIG = {
   confirmed: { label: "Đã xác nhận", className: "bg-green-50 text-green-700 border-green-200" },
@@ -63,6 +64,20 @@ export default function BookingDetailPage() {
   const [complaintText, setComplaintText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [chatStarting, setChatStarting] = useState(false);
+
+  const handleMessageOwner = async () => {
+    if (!booking?.ownerUserId) return toast.error('Không tìm thấy tài khoản chủ sân');
+    try {
+      setChatStarting(true);
+      const conversationId = await createContextualConversation(booking.ownerUserId, {
+        action: 'booking_referral', bookingId: Number(booking.id), stadiumName: booking.venueName,
+        playDate: booking.playDate, time: `${booking.startTime} - ${booking.endTime}`,
+      });
+      router.push(chatUrl(conversationId));
+    } catch { toast.error('Không thể bắt đầu cuộc trò chuyện'); }
+    finally { setChatStarting(false); }
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -319,9 +334,9 @@ export default function BookingDetailPage() {
             <div className="flex flex-col sm:flex-row gap-4">
               {(booking.status === 'confirmed' || booking.status === 'pending') && (
                 <>
-                  <Button variant="secondary" className="rounded-2xl flex-1 font-bold h-12" onClick={() => toast.info("Tính năng chat đang được phát triển")}>
+                  <Button variant="secondary" className="rounded-2xl flex-1 font-bold h-12" onClick={handleMessageOwner} disabled={chatStarting}>
                     <MessageSquare className="h-4 w-4 mr-2" />
-                    Liên hệ chủ sân
+                    {chatStarting ? 'Đang mở...' : 'Liên hệ chủ sân'}
                   </Button>
                   <Button asChild variant="destructive" className="rounded-2xl flex-1 font-bold h-12">
                     <Link href={`/booking/${booking.id}/cancel`}>Huỷ đơn đặt</Link>

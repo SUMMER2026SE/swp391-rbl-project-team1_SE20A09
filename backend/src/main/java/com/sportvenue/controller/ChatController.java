@@ -8,6 +8,8 @@ import com.sportvenue.dto.chat.ConversationDto;
 import com.sportvenue.dto.chat.SendMessageRequest;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.ChatService;
+import com.sportvenue.repository.ChatConversationRepository;
+import org.springframework.security.access.AccessDeniedException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -40,8 +42,22 @@ import java.util.Map;
 public class ChatController {
 
     private final ChatService chatService;
+    private final ChatConversationRepository conversationRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
+
+    @GetMapping("/matches/{matchId}/conversation")
+    public ResponseEntity<Map<String, Long>> getMatchConversation(
+            @AuthenticationPrincipal UserPrincipal principal, @PathVariable Integer matchId) {
+        var conversation = conversationRepository.findByMatchId(matchId)
+                .orElseThrow(() -> new IllegalArgumentException("Nhóm chat của kèo chưa được tạo"));
+        boolean isMember = conversation.getParticipants().stream()
+                .anyMatch(user -> user.getUserId().equals(principal.getUserId()));
+        if (!isMember) {
+            throw new AccessDeniedException("Bạn chưa phải thành viên của nhóm chat này");
+        }
+        return ResponseEntity.ok(Map.of("conversationId", conversation.getConversationId()));
+    }
     // ── Conversations ────────────────────────────────────────────
 
     @GetMapping("/conversations")

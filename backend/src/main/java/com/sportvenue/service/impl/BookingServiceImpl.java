@@ -806,6 +806,8 @@ public class BookingServiceImpl implements BookingService {
                         .build())
                 .stadium(BookingDetailResponse.StadiumInfo.builder()
                         .stadiumId(stadium.getStadiumId())
+                        .ownerUserId(stadium.resolveOwner() != null && stadium.resolveOwner().getUser() != null
+                                ? stadium.resolveOwner().getUser().getUserId() : null)
                         .stadiumName(stadium.getStadiumName())
                         .address(StadiumUtils.resolveAddress(stadium))
                         .sportType(sportType)

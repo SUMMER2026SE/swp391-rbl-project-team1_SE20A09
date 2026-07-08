@@ -81,6 +81,7 @@ public class BookingDetailResponse {
     @AllArgsConstructor
     public static class StadiumInfo {
         private Integer stadiumId;
+        private Integer ownerUserId;
         private String stadiumName;
         private String address;
         private String sportType;

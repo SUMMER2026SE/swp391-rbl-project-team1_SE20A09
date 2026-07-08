@@ -36,6 +36,8 @@ import type { ReviewDto } from '@/lib/api/venue'
 import { getComplexReviews } from '@/lib/api/complex'
 import { Skeleton } from '@/components/ui/skeleton'
 import FacilityTabs from './FacilityTabs'
+import { toast } from 'sonner'
+import { chatUrl, createContextualConversation } from '@/lib/contextual-chat'
 
 // Lazy load map component to prevent SSR issue
 const VenueMap = dynamic(() => import('../venues/VenueMap'), {
@@ -86,6 +88,25 @@ export default function ComplexDetail({
   const [reviewPage, setReviewPage] = useState(0)
   const [reviewHasMore, setReviewHasMore] = useState(false)
   const [reviewsFetched, setReviewsFetched] = useState(false)
+  const [chatStarting, setChatStarting] = useState(false)
+
+  const handleMessageOwner = async () => {
+    if (!complex.ownerUserId) {
+      toast.error('Vui lòng đăng nhập hoặc thử lại sau')
+      return
+    }
+    try {
+      setChatStarting(true)
+      const conversationId = await createContextualConversation(complex.ownerUserId, {
+        action: 'stadium_referral', stadiumId: complex.complexId, stadiumName: complex.name,
+      })
+      router.push(chatUrl(conversationId))
+    } catch {
+      toast.error('Không thể bắt đầu cuộc trò chuyện')
+    } finally {
+      setChatStarting(false)
+    }
+  }
 
   // Load review list the first time the "Đánh giá" tab is opened.
   useEffect(() => {
@@ -283,12 +304,13 @@ export default function ComplexDetail({
           </a>
         )}
         <button
-          onClick={() => alert(`Nhắn tin đến chủ sân: ${complex.ownerPhone || 'N/A'}`)}
+          onClick={handleMessageOwner}
+          disabled={chatStarting}
           className="flex-1 flex items-center justify-center gap-1.5 border-[0.5px] border-gray-200 rounded-[20px] py-[5px] text-[12px] font-medium text-gray-600 hover:bg-gray-100 cursor-pointer transition-colors"
           type="button"
         >
           <IconMessageCircle className="w-[13px] h-[13px] text-[#1a8a4a]" />
-          <span>Nhắn tin</span>
+          <span>{chatStarting ? 'Đang mở...' : 'Nhắn tin'}</span>
         </button>
       </div>
     </div>

@@ -26,7 +26,9 @@ import {
   createOrUpdateException,
   deleteException,
 } from "@/lib/api/timeSlot"
-import { getWeeklySlots, WeeklySlotsResponse, WeeklySlotItem } from "@/lib/bookings-api"
+import { getOwnerWeeklySlots, WeeklySlotsResponse, WeeklySlotItem } from "@/lib/bookings-api"
+import { chatUrl, createContextualConversation } from "@/lib/contextual-chat"
+import { useRouter } from "next/navigation"
 import { TimeSlot, CreateTimeSlotRequest } from "@/types/timeSlot"
 import { ConfirmDialog } from "@/components/common/ConfirmDialog"
 import { useConfirm } from "@/hooks/useConfirm"
@@ -82,6 +84,7 @@ export function TimeSlotManager({
   openTime,
   closeTime,
 }: TimeSlotManagerProps) {
+  const router = useRouter()
   const [viewMode, setViewMode] = React.useState<"weekly" | "list">("weekly")
   const [currentDate, setCurrentDate] = React.useState<string>(() => {
     return mondayOfThisWeek()
@@ -104,6 +107,24 @@ export function TimeSlotManager({
   } | null>(null)
   const [isChoiceOpen, setIsChoiceOpen] = React.useState<boolean>(false)
   const [selectedDate, setSelectedDate] = React.useState<string | undefined>(undefined)
+  const [selectedBooking, setSelectedBooking] = React.useState<{ slot: WeeklySlotItem; date: string } | null>(null)
+  const [openingBookingChat, setOpeningBookingChat] = React.useState(false)
+
+  const handleMessageCustomer = async () => {
+    const selected = selectedBooking
+    if (!selected?.slot.customerId || !selected.slot.bookingId) return
+    try {
+      setOpeningBookingChat(true)
+      const conversationId = await createContextualConversation(selected.slot.customerId, {
+        action: 'booking_referral', bookingId: selected.slot.bookingId,
+        stadiumName: `Sân #${stadiumId}`, playDate: selected.date,
+        time: `${selected.slot.startTime} - ${selected.slot.endTime}`,
+      })
+      setSelectedBooking(null)
+      router.push(chatUrl(conversationId))
+    } catch { toast.error('Không thể bắt đầu cuộc trò chuyện') }
+    finally { setOpeningBookingChat(false) }
+  }
 
   // Custom confirm hook
   const { 
@@ -127,7 +148,7 @@ export function TimeSlotManager({
     try {
       setLoading(true)
       if (viewMode === "weekly") {
-        const data = await getWeeklySlots(stadiumId, currentDate)
+        const data = await getOwnerWeeklySlots(stadiumId, currentDate)
         setWeeklyData(data)
       } else {
         const data = await getStadiumTimeSlots(stadiumId)
@@ -497,6 +518,7 @@ export function TimeSlotManager({
                   renderSlotBlock={(slot, date) => (
                     <OwnerSlotBlock
                       slot={slot}
+                      onBooked={() => setSelectedBooking({ slot, date })}
                       onChoice={(action) => {
                         setSelectedSlotForChoice({ slot, date, action })
                         setIsChoiceOpen(true)
@@ -721,6 +743,26 @@ export function TimeSlotManager({
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!selectedBooking} onOpenChange={(open) => !open && setSelectedBooking(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Chi tiết lịch đã đặt</DialogTitle></DialogHeader>
+          {selectedBooking && (
+            <div className="space-y-3 text-sm">
+              <div className="rounded-lg bg-slate-50 p-3 space-y-1">
+                <p><strong>Khách hàng:</strong> {selectedBooking.slot.customerDisplayName || 'Khách hàng'}</p>
+                <p><strong>Ngày:</strong> {formatDayShort(selectedBooking.date)}</p>
+                <p><strong>Khung giờ:</strong> {selectedBooking.slot.startTime} - {selectedBooking.slot.endTime}</p>
+                <p><strong>Mã booking:</strong> #{selectedBooking.slot.bookingId}</p>
+              </div>
+              <Button className="w-full" onClick={handleMessageCustomer}
+                disabled={!selectedBooking.slot.customerId || openingBookingChat}>
+                {openingBookingChat ? 'Đang mở...' : 'Nhắn tin cho khách hàng'}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -730,14 +772,15 @@ export function TimeSlotManager({
 interface OwnerSlotBlockProps {
   slot: WeeklySlotItem
   onChoice: (action: "edit" | "toggle" | "delete") => void
+  onBooked: () => void
 }
 
-function OwnerSlotBlock({ slot, onChoice }: OwnerSlotBlockProps) {
+function OwnerSlotBlock({ slot, onChoice, onBooked }: OwnerSlotBlockProps) {
   if (slot.status === 'BOOKED') {
     return (
-      <div className="h-full w-full rounded-[6px] bg-[#fdf0f0] border-[0.5px] border-[#f5b7b7] flex items-center justify-center px-3 text-[13px] font-bold text-[#8a1c1c] select-none cursor-not-allowed">
-        Đã đặt
-      </div>
+      <button type="button" onClick={onBooked} className="h-full w-full rounded-[6px] bg-[#fdf0f0] border-[0.5px] border-[#f5b7b7] flex flex-col items-center justify-center px-3 text-[13px] font-bold text-[#8a1c1c] select-none cursor-pointer hover:bg-red-100">
+        <span>Đã đặt</span><span className="text-[10px] font-medium">Xem chi tiết</span>
+      </button>
     )
   }
 

@@ -35,6 +35,7 @@ public class JoinRequestResponse {
     private java.time.LocalTime endTime;
     private String hostName;
     private String hostEmail;
+    private Integer hostUserId;
     private MatchStatus matchStatus;
     private MatchingType matchingType;
     private String cancelReason;
