@@ -6,6 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
 @RequiredArgsConstructor
@@ -15,7 +17,10 @@ public class NotificationListener {
     private final NotificationService notificationService;
 
     @Async
-    @EventListener
+    @TransactionalEventListener(
+        phase = TransactionPhase.AFTER_COMMIT,
+        fallbackExecution = true
+    )
     public void handleNotificationEvent(NotificationEvent event) {
         log.info("Handling notification event for user {}: {}", event.getUserId(), event.getTitle());
         try {
