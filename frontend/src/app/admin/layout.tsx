@@ -82,7 +82,6 @@ export default function AdminLayout({
   const getPageTitle = (path: string) => {
     if (path === "/admin/dashboard") return { title: "Dashboard", subtitle: "Tổng quan hệ thống SportsBook" };
     if (path.startsWith("/admin/customers")) return { title: "Khách hàng", subtitle: "Quản lý thông tin khách hàng" };
-    if (path.startsWith("/admin/users")) return { title: "Người dùng", subtitle: "Quản lý tài khoản người dùng" };
     if (path.startsWith("/admin/owner-approvals")) return { title: "Duyệt chủ sân", subtitle: "Phê duyệt tài khoản chủ sân" };
     if (path.startsWith("/admin/complex-approvals")) return { title: "Duyệt Tổ hợp", subtitle: "Phê duyệt Tổ hợp sân" };
     if (path.startsWith("/admin/sport-categories")) return { title: "Danh mục", subtitle: "Quản lý danh mục môn thể thao" };
