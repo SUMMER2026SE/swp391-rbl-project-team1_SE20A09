@@ -178,6 +178,80 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("from") java.time.LocalDate from,
             @Param("to") java.time.LocalDate to);
 
+    @Query("""
+            SELECT b.reservationDate AS date,
+                   COALESCE(SUM(
+                       CASE
+                           WHEN b.totalPrice > :serviceFee THEN b.totalPrice - :serviceFee
+                           ELSE 0
+                       END
+                   ), 0) AS revenue
+            FROM Booking b
+            JOIN b.stadium s
+            WHERE s.owner.user.email = :ownerEmail
+            AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId)
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
+            AND b.reservationDate BETWEEN :startDate AND :endDate
+            GROUP BY b.reservationDate
+            ORDER BY b.reservationDate ASC
+            """)
+    List<com.sportvenue.repository.projection.DailyRevenueProjection> getOwnerDailyNetRevenue(
+            @Param("ownerEmail") String ownerEmail,
+            @Param("stadiumId") Integer stadiumId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("serviceFee") BigDecimal serviceFee);
+
+    @Query("""
+            SELECT s.stadiumId AS stadiumId,
+                   s.stadiumName AS stadiumName,
+                   COUNT(DISTINCT b.bookingId) AS totalBookings,
+                   COALESCE(SUM(
+                       CASE
+                           WHEN b.totalPrice > :serviceFee THEN b.totalPrice - :serviceFee
+                           ELSE 0
+                       END
+                   ), 0) AS totalRevenue
+            FROM Booking b
+            JOIN b.stadium s
+            WHERE s.owner.user.email = :ownerEmail
+            AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId)
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
+            AND b.reservationDate BETWEEN :startDate AND :endDate
+            GROUP BY s.stadiumId, s.stadiumName
+            ORDER BY COALESCE(SUM(
+                       CASE
+                           WHEN b.totalPrice > :serviceFee THEN b.totalPrice - :serviceFee
+                           ELSE 0
+                       END
+                   ), 0) DESC
+            """)
+    List<com.sportvenue.repository.projection.VenueRevenueProjection> getOwnerVenueNetRevenueBreakdown(
+            @Param("ownerEmail") String ownerEmail,
+            @Param("stadiumId") Integer stadiumId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("serviceFee") BigDecimal serviceFee);
+
+    @Query("""
+            SELECT COALESCE(SUM(
+                CASE
+                    WHEN b.totalPrice > :serviceFee THEN b.totalPrice - :serviceFee
+                    ELSE 0
+                END
+            ), 0)
+            FROM Booking b
+            JOIN b.stadium s
+            WHERE s.owner.user.email = :ownerEmail
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
+            AND b.reservationDate BETWEEN :startDate AND :endDate
+            """)
+    BigDecimal sumOwnerCurrentMonthNetRevenue(
+            @Param("ownerEmail") String ownerEmail,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("serviceFee") BigDecimal serviceFee);
+
     /** Đếm số lượng đặt sân theo trạng thái — dùng cho Dashboard. */
     long countByStadiumStadiumIdAndBookingStatus(Integer stadiumId, BookingStatus status);
 
