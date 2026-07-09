@@ -31,7 +31,8 @@ const PAYMENT_STATUS_CONFIG = {
   unpaid: { label: "Chưa thanh toán", className: "bg-rose-50 text-rose-700 border-rose-200" },
   deposited: { label: "Đã đặt cọc", className: "bg-indigo-50 text-indigo-700 border-indigo-200" },
   paid: { label: "Đã thanh toán", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  refunded: { label: "Đã hoàn tiền", className: "bg-blue-50 text-blue-700 border-blue-200" }
+  refunded: { label: "Đã hoàn tiền", className: "bg-blue-50 text-blue-700 border-blue-200" },
+  awaiting_cash_payment: { label: "Chờ thu tiền mặt", className: "bg-amber-50 text-amber-700 border-amber-200" }
 } as const;
 
 function getStatusBadge(status: BookingDetailItem["status"]) {
@@ -280,11 +281,13 @@ export default function BookingDetailPage() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-500 font-medium">Giá sân</span>
-                    <span className="font-bold text-slate-700">{booking.totalPrice.toLocaleString('vi-VN')}đ</span>
+                    <span className="font-bold text-slate-700">
+                      {Math.max(0, booking.totalPrice - booking.serviceFee).toLocaleString('vi-VN')}đ
+                    </span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-500 font-medium">Phí dịch vụ</span>
-                    <span className="font-bold text-slate-700">0đ</span>
+                    <span className="font-bold text-slate-700">{booking.serviceFee.toLocaleString('vi-VN')}đ</span>
                   </div>
                   
                   <Separator className="bg-slate-100" />
