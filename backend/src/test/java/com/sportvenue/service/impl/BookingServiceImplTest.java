@@ -7,6 +7,8 @@ import com.sportvenue.entity.Accessory;
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.BookingAccessory;
 import com.sportvenue.entity.Owner;
+import com.sportvenue.entity.Payment;
+import com.sportvenue.entity.enums.TransactionStatus;
 import com.sportvenue.entity.Role;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.TimeSlot;
@@ -370,7 +372,7 @@ class BookingServiceImplTest {
     // ─────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("confirmPayment: PENDING_PAYMENT + đúng user → CONFIRMED + expiredAt cleared")
+    @DisplayName("confirmPayment: PENDING_PAYMENT + đúng user → CONFIRMED + AWAITING_CASH_PAYMENT + expiredAt cleared")
     void confirmPayment_happyPath() {
         Booking booking = Booking.builder()
                 .bookingId(50)
@@ -390,9 +392,17 @@ class BookingServiceImplTest {
         BookingDetailResponse response = bookingService.confirmPayment(principal, 50);
 
         assertEquals(BookingStatus.CONFIRMED, booking.getBookingStatus());
-        assertEquals(PaymentStatus.PAID, booking.getPaymentStatus());
+        assertEquals(PaymentStatus.AWAITING_CASH_PAYMENT, booking.getPaymentStatus(),
+                "Cash confirm không được set PAID trực tiếp — tiền chưa qua cổng thanh toán nào (mục 1.5)");
         assertNull(booking.getExpiredAt(), "expiredAt phải bị clear sau khi confirm");
         assertEquals(50, response.getBookingId());
+
+        ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
+        verify(paymentRepository).save(paymentCaptor.capture());
+        Payment savedPayment = paymentCaptor.getValue();
+        assertEquals(com.sportvenue.entity.enums.PaymentMethod.CASH, savedPayment.getPaymentMethod());
+        assertEquals(TransactionStatus.PENDING, savedPayment.getPaymentStatus());
+        assertEquals(new BigDecimal("270000"), savedPayment.getAmount());
     }
 
     @Test
@@ -706,6 +716,77 @@ class BookingServiceImplTest {
         assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
         assertEquals("Owner closed court", booking.getCancelReason());
         verify(bookingRepository, times(1)).save(booking);
+    }
+
+    @Test
+    @DisplayName("cancelBooking: venue owner CANNOT cancel an already-PAID booking -> Forbidden (mục 1.2 bypass fix)")
+    void cancelBooking_byVenueOwner_whenPaid_throwsForbidden() {
+        // Arrange
+        User ownerUser = User.builder()
+                .userId(99)
+                .email("owner@example.com")
+                .role(Role.builder().roleName("Owner").build())
+                .build();
+        Owner owner = Owner.builder()
+                .ownerId(5)
+                .user(ownerUser)
+                .build();
+        stadium.setOwner(owner);
+
+        Booking booking = Booking.builder()
+                .bookingId(101)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("150000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .reservationDate(futureDate())
+                .build();
+
+        UserPrincipal ownerPrincipal = new UserPrincipal(ownerUser);
+
+        when(bookingRepository.findDetailById(101)).thenReturn(Optional.of(booking));
+
+        // Act & Assert — Owner phải dùng /owner/bookings/{id}/refund thay vì né chính sách qua đây
+        ForbiddenException ex = assertThrows(ForbiddenException.class,
+                () -> bookingService.cancelBooking(ownerPrincipal, 101, "Owner tries to bypass refund policy"));
+        assertTrue(ex.getMessage().contains("Hoàn tiền"));
+        assertEquals(BookingStatus.CONFIRMED, booking.getBookingStatus(), "booking không được đổi trạng thái khi bị chặn");
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cancelBooking: venue owner cancelling a DEPOSITED booking is blocked too (same as PAID)")
+    void cancelBooking_byVenueOwner_whenDeposited_throwsForbidden() {
+        User ownerUser = User.builder()
+                .userId(99)
+                .email("owner@example.com")
+                .role(Role.builder().roleName("Owner").build())
+                .build();
+        Owner owner = Owner.builder()
+                .ownerId(5)
+                .user(ownerUser)
+                .build();
+        stadium.setOwner(owner);
+
+        Booking booking = Booking.builder()
+                .bookingId(102)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("150000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.DEPOSITED)
+                .reservationDate(futureDate())
+                .build();
+
+        UserPrincipal ownerPrincipal = new UserPrincipal(ownerUser);
+        when(bookingRepository.findDetailById(102)).thenReturn(Optional.of(booking));
+
+        assertThrows(ForbiddenException.class,
+                () -> bookingService.cancelBooking(ownerPrincipal, 102, "Owner tries again with deposit"));
+        verify(bookingRepository, never()).save(any());
     }
 
     @Test

@@ -40,6 +40,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { get, post } from "@/lib/api";
+import { cancelBooking } from "@/lib/bookings-api";
 import type { PageResponse } from "@/types/common";
 
 interface BookingItem {
@@ -81,6 +82,13 @@ function BookingManagementPage() {
   // States phục vụ hiển thị kết quả thành công Premium
   const [successData, setSuccessData] = useState<any>(null);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+
+  // Hủy đơn chưa thu tiền (vd: đang chờ thu tiền mặt) — không có gì để hoàn nên
+  // dùng thẳng luồng cancelBooking() thay vì modal "Hủy & Hoàn Tiền" (yêu cầu
+  // có giao dịch PAID/DEPOSITED để tính % hoàn).
+  const [cancelOnlyBooking, setCancelOnlyBooking] = useState<BookingItem | null>(null);
+  const [cancelOnlyReason, setCancelOnlyReason] = useState("");
+  const [isCancelOnlySubmitting, setIsCancelOnlySubmitting] = useState(false);
 
   const [activeTab, setActiveTab] = useState("all");
   const [page, setPage] = useState(0);
@@ -181,6 +189,7 @@ function BookingManagementPage() {
       unpaid: { label: "Chưa thanh toán", className: "bg-orange-100 text-orange-700 dark:bg-orange-950/30 dark:text-orange-400" },
       paid: { label: "Đã thanh toán", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" },
       refunded: { label: "Đã hoàn tiền", className: "bg-purple-100 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400" },
+      awaiting_cash_payment: { label: "Chờ thu tiền mặt", className: "bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400" },
     };
     const item = config[status.toLowerCase() as keyof typeof config] || { label: status, className: "bg-gray-100 text-gray-700" };
     return <Badge className={`${item.className} border-none shadow-none font-medium px-2.5 py-0.5`}>{item.label}</Badge>;
@@ -274,9 +283,29 @@ function BookingManagementPage() {
     }
   };
 
+  const handleConfirmCancelOnly = async () => {
+    if (!cancelOnlyBooking) return;
+    try {
+      setIsCancelOnlySubmitting(true);
+      await cancelBooking(cancelOnlyBooking.id, cancelOnlyReason.trim() || undefined);
+      setBookingList(prev => prev.map(b =>
+        b.id === cancelOnlyBooking.id ? { ...b, status: "cancelled" } : b
+      ));
+      toast.success("Đã hủy đơn thành công");
+      setCancelOnlyBooking(null);
+      setCancelOnlyReason("");
+    } catch (error: any) {
+      toast.error(error.message || "Không thể hủy đơn, vui lòng thử lại");
+    } finally {
+      setIsCancelOnlySubmitting(false);
+    }
+  };
+
   const BookingRow = ({ booking }: { booking: BookingItem }) => {
     const isExpanded = expandedRow === booking.id;
     const canRefund = booking.status.toLowerCase() === "confirmed" && booking.paymentStatus.toLowerCase() === "paid";
+    const canCancelUnpaid = booking.status.toLowerCase() === "confirmed"
+      && booking.paymentStatus.toLowerCase() === "awaiting_cash_payment";
 
     return (
       <>
@@ -311,14 +340,25 @@ function BookingManagementPage() {
           <td className="p-4 align-middle">
             <div className="flex gap-2 items-center justify-end">
               {canRefund && (
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   variant="destructive"
                   className="bg-rose-600 hover:bg-rose-700 text-white font-medium shadow-sm transition-all duration-200"
                   onClick={() => handleOpenRefundModal(booking)}
                 >
                   <RotateCcw className="h-3.5 w-3.5 mr-1.5 animate-spin-reverse" />
                   Hủy & Hoàn Tiền
+                </Button>
+              )}
+              {canCancelUnpaid && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400"
+                  onClick={() => setCancelOnlyBooking(booking)}
+                >
+                  <XCircle className="h-3.5 w-3.5 mr-1.5" />
+                  Hủy đơn
                 </Button>
               )}
               <Button
@@ -954,6 +994,63 @@ function BookingManagementPage() {
               Đóng và tiếp tục
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={cancelOnlyBooking !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCancelOnlyBooking(null);
+            setCancelOnlyReason("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md border dark:border-slate-800 shadow-2xl rounded-xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-amber-600">
+              <XCircle className="h-5 w-5" /> Hủy đơn đặt sân
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs">
+              Đơn <span className="font-mono font-semibold">{cancelOnlyBooking?.displayId}</span> đang chờ thu tiền mặt tại sân —
+              chưa thu tiền nên hủy sẽ không phát sinh hoàn tiền. Giờ chơi sẽ được giải phóng ngay.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 py-2">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              Lý do hủy (tùy chọn)
+            </label>
+            <Textarea
+              value={cancelOnlyReason}
+              onChange={(e) => setCancelOnlyReason(e.target.value)}
+              placeholder="Ví dụ: khách báo không tới, đặt trùng lịch..."
+              rows={3}
+              maxLength={255}
+              disabled={isCancelOnlySubmitting}
+            />
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setCancelOnlyBooking(null)}
+              disabled={isCancelOnlySubmitting}
+            >
+              Quay lại
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              className="rounded-xl"
+              onClick={handleConfirmCancelOnly}
+              disabled={isCancelOnlySubmitting}
+            >
+              {isCancelOnlySubmitting ? "Đang xử lý..." : "Xác nhận hủy"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

@@ -133,6 +133,8 @@ export type BookingDetailItem = {
   endTime: string;
   address: string;
   totalPrice: number;
+  /** Phí dịch vụ đã gồm trong totalPrice — 0 nếu backend cũ chưa trả field này. */
+  serviceFee: number;
   status: "pending" | "pending_payment" | "confirmed" | "completed" | "cancelled";
   paymentStatus: string;
   createdAt: string;
@@ -154,6 +156,7 @@ export async function fetchBookingDetail(id: string | number): Promise<BookingDe
     endTime: data.slot?.endTime || "Chưa rõ",
     address: data.stadium?.address || "Chưa rõ",
     totalPrice: typeof data.totalPrice === "number" ? data.totalPrice : Number(data.totalPrice),
+    serviceFee: typeof data.serviceFee === "number" ? data.serviceFee : Number(data.serviceFee) || 0,
     status: data.status,
     paymentStatus: data.paymentStatus,
     createdAt: data.createdAt || "Chưa rõ",
@@ -314,13 +317,16 @@ export type BookingDetailResponse = CreateBookingResponse;
 
 /**
  * Hủy một đơn đặt sân — PUT /api/v1/bookings/{bookingId}/cancel.
- * Customer (chủ booking) hoặc Owner (chủ sân) đều có thể gọi.
+ * Customer (chủ booking) luôn gọi được. Owner (chủ sân) CHỈ gọi được khi booking
+ * chưa thu tiền thật (paymentStatus khác paid/deposited, vd đang awaiting_cash_payment) —
+ * booking đã thanh toán phải hủy qua trang Owner "Hoàn tiền" (processRefund) để áp dụng
+ * đúng chính sách hoàn tiền theo giờ, không né được qua endpoint này nữa.
  *
  * @param bookingId id của booking cần hủy.
  * @param reason   lý do hủy (tùy chọn, tối đa 255 ký tự — server validate).
  * @returns booking detail sau khi hủy (status=CANCELLED, cancelReason đã lưu).
  * @throws Error với message từ BE nếu booking không tồn tại / không có quyền /
- *         đang ở trạng thái COMPLETED hoặc CANCELLED.
+ *         đang ở trạng thái COMPLETED hoặc CANCELLED / Owner cố hủy booking đã thanh toán.
  */
 export async function cancelBooking(
   bookingId: number,
