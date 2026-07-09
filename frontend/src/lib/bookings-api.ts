@@ -133,6 +133,8 @@ export type BookingDetailItem = {
   endTime: string;
   address: string;
   totalPrice: number;
+  /** Phí dịch vụ đã gồm trong totalPrice — 0 nếu backend cũ chưa trả field này. */
+  serviceFee: number;
   status: "pending" | "pending_payment" | "confirmed" | "completed" | "cancelled";
   paymentStatus: string;
   createdAt: string;
@@ -154,6 +156,7 @@ export async function fetchBookingDetail(id: string | number): Promise<BookingDe
     endTime: data.slot?.endTime || "Chưa rõ",
     address: data.stadium?.address || "Chưa rõ",
     totalPrice: typeof data.totalPrice === "number" ? data.totalPrice : Number(data.totalPrice),
+    serviceFee: typeof data.serviceFee === "number" ? data.serviceFee : Number(data.serviceFee) || 0,
     status: data.status,
     paymentStatus: data.paymentStatus,
     createdAt: data.createdAt || "Chưa rõ",

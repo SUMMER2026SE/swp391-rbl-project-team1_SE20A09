@@ -281,11 +281,13 @@ export default function BookingDetailPage() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-500 font-medium">Giá sân</span>
-                    <span className="font-bold text-slate-700">{booking.totalPrice.toLocaleString('vi-VN')}đ</span>
+                    <span className="font-bold text-slate-700">
+                      {Math.max(0, booking.totalPrice - booking.serviceFee).toLocaleString('vi-VN')}đ
+                    </span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-slate-500 font-medium">Phí dịch vụ</span>
-                    <span className="font-bold text-slate-700">0đ</span>
+                    <span className="font-bold text-slate-700">{booking.serviceFee.toLocaleString('vi-VN')}đ</span>
                   </div>
                   
                   <Separator className="bg-slate-100" />

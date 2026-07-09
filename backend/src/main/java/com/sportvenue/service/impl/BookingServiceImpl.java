@@ -884,6 +884,7 @@ public class BookingServiceImpl implements BookingService {
                         .imageUrl(imageUrl)
                         .build())
                 .totalPrice(booking.getTotalPrice())
+                .serviceFee(SERVICE_FEE)
                 .status(booking.getBookingStatus().name().toLowerCase())
                 .paymentStatus(booking.getPaymentStatus().name().toLowerCase())
                 .note(booking.getNote())
