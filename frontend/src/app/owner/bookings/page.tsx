@@ -731,7 +731,7 @@ function BookingManagementPage() {
           POPUP 1: ĐỐI THOẠI XÁC NHẬN HỦY VÀ ƯỚC TÍNH HOÀN TIỀN (CONFIRM REFUND DIALOG)
           ────────────────────────────────────────────────────────────────────────── */}
       <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
-        <DialogContent className="max-w-md border dark:border-slate-800 shadow-2xl rounded-xl">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto border dark:border-slate-800 shadow-2xl rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2 text-rose-600">
               <RotateCcw className="h-5.5 w-5.5" />
