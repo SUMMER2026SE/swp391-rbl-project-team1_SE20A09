@@ -82,6 +82,8 @@ public class PublicComplexServiceImpl implements PublicComplexService {
                 .reviewCount(complex.getReviewCount())
                 .ownerName(ownerName)
                 .ownerPhone(ownerPhone)
+                .ownerUserId(complex.getOwner() != null && complex.getOwner().getUser() != null
+                        ? complex.getOwner().getUser().getUserId() : null)
                 .sportTypes(complex.getSportTypes() != null 
                         ? complex.getSportTypes().stream()
                                 .map(st -> PublicComplexDetailResponse.SportTypeInfo.builder()

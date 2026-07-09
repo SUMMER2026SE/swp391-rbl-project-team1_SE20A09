@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
  * UC-CUS-01: Một khung giờ trong weekly schedule — kèm trạng thái cho một ngày cụ thể.
@@ -36,4 +37,10 @@ public class WeeklySlotItemDto {
     private String status;
     /** ISO local date-time; only populated for HELD slots. */
     private String heldUntil;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Integer bookingId;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Integer customerId;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String customerDisplayName;
 }

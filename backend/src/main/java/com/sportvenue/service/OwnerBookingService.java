@@ -24,6 +24,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import com.sportvenue.dto.response.WeeklySlotResponse;
 
 
 /**
@@ -39,6 +45,45 @@ public class OwnerBookingService {
     private final OwnerRepository ownerRepository;
     private final StadiumRepository stadiumRepository;
     private final TimeSlotRepository timeSlotRepository;
+    private final BookingService bookingService;
+
+    @Transactional(readOnly = true)
+    public WeeklySlotResponse getOwnerWeeklySlots(Integer userId, Integer stadiumId, LocalDate weekStart) {
+        Owner owner = findOwnerByUserId(userId);
+        validateStadiumOwnership(stadiumId, owner.getOwnerId());
+        WeeklySlotResponse response = bookingService.getWeeklySlots(stadiumId, weekStart);
+        LocalDate monday = LocalDate.parse(response.getWeekStart());
+        List<Booking> bookings = bookingRepository.findWeeklyBookings(stadiumId, monday, monday.plusDays(6),
+                List.of(BookingStatus.PENDING_PAYMENT, BookingStatus.PENDING, BookingStatus.CONFIRMED));
+        Map<String, Booking> byDateAndSlot = bookings.stream().collect(Collectors.toMap(
+                booking -> booking.getReservationDate() + ":" + booking.getSlot().getSlotId(),
+                Function.identity(), (first, ignored) -> first));
+        response.getDays().forEach(day -> day.getSlots().forEach(slot -> {
+            Booking booking = byDateAndSlot.get(day.getDate() + ":" + slot.getSlotId());
+            if (booking != null) {
+                slot.setBookingId(booking.getBookingId());
+                slot.setCustomerId(booking.getUser().getUserId());
+                slot.setCustomerDisplayName(abbreviateCustomerName(booking.getUser()));
+            }
+        }));
+        return response;
+    }
+
+    private String abbreviateCustomerName(User user) {
+        if (user == null) {
+            return "Khách hàng";
+        }
+        String firstName = user.getFirstName();
+        String lastName = user.getLastName();
+        if (firstName == null || firstName.isBlank()) {
+            return "Khách hàng";
+        }
+        if (lastName == null || lastName.isBlank()) {
+            return firstName.trim();
+        }
+        String familyName = lastName.trim().split("\\s+")[0];
+        return firstName.trim() + " " + Character.toUpperCase(familyName.charAt(0)) + ".";
+    }
 
     /**
      * UC-OWN-06: Lấy danh sách booking của tất cả sân thuộc Owner.

@@ -39,6 +39,7 @@ import WeeklySchedule from './WeeklySchedule'
 import EditReviewForm from './EditReviewForm'
 import WriteReviewForm from './WriteReviewForm'
 import { useRouteGuard } from '@/components/shared/RouteGuard'
+import { chatUrl, createContextualConversation } from '@/lib/contextual-chat'
 
 // Lazy load the Leaflet Map to avoid SSR issues and reduce bundle size
 const VenueMap = dynamic(() => import('./VenueMap'), {
@@ -77,6 +78,7 @@ export interface VenueDetailProps {
       price: number
     }[]
     owner: {
+      userId?: number
       name: string
       initials: string
       phone: string
@@ -136,6 +138,30 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
   const [selectedSlotEndTime, setSelectedSlotEndTime] = useState<string>('')
   const [selectedSlotPrice, setSelectedSlotPrice] = useState<number | null>(null)
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
+  const [chatStarting, setChatStarting] = useState(false)
+
+  const handleMessageOwner = async () => {
+    if (!session) {
+      toast.info('Vui lòng đăng nhập để nhắn tin')
+      router.push(`/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
+      return
+    }
+    if (!venue.owner.userId) {
+      toast.error('Không tìm thấy tài khoản chủ sân')
+      return
+    }
+    try {
+      setChatStarting(true)
+      const conversationId = await createContextualConversation(venue.owner.userId, {
+        action: 'stadium_referral', stadiumId: venue.id, stadiumName: venue.name,
+      })
+      router.push(chatUrl(conversationId))
+    } catch {
+      toast.error('Không thể bắt đầu cuộc trò chuyện')
+    } finally {
+      setChatStarting(false)
+    }
+  }
 
   /**
    * Bump để remount WeeklySchedule — dùng sau khi đặt sân / 409 conflict
@@ -297,11 +323,12 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
           <span>Gọi ngay</span>
         </a>
         <button 
-          onClick={() => alert(`Nhắn tin đến ${venue.owner.phone}`)}
+          onClick={handleMessageOwner}
+          disabled={chatStarting}
           className="flex-1 flex items-center justify-center gap-1.5 border-[0.5px] border-gray-200 rounded-[20px] py-[5px] text-[12px] font-medium text-gray-600 hover:bg-gray-100 cursor-pointer transition-colors"
         >
           <IconMessageCircle className="w-[13px] h-[13px] text-[#1a8a4a]" />
-          <span>Nhắn tin</span>
+          <span>{chatStarting ? 'Đang mở...' : 'Nhắn tin'}</span>
         </button>
       </div>
     </div>

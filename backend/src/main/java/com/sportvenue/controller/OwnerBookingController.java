@@ -25,6 +25,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import java.time.LocalDate;
+import com.sportvenue.dto.response.WeeklySlotResponse;
 
 /**
  * Controller quản lý đặt sân dành cho Owner.
@@ -41,6 +43,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class OwnerBookingController {
 
     private final OwnerBookingService ownerBookingService;
+
+    @GetMapping("/stadiums/{stadiumId}/weekly-slots")
+    @PreAuthorize("hasRole('Owner')")
+    public ResponseEntity<WeeklySlotResponse> getOwnerWeeklySlots(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Integer stadiumId,
+            @RequestParam LocalDate weekStart) {
+        return ResponseEntity.ok(ownerBookingService.getOwnerWeeklySlots(
+                principal.getUserId(), stadiumId, weekStart));
+    }
 
     /**
      * UC-OWN-06: Xem danh sách tất cả lịch đặt sân.

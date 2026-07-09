@@ -49,6 +49,7 @@ export interface StadiumComplexDto {
   reviewCount?: number
   ownerName?: string | null
   ownerPhone?: string | null
+  ownerUserId?: number | null
   distanceInKm?: number | null
   minPrice?: number | null
   maxPrice?: number | null

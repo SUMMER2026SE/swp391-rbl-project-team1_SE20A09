@@ -27,6 +27,7 @@ public class PublicComplexDetailResponse {
     private Integer reviewCount;
     private String ownerName;
     private String ownerPhone;
+    private Integer ownerUserId;
     private Double distanceInKm;
     private BigDecimal minPrice;
     private BigDecimal maxPrice;

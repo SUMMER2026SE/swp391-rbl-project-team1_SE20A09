@@ -351,6 +351,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             AND b.reservationDate BETWEEN :start AND :end
             AND b.bookingStatus IN :statuses
             """)
+    @EntityGraph(attributePaths = {"user", "slot"})
     List<Booking> findWeeklyBookings(
             @Param("stadiumId") Integer stadiumId,
             @Param("start") LocalDate start,

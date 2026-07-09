@@ -16,6 +16,7 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 import { OwnerNotificationBell } from "@/components/notifications/OwnerNotificationBell";
+import { ChatBadge } from "@/components/chat/ChatBadge";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { useState } from "react";
@@ -132,6 +133,7 @@ export default function OwnerLayout({
             </div>
 
             <OwnerNotificationBell />
+            <ChatBadge userId={(session?.user as { userId?: number })?.userId} />
 
             <div className="h-8 w-px bg-slate-200 hidden md:block"></div>
 

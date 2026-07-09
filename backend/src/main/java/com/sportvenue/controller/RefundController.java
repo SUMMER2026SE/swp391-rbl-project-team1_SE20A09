@@ -31,6 +31,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 
+
 @RestController
 @RequestMapping("/api/v1/owner/bookings")
 @RequiredArgsConstructor

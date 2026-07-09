@@ -79,6 +79,10 @@ export async function getOrCreateConversation(recipientId: number): Promise<{ co
   return post<{ conversationId: number }>(`/chat/conversations/${recipientId}`)
 }
 
+export async function getMatchConversation(matchId: number): Promise<{ conversationId: number }> {
+  return get<{ conversationId: number }>(`/chat/matches/${matchId}/conversation`)
+}
+
 export async function getMessages(
   conversationId: number,
   page = 0,

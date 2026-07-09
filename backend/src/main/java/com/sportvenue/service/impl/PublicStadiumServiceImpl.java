@@ -345,6 +345,7 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 .timeSlots(mapTimeSlots(stadium))
                 .owner(owner != null ? StadiumDetailResponse.OwnerInfoDto.builder()
                         .ownerId(owner.getOwnerId())
+                        .ownerUserId(owner.getUser() != null ? owner.getUser().getUserId() : null)
                         .ownerName(owner.getUser() != null ? owner.getUser().getFullName() : null)
                         .phoneNumber(owner.getUser() != null ? owner.getUser().getPhoneNumber() : null)
                         .build() : null)
