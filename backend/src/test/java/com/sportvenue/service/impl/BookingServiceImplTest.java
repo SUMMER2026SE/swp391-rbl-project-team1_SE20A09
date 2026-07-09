@@ -7,6 +7,8 @@ import com.sportvenue.entity.Accessory;
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.BookingAccessory;
 import com.sportvenue.entity.Owner;
+import com.sportvenue.entity.Payment;
+import com.sportvenue.entity.enums.TransactionStatus;
 import com.sportvenue.entity.Role;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.TimeSlot;
@@ -370,7 +372,7 @@ class BookingServiceImplTest {
     // ─────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("confirmPayment: PENDING_PAYMENT + đúng user → CONFIRMED + expiredAt cleared")
+    @DisplayName("confirmPayment: PENDING_PAYMENT + đúng user → CONFIRMED + AWAITING_CASH_PAYMENT + expiredAt cleared")
     void confirmPayment_happyPath() {
         Booking booking = Booking.builder()
                 .bookingId(50)
@@ -390,9 +392,17 @@ class BookingServiceImplTest {
         BookingDetailResponse response = bookingService.confirmPayment(principal, 50);
 
         assertEquals(BookingStatus.CONFIRMED, booking.getBookingStatus());
-        assertEquals(PaymentStatus.PAID, booking.getPaymentStatus());
+        assertEquals(PaymentStatus.AWAITING_CASH_PAYMENT, booking.getPaymentStatus(),
+                "Cash confirm không được set PAID trực tiếp — tiền chưa qua cổng thanh toán nào (mục 1.5)");
         assertNull(booking.getExpiredAt(), "expiredAt phải bị clear sau khi confirm");
         assertEquals(50, response.getBookingId());
+
+        ArgumentCaptor<Payment> paymentCaptor = ArgumentCaptor.forClass(Payment.class);
+        verify(paymentRepository).save(paymentCaptor.capture());
+        Payment savedPayment = paymentCaptor.getValue();
+        assertEquals(com.sportvenue.entity.enums.PaymentMethod.CASH, savedPayment.getPaymentMethod());
+        assertEquals(TransactionStatus.PENDING, savedPayment.getPaymentStatus());
+        assertEquals(new BigDecimal("270000"), savedPayment.getAmount());
     }
 
     @Test

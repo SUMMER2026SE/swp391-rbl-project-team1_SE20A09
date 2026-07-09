@@ -25,6 +25,7 @@ import com.sportvenue.exception.DuplicateResourceException;
 import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.entity.Payment;
+import com.sportvenue.entity.enums.PaymentMethod;
 import com.sportvenue.entity.enums.TransactionStatus;
 import com.sportvenue.repository.AccessoryRepository;
 import com.sportvenue.repository.BookingAccessoryRepository;
@@ -290,9 +291,9 @@ public class BookingServiceImpl implements BookingService {
                             + "Hiện tại: " + booking.getBookingStatus());
         }
 
-        // Chỉ CẢNH BÁO, không chặn: tại thời điểm này khách đã thanh toán thật qua cổng thanh toán
-        // (confirmPayment không tự capture tiền — chỉ đồng bộ trạng thái nội bộ sau khi cổng đã báo
-        // thành công). Chặn ở đây sẽ khiến khách mất tiền mà không có booking — tệ hơn hiện trạng.
+        // Chỉ CẢNH BÁO, không chặn: đây là luồng "khách xác nhận trả tiền mặt tại sân" (VNPay
+        // dùng handleVnpayReturn() riêng, không đi qua đây). Chặn ở đây sẽ khiến khách mất chỗ
+        // dù đã đồng ý trả tiền mặt — tệ hơn hiện trạng.
         // createSchedule chỉ conflict-check với booking CONFIRMED (không tính PENDING_PAYMENT) nên
         // vẫn còn khe hở hẹp (~5 phút) nếu Owner đặt bảo trì đúng lúc khách đang thanh toán — log lại
         // rõ ràng để Owner/Admin chủ động xử lý thay vì âm thầm trôi qua. Check theo đúng khung giờ
@@ -305,12 +306,26 @@ public class BookingServiceImpl implements BookingService {
                     booking.getBookingId(), booking.getStadium().getStadiumId(), booking.getReservationDate());
         }
 
+        // AWAITING_CASH_PAYMENT (không phải PAID) vì tiền chưa thực sự được thu qua cổng thanh
+        // toán nào — khách mới chỉ xác nhận ý định trả tiền mặt tại sân. Đánh dấu PAID ở đây từng
+        // khiến refund/revenue hiểu nhầm là tiền đã thu thật (docs/qa_findings_refactor_plan.md mục 1.5).
         booking.setBookingStatus(BookingStatus.CONFIRMED);
-        booking.setPaymentStatus(PaymentStatus.PAID);
+        booking.setPaymentStatus(PaymentStatus.AWAITING_CASH_PAYMENT);
         booking.setExpiredAt(null);
         Booking saved = bookingRepository.save(booking);
 
-        log.info("💳 UC-CUS-01: Booking #{} thanh toán thành công — CONFIRMED, expiredAt cleared",
+        // Ghi nhận Payment PENDING cho cash — giống hệt cách savePayment() làm cho VNPay trước khi
+        // gateway callback — để refund/revenue có 1 dòng ledger để tra cứu thay vì không có gì.
+        paymentRepository.save(Payment.builder()
+                .booking(saved)
+                .paymentMethod(PaymentMethod.CASH)
+                .amount(saved.getTotalPrice())
+                .transactionCode("CASH_" + saved.getBookingId())
+                .paymentStatus(TransactionStatus.PENDING)
+                .paidAt(null)
+                .build());
+
+        log.info("💳 UC-CUS-01: Booking #{} xác nhận trả tiền mặt — CONFIRMED, chờ thu tiền tại sân, expiredAt cleared",
                 saved.getBookingId());
 
         return toBookingDetailResponse(saved, saved.getStadium(), saved.getSlot());
