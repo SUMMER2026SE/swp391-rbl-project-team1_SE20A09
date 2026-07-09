@@ -790,11 +790,17 @@ function BookingManagementPage() {
                         Hoàn {previewData.refundPercentage}%
                       </Badge>
                     </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-slate-600 dark:text-slate-400">Tiền trả khách:</span>
-                      <span className="font-extrabold text-lg text-slate-900 dark:text-slate-100">{previewData.refundAmount.toLocaleString('vi-VN')}đ</span>
+                    {previewData.serviceFee > 0 && reasonType === "CUSTOMER_REQUEST" && (
+                      <div className="flex justify-between items-center text-xs text-rose-600 font-medium">
+                        <span>Phí dịch vụ (Không hoàn lại):</span>
+                        <span>-{previewData.serviceFee.toLocaleString('vi-VN')}đ</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center text-sm border-t pt-1.5 mt-1.5">
+                      <span className="text-slate-600 dark:text-slate-400 font-semibold">Tiền trả khách:</span>
+                      <span className="font-extrabold text-lg text-emerald-600 dark:text-emerald-400">{previewData.refundAmount.toLocaleString('vi-VN')}đ</span>
                     </div>
-                    <p className="text-[11px] leading-relaxed text-muted-foreground border-t pt-2 mt-1 italic">
+                    <p className="text-[11px] leading-relaxed text-muted-foreground border-t pt-2 mt-1.5 italic">
                       {previewData.refundPercentage === 100 
                         ? "Hủy trước giờ chơi >= 24 giờ. Khách hàng nhận lại toàn bộ tiền sân." 
                         : previewData.refundPercentage === 50 
