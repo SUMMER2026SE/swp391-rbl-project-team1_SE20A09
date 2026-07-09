@@ -218,7 +218,7 @@ public class RefundServiceImpl implements RefundService {
         return LocalDateTime.of(booking.getReservationDate(), booking.getSlot().getStartTime());
     }
 
-    private RefundCalculation calculateRefund(Booking booking, Payment originalPayment,
+    static RefundCalculation calculateRefund(Booking booking, Payment originalPayment,
             RefundReasonType reasonType, String proofUrl, boolean isPreview) {
         BigDecimal paidAmount = originalPayment != null ? originalPayment.getAmount() : booking.getTotalPrice();
 
@@ -482,7 +482,7 @@ public class RefundServiceImpl implements RefundService {
 
     @Getter
     @RequiredArgsConstructor
-    private static class RefundCalculation {
+    static class RefundCalculation {
         private final int percentage;
         private final BigDecimal amount;
     }

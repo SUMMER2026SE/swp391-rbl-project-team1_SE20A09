@@ -670,8 +670,8 @@ class BookingServiceImplTest {
     }
 
     @Test
-    @DisplayName("cancelBooking: venue owner can cancel booking successfully -> success")
-    void cancelBooking_byVenueOwner_success() {
+    @DisplayName("cancelBooking: venue owner tries to cancel directly -> throws ForbiddenException")
+    void cancelBooking_byVenueOwner_throwsForbiddenException() {
         // Arrange
         User ownerUser = User.builder()
                 .userId(99)
@@ -697,17 +697,14 @@ class BookingServiceImplTest {
 
         UserPrincipal ownerPrincipal = new UserPrincipal(ownerUser);
 
-        when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
-        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(bookingRepository.findByIdForUpdate(100)).thenReturn(Optional.of(booking));
 
-        // Act
-        BookingDetailResponse response = bookingService.cancelBooking(ownerPrincipal, 100, "Owner closed court");
-        
-        // Assert
-        assertNotNull(response);
-        assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
-        assertEquals("Owner closed court", booking.getCancelReason());
-        verify(bookingRepository, times(1)).save(booking);
+        // Act & Assert
+        ForbiddenException ex = assertThrows(ForbiddenException.class, 
+                () -> bookingService.cancelBooking(ownerPrincipal, 100, "Owner closed court"));
+
+        assertTrue(ex.getMessage().contains("Chủ sân vui lòng xử lý hủy/hoàn tiền cho khách"));
+        verify(bookingRepository, never()).save(any());
     }
 
     @Test
@@ -907,4 +904,142 @@ class BookingServiceImplTest {
         // Assert: priceOverride (200000) + serviceFee (10000) = 210000
         assertEquals(new BigDecimal("210000"), res.getTotalPrice());
     }
+
+    @Test
+    @DisplayName("calculateServiceFee: floor limit test")
+    void calculateServiceFee_floorLimit() {
+        // 5% of 100k = 5k < 10k -> should floor to 10k
+        BigDecimal fee = BookingServiceImpl.calculateServiceFee(new BigDecimal("100000"));
+        assertEquals(new BigDecimal("10000"), fee);
+    }
+
+    @Test
+    @DisplayName("calculateServiceFee: normal percentage test")
+    void calculateServiceFee_normalPercentage() {
+        // 5% of 400k = 20k -> should be 20k
+        BigDecimal fee = BookingServiceImpl.calculateServiceFee(new BigDecimal("400000"));
+        assertEquals(new BigDecimal("20000"), fee);
+    }
+
+    @Test
+    @DisplayName("calculateServiceFee: ceiling limit test")
+    void calculateServiceFee_ceilingLimit() {
+        // 5% of 800k = 40k > 30k -> should cap at 30k
+        BigDecimal fee = BookingServiceImpl.calculateServiceFee(new BigDecimal("800000"));
+        assertEquals(new BigDecimal("30000"), fee);
+    }
+
+    @Test
+    @DisplayName("cancelBooking: Customer cancellation applies tiered refund and deducts service fee")
+    void cancelBooking_customerRequest_appliesTieringAndDeductsServiceFee() {
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("150000"))
+                .serviceFee(new BigDecimal("10000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .reservationDate(LocalDate.now().plusDays(2)) // far future (>=24h)
+                .build();
+
+        com.sportvenue.entity.Payment successPayment = com.sportvenue.entity.Payment.builder()
+                .paymentId(100)
+                .amount(new BigDecimal("150000"))
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.SUCCESS)
+                .paymentMethod(com.sportvenue.entity.enums.PaymentMethod.VNPAY)
+                .transactionCode("TX123")
+                .build();
+
+        org.mockito.Mockito.lenient().when(bookingRepository.findByIdForUpdate(100)).thenReturn(Optional.of(booking));
+        org.mockito.Mockito.lenient().when(bookingRepository.findById(100)).thenReturn(Optional.of(booking));
+        org.mockito.Mockito.lenient().when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        org.mockito.Mockito.lenient().when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(successPayment));
+        org.mockito.Mockito.lenient().when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(Optional.empty());
+        org.mockito.Mockito.lenient().when(paymentRepository.save(any(com.sportvenue.entity.Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BookingDetailResponse response = bookingService.cancelBooking(principal, 100, "I want to cancel");
+
+        assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
+        assertEquals("I want to cancel", booking.getCancelReason());
+        verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(p -> p.getAmount().compareTo(new BigDecimal("-140000")) == 0));
+    }
+
+    @Test
+    @DisplayName("cancelBooking: Customer cancellation less than 12 hours before play time -> 0% refund")
+    void cancelBooking_customerRequest_appliesTieringAndDeductsServiceFee_below12h() {
+        LocalDateTime targetPlayTime = LocalDateTime.now().plusHours(5);
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("150000"))
+                .serviceFee(new BigDecimal("10000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .reservationDate(targetPlayTime.toLocalDate())
+                .build();
+        slot.setStartTime(targetPlayTime.toLocalTime());
+
+        com.sportvenue.entity.Payment successPayment = com.sportvenue.entity.Payment.builder()
+                .paymentId(100)
+                .amount(new BigDecimal("150000"))
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.SUCCESS)
+                .paymentMethod(com.sportvenue.entity.enums.PaymentMethod.VNPAY)
+                .transactionCode("TX123")
+                .build();
+
+        org.mockito.Mockito.lenient().when(bookingRepository.findByIdForUpdate(100)).thenReturn(Optional.of(booking));
+        org.mockito.Mockito.lenient().when(bookingRepository.findById(100)).thenReturn(Optional.of(booking));
+        org.mockito.Mockito.lenient().when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        org.mockito.Mockito.lenient().when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(successPayment));
+        org.mockito.Mockito.lenient().when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(Optional.empty());
+        org.mockito.Mockito.lenient().when(paymentRepository.save(any(com.sportvenue.entity.Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BookingDetailResponse response = bookingService.cancelBooking(principal, 100, "Too late cancellation");
+
+        assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
+        verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(p -> p.getAmount().compareTo(BigDecimal.ZERO) == 0));
+    }
+
+    @Test
+    @DisplayName("cancelBooking: Owner calls cancelBooking directly -> throws ForbiddenException")
+    void cancelBooking_byOwnerDirectly_throwsForbidden() {
+        User ownerUser = User.builder()
+                .userId(1)
+                .email("owner@example.com")
+                .role(Role.builder().roleName("Owner").build())
+                .build();
+        UserPrincipal ownerPrincipal = new UserPrincipal(ownerUser);
+
+        Owner owner = Owner.builder()
+                .ownerId(5)
+                .user(ownerUser)
+                .build();
+
+        Stadium myStadium = Stadium.builder()
+                .stadiumId(10)
+                .owner(owner)
+                .build();
+
+        User bookingCreator = User.builder().userId(99).email("customer@example.com").build();
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(bookingCreator)
+                .stadium(myStadium)
+                .slot(slot)
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .build();
+
+        org.mockito.Mockito.lenient().when(bookingRepository.findByIdForUpdate(100)).thenReturn(Optional.of(booking));
+
+        ForbiddenException ex = assertThrows(ForbiddenException.class, 
+                () -> bookingService.cancelBooking(ownerPrincipal, 100, "Owner trying to cancel"));
+
+        assertTrue(ex.getMessage().contains("Chủ sân vui lòng xử lý hủy/hoàn tiền cho khách"));
+    }
 }
+

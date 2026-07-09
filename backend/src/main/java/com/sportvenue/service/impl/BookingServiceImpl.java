@@ -19,6 +19,7 @@ import com.sportvenue.entity.TimeSlot;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.entity.enums.PaymentStatus;
+import com.sportvenue.entity.enums.RefundReasonType;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.DuplicateResourceException;
@@ -374,16 +375,13 @@ public class BookingServiceImpl implements BookingService {
                         .stream().findFirst().orElse(null);
 
                 if (originalPayment != null) {
-                    BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
-                    BigDecimal refundAmount = originalPayment.getAmount().subtract(serviceFee);
-                    if (refundAmount.compareTo(BigDecimal.ZERO) < 0) {
-                        refundAmount = BigDecimal.ZERO;
-                    }
+                    RefundServiceImpl.RefundCalculation calculation = RefundServiceImpl.calculateRefund(
+                            booking, originalPayment, RefundReasonType.CUSTOMER_REQUEST, null, false);
 
                     refundPayment = Payment.builder()
                         .booking(booking)
                         .paymentMethod(originalPayment.getPaymentMethod())
-                        .amount(refundAmount.negate())
+                        .amount(calculation.getAmount().negate())
                         .transactionCode("RFND_CUST_" + originalPayment.getTransactionCode())
                         .paymentStatus(TransactionStatus.PENDING)
                         .paidAt(LocalDateTime.now())
@@ -419,8 +417,13 @@ public class BookingServiceImpl implements BookingService {
                 && booking.getStadium().getOwner() != null
                 && booking.getStadium().getOwner().getUser() != null
                 && booking.getStadium().getOwner().getUser().getUserId().equals(currentUserId);
-                
-        if (!isCustomer && !isVenueOwner) {
+
+        if (isVenueOwner) {
+            throw new ForbiddenException(
+                    "Chủ sân vui lòng xử lý hủy/hoàn tiền cho khách qua chức năng Hoàn tiền tại /owner/bookings.");
+        }
+
+        if (!isCustomer) {
             throw new ForbiddenException("Bạn không có quyền hủy đơn đặt sân này");
         }
 

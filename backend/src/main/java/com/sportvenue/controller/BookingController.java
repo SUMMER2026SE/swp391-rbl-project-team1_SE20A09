@@ -190,20 +190,20 @@ public class BookingController {
     }
 
     /**
-     * UC-CUS-03: Hủy một đơn đặt sân — Customer (chủ booking) hoặc Owner (chủ sân) đều có thể gọi.
+     * UC-CUS-03: Hủy một đơn đặt sân — Chỉ Customer (chủ booking) mới có thể gọi.
      *
      * <p>Body {@link CancelBookingRequest} mang {@code reason} (lý do hủy, không bắt buộc,
      * tối đa 255 ký tự). Server kiểm tra quyền ở tầng service — nếu user không phải
-     * customer/owner của booking sẽ trả 400.</p>
+     * chủ booking sẽ trả 400.</p>
      *
      * <p>Trả về {@link BookingDetailResponse} của booking sau khi hủy để FE đồng bộ UI.</p>
      */
     @PutMapping("/api/v1/bookings/{id}/cancel")
     @PreAuthorize("hasAnyRole('Customer', 'Owner')")
     @Operation(
-            summary = "Hủy đơn đặt sân (Customer hoặc Owner)",
+            summary = "Hủy đơn đặt sân (Customer tự hủy)",
             description = "Đổi booking sang CANCELLED và lưu lý do (nếu có). "
-                    + "Customer chỉ được hủy booking của mình; Owner chỉ được hủy booking của sân mình quản lý. "
+                    + "Chỉ cho phép Customer sở hữu đơn đặt sân tự hủy đơn. "
                     + "Trả 400 nếu booking đã COMPLETED hoặc CANCELLED, "
                     + "hoặc người gọi không có quyền với booking này.")
     public ResponseEntity<BookingDetailResponse> cancelBooking(
