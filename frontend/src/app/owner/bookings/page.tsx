@@ -228,7 +228,8 @@ function BookingManagementPage() {
   // Hàm gửi Request thực tế lên Backend để thực hiện hoàn tiền
   const handleConfirmRefund = async () => {
     if (!selectedBooking) return;
-    if (!cancelReason.trim()) {
+
+    if (reasonType === "CUSTOMER_REQUEST" && !cancelReason.trim()) {
       toast.error("Vui lòng nhập lý do hủy đặt sân!");
       return;
     }
@@ -244,7 +245,7 @@ function BookingManagementPage() {
 
       // Gọi API thật
       const response = await post<any>(`/owner/bookings/${selectedBooking.id}/refund`, {
-        reason: cancelReason.trim(),
+        reason: reasonType === "OWNER_FAULT" ? proofUrl.trim() : cancelReason.trim(),
         reasonType,
         proofUrl: reasonType === "OWNER_FAULT" ? proofUrl.trim() : null
       });
@@ -844,16 +845,18 @@ function BookingManagementPage() {
                 </div>
               )}
 
-              {/* Lý do hủy */}
-              <div className="space-y-1.5 mt-2">
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">Ghi chú hủy sân</label>
-                <Textarea 
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder="Ghi chú thêm (không bắt buộc)..."
-                  className="min-h-[60px] focus:ring-1 focus:ring-primary focus:outline-none"
-                />
-              </div>
+              {/* Lý do hủy — chỉ hiện khi khách yêu cầu hủy để tránh trùng lặp với bằng chứng sự cố */}
+              {reasonType === "CUSTOMER_REQUEST" && (
+                <div className="space-y-1.5 mt-2">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">Ghi chú hủy sân</label>
+                  <Textarea 
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    placeholder="Ghi chú thêm (không bắt buộc)..."
+                    className="min-h-[60px] focus:ring-1 focus:ring-primary focus:outline-none"
+                  />
+                </div>
+              )}
             </div>
           )}
 
