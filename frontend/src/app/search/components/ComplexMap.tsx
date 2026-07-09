@@ -101,7 +101,9 @@ function MapViewportHandler({ center, searchCircle }: { center: [number, number]
   useEffect(() => {
     if (!map) return
     if (searchCircle) {
-      const circleBounds = L.circle(searchCircle.center, { radius: searchCircle.radiusMeters }).getBounds()
+      const tempCircle = L.circle(searchCircle.center, { radius: searchCircle.radiusMeters }).addTo(map)
+      const circleBounds = tempCircle.getBounds()
+      tempCircle.remove()
       map.fitBounds(circleBounds, { padding: [32, 32], animate: false })
     } else {
       map.setView(center, map.getZoom(), { animate: false })
