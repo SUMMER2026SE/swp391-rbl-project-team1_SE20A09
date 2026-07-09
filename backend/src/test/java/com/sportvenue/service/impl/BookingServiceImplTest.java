@@ -719,6 +719,77 @@ class BookingServiceImplTest {
     }
 
     @Test
+    @DisplayName("cancelBooking: venue owner CANNOT cancel an already-PAID booking -> Forbidden (mục 1.2 bypass fix)")
+    void cancelBooking_byVenueOwner_whenPaid_throwsForbidden() {
+        // Arrange
+        User ownerUser = User.builder()
+                .userId(99)
+                .email("owner@example.com")
+                .role(Role.builder().roleName("Owner").build())
+                .build();
+        Owner owner = Owner.builder()
+                .ownerId(5)
+                .user(ownerUser)
+                .build();
+        stadium.setOwner(owner);
+
+        Booking booking = Booking.builder()
+                .bookingId(101)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("150000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .reservationDate(futureDate())
+                .build();
+
+        UserPrincipal ownerPrincipal = new UserPrincipal(ownerUser);
+
+        when(bookingRepository.findDetailById(101)).thenReturn(Optional.of(booking));
+
+        // Act & Assert — Owner phải dùng /owner/bookings/{id}/refund thay vì né chính sách qua đây
+        ForbiddenException ex = assertThrows(ForbiddenException.class,
+                () -> bookingService.cancelBooking(ownerPrincipal, 101, "Owner tries to bypass refund policy"));
+        assertTrue(ex.getMessage().contains("Hoàn tiền"));
+        assertEquals(BookingStatus.CONFIRMED, booking.getBookingStatus(), "booking không được đổi trạng thái khi bị chặn");
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("cancelBooking: venue owner cancelling a DEPOSITED booking is blocked too (same as PAID)")
+    void cancelBooking_byVenueOwner_whenDeposited_throwsForbidden() {
+        User ownerUser = User.builder()
+                .userId(99)
+                .email("owner@example.com")
+                .role(Role.builder().roleName("Owner").build())
+                .build();
+        Owner owner = Owner.builder()
+                .ownerId(5)
+                .user(ownerUser)
+                .build();
+        stadium.setOwner(owner);
+
+        Booking booking = Booking.builder()
+                .bookingId(102)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("150000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.DEPOSITED)
+                .reservationDate(futureDate())
+                .build();
+
+        UserPrincipal ownerPrincipal = new UserPrincipal(ownerUser);
+        when(bookingRepository.findDetailById(102)).thenReturn(Optional.of(booking));
+
+        assertThrows(ForbiddenException.class,
+                () -> bookingService.cancelBooking(ownerPrincipal, 102, "Owner tries again with deposit"));
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("cancelBooking: gateway fails -> throws exception and keeps booking intact")
     void cancelBooking_gatewayFails_keepsBookingIntact() {
         // Arrange

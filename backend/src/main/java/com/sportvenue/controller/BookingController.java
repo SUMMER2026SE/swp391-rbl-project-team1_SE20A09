@@ -190,22 +190,30 @@ public class BookingController {
     }
 
     /**
-     * UC-CUS-03: Hủy một đơn đặt sân — Customer (chủ booking) hoặc Owner (chủ sân) đều có thể gọi.
+     * UC-CUS-03: Hủy một đơn đặt sân — Customer (chủ booking) luôn được gọi; Owner (chủ sân)
+     * chỉ được gọi khi booking CHƯA thu tiền thật (paymentStatus khác PAID/DEPOSITED).
+     *
+     * <p>Booking đã PAID/DEPOSITED phải hủy qua {@code POST /owner/bookings/{id}/refund}
+     * (áp dụng chính sách hoàn tiền theo giờ + OWNER_FAULT/bằng chứng) — chặn ở đây để Owner
+     * không thể né chính sách đó bằng cách gọi thẳng endpoint hủy đơn giản này
+     * (docs/qa_findings_refactor_plan.md mục 1.2).</p>
      *
      * <p>Body {@link CancelBookingRequest} mang {@code reason} (lý do hủy, không bắt buộc,
      * tối đa 255 ký tự). Server kiểm tra quyền ở tầng service — nếu user không phải
-     * customer/owner của booking sẽ trả 400.</p>
+     * customer/owner của booking sẽ trả 403; nếu Owner cố hủy booking đã thanh toán cũng trả 403.</p>
      *
      * <p>Trả về {@link BookingDetailResponse} của booking sau khi hủy để FE đồng bộ UI.</p>
      */
     @PutMapping("/api/v1/bookings/{id}/cancel")
     @PreAuthorize("hasAnyRole('Customer', 'Owner')")
     @Operation(
-            summary = "Hủy đơn đặt sân (Customer hoặc Owner)",
+            summary = "Hủy đơn đặt sân (Customer hoặc Owner — chỉ khi chưa thu tiền thật)",
             description = "Đổi booking sang CANCELLED và lưu lý do (nếu có). "
-                    + "Customer chỉ được hủy booking của mình; Owner chỉ được hủy booking của sân mình quản lý. "
+                    + "Customer chỉ được hủy booking của mình. Owner chỉ được hủy booking của sân mình quản lý "
+                    + "VÀ CHỈ khi paymentStatus chưa phải PAID/DEPOSITED (chưa thu tiền thật) — nếu đã thu tiền, "
+                    + "Owner phải dùng POST /owner/bookings/{id}/refund để áp dụng đúng chính sách hoàn tiền theo giờ. "
                     + "Trả 400 nếu booking đã COMPLETED hoặc CANCELLED, "
-                    + "hoặc người gọi không có quyền với booking này.")
+                    + "trả 403 nếu người gọi không có quyền với booking này hoặc Owner cố hủy booking đã thanh toán.")
     public ResponseEntity<BookingDetailResponse> cancelBooking(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @PathVariable("id") Integer bookingId,

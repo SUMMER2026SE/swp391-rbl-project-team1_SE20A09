@@ -414,7 +414,7 @@ public class BookingServiceImpl implements BookingService {
                 && booking.getStadium().getOwner() != null
                 && booking.getStadium().getOwner().getUser() != null
                 && booking.getStadium().getOwner().getUser().getUserId().equals(currentUserId);
-                
+
         if (!isCustomer && !isVenueOwner) {
             throw new ForbiddenException("Bạn không có quyền hủy đơn đặt sân này");
         }
@@ -423,6 +423,20 @@ public class BookingServiceImpl implements BookingService {
         if (currentStatus == BookingStatus.COMPLETED || currentStatus == BookingStatus.CANCELLED) {
             throw new BadRequestException(
                     "Không thể hủy đơn đặt sân ở trạng thái " + currentStatus);
+        }
+
+        // docs/qa_findings_refactor_plan.md mục 1.2: luồng hủy chung này luôn hoàn 100% không
+        // tiering theo giờ, khác với /owner/bookings/{id}/refund áp dụng chính sách chặt chẽ hơn
+        // (24h/12h/OWNER_FAULT + bằng chứng). Nếu để Owner dùng luồng này cho booking đã thu tiền
+        // thật (PAID/DEPOSITED), họ có thể né hoàn toàn chính sách đó. Chỉ chặn khi ĐÃ thu tiền —
+        // Owner vẫn được hủy thẳng booking UNPAID/AWAITING_CASH_PAYMENT (chưa có gì để hoàn) vì đó
+        // không phải đường né chính sách, chỉ là dọn đơn chưa phát sinh tiền thật.
+        boolean wasReallyPaid = booking.getPaymentStatus() == PaymentStatus.PAID
+                || booking.getPaymentStatus() == PaymentStatus.DEPOSITED;
+        if (isVenueOwner && !isCustomer && wasReallyPaid) {
+            throw new ForbiddenException(
+                    "Đơn đã thanh toán — vui lòng dùng chức năng \"Hoàn tiền\" ở trang quản lý booking "
+                            + "để áp dụng đúng chính sách hoàn tiền, không thể hủy thẳng qua đây.");
         }
     }
 
