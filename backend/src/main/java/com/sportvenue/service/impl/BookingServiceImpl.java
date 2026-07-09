@@ -462,6 +462,17 @@ public class BookingServiceImpl implements BookingService {
 
     private void sendCancellationEmailAndNotification(Booking booking, String reason, Integer currentUserId) {
         String cancelledBy = booking.getUser().getUserId().equals(currentUserId) ? "Khách hàng" : "Chủ sân";
+        try {
+            notificationService.publishNotificationEvent(
+                    booking.getUser().getUserId(),
+                    "Đơn đặt sân bị hủy",
+                    "Đơn đặt sân #" + booking.getBookingId() + " tại " + booking.getStadium().getStadiumName() + " đã bị hủy bởi " + cancelledBy + ".",
+                    com.sportvenue.entity.enums.NotificationType.BOOKING,
+                    String.valueOf(booking.getBookingId())
+            );
+        } catch (Exception e) {
+            log.error("Failed to publish cancellation notification for booking {}", booking.getBookingId(), e);
+        }
         afterCommitExecutor.execute(() -> {
             try {
                 emailService.sendBookingCancellationEmail(
@@ -491,17 +502,6 @@ public class BookingServiceImpl implements BookingService {
                 } catch (Exception e) {
                     log.error("Failed to send owner cancellation email for booking {}", booking.getBookingId(), e);
                 }
-            }
-            try {
-                notificationService.publishNotificationEvent(
-                        booking.getUser().getUserId(),
-                        "Đơn đặt sân bị hủy",
-                        "Đơn đặt sân #" + booking.getBookingId() + " tại " + booking.getStadium().getStadiumName() + " đã bị hủy bởi " + cancelledBy + ".",
-                        com.sportvenue.entity.enums.NotificationType.BOOKING,
-                        String.valueOf(booking.getBookingId())
-                );
-            } catch (Exception e) {
-                log.error("Failed to publish cancellation notification for booking {}", booking.getBookingId(), e);
             }
         });
     }

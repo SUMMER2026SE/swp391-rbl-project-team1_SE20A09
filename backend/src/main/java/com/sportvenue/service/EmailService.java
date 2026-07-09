@@ -38,6 +38,9 @@ public class EmailService {
     @Value("${app.mail.from:noreply@sportvenue.com}")
     private String fromAddress;
 
+    @Value("${app.mail.mock:false}")
+    private boolean mockMail;
+
     @Value("${spring.mail.username:}")
     private String smtpUsername;
 
@@ -46,6 +49,10 @@ public class EmailService {
      */
     @Async
     public void sendOtpEmail(String toEmail, String otpCode, int expiryMinutes) {
+        if (mockMail) {
+            log.warn("=== DEV MAIL MOCK === OTP for {}: {} (expires in {} min) ===", toEmail, otpCode, expiryMinutes);
+            return;
+        }
         try {
             MimeMessage mimeMessage = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
@@ -72,6 +79,10 @@ public class EmailService {
      */
     @Async
     public void sendResetPasswordOtpEmail(String toEmail, String otp) {
+        if (mockMail) {
+            log.warn("=== DEV MAIL MOCK === OTP Reset for {}: {} ===", toEmail, otp);
+            return;
+        }
         log.info("Preparing to send OTP reset password email to: {}", toEmail);
         try {
             SimpleMailMessage message = new SimpleMailMessage();
@@ -79,10 +90,10 @@ public class EmailService {
             message.setTo(toEmail);
             message.setSubject("🔑 Mã OTP Khôi Phục Mật Khẩu — SportsBook");
 
-            String textContent = "Xin chào," +
-                    "Bạn đã yêu cầu khôi phục mật khẩu cho tài khoản SportsBook." +
-                    "Mã OTP của bạn là: " + otp + "" +
-                    "Mã OTP này có hiệu lực trong vòng 5 phút. Vui lòng nhập mã này vào trang khôi phục để đặt lại mật khẩu mới." +
+            String textContent = "Xin chào,\n\n" +
+                    "Bạn đã yêu cầu khôi phục mật khẩu cho tài khoản SportsBook.\n" +
+                    "Mã OTP của bạn là: " + otp + "\n\n" +
+                    "Mã OTP này có hiệu lực trong vòng 5 phút. Vui lòng nhập mã này vào trang khôi phục để đặt lại mật khẩu mới.\n\n" +
                     "Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.";
 
             message.setText(textContent);
@@ -99,6 +110,10 @@ public class EmailService {
      */
     @Async
     public void sendAccountStatusNotification(String toEmail, String businessName, boolean isEnabled, String reason) {
+        if (mockMail) {
+            log.warn("=== DEV MAIL MOCK === Account Status for {}: isEnabled={}, reason={} ===", toEmail, isEnabled, reason);
+            return;
+        }
         log.info("Preparing to send account status notification email to: {}", toEmail);
         try {
             SimpleMailMessage message = new SimpleMailMessage();
@@ -107,22 +122,22 @@ public class EmailService {
             message.setSubject("Thông báo trạng thái tài khoản đối tác — SportsBook");
 
             String status = isEnabled ? "MỞ KHÓA" : "BỊ KHÓA";
-            String textContent = "Xin chào " + businessName + "," +
-                    "Tài khoản đối tác của bạn trên hệ thống SportsBook vừa được " + status + ".";
+            String textContent = "Xin chào " + businessName + ",\n\n" +
+                    "Tài khoản đối tác của bạn trên hệ thống SportsBook vừa được " + status + ".\n\n";
             
             if (!isEnabled && StringUtils.hasText(reason)) {
-                textContent += "Lý do khóa: " + reason + "";
+                textContent += "Lý do khóa: " + reason + "\n\n";
             } else if (isEnabled && StringUtils.hasText(reason)) {
-                textContent += "Ghi chú: " + reason + "";
+                textContent += "Ghi chú: " + reason + "\n\n";
             }
 
             if (!isEnabled) {
-                textContent += "Khi tài khoản bị khóa, bạn sẽ không thể đăng nhập và toàn bộ sân thể thao của bạn sẽ tạm thời không nhận đặt lịch mới. Vui lòng liên hệ ban quản trị để biết thêm chi tiết.";
+                textContent += "Khi tài khoản bị khóa, bạn sẽ không thể đăng nhập và toàn bộ sân thể thao của bạn sẽ tạm thời không nhận đặt lịch mới. Vui lòng liên hệ ban quản trị để biết thêm chi tiết.\n\n";
             } else {
-                textContent += "Bạn đã có thể đăng nhập bình thường. Chúc bạn kinh doanh thuận lợi!";
+                textContent += "Bạn đã có thể đăng nhập bình thường. Chúc bạn kinh doanh thuận lợi!\n\n";
             }
 
-            textContent += "Trân trọng,Ban quản trị SportsBook";
+            textContent += "Trân trọng,\nBan quản trị SportsBook";
 
             message.setText(textContent);
 
@@ -141,19 +156,23 @@ public class EmailService {
                                          String stadiumName,
                                          String reservationDate,
                                          String timeRange) {
+        if (mockMail) {
+            log.warn("=== DEV MAIL MOCK === Booking Reminder for {}: Stadium {}, Time {} {} ===", toEmail, stadiumName, reservationDate, timeRange);
+            return;
+        }
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromAddress);
             message.setTo(toEmail);
             message.setSubject("⏰ Nhắc lịch chơi thể thao - " + stadiumName);
             message.setText(
-                    "Xin chào," +
-                    "Bạn có lịch đặt sân sắp tới:" +
-                    "  🏟️  Sân:  " + stadiumName + "" +
-                    "  📅  Ngày: " + reservationDate + "" +
-                    "  🕐  Giờ:  " + timeRange + "" +
-                    "Vui lòng có mặt đúng giờ. Nếu cần hỗ trợ, liên hệ với chúng tôi qua ứng dụng." +
-                    "Chúc bạn có buổi chơi thể thao vui vẻ!" +
+                    "Xin chào,\n\n" +
+                    "Bạn có lịch đặt sân sắp tới:\n\n" +
+                    "  🏟️  Sân:  " + stadiumName + "\n" +
+                    "  📅  Ngày: " + reservationDate + "\n" +
+                    "  🕐  Giờ:  " + timeRange + "\n\n" +
+                    "Vui lòng có mặt đúng giờ. Nếu cần hỗ trợ, liên hệ với chúng tôi qua ứng dụng.\n" +
+                    "Chúc bạn có buổi chơi thể thao vui vẻ!\n\n" +
                     "Đội ngũ SportsBook"
             );
             mailSender.send(message);
@@ -340,6 +359,7 @@ public class EmailService {
 
 
 
+    @Async
     public void sendPaymentFailedEmail(String toEmail, String customerName, Integer bookingId, String stadiumName) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -356,6 +376,7 @@ public class EmailService {
         }
     }
 
+    @Async
     public void sendOwnerNewBookingEmail(String toEmail, String ownerName, Integer bookingId, String stadiumName, LocalDate date, java.time.LocalTime time, String customerName) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -372,6 +393,7 @@ public class EmailService {
         }
     }
 
+    @Async
     public void sendOwnerBookingCancelledEmail(String toEmail, String ownerName, Integer bookingId, String stadiumName, LocalDate date, java.time.LocalTime time, String reason) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -388,6 +410,7 @@ public class EmailService {
         }
     }
 
+    @Async
     public void sendStadiumApprovalResultEmail(String toEmail, String ownerName, String stadiumName, boolean isApproved, String reason) {
         try {
             MimeMessage message = mailSender.createMimeMessage();

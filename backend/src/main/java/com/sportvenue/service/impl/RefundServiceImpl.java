@@ -70,6 +70,20 @@ public class RefundServiceImpl implements RefundService {
         Booking finalBooking = transactionTemplate
                 .execute(status -> bookingRepository.findById(bookingId).orElse(ctx.booking));
 
+        try {
+            notificationService.publishNotificationEvent(
+                    finalBooking.getUser().getUserId(),
+                    "Hoàn tiền thành công",
+                    String.format("Đơn đặt sân #%d đã được hoàn tiền %s VNĐ.", 
+                            finalBooking.getBookingId(), 
+                            java.text.NumberFormat.getInstance(new java.util.Locale("vi", "VN")).format(ctx.calculation.getAmount())),
+                    com.sportvenue.entity.enums.NotificationType.PAYMENT,
+                    String.valueOf(finalBooking.getBookingId())
+            );
+        } catch (Exception e) {
+            log.error("Failed to publish refund notification for booking {}", finalBooking.getBookingId(), e);
+        }
+
         afterCommitExecutor.execute(() -> {
             try {
                 emailService.sendRefundEmail(
@@ -83,20 +97,6 @@ public class RefundServiceImpl implements RefundService {
                 );
             } catch (Exception e) {
                 log.error("Failed to send refund email for booking {}", finalBooking.getBookingId(), e);
-            }
-
-            try {
-                notificationService.publishNotificationEvent(
-                        finalBooking.getUser().getUserId(),
-                        "Hoàn tiền thành công",
-                        String.format("Đơn đặt sân #%d đã được hoàn tiền %s VNĐ.", 
-                                finalBooking.getBookingId(), 
-                                java.text.NumberFormat.getInstance(new java.util.Locale("vi", "VN")).format(ctx.calculation.getAmount())),
-                        com.sportvenue.entity.enums.NotificationType.PAYMENT,
-                        String.valueOf(finalBooking.getBookingId())
-                );
-            } catch (Exception e) {
-                log.error("Failed to publish refund notification for booking {}", finalBooking.getBookingId(), e);
             }
         });
 
