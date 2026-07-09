@@ -63,21 +63,26 @@ public class OwnerBookingService {
             if (booking != null) {
                 slot.setBookingId(booking.getBookingId());
                 slot.setCustomerId(booking.getUser().getUserId());
-                slot.setCustomerDisplayName(abbreviateCustomerName(booking.getUser().getFullName()));
+                slot.setCustomerDisplayName(abbreviateCustomerName(booking.getUser()));
             }
         }));
         return response;
     }
 
-    private String abbreviateCustomerName(String fullName) {
-        if (fullName == null || fullName.isBlank()) {
+    private String abbreviateCustomerName(User user) {
+        if (user == null) {
             return "Khách hàng";
         }
-        String[] parts = fullName.trim().split("\\s+");
-        if (parts.length == 1) {
-            return parts[0];
+        String firstName = user.getFirstName();
+        String lastName = user.getLastName();
+        if (firstName == null || firstName.isBlank()) {
+            return "Khách hàng";
         }
-        return parts[parts.length - 1] + " " + parts[0].charAt(0) + ".";
+        if (lastName == null || lastName.isBlank()) {
+            return firstName.trim();
+        }
+        String familyName = lastName.trim().split("\\s+")[0];
+        return firstName.trim() + " " + Character.toUpperCase(familyName.charAt(0)) + ".";
     }
 
     /**

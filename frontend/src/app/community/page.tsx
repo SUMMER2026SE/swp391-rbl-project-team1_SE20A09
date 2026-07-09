@@ -42,6 +42,7 @@ import {
   X,
   ShieldAlert,
   ChevronRight,
+  MessageSquare,
 } from "lucide-react";
 import {
   getActiveMatches,
@@ -140,6 +141,26 @@ function MatchRequestFeedPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [matchIdToCancel, setMatchIdToCancel] = useState<number | null>(null);
   const [submittingCancel, setSubmittingCancel] = useState(false);
+
+  const handleHostChatCandidate = async (req: JoinRequestResponse) => {
+    if (!req.userId || !selectedManageMatch) return;
+    try {
+      setOpeningChat(true);
+      const conversationId = await createContextualConversation(req.userId, {
+        action: "match_referral",
+        matchId: selectedManageMatch.matchId,
+        title: selectedManageMatch.title || `KÃ¨o #${selectedManageMatch.matchId}`,
+        sportName: selectedManageMatch.sportName,
+        playDate: selectedManageMatch.playDate,
+      });
+      setShowManageDialog(false);
+      router.push(chatUrl(conversationId));
+    } catch {
+      toast.error("KhÃ´ng thá»ƒ má»Ÿ cuá»™c trÃ² chuyá»‡n");
+    } finally {
+      setOpeningChat(false);
+    }
+  };
 
   // Lists from APIs
   const [matchRequests, setMatchRequests] = useState<MatchResponse[]>([]);
@@ -1273,7 +1294,7 @@ function MatchRequestFeedPage() {
 
       {/* Host Manage Join Requests Dialog */}
       <Dialog open={showManageDialog} onOpenChange={setShowManageDialog}>
-        <DialogContent className="w-full max-w-2xl bg-white border border-slate-200 p-6 max-h-[85vh] flex flex-col">
+        <DialogContent className="w-[95%] sm:max-w-2xl bg-white border border-slate-200 p-5 sm:p-6 max-h-[90vh] flex flex-col overflow-hidden">
           <DialogHeader className="border-b pb-3.5 mb-2">
             <DialogTitle className="text-xl font-bold text-slate-800">
               Quản lý đơn đăng ký tham gia
@@ -1325,21 +1346,40 @@ function MatchRequestFeedPage() {
                         className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs hover:border-slate-300 transition-all flex flex-col gap-4"
                       >
                         {/* Requester Info */}
-                        <div className="flex gap-3 items-center">
-                          <Avatar className="h-10 w-10 border border-slate-100 shadow-2xs">
+                        <div className="flex justify-between items-center gap-3">
+                          <div className="flex gap-3 items-center min-w-0">
+                          <Avatar className="h-10 w-10 border border-slate-100 shadow-2xs shrink-0">
                             <AvatarImage
                               src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(req.fullName)}`}
                             />
                             <AvatarFallback>{req.fullName[0]}</AvatarFallback>
                           </Avatar>
-                          <div>
-                            <div className="font-bold text-slate-800 text-sm">
+                          <div className="min-w-0">
+                            <div className="font-bold text-slate-800 text-sm truncate">
                               {req.fullName}
                             </div>
-                            <div className="text-slate-400 text-[10px] mt-0.5">
+                            <div className="text-slate-400 text-[10px] mt-0.5 truncate">
                               {req.email} • Đăng ký: {new Date(req.createdAt).toLocaleDateString("vi-VN")}
                             </div>
                           </div>
+                          </div>
+                          {req.userId && req.requestStatus === "PENDING" && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              disabled={openingChat}
+                              onClick={() => handleHostChatCandidate(req)}
+                              className="rounded-full h-8 w-8 hover:bg-slate-100 text-slate-600 cursor-pointer shrink-0"
+                              title="Nháº¯n tin liÃªn há»‡"
+                            >
+                              {openingChat ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                              ) : (
+                                <MessageSquare className="h-4 w-4 text-emerald-600" />
+                              )}
+                            </Button>
+                          )}
                         </div>
 
                         {/* Message box */}
@@ -1441,7 +1481,7 @@ function MatchRequestFeedPage() {
 
       {/* Joined Request Detail Dialog */}
       <Dialog open={showJoinedDetailDialog} onOpenChange={setShowJoinedDetailDialog}>
-        <DialogContent className="max-w-md bg-white border border-slate-200 p-6">
+        <DialogContent className="w-[95%] sm:max-w-md bg-white border border-slate-200 p-5 sm:p-6 max-h-[90vh] overflow-y-auto">
           <DialogHeader className="border-b pb-3.5 mb-2">
             <DialogTitle className="text-xl font-bold text-slate-800">
               Chi tiết đơn đăng ký tham gia

@@ -68,6 +68,11 @@ public interface ChatService {
     void createOrUpdateMatchGroupChat(MatchRequest match, Integer newUserId);
 
     /**
+     * Get or create a match group chat and verify the current user can access it.
+     */
+    Long getOrCreateMatchGroupChat(Integer matchId, Integer currentUserId);
+
+    /**
      * Rename a group chat. Only participants can rename.
      */
     ConversationDto renameGroupChat(Long conversationId, Integer userId, String newName);

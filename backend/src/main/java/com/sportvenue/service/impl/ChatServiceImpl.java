@@ -10,13 +10,17 @@ import com.sportvenue.entity.ChatConversation;
 import com.sportvenue.entity.ChatConversationHiddenState;
 import com.sportvenue.entity.ChatMessage;
 import com.sportvenue.entity.ChatbotLog;
+import com.sportvenue.entity.JoinRequest;
 import com.sportvenue.entity.MatchRequest;
 import com.sportvenue.entity.User;
+import com.sportvenue.entity.enums.JoinRequestStatus;
 import com.sportvenue.entity.enums.MessageType;
 import com.sportvenue.repository.ChatConversationRepository;
 import com.sportvenue.repository.ChatMessageRepository;
 import com.sportvenue.repository.ChatbotLogRepository;
 import com.sportvenue.repository.ChatConversationHiddenStateRepository;
+import com.sportvenue.repository.JoinRequestRepository;
+import com.sportvenue.repository.MatchRequestRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.ChatService;
 import com.sportvenue.exception.ResourceNotFoundException;
@@ -25,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -43,6 +48,8 @@ public class ChatServiceImpl implements ChatService {
     private final ChatbotLogRepository chatbotLogRepo;
     private final UserRepository userRepo;
     private final ChatConversationHiddenStateRepository hiddenStateRepo;
+    private final MatchRequestRepository matchRequestRepo;
+    private final JoinRequestRepository joinRequestRepo;
     private final SimpMessagingTemplate messagingTemplate;
 
     @Override
@@ -348,6 +355,58 @@ public class ChatServiceImpl implements ChatService {
             messagingTemplate.convertAndSend("/topic/chat/user/" + p.getUserId() + "/new-group", payload);
             messagingTemplate.convertAndSend("/topic/chat/user/" + p.getUserId(), msgDto);
         }
+    }
+
+    @Override
+    @Transactional
+    public Long getOrCreateMatchGroupChat(Integer matchId, Integer currentUserId) {
+        MatchRequest match = matchRequestRepo.findById(matchId)
+                .orElseThrow(() -> new ResourceNotFoundException("KhÃ´ng tÃ¬m tháº¥y kÃ¨o ghÃ©p ID: " + matchId));
+
+        ChatConversation group = conversationRepo.findByMatchId(matchId)
+                .orElseGet(() -> createMatchGroupChatWithApprovedParticipants(match));
+
+        boolean isMember = group.getParticipants().stream()
+                .anyMatch(user -> user.getUserId().equals(currentUserId));
+        if (!isMember) {
+            throw new AccessDeniedException("Báº¡n chÆ°a pháº£i lÃ  thÃ nh viÃªn cá»§a nhÃ³m chat nÃ y");
+        }
+
+        return group.getConversationId();
+    }
+
+    private ChatConversation createMatchGroupChatWithApprovedParticipants(MatchRequest match) {
+        String groupName = match.getSportType().getSportName() + " " + match.getPlayDate()
+                + " - KÃ¨o " + match.getUser().getFirstName();
+        ChatConversation newGroup = ChatConversation.builder()
+                .isGroup(true)
+                .name(groupName)
+                .match(match)
+                .build();
+
+        newGroup.getParticipants().add(match.getUser());
+        List<JoinRequest> approvedRequests = joinRequestRepo.findAllByMatchRequestMatchId(match.getMatchId());
+        for (JoinRequest request : approvedRequests) {
+            if (request.getRequestStatus() == JoinRequestStatus.APPROVED) {
+                newGroup.getParticipants().add(request.getUser());
+            }
+        }
+
+        ChatConversation saved = conversationRepo.save(newGroup);
+        LocalDateTime now = LocalDateTime.now();
+        String systemMessage = "âœ… NhÃ³m chat cá»§a kÃ¨o Ä‘Ã£ Ä‘Æ°á»£c khá»Ÿi táº¡o.";
+        ChatMessage message = ChatMessage.builder()
+                .conversation(saved)
+                .sender(match.getUser())
+                .content(systemMessage)
+                .messageType(MessageType.SYSTEM)
+                .sentAt(now)
+                .build();
+        messageRepo.save(message);
+
+        saved.setLastMessagePreview(systemMessage);
+        saved.setLastMessageAt(now);
+        return conversationRepo.save(saved);
     }
 
     @Override
