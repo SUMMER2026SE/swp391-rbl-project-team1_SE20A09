@@ -22,6 +22,8 @@ import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.OtpService;
 import com.sportvenue.service.NotificationService;
 import com.sportvenue.service.OwnerRegistrationService;
+import com.sportvenue.service.EmailService;
+import com.sportvenue.util.AfterCommitExecutor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -42,6 +44,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
     private final OtpService otpService;
     private final NotificationService notificationService;
     private final com.sportvenue.service.AdminDashboardService adminDashboardService;
+    private final EmailService emailService;
+    private final AfterCommitExecutor afterCommitExecutor;
 
     @Override
     @Transactional
@@ -235,6 +239,10 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                     "Chúc mừng! Hồ sơ đối tác cho doanh nghiệp '" + owner.getBusinessName() + "' đã được Admin phê duyệt thành công. Bạn hiện có quyền của Chủ sân.",
                     NotificationType.SYSTEM,
                     owner.getOwnerId().toString()
+            );
+            
+            afterCommitExecutor.execute(() -> 
+                emailService.sendOwnerRegistrationSuccessEmail(user.getEmail(), user.getFullName(), owner.getBusinessName())
             );
 
         } else if (request.getApprovedStatus() == ApprovedStatus.REJECTED) {

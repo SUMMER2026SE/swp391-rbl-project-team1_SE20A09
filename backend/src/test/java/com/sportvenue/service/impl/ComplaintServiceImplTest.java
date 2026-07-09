@@ -70,6 +70,9 @@ class ComplaintServiceImplTest {
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
+    @Mock private com.sportvenue.service.EmailService emailService;
+    @Mock private com.sportvenue.util.AfterCommitExecutor afterCommitExecutor;
+
     @InjectMocks
     private ComplaintServiceImpl complaintService;
 

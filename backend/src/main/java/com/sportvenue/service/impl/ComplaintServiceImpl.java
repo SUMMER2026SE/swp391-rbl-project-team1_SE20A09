@@ -33,6 +33,8 @@ import java.util.ArrayList;
 import java.util.List;
 import com.sportvenue.dto.response.ComplaintChatEventDTO;
 import com.sportvenue.service.NotificationService;
+import com.sportvenue.service.EmailService;
+import com.sportvenue.util.AfterCommitExecutor;
 import com.sportvenue.entity.enums.NotificationType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
@@ -49,6 +51,8 @@ public class ComplaintServiceImpl implements ComplaintService {
     private final ObjectMapper objectMapper;
     private final SimpMessagingTemplate messagingTemplate;
     private final com.sportvenue.service.AdminDashboardService adminDashboardService;
+    private final EmailService emailService;
+    private final AfterCommitExecutor afterCommitExecutor;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -128,6 +132,21 @@ public class ComplaintServiceImpl implements ComplaintService {
 
         // Xóa cache dashboard — số liệu khiếu nại mở thay đổi
         adminDashboardService.evictDashboardCache();
+
+        afterCommitExecutor.execute(() -> {
+            try {
+                emailService.sendComplaintCreatedEmail(
+                        booking.getStadium().getOwner().getUser().getEmail(),
+                        booking.getStadium().getOwner().getUser().getFirstName() + " " + booking.getStadium().getOwner().getUser().getLastName(),
+                        booking.getStadium().getStadiumName(),
+                        saved.getComplaintId(),
+                        user.getFirstName() + " " + user.getLastName(),
+                        saved.getSubject()
+                );
+            } catch (Exception e) {
+                log.error("Failed to send complaint created email", e);
+            }
+        });
 
         return mapToResponse(saved);
     }
@@ -279,6 +298,19 @@ public class ComplaintServiceImpl implements ComplaintService {
         // Xóa cache dashboard — số liệu khiếu nại mở thay đổi (OPEN → RESOLVED)
         adminDashboardService.evictDashboardCache();
 
+        afterCommitExecutor.execute(() -> {
+            try {
+                emailService.sendComplaintResolvedEmail(
+                        complaint.getUser().getEmail(),
+                        complaint.getUser().getFirstName() + " " + complaint.getUser().getLastName(),
+                        complaint.getComplaintId(),
+                        request.getResolution()
+                );
+            } catch (Exception e) {
+                log.error("Failed to send complaint resolved email", e);
+            }
+        });
+
         return mapToResponse(saved);
     }
 
@@ -398,6 +430,19 @@ public class ComplaintServiceImpl implements ComplaintService {
 
         // Xóa cache dashboard — số liệu khiếu nại mở thay đổi (OPEN → RESOLVED)
         adminDashboardService.evictDashboardCache();
+
+        afterCommitExecutor.execute(() -> {
+            try {
+                emailService.sendComplaintResolvedEmail(
+                        complaint.getUser().getEmail(),
+                        complaint.getUser().getFirstName() + " " + complaint.getUser().getLastName(),
+                        complaint.getComplaintId(),
+                        request.getResolution()
+                );
+            } catch (Exception e) {
+                log.error("Failed to send complaint resolved email by admin", e);
+            }
+        });
 
         return mapToResponse(saved);
     }

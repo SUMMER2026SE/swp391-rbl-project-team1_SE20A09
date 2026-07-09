@@ -17,4 +17,12 @@ public interface NotificationService {
     void markAllAsRead(Integer userId);
     
     void createNotification(Integer userId, String title, String message, NotificationType type, String relatedResourceId);
+    
+    void publishNotificationEvent(
+        Integer userId,
+        String title,
+        String message,
+        NotificationType type,
+        String relatedResourceId
+    );
 }
