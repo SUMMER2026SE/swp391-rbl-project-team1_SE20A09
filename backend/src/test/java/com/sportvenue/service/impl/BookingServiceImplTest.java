@@ -187,9 +187,11 @@ class BookingServiceImplTest {
         // Assert
         assertNotNull(response);
         assertEquals(99, response.getBookingId());
-        // totalPrice = 150000 (slot) + 50000*2=100000 (accessory) + 20000 (service) = 270000
-        assertEquals(0, new BigDecimal("270000.00").compareTo(response.getTotalPrice()),
-                "totalPrice phải = slot + accessories + serviceFee (20k)");
+        // totalPrice = 150000 (slot) + 50000*2=100000 (accessory) + 10000 (service) = 260000
+        assertEquals(0, new BigDecimal("260000.00").compareTo(response.getTotalPrice()),
+                "totalPrice phải = slot + accessories + serviceFee (10k)");
+        assertEquals(0, new BigDecimal("10000.00").compareTo(response.getServiceFee()),
+                "serviceFee phải được tính động là 10k");
 
         // Verify accessory đã được persist với bookingId
         ArgumentCaptor<List<BookingAccessory>> captor = ArgumentCaptor.forClass(List.class);
@@ -233,8 +235,8 @@ class BookingServiceImplTest {
 
         BookingDetailResponse response = bookingService.createBooking(principal, request);
 
-        // 150000 + 0 + 20000 = 170000
-        assertEquals(0, new BigDecimal("170000.00").compareTo(response.getTotalPrice()));
+        // 150000 + 0 + 10000 = 160000
+        assertEquals(0, new BigDecimal("160000.00").compareTo(response.getTotalPrice()));
         verify(bookingAccessoryRepository, never()).saveAll(anyList());
     }
 
@@ -902,7 +904,7 @@ class BookingServiceImplTest {
         // Act
         BookingDetailResponse res = bookingService.createBooking(principal, req);
 
-        // Assert: priceOverride (200000) + serviceFee (20000) = 220000
-        assertEquals(new BigDecimal("220000"), res.getTotalPrice());
+        // Assert: priceOverride (200000) + serviceFee (10000) = 210000
+        assertEquals(new BigDecimal("210000"), res.getTotalPrice());
     }
 }
