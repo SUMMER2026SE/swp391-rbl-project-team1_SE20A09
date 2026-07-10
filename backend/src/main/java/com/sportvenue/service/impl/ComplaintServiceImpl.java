@@ -554,4 +554,16 @@ public class ComplaintServiceImpl implements ComplaintService {
                 .slaViolated(c.getSlaViolated())
                 .build();
     }
+    @Override
+    @Transactional(readOnly = true)
+    public com.sportvenue.dto.response.ComplaintStatsDto getAdminComplaintStats() {
+        return com.sportvenue.dto.response.ComplaintStatsDto.builder()
+                .totalCount(complaintRepository.count())
+                .openCount(complaintRepository.countByStatus(ComplaintStatus.OPEN))
+                .progressCount(complaintRepository.countByStatus(ComplaintStatus.IN_PROGRESS))
+                .escalatedCount(complaintRepository.countByStatus(ComplaintStatus.ESCALATED) + 
+                              complaintRepository.countByStatus(ComplaintStatus.PENDING_ADMIN_REVIEW))
+                .resolvedCount(complaintRepository.countByStatus(ComplaintStatus.RESOLVED))
+                .build();
+    }
 }

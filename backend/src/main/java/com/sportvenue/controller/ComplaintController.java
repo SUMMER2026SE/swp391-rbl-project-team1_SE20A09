@@ -207,4 +207,11 @@ public class ComplaintController {
         // Sẽ implement method này trong ComplaintService
         return ResponseEntity.ok(PageResponse.of(complaintService.getEscalatedComplaints(pageable)));
     }
+
+    @GetMapping("/admin/complaints/stats")
+    @PreAuthorize("hasRole('Admin')")
+    @Operation(summary = "Admin lấy thống kê khiếu nại")
+    public ResponseEntity<com.sportvenue.dto.response.ComplaintStatsDto> getAdminComplaintStats() {
+        return ResponseEntity.ok(complaintService.getAdminComplaintStats());
+    }
 }

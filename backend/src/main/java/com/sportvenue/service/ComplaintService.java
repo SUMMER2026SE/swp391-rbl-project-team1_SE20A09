@@ -35,4 +35,6 @@ public interface ComplaintService {
 
     /** Admin lấy danh sách khiếu nại đã escalate hoặc chờ xem xét. */
     Page<ComplaintResponse> getEscalatedComplaints(Pageable pageable);
+
+    com.sportvenue.dto.response.ComplaintStatsDto getAdminComplaintStats();
 }
