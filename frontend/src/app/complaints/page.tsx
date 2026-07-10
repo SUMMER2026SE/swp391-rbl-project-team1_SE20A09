@@ -25,7 +25,7 @@ import {
 import { AlertCircle, Plus, MessageSquare, XCircle, SlidersHorizontal, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
 import { get, post } from "@/lib/api";
 import { toast } from "sonner";
-import { fetchMyBookings } from "@/lib/bookings-api";
+import { fetchMyBookings, type BookingHistoryItem } from "@/lib/bookings-api";
 import { useComplaintWebSocket, type ComplaintChatEvent } from "@/hooks/useComplaintWebSocket";
 
 type ComplaintResponse = {
@@ -52,13 +52,13 @@ type Complaint = {
 
 function ComplaintsPage() {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
-  const [completedBookings, setCompletedBookings] = useState<any[]>([]);
+  const [completedBookings, setCompletedBookings] = useState<BookingHistoryItem[]>([]);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
 
   // Form states
   const [bookingId, setBookingId] = useState("");
-  const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [selectedBooking, setSelectedBooking] = useState<BookingHistoryItem | null>(null);
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
 
@@ -348,7 +348,7 @@ function ComplaintsPage() {
                 onValueChange={(val) => {
                   setBookingId(val);
                   const b = completedBookings.find(x => String(x.id) === val);
-                  setSelectedBooking(b);
+                  setSelectedBooking(b || null);
                 }}
               >
                 <SelectTrigger id="bookingSelect">
