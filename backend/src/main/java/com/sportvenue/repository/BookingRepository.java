@@ -15,6 +15,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.domain.Specification;
+
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.enums.BookingStatus;
 
@@ -25,7 +28,16 @@ import jakarta.persistence.LockModeType;
  * Stub — Hoàng và Lượng mở rộng thêm query khi cần.
  */
 @Repository
-public interface BookingRepository extends JpaRepository<Booking, Integer> {
+public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaSpecificationExecutor<Booking> {
+
+    @Override
+    @EntityGraph(attributePaths = {
+        "user", "slot", "stadium",
+        "stadium.owner", "stadium.owner.user",
+        "stadium.parentStadium", "stadium.parentStadium.complex", "stadium.parentStadium.complex.owner", "stadium.parentStadium.complex.owner.user",
+        "stadium.complex", "stadium.complex.owner", "stadium.complex.owner.user"
+    })
+    Page<Booking> findAll(Specification<Booking> spec, Pageable pageable);
 
     @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "slot"})
     @Query("SELECT b FROM Booking b WHERE b.bookingId = :id")
