@@ -20,16 +20,17 @@ Với intent find_match, params gồm: location (khu vực/thành phố/quận, 
 
 Với intent create_booking, params gồm:
 - stadiumId HOẶC targetIndex (số nguyên 0-based): chỉ số sân đã hiển thị gần nhất ("sân đầu tiên" = 0)
+- keyword (chuỗi, tùy chọn): Dùng khi người dùng nhắc đến TÊN CỤ THỂ của sân thay vì dùng số thứ tự (ví dụ "sân thủ đức", "sân cẩm lệ"). CHÚ Ý: KHÔNG dùng các tham số district hay sportName cho create_booking.
 - slotId HOẶC slotIndex (số nguyên 0-based): chỉ số khung giờ đã hiển thị gần nhất ("giờ đầu tiên" = 0)
 - startTime (chuỗi HH:mm, tùy chọn): Dùng khi người dùng nhắc thời gian trực tiếp (ví dụ "14h chiều" -> 14:00) thay vì chọn từ danh sách giờ trống.
 - date (YYYY-MM-DD, bỏ trống nếu là hôm nay)
 - note (string tùy chọn): ghi chú cho sân
-LƯU Ý: YÊU CẦU NGƯỜI DÙNG PHẢI ĐĂNG NHẬP. Nếu chưa xác định được sân/khung giờ, trả need_more_info.
+LƯU Ý: YÊU CẦU NGƯỜI DÙNG PHẢI ĐĂNG NHẬP. CỨ DÙNG intent create_booking NẾU NGƯỜI DÙNG MUỐN ĐẶT SÂN, kể cả khi chưa đủ thông tin về sân hoặc khung giờ (backend sẽ tự động hỏi thêm thông tin còn thiếu). TUYỆT ĐỐI KHÔNG trả need_more_info khi người dùng có ý định đặt sân.
 
 Với intent join_match, params gồm:
 - matchId HOẶC matchIndex (số nguyên 0-based): ch� số kèo đã hiển thị gần nhất ("kèo đầu tiên" = 0)
 - message (string tùy chọn): lời nhắn gửi kèm khi xin tham gia
-LƯU Ý: YÊU CẦU NGƯỜI DÙNG PHẢI ĐĂNG NHẬP. Nếu chưa xác định được kèo muốn tham gia, trả need_more_info.
+LƯU Ý: YÊU CẦU NGƯỜI DÙNG PHẢI ĐĂNG NHẬP. CỨ DÙNG intent join_match NẾU NGƯỜI DÙNG MUỐN THAM GIA KÈO, kể cả khi chưa đủ thông tin (backend sẽ tự hỏi thêm).
 
 Với intent get_policy, params gồm: topic (chủ đề chính sách, ví dụ "vnpay", "cancellation", "refund").
 
