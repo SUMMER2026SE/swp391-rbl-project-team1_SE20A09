@@ -169,7 +169,12 @@ public class BookingHandler {
             if (lastShown != null && !lastShown.isEmpty()) {
                 List<Stadium> recentStadiums = stadiumRepository.findAllById(lastShown);
                 stadiumId = recentStadiums.stream()
-                        .filter(s -> s.getStadiumName().toLowerCase().contains(keyword))
+                        .filter(s -> {
+                            String name = s.getStadiumName().toLowerCase();
+                            String parentName = (s.getParentStadium() != null && s.getParentStadium().getStadiumName() != null)
+                                    ? s.getParentStadium().getStadiumName().toLowerCase() : "";
+                            return name.contains(keyword) || parentName.contains(keyword);
+                        })
                         .findFirst()
                         .map(Stadium::getStadiumId)
                         .orElse(null);
