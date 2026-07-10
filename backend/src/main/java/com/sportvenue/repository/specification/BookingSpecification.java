@@ -12,6 +12,7 @@ import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
 
@@ -36,53 +37,19 @@ public class BookingSpecification {
             // Shared Join variable to prevent duplicate left joins
             Join<Booking, Stadium> stadiumJoin = null;
 
-            // 1. Search keyword
             if (StringUtils.hasText(search)) {
-                String likePattern = "%" + search.trim().toLowerCase() + "%";
-
-                Join<Booking, User> userJoin = root.join("user", JoinType.LEFT);
                 stadiumJoin = root.join("stadium", JoinType.LEFT);
-                Join<Stadium, Stadium> parentStadiumJoin = stadiumJoin.join("parentStadium", JoinType.LEFT);
-
-                // Tên khách hàng (Họ + Tên) ghép chuỗi hoặc tìm kiếm riêng rẽ
-                Predicate emailLike = cb.like(cb.lower(userJoin.get("email")), likePattern);
-                Predicate firstNameLike = cb.like(cb.lower(userJoin.get("firstName")), likePattern);
-                Predicate lastNameLike = cb.like(cb.lower(userJoin.get("lastName")), likePattern);
-                
-                // Hỗ trợ tìm kiếm theo họ tên đầy đủ ghép lại
-                Expression<String> fullNameExpr = cb.concat(
-                        cb.concat(cb.lower(userJoin.get("lastName")), " "),
-                        cb.lower(userJoin.get("firstName"))
-                );
-                Predicate fullNameLike = cb.like(fullNameExpr, likePattern);
-
-                Predicate phoneLike = cb.like(cb.lower(userJoin.get("phoneNumber")), likePattern);
-
-                Predicate stadiumNameLike = cb.like(cb.lower(stadiumJoin.get("stadiumName")), likePattern);
-                Predicate parentStadiumNameLike = cb.like(cb.lower(parentStadiumJoin.get("stadiumName")), likePattern);
-
-                predicates.add(cb.or(
-                        emailLike,
-                        firstNameLike,
-                        lastNameLike,
-                        fullNameLike,
-                        phoneLike,
-                        stadiumNameLike,
-                        parentStadiumNameLike
-                ));
+                predicates.add(buildSearchPredicate(root, cb, stadiumJoin, search));
             }
 
-            // 2. Booking Status
             if (bookingStatus != null) {
                 predicates.add(cb.equal(root.get("bookingStatus"), bookingStatus));
             }
 
-            // 3. Payment Status
             if (paymentStatus != null) {
                 predicates.add(cb.equal(root.get("paymentStatus"), paymentStatus));
             }
 
-            // 4. Date range (reservationDate)
             if (startDate != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.get("reservationDate"), startDate));
             }
@@ -90,31 +57,65 @@ public class BookingSpecification {
                 predicates.add(cb.lessThanOrEqualTo(root.get("reservationDate"), endDate));
             }
 
-            // 5. Stadium ID
             if (stadiumId != null) {
                 predicates.add(cb.equal(root.get("stadium").get("stadiumId"), stadiumId));
             }
 
-            // 6. Owner ID (with OR-Join for 3-layer model)
             if (ownerId != null) {
-                Join<Booking, Stadium> s = stadiumJoin != null ? stadiumJoin : root.join("stadium", JoinType.LEFT);
-                Join<Stadium, Owner> o = s.join("owner", JoinType.LEFT);
-                Join<Stadium, Stadium> p = s.join("parentStadium", JoinType.LEFT);
-                Join<Stadium, StadiumComplex> c = p.join("complex", JoinType.LEFT);
-                Join<StadiumComplex, Owner> co = c.join("owner", JoinType.LEFT);
-                
-                // Direct complex fallback
-                Join<Stadium, StadiumComplex> dc = s.join("complex", JoinType.LEFT);
-                Join<StadiumComplex, Owner> dco = dc.join("owner", JoinType.LEFT);
-
-                predicates.add(cb.or(
-                    cb.equal(o.get("ownerId"), ownerId),
-                    cb.equal(co.get("ownerId"), ownerId),
-                    cb.equal(dco.get("ownerId"), ownerId)
-                ));
+                Join<Booking, Stadium> ownerStadiumJoin =
+                        stadiumJoin != null ? stadiumJoin : root.join("stadium", JoinType.LEFT);
+                predicates.add(buildOwnerPredicate(cb, ownerStadiumJoin, ownerId));
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    /** Search theo tên/email/SĐT khách hàng hoặc tên sân (kể cả Facility cha). */
+    private static Predicate buildSearchPredicate(Root<Booking> root, CriteriaBuilder cb,
+            Join<Booking, Stadium> stadiumJoin, String search) {
+        String likePattern = "%" + search.trim().toLowerCase() + "%";
+
+        Join<Booking, User> userJoin = root.join("user", JoinType.LEFT);
+        Join<Stadium, Stadium> parentStadiumJoin = stadiumJoin.join("parentStadium", JoinType.LEFT);
+
+        Predicate emailLike = cb.like(cb.lower(userJoin.get("email")), likePattern);
+        Predicate firstNameLike = cb.like(cb.lower(userJoin.get("firstName")), likePattern);
+        Predicate lastNameLike = cb.like(cb.lower(userJoin.get("lastName")), likePattern);
+
+        // Hỗ trợ tìm kiếm theo họ tên đầy đủ ghép lại
+        Expression<String> fullNameExpr = cb.concat(
+                cb.concat(cb.lower(userJoin.get("lastName")), " "),
+                cb.lower(userJoin.get("firstName"))
+        );
+        Predicate fullNameLike = cb.like(fullNameExpr, likePattern);
+        Predicate phoneLike = cb.like(cb.lower(userJoin.get("phoneNumber")), likePattern);
+        Predicate stadiumNameLike = cb.like(cb.lower(stadiumJoin.get("stadiumName")), likePattern);
+        Predicate parentStadiumNameLike = cb.like(cb.lower(parentStadiumJoin.get("stadiumName")), likePattern);
+
+        return cb.or(emailLike, firstNameLike, lastNameLike, fullNameLike,
+                phoneLike, stadiumNameLike, parentStadiumNameLike);
+    }
+
+    /**
+     * Lọc theo ownerId — OR-join qua cả 3 nhánh của mô hình phân cấp sân:
+     * owner trực tiếp trên Stadium, owner của Complex cha (Court -> Facility -> Complex),
+     * và owner của Complex gắn trực tiếp (Facility -> Complex).
+     */
+    private static Predicate buildOwnerPredicate(CriteriaBuilder cb, Join<Booking, Stadium> stadiumJoin,
+            Integer ownerId) {
+        Join<Stadium, Owner> directOwner = stadiumJoin.join("owner", JoinType.LEFT);
+        Join<Stadium, Stadium> parentStadium = stadiumJoin.join("parentStadium", JoinType.LEFT);
+        Join<Stadium, StadiumComplex> parentComplex = parentStadium.join("complex", JoinType.LEFT);
+        Join<StadiumComplex, Owner> parentComplexOwner = parentComplex.join("owner", JoinType.LEFT);
+
+        Join<Stadium, StadiumComplex> directComplex = stadiumJoin.join("complex", JoinType.LEFT);
+        Join<StadiumComplex, Owner> directComplexOwner = directComplex.join("owner", JoinType.LEFT);
+
+        return cb.or(
+                cb.equal(directOwner.get("ownerId"), ownerId),
+                cb.equal(parentComplexOwner.get("ownerId"), ownerId),
+                cb.equal(directComplexOwner.get("ownerId"), ownerId)
+        );
     }
 }

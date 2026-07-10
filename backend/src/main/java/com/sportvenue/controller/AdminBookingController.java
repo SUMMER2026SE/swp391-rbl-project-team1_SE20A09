@@ -1,9 +1,8 @@
 package com.sportvenue.controller;
 
+import com.sportvenue.dto.request.AdminBookingSearchRequest;
 import com.sportvenue.dto.response.AdminBookingListResponse;
 import com.sportvenue.dto.response.ApiResponse;
-import com.sportvenue.entity.enums.BookingStatus;
-import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.service.AdminBookingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -13,10 +12,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -25,7 +24,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -60,48 +58,23 @@ public class AdminBookingController {
             @Min(value = 1, message = "Số bản ghi mỗi trang (pageSize) phải lớn hơn 0")
             @RequestParam(defaultValue = "10") int pageSize,
 
-            @Parameter(description = "Tìm kiếm theo tên, email khách hàng hoặc tên sân")
-            @RequestParam(required = false) String search,
-
-            @Parameter(description = "Lọc theo trạng thái booking: PENDING_PAYMENT, PENDING, CONFIRMED, COMPLETED, CANCELLED")
-            @RequestParam(required = false) BookingStatus bookingStatus,
-
-            @Parameter(description = "Lọc theo trạng thái thanh toán: UNPAID, PAID, REFUNDED, DEPOSITED, AWAITING_CASH_PAYMENT")
-            @RequestParam(required = false) PaymentStatus paymentStatus,
-
-            @Parameter(description = "Ngày bắt đầu chơi (reservationDate)", example = "2026-07-10")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-
-            @Parameter(description = "Ngày kết thúc chơi (reservationDate)", example = "2026-07-11")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-
-            @Parameter(description = "Lọc theo ID sân")
-            @RequestParam(required = false) Integer stadiumId,
-
-            @Parameter(description = "Lọc theo ID Owner")
-            @RequestParam(required = false) Integer ownerId,
-
-            @Parameter(description = "Trường sắp xếp", example = "bookingDate")
-            @RequestParam(defaultValue = "bookingDate") String sortBy,
-
-            @Parameter(description = "Hướng sắp xếp: asc hoặc desc", example = "desc")
-            @RequestParam(defaultValue = "desc") String sortDir
+            @ParameterObject AdminBookingSearchRequest filter
     ) {
         List<String> allowedSortBy = List.of(
                 "bookingId", "totalPrice", "serviceFee",
                 "bookingStatus", "paymentStatus", "bookingDate", "reservationDate"
         );
-        if (!allowedSortBy.contains(sortBy)) {
-            sortBy = "bookingDate"; // fallback an toàn
-        }
+        String sortBy = allowedSortBy.contains(filter.getSortBy()) ? filter.getSortBy() : "bookingDate";
 
-        Sort sort = sortDir.equalsIgnoreCase("asc")
+        Sort sort = "asc".equalsIgnoreCase(filter.getSortDir())
                 ? Sort.by(sortBy).ascending()
                 : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, pageSize, sort);
 
         AdminBookingListResponse result = adminBookingService.getAdminBookings(
-                search, bookingStatus, paymentStatus, startDate, endDate, stadiumId, ownerId, pageable);
+                filter.getSearch(), filter.getBookingStatus(), filter.getPaymentStatus(),
+                filter.getStartDate(), filter.getEndDate(), filter.getStadiumId(), filter.getOwnerId(),
+                pageable);
 
         return ResponseEntity.ok(ApiResponse.<AdminBookingListResponse>builder()
                 .code(200)
