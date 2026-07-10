@@ -367,6 +367,10 @@ export default function BookingDetailPage() {
               )}
               {booking.status === 'cancelled' && (
                 <>
+                  <Button variant="secondary" className="rounded-2xl flex-1 font-bold h-12" onClick={handleMessageOwner} disabled={chatStarting}>
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    {chatStarting ? 'Đang mở...' : 'Liên hệ chủ sân'}
+                  </Button>
                   <Button 
                     variant="outline" 
                     className="rounded-2xl flex-1 font-bold h-12 bg-transparent text-white border-white/20 hover:bg-white/10"

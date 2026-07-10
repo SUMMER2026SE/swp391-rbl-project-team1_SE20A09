@@ -68,6 +68,7 @@ function AdminComplaintsPage() {
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+  const [stats, setStats] = useState({ totalCount: 0, openCount: 0, progressCount: 0, escalatedCount: 0, resolvedCount: 0 });
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showOverrideDialog, setShowOverrideDialog] = useState(false);
   const [overrideText, setOverrideText] = useState("");
@@ -75,10 +76,12 @@ function AdminComplaintsPage() {
   const fetchComplaints = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await get<PageResponse<Complaint>>(
-        `/admin/complaints?page=${page}&size=20`
-      );
+      const [data, statsData] = await Promise.all([
+        get<PageResponse<Complaint>>(`/admin/complaints?page=${page}&size=20`),
+        get<any>(`/admin/complaints/stats`)
+      ]);
       const list = data.content;
+      setStats(statsData);
       if (Array.isArray(list)) {
         setComplaints(list);
         setTotalPages(data.totalPages);
@@ -217,11 +220,7 @@ function AdminComplaintsPage() {
     }
   };
 
-  const totalCount = totalElements;
-  const openCount = complaints.filter(c => c.status === "open").length;
-  const progressCount = complaints.filter(c => c.status === "in_progress").length;
-  const escalatedCount = complaints.filter(c => ["escalated", "pending_admin_review"].includes(c.status)).length;
-  const resolvedCount = complaints.filter(c => c.status === "resolved").length;
+  const { totalCount, openCount, progressCount, escalatedCount, resolvedCount } = stats;
 
   const filteredComplaints = complaints.filter(c => {
     const matchesStatus = filterStatus === "all" || c.status.toLowerCase() === filterStatus.toLowerCase();
