@@ -395,18 +395,19 @@ class RefundServiceTest {
     @Test
     @DisplayName("previewRefundForCustomer: Should refund 100% of the deposit amount instead of total price when cancelled >= 24 hours")
     void previewRefundForCustomer_DepositBooking_ShouldRefundCorrectPercentageOfDeposit() {
-        // Arrange
+        // Arrange — đặt cọc bị khách tự hủy (CUSTOMER_REQUEST) -> KHÔNG hoàn, bất kể còn bao lâu
+        // tới giờ chơi (đúng bản chất tiền cọc giữ chỗ, xem RefundServiceImpl.calculateRefund).
         User customer = User.builder()
                 .userId(2).email("customer@example.com").build();
         booking.setUser(customer);
         booking.setTotalPrice(new BigDecimal("1000000"));
-        booking.setReservationDate(LocalDate.now().plusDays(2)); // > 24h
+        booking.setReservationDate(LocalDate.now().plusDays(2)); // > 24h — không còn ý nghĩa với cọc
         booking.setPaymentStatus(PaymentStatus.DEPOSITED);
-        
+
         Stadium stadiumMock = new Stadium();
         stadiumMock.setStadiumName("Test Stadium");
         booking.setStadium(stadiumMock);
-        
+
         TimeSlot ts = new TimeSlot();
         ts.setStartTime(LocalTime.now());
         booking.setSlot(ts);
@@ -423,9 +424,37 @@ class RefundServiceTest {
         RefundResponse response = refundService.previewRefundForCustomer(1, "customer@example.com");
 
         // Assert
-        assertEquals(100, response.getRefundPercentage());
-        assertEquals(0, new BigDecimal("300000").compareTo(response.getRefundAmount()), 
-                "Refund amount should be exactly the deposit amount (300000)");
+        assertEquals(0, response.getRefundPercentage());
+        assertEquals(0, BigDecimal.ZERO.compareTo(response.getRefundAmount()),
+                "Đặt cọc bị khách tự hủy -> mất cọc, không hoàn (0đ)");
+    }
+
+    @Test
+    @DisplayName("calculateRefund: DEPOSIT + OWNER_FAULT -> vẫn hoàn 100% cọc (không phải lỗi khách)")
+    void calculateRefund_depositBooking_ownerFault_stillRefundsFull() {
+        User customer = User.builder().userId(2).email("customer@example.com").build();
+        booking.setUser(customer);
+        booking.setTotalPrice(new BigDecimal("1000000"));
+        booking.setReservationDate(LocalDate.now().plusDays(2));
+        booking.setPaymentStatus(PaymentStatus.DEPOSITED);
+
+        Stadium stadiumMock = new Stadium();
+        stadiumMock.setStadiumName("Test Stadium");
+        booking.setStadium(stadiumMock);
+
+        TimeSlot ts = new TimeSlot();
+        ts.setStartTime(LocalTime.now());
+        booking.setSlot(ts);
+
+        Payment depositPayment = Payment.builder()
+                .paymentId(1).booking(booking).amount(new BigDecimal("300000"))
+                .transactionCode("TXN123").paymentStatus(TransactionStatus.SUCCESS).build();
+
+        RefundServiceImpl.RefundCalculation calc = RefundServiceImpl.calculateRefund(
+                booking, depositPayment, RefundReasonType.OWNER_FAULT, "http://proof.jpg", false);
+
+        assertEquals(100, calc.getPercentage());
+        assertEquals(0, new BigDecimal("300000").compareTo(calc.getAmount()));
     }
 
     @Test

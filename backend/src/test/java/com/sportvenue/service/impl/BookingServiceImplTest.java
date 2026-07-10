@@ -739,6 +739,47 @@ class BookingServiceImplTest {
     }
 
     @Test
+    @DisplayName("cancelBooking: customer cancels a DEPOSITED booking >=24h before play -> still 0% (mất cọc, không phải lỗi tiering)")
+    void cancelBooking_customerCancels_depositBooking_alwaysZeroRefund() {
+        // Arrange: giờ chơi còn tận 5 ngày (>=24h, lẽ ra 100% nếu là thanh toán đầy đủ) — chứng
+        // minh việc hoàn 0đ ở đây là do CHÍNH SÁCH đặt cọc (không hoàn khi khách tự hủy), không
+        // phải do rơi vào tier <12h/12-24h.
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("150000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.DEPOSITED)
+                .reservationDate(futureDate())
+                .build();
+
+        com.sportvenue.entity.Payment depositPayment = com.sportvenue.entity.Payment.builder()
+                .paymentId(1)
+                .booking(booking)
+                .amount(new BigDecimal("45000")) // 30% cọc
+                .transactionCode("TXN_DEPOSIT")
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.SUCCESS)
+                .build();
+
+        when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        when(bookingRepository.findById(100)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(depositPayment));
+        when(paymentRepository.save(any(com.sportvenue.entity.Payment.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(List.of());
+
+        BookingDetailResponse response = bookingService.cancelBooking(principal, 100, "Đổi ý");
+
+        assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
+        assertEquals(PaymentStatus.REFUNDED, booking.getPaymentStatus());
+        verify(paymentService, never()).processRefund(any(), any(), any());
+        verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(
+                p -> p.getAmount().compareTo(BigDecimal.ZERO) == 0));
+    }
+
+    @Test
     @DisplayName("cancelBooking: venue owner can cancel an UNPAID booking directly (nothing to refund) -> success")
     void cancelBooking_byVenueOwner_whenUnpaid_success() {
         // Arrange

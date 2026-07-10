@@ -55,8 +55,15 @@ function getStatusBadge(status: BookingDetailItem["status"]) {
   );
 }
 
-function getPaymentStatusBadge(status: string) {
+function getPaymentStatusBadge(status: string, refundedAmount?: number | null) {
   const normalized = status.toLowerCase();
+  if (normalized === 'refunded' && refundedAmount === 0) {
+    return (
+      <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 font-bold px-3 py-1 rounded-full text-[10px] uppercase tracking-wider">
+        Không hoàn tiền
+      </Badge>
+    );
+  }
   const config = PAYMENT_STATUS_CONFIG[normalized as keyof typeof PAYMENT_STATUS_CONFIG] || { label: status, className: "bg-slate-50 text-slate-600" };
   return (
     <Badge variant="outline" className={`${config.className} font-bold px-3 py-1 rounded-full text-[10px] uppercase tracking-wider`}>
@@ -340,14 +347,39 @@ export default function BookingDetailPage() {
                         {booking.totalPrice.toLocaleString('vi-VN')}đ
                       </p>
                     </div>
-                    {getPaymentStatusBadge(booking.paymentStatus)}
+                    {getPaymentStatusBadge(booking.paymentStatus, booking.refundedAmount)}
                   </div>
+
+                  {/* Hiển thị thông tin cọc đã đóng (đối với cả đơn đang cọc lẫn đơn cọc đã bị hủy) */}
+                  {(booking.paymentStatus === 'deposited' || (booking.paidAmount !== null && booking.paidAmount < booking.totalPrice)) && (
+                    <>
+                      <Separator className="bg-slate-100" />
+                      <div className="flex justify-between items-center text-sm bg-indigo-50/60 -mx-2 px-2 py-2 rounded-xl">
+                        <span className="text-indigo-700 font-semibold">Đã đặt cọc</span>
+                        <span className="font-bold text-indigo-700">
+                          {booking.paidAmount !== null
+                            ? `${booking.paidAmount.toLocaleString('vi-VN')}đ (30%)`
+                            : 'Đang xử lý...'}
+                        </span>
+                      </div>
+                      {booking.paidAmount !== null && booking.status !== 'cancelled' && (
+                        <div className="flex justify-between items-center text-xs px-2">
+                          <span className="text-slate-500">Còn lại khi đến sân</span>
+                          <span className="font-semibold text-slate-600">
+                            {Math.max(0, booking.totalPrice - booking.paidAmount).toLocaleString('vi-VN')}đ
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )}
 
                   {booking.paymentStatus === 'refunded' && (
                     <>
                       <Separator className="bg-slate-100" />
                       <div className="flex justify-between items-center text-sm bg-blue-50/60 -mx-2 px-2 py-2 rounded-xl">
-                        <span className="text-blue-700 font-semibold">Đã hoàn tiền</span>
+                        <span className="text-blue-700 font-semibold">
+                          {booking.refundedAmount === 0 ? "Số tiền hoàn" : "Đã hoàn tiền"}
+                        </span>
                         <span className="font-bold text-blue-700">
                           {booking.refundedAmount !== null
                             ? `${booking.refundedAmount.toLocaleString('vi-VN')}đ${booking.refundPercent !== null ? ` (${booking.refundPercent}%)` : ''}`
@@ -387,7 +419,20 @@ export default function BookingDetailPage() {
             </Card>
           </div>
 
-          {booking.status === 'cancelled' && (
+          {/*
+            Chỉ cho xem xét ngoại lệ khi đơn CANCELLED + đã thực sự hoàn tiền (paymentStatus
+            'refunded' — loại trừ booking hủy thẳng khi đang chờ thu tiền mặt tại sân, chưa có
+            gì để hoàn) + refundPercent < 100 (đã hoàn đủ 100% thì không còn gì để xin thêm).
+            Nếu đã có exceptionRequest đang tồn tại thì luôn hiện để khách theo dõi trạng thái,
+            bất kể refundPercent hiện tại (vì có thể đã đổi sau khi ngoại lệ được duyệt).
+          */}
+          {booking.status === 'cancelled' && (exceptionRequest || (
+            booking.paymentStatus === 'refunded' &&
+            booking.paidAmount !== null &&
+            booking.paidAmount === booking.totalPrice &&
+            booking.refundPercent !== null &&
+            booking.refundPercent < 100
+          )) && (
             <Card className="rounded-3xl border border-slate-100 shadow-sm bg-white p-6">
               <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
                 <HelpCircle className="h-5 w-5 text-emerald-500" />
@@ -458,13 +503,20 @@ export default function BookingDetailPage() {
                   </div>
 
                   {exceptionRequest.canEscalate && (
-                    <Button
-                      onClick={handleEscalate}
-                      disabled={escalating}
-                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl h-11 disabled:opacity-60"
-                    >
-                      {escalating ? "Đang xử lý..." : "Leo thang lên Ban quản trị (Admin)"}
-                    </Button>
+                    <div className="space-y-2">
+                      {exceptionRequest.status === 'APPROVED_OWNER' && (
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Chưa hài lòng với mức {exceptionRequest.refundPercent}% Chủ sân đã duyệt? Bạn có thể yêu cầu Admin xem xét lại — nếu Admin duyệt mức cao hơn, bạn chỉ nhận thêm phần chênh lệch.
+                        </p>
+                      )}
+                      <Button
+                        onClick={handleEscalate}
+                        disabled={escalating}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl h-11 disabled:opacity-60"
+                      >
+                        {escalating ? "Đang xử lý..." : "Leo thang lên Ban quản trị (Admin)"}
+                      </Button>
+                    </div>
                   )}
                 </div>
               ) : (
@@ -486,16 +538,16 @@ export default function BookingDetailPage() {
           {/* Action Buttons */}
           <Card className="rounded-3xl border-none shadow-sm bg-slate-900 p-6">
             <div className="flex flex-col sm:flex-row gap-4">
+              {/* Liên hệ chủ sân — luôn hiện bất kể đơn đã hủy/hoàn tiền hay chưa, khách có thể
+                  cần hỏi về tiến độ hoàn tiền hoặc trao đổi thêm sau khi hủy. */}
+              <Button variant="secondary" className="rounded-2xl flex-1 font-bold h-12" onClick={handleMessageOwner} disabled={chatStarting}>
+                <MessageSquare className="h-4 w-4 mr-2" />
+                {chatStarting ? 'Đang mở...' : 'Liên hệ chủ sân'}
+              </Button>
               {(booking.status === 'confirmed' || booking.status === 'pending') && (
-                <>
-                  <Button variant="secondary" className="rounded-2xl flex-1 font-bold h-12" onClick={handleMessageOwner} disabled={chatStarting}>
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    {chatStarting ? 'Đang mở...' : 'Liên hệ chủ sân'}
-                  </Button>
-                  <Button asChild variant="destructive" className="rounded-2xl flex-1 font-bold h-12">
-                    <Link href={`/booking/${booking.id}/cancel`}>Huỷ đơn đặt</Link>
-                  </Button>
-                </>
+                <Button asChild variant="destructive" className="rounded-2xl flex-1 font-bold h-12">
+                  <Link href={`/booking/${booking.id}/cancel`}>Huỷ đơn đặt</Link>
+                </Button>
               )}
               {booking.status === 'completed' && (
                 <>
@@ -505,8 +557,8 @@ export default function BookingDetailPage() {
                       Viết đánh giá
                     </Link>
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="rounded-2xl flex-1 font-bold h-12 bg-transparent text-white border-white/20 hover:bg-white/10"
                     onClick={() => setComplaintOpen(true)}
                   >
@@ -516,7 +568,7 @@ export default function BookingDetailPage() {
                 </>
               )}
               {booking.status === 'cancelled' && (
-                <Button asChild variant="secondary" className="rounded-2xl w-full font-bold h-12">
+                <Button asChild variant="secondary" className="rounded-2xl flex-1 font-bold h-12">
                   <Link href="/search">Đặt sân khác</Link>
                 </Button>
               )}

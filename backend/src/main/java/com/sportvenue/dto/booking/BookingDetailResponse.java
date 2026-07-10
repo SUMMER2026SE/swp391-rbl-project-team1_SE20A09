@@ -45,6 +45,10 @@ public class BookingDetailResponse {
     @Schema(description = "Phí dịch vụ nền tảng đã gồm trong totalPrice", example = "20000.00")
     private BigDecimal serviceFee;
 
+    @Schema(description = "Số tiền THỰC TẾ đã thanh toán qua cổng — bằng totalPrice nếu trả đủ, "
+            + "chỉ bằng 30% totalPrice nếu đặt cọc. Null nếu chưa thanh toán.", example = "519750.00")
+    private BigDecimal paidAmount;
+
     @Schema(description = "Trạng thái đơn — sau createBooking luôn là PENDING", example = "pending")
     private String status;
 

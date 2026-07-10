@@ -229,6 +229,14 @@ public class RefundServiceImpl implements RefundService {
             return new RefundCalculation(100, paidAmount);
         }
 
+        // Đặt cọc bị khách tự hủy -> giữ chỗ, KHÔNG hoàn lại (đúng bản chất tiền cọc trong thực
+        // tế: cam kết giữ chỗ, mất nếu không đến), bất kể còn bao lâu tới giờ chơi — khác hẳn
+        // thanh toán đầy đủ vẫn áp tiering 24h/12h bên dưới. Lỗi do sân (nhánh OWNER_FAULT phía
+        // trên) vẫn hoàn 100% cọc như bình thường vì không phải lỗi của khách.
+        if (booking.getPaymentStatus() == PaymentStatus.DEPOSITED) {
+            return new RefundCalculation(0, BigDecimal.ZERO);
+        }
+
         // Khách tự hủy -> Phí dịch vụ không hoàn trả (non-refundable)
         BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
         BigDecimal baseAmount = paidAmount.subtract(serviceFee);

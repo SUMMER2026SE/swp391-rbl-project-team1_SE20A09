@@ -120,15 +120,31 @@ function PaymentResultContent() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-sm pt-3 border-t border-slate-100">
-                    <span className="text-slate-500 font-medium">Tổng tiền</span>
+                    <span className="text-slate-500 font-medium">Tổng giá trị đơn</span>
                     <span className="text-xl font-bold text-primary">
                       {booking.totalPrice.toLocaleString("vi-VN")}đ
                     </span>
                   </div>
+                  {booking.paymentStatus === "deposited" && booking.paidAmount !== null && (
+                    <>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500 font-medium">Đã thanh toán (đặt cọc 30%)</span>
+                        <span className="font-bold text-indigo-700">
+                          {booking.paidAmount.toLocaleString("vi-VN")}đ
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400">Còn lại khi đến sân</span>
+                        <span className="font-semibold text-slate-500">
+                          {Math.max(0, booking.totalPrice - booking.paidAmount).toLocaleString("vi-VN")}đ
+                        </span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-slate-500 font-medium">Trạng thái</span>
                     <span className="font-semibold text-emerald-700">
-                      Đã xác nhận
+                      {booking.paymentStatus === "deposited" ? "Đã đặt cọc" : "Đã xác nhận"}
                     </span>
                   </div>
                 </div>

@@ -118,6 +118,7 @@ class RefundExceptionServiceImplTest {
         when(bookingRepository.findById(100)).thenReturn(Optional.of(cancelledBooking));
         when(refundExceptionRepository.existsByBookingBookingIdAndStatusIn(anyInt(), anyList())).thenReturn(false);
         when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(List.of());
+        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(successPayment));
         when(refundExceptionRepository.save(any())).thenAnswer(inv -> {
             RefundExceptionRequest r = inv.getArgument(0);
             r = RefundExceptionRequest.builder()
@@ -191,6 +192,7 @@ class RefundExceptionServiceImplTest {
         when(userRepository.findByEmail("customer@test.com")).thenReturn(Optional.of(customer));
         when(bookingRepository.findById(100)).thenReturn(Optional.of(cancelledBooking));
         when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(List.of(zeroRefund));
+        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(successPayment));
         when(refundExceptionRepository.existsByBookingBookingIdAndStatusIn(anyInt(), anyList())).thenReturn(false);
 
         SubmitExceptionRequest req = new SubmitExceptionRequest();
@@ -219,8 +221,9 @@ class RefundExceptionServiceImplTest {
     }
 
     @Test
-    @DisplayName("submitRequest: booking đã hoàn tiền SUCCESS trước đó → BadRequestException (double-refund guard)")
-    void submitRequest_existsSuccessRefundPayment_throwsBadRequest() {
+    @DisplayName("submitRequest: booking đã hoàn ĐỦ 100% trước đó → BadRequestException (double-refund guard)")
+    void submitRequest_alreadyFullyRefunded_throwsBadRequest() {
+        // originalPayment 150000, đã hoàn đủ -150000 -> hoàn ĐỦ 100%, không còn gì để xin thêm
         Payment existingRefund = Payment.builder()
                 .paymentId(99).amount(new BigDecimal("-150000"))
                 .paymentStatus(TransactionStatus.SUCCESS).build();
@@ -228,6 +231,7 @@ class RefundExceptionServiceImplTest {
         when(bookingRepository.findById(100)).thenReturn(Optional.of(cancelledBooking));
         when(refundExceptionRepository.existsByBookingBookingIdAndStatusIn(anyInt(), anyList())).thenReturn(false);
         when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(List.of(existingRefund));
+        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(successPayment));
 
         SubmitExceptionRequest req = new SubmitExceptionRequest();
         req.setBookingId(100);
@@ -235,7 +239,50 @@ class RefundExceptionServiceImplTest {
 
         BadRequestException ex = assertThrows(BadRequestException.class,
                 () -> service.submitRequest("customer@test.com", req));
-        assertTrue(ex.getMessage().contains("đã được hoàn tiền"));
+        assertTrue(ex.getMessage().contains("đã được hoàn tiền toàn bộ"));
+    }
+
+    @Test
+    @DisplayName("submitRequest: booking chỉ mới hoàn 50% (chưa đủ 100%) → vẫn gửi được (mục 2 QA)")
+    void submitRequest_partiallyRefunded50Percent_stillAllowed() {
+        // originalPayment 150000, mới hoàn -75000 (50%) -> chưa đủ 100%, vẫn cho xin ngoại lệ
+        Payment existingRefund = Payment.builder()
+                .paymentId(99).amount(new BigDecimal("-75000"))
+                .paymentStatus(TransactionStatus.SUCCESS)
+                .paidAt(LocalDateTime.now().minusHours(1))
+                .build();
+        when(userRepository.findByEmail("customer@test.com")).thenReturn(Optional.of(customer));
+        when(bookingRepository.findById(100)).thenReturn(Optional.of(cancelledBooking));
+        when(refundExceptionRepository.existsByBookingBookingIdAndStatusIn(anyInt(), anyList())).thenReturn(false);
+        when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(List.of(existingRefund));
+        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(successPayment));
+
+        SubmitExceptionRequest req = new SubmitExceptionRequest();
+        req.setBookingId(100);
+        req.setReason("Tôi bị tai nạn xe máy, không thể đến sân được, có ảnh bằng chứng.");
+
+        RefundExceptionResponse res = service.submitRequest("customer@test.com", req);
+
+        assertNotNull(res);
+        assertEquals(RefundExceptionStatus.PENDING_OWNER, res.getStatus());
+    }
+
+    @Test
+    @DisplayName("submitRequest: booking chưa từng thanh toán qua cổng (hủy cash-tại-sân) → BadRequestException")
+    void submitRequest_neverPaid_throwsBadRequest() {
+        when(userRepository.findByEmail("customer@test.com")).thenReturn(Optional.of(customer));
+        when(bookingRepository.findById(100)).thenReturn(Optional.of(cancelledBooking));
+        when(refundExceptionRepository.existsByBookingBookingIdAndStatusIn(anyInt(), anyList())).thenReturn(false);
+        when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(List.of());
+        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of());
+
+        SubmitExceptionRequest req = new SubmitExceptionRequest();
+        req.setBookingId(100);
+        req.setReason("Lý do dài hơn 20 ký tự để qua validation.");
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> service.submitRequest("customer@test.com", req));
+        assertTrue(ex.getMessage().contains("chưa từng thanh toán"));
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -342,6 +389,20 @@ class RefundExceptionServiceImplTest {
                 () -> service.customerEscalate("customer@test.com", 1));
     }
 
+    @Test
+    @DisplayName("customerEscalate: status APPROVED_OWNER (khách không hài lòng mức đã duyệt) → PENDING_ADMIN")
+    void customerEscalate_approvedOwner_success() {
+        RefundExceptionRequest request = buildRequest(RefundExceptionStatus.APPROVED_OWNER);
+        request.setRefundPercent(50);
+        when(refundExceptionRepository.findById(1)).thenReturn(Optional.of(request));
+        when(refundExceptionRepository.save(any())).thenReturn(request);
+        when(userRepository.findAllAdmins()).thenReturn(List.of());
+
+        service.customerEscalate("customer@test.com", 1);
+
+        assertEquals(RefundExceptionStatus.PENDING_ADMIN, request.getStatus());
+    }
+
     // ═══════════════════════════════════════════════════════════
     // adminDecide — gateway resilience
     // ═══════════════════════════════════════════════════════════
@@ -400,6 +461,39 @@ class RefundExceptionServiceImplTest {
         verify(transactionTemplate, atLeastOnce()).execute(any());
         // Status request giữ APPROVED_ADMIN (không rollback về PENDING_ADMIN)
         assertEquals(RefundExceptionStatus.APPROVED_ADMIN, request.getStatus());
+    }
+
+    @Test
+    @DisplayName("adminDecide: Owner đã duyệt 50% (đã hoàn thật), Admin duyệt 100% → chỉ hoàn phần CHÊNH LỆCH 50% còn lại")
+    void adminDecide_topUpAfterOwnerApproval_onlyRefundsRemainingDifference() {
+        RefundExceptionRequest request = buildRequest(RefundExceptionStatus.PENDING_ADMIN);
+        request.setRefundPercent(50); // mức Owner từng duyệt trước khi leo thang
+        when(refundExceptionRepository.findById(1)).thenReturn(Optional.of(request));
+        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(successPayment));
+
+        // Owner đã duyệt 50% và đã hoàn thành công 75000 trước đó (còn nằm trong payments table)
+        Payment ownerApprovedRefund = Payment.builder()
+                .paymentId(90).amount(new BigDecimal("-75000"))
+                .paymentStatus(TransactionStatus.SUCCESS).build();
+        when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(List.of(ownerApprovedRefund));
+
+        when(paymentRepository.save(any())).thenAnswer(inv -> {
+            Payment p = inv.getArgument(0);
+            return Payment.builder().paymentId(91).amount(p.getAmount())
+                    .paymentStatus(p.getPaymentStatus()).build();
+        });
+        when(paymentRepository.findById(91)).thenReturn(Optional.of(
+                Payment.builder().paymentId(91).paymentStatus(TransactionStatus.PENDING).build()));
+        when(bookingRepository.findById(100)).thenReturn(Optional.of(cancelledBooking));
+
+        AdminDecisionRequest req = new AdminDecisionRequest();
+        req.setApproved(true);
+        req.setRefundPercent(100); // Admin duyệt cao hơn mức Owner (50% -> 100%)
+
+        service.adminDecide("admin@test.com", 1, req);
+
+        // Desired = 150000 (100%), đã hoàn 75000 trước đó -> chỉ gọi gateway với phần còn lại 75000
+        verify(paymentService).processRefund(any(), eq(new BigDecimal("75000")), any());
     }
 
     // ═══════════════════════════════════════════════════════════

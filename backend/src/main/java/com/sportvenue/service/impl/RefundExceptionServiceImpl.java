@@ -93,11 +93,30 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
         if (refundExceptionRepository.existsByBookingBookingIdAndStatusIn(req.getBookingId(), ACTIVE_STATUSES)) {
             throw new BadRequestException("Đơn này đã có yêu cầu ngoại lệ đang được xử lý.");
         }
-        // 5. [Guard double-refund] Không được tồn tại khoản hoàn tiền có giá trị (PENDING/SUCCESS) trước đó
+        // 5. Phải từng có 1 giao dịch thanh toán THẬT qua cổng thanh toán — booking hủy thẳng khi
+        // đang chờ thu tiền mặt tại sân (AWAITING_CASH_PAYMENT/UNPAID) không tạo Payment SUCCESS
+        // nào, không có gì để hoàn nên không cho gửi yêu cầu (tránh crash ở bước trigger refund
+        // sau này khi Owner/Admin duyệt).
+        Payment originalPayment = paymentRepository.findSuccessPaymentsByBookingId(req.getBookingId())
+                .stream().findFirst().orElse(null);
+        if (originalPayment == null) {
+            throw new BadRequestException("Đơn này chưa từng thanh toán qua cổng thanh toán — không có gì để hoàn.");
+        }
+        // 5.5 Chặn đơn đặt cọc — Chỉ áp dụng yêu cầu ngoại lệ cho đơn thanh toán toàn bộ (100%)
+        BigDecimal totalPrice = booking.getTotalPrice() != null ? booking.getTotalPrice() : BigDecimal.ZERO;
+        BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
+        BigDecimal baseCourtPrice = totalPrice.subtract(serviceFee);
+        if (originalPayment.getAmount().compareTo(baseCourtPrice) < 0) {
+            throw new BadRequestException("Yêu cầu ngoại lệ không áp dụng cho đơn đặt cọc (chỉ áp dụng cho đơn thanh toán toàn bộ).");
+        }
+        // 6. [Guard] Chỉ áp dụng cho booking đã hoàn 0% hoặc một phần (vd 50%) — nếu đã hoàn ĐỦ
+        // 100% giá trị đã thanh toán (dù do tiering ≥24h hay do OWNER_FAULT) thì không còn gì để
+        // xin ngoại lệ thêm. So sánh với originalPayment.getAmount() thay vì chỉ kiểm tra "có
+        // hoàn hay không" — vì hoàn 50% vẫn hợp lệ để nộp yêu cầu, chỉ hoàn ĐỦ 100% mới chặn.
         existingRefund.ifPresent(refund -> {
             if (refund.getPaymentStatus() != TransactionStatus.FAILED
-                    && refund.getAmount().abs().compareTo(BigDecimal.ZERO) > 0) {
-                throw new BadRequestException("Booking đã được hoàn tiền một phần/toàn bộ — không đủ điều kiện xin ngoại lệ.");
+                    && refund.getAmount().abs().compareTo(originalPayment.getAmount()) >= 0) {
+                throw new BadRequestException("Booking đã được hoàn tiền toàn bộ — không đủ điều kiện xin ngoại lệ.");
             }
         });
 
@@ -181,23 +200,31 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
         if (!request.getCustomer().getEmail().equals(customerEmail)) {
             throw new ForbiddenException("Bạn không có quyền leo thang yêu cầu này.");
         }
-        if (request.getStatus() != RefundExceptionStatus.REJECTED_OWNER) {
-            throw new BadRequestException("Chỉ có thể leo thang khi Owner đã từ chối (status hiện tại=" + request.getStatus() + ").");
+        // Cho leo thang cả khi Owner đã CHẤP NHẬN (thường là 50%) nhưng khách chưa hài lòng,
+        // không chỉ khi bị từ chối hẳn — Admin xem xét lại, có thể duyệt thêm phần chênh lệch
+        // (xem createPendingRefundRecord: chỉ hoàn phần còn thiếu, không hoàn lại từ đầu).
+        if (request.getStatus() != RefundExceptionStatus.REJECTED_OWNER
+                && request.getStatus() != RefundExceptionStatus.APPROVED_OWNER) {
+            throw new BadRequestException("Chỉ có thể leo thang khi Owner đã từ chối hoặc đã chấp nhận một phần (status hiện tại=" + request.getStatus() + ").");
         }
         if (LocalDateTime.now().isAfter(request.getExpiresAt())) {
             throw new BadRequestException("Đã quá thời hạn 72h — không thể leo thang Admin.");
         }
 
+        boolean wasApproved = request.getStatus() == RefundExceptionStatus.APPROVED_OWNER;
         request.setStatus(RefundExceptionStatus.PENDING_ADMIN);
         refundExceptionRepository.save(request);
 
         // Notify Admin (tất cả admin)
+        String escalateContext = wasApproved
+                ? " sau khi không hài lòng với mức Owner đã chấp nhận (" + request.getRefundPercent() + "%)."
+                : " sau khi Owner từ chối.";
         userRepository.findAllAdmins().forEach(admin ->
                 notificationService.publishNotificationEvent(
                         admin.getUserId(),
                         "Yêu cầu ngoại lệ leo thang lên Admin",
                         "Khách " + request.getCustomer().getFullName()
-                                + " leo thang yêu cầu #" + requestId + " sau khi Owner từ chối.",
+                                + " leo thang yêu cầu #" + requestId + escalateContext,
                         NotificationType.BOOKING,
                         String.valueOf(requestId)
                 )
@@ -295,22 +322,46 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
      * lúc transaction vẫn mở). Đồng nhất với cách {@code executeGatewayRefund()} bên dưới làm.</p>
      */
     private Payment createPendingRefundRecord(RefundExceptionRequest request) {
+        Integer bookingId = request.getBooking().getBookingId();
         Payment originalPayment = paymentRepository
-                .findSuccessPaymentsByBookingId(request.getBooking().getBookingId())
+                .findSuccessPaymentsByBookingId(bookingId)
                 .stream().findFirst()
-                .orElseThrow(() -> new BadRequestException("Không tìm thấy giao dịch gốc cho booking #"
-                        + request.getBooking().getBookingId()));
+                .orElseThrow(() -> new BadRequestException("Không tìm thấy giao dịch gốc cho booking #" + bookingId));
 
-        BigDecimal refundAmount = originalPayment.getAmount()
+        BigDecimal serviceFee = request.getBooking().getServiceFee() != null ? request.getBooking().getServiceFee() : BigDecimal.ZERO;
+        BigDecimal baseAmount = originalPayment.getAmount().subtract(serviceFee);
+        if (baseAmount.compareTo(BigDecimal.ZERO) < 0) {
+            baseAmount = BigDecimal.ZERO;
+        }
+
+        BigDecimal desiredAmount = baseAmount
                 .multiply(BigDecimal.valueOf(request.getRefundPercent()))
                 .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP);
 
+        // Nếu request này từng được Owner duyệt 1 phần rồi khách leo thang lên Admin duyệt cao
+        // hơn (vd Owner 50% -> Admin 100%), chỉ hoàn phần CHÊNH LỆCH — không tính lại từ đầu để
+        // tránh trả tiền 2 lần cho cùng 1 khoản đã chi trước đó.
+        BigDecimal alreadyRefunded = paymentRepository.findRefundPaymentByBookingId(bookingId).stream()
+                .filter(p -> p.getPaymentStatus() == TransactionStatus.SUCCESS)
+                .map(p -> p.getAmount().abs())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal refundAmount = desiredAmount.subtract(alreadyRefunded);
+        if (refundAmount.compareTo(BigDecimal.ZERO) < 0) {
+            refundAmount = BigDecimal.ZERO;
+        }
+
+        String transactionCode = alreadyRefunded.compareTo(BigDecimal.ZERO) > 0
+                ? "EXC_RFND_TOPUP_" + request.getRequestId() + "_" + originalPayment.getTransactionCode()
+                : "EXC_RFND_" + originalPayment.getTransactionCode();
+
+        final BigDecimal finalRefundAmount = refundAmount;
         Payment saved = transactionTemplate.execute(status -> {
             Payment refundPayment = Payment.builder()
                     .booking(request.getBooking())
                     .paymentMethod(originalPayment.getPaymentMethod())
-                    .amount(refundAmount.negate())
-                    .transactionCode("EXC_RFND_" + originalPayment.getTransactionCode())
+                    .amount(finalRefundAmount.negate())
+                    .transactionCode(transactionCode)
                     .paymentStatus(TransactionStatus.PENDING)
                     .paidAt(LocalDateTime.now())
                     .reasonType(RefundReasonType.FORCE_MAJEURE)
@@ -318,8 +369,8 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
             return paymentRepository.save(refundPayment);
         });
 
-        log.info("[RefundException] Phase1: Created PENDING refund paymentId={} amount={} for requestId={}",
-                saved.getPaymentId(), refundAmount, request.getRequestId());
+        log.info("[RefundException] Phase1: Created PENDING refund paymentId={} amount={} (đã hoàn trước đó={}) for requestId={}",
+                saved.getPaymentId(), finalRefundAmount, alreadyRefunded, request.getRequestId());
         return saved;
     }
 
@@ -328,8 +379,8 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
      * Không có @Transactional bao ngoài — exception propagate về controller → client nhận 400.
      * Gateway lỗi: Payment=FAILED, request status giữ nguyên APPROVED_* → Admin có thể audit/retry.
      *
-     * <p>Chính sách phí dịch vụ FORCE_MAJEURE: hoàn refundPercent × originalPayment.getAmount()
-     * (bao gồm phí dịch vụ — giống OWNER_FAULT, vì bất khả kháng không phải lỗi của khách).</p>
+     * <p>Chính sách phí dịch vụ FORCE_MAJEURE: hoàn refundPercent × (originalPayment.getAmount() - serviceFee)
+     * (KHÔNG bao gồm phí dịch vụ, để giữ tính công bằng tài chính với Owner và đồng nhất với khách tự hủy standard).</p>
      */
     private void executeGatewayRefund(RefundExceptionRequest request, Payment pendingRefundPayment) {
         Payment originalPayment = paymentRepository
@@ -339,14 +390,21 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
 
         BigDecimal refundAmount = pendingRefundPayment.getAmount().abs();
 
-        boolean gatewaySuccess = false;
-        try {
-            paymentService.processRefund(originalPayment, refundAmount,
-                    "Ngoại lệ bất khả kháng — Yêu cầu #" + request.getRequestId());
+        boolean gatewaySuccess;
+        if (refundAmount.compareTo(BigDecimal.ZERO) == 0) {
+            // Top-up = 0đ (vd Admin duyệt đúng bằng % Owner đã duyệt trước) -> không có gì thêm
+            // để hoàn, không gọi gateway (gateway thật/mock đều từ chối yêu cầu hoàn 0đ).
             gatewaySuccess = true;
-        } catch (Exception e) {
-            log.error("[RefundException] Gateway failed for requestId={}, bookingId={}",
-                    request.getRequestId(), request.getBooking().getBookingId(), e);
+        } else {
+            gatewaySuccess = false;
+            try {
+                paymentService.processRefund(originalPayment, refundAmount,
+                        "Ngoại lệ bất khả kháng — Yêu cầu #" + request.getRequestId());
+                gatewaySuccess = true;
+            } catch (Exception e) {
+                log.error("[RefundException] Gateway failed for requestId={}, bookingId={}",
+                        request.getRequestId(), request.getBooking().getBookingId(), e);
+            }
         }
 
         final boolean success = gatewaySuccess;
@@ -407,7 +465,8 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
 
     private RefundExceptionResponse toResponse(RefundExceptionRequest r) {
         boolean expired = LocalDateTime.now().isAfter(r.getExpiresAt());
-        boolean canEscalate = r.getStatus() == RefundExceptionStatus.REJECTED_OWNER && !expired;
+        boolean canEscalate = (r.getStatus() == RefundExceptionStatus.REJECTED_OWNER
+                || (r.getStatus() == RefundExceptionStatus.APPROVED_OWNER && r.getRefundPercent() != null && r.getRefundPercent() < 100)) && !expired;
 
         String reservationDate = r.getBooking().getReservationDate() != null
                 ? r.getBooking().getReservationDate().toString() : null;

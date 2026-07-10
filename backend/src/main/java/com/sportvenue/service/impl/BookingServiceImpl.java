@@ -911,21 +911,42 @@ public class BookingServiceImpl implements BookingService {
             sportType = stadium.getSportType().getSportName();
         }
 
+        // Số tiền THỰC TẾ đã charge qua cổng — khác totalPrice khi là đơn đặt cọc (chỉ thu 30%),
+        // để FE hiển thị rõ "Đã đặt cọc: Xđ" thay vì chỉ ghi nhãn "Đặt cọc" mà không rõ số tiền.
+        BigDecimal paidAmount = paymentRepository.findSuccessPaymentsByBookingId(booking.getBookingId())
+                .stream().findFirst()
+                .map(Payment::getAmount)
+                .orElse(null);
+
         // Hiển thị số tiền/% thực tế đã hoàn cho khách theo dõi — trước đây chỉ có badge
         // "Đã hoàn tiền" chung chung, không rõ hoàn bao nhiêu (0%, 50%, hay 100%).
+        // Cộng dồn TẤT CẢ payment hoàn tiền SUCCESS (không chỉ lấy 1 dòng mới nhất) — vì luồng
+        // "Yêu cầu ngoại lệ" có thể tạo thêm payment hoàn bổ sung (top-up) sau lần hoàn gốc, lấy
+        // 1 dòng sẽ hiện thiếu số tiền thực đã nhận. % tính trên paidAmount (số tiền thực đã
+        // charge) chứ không phải totalPrice — vì đơn đặt cọc chỉ thu 30% totalPrice.
         BigDecimal refundedAmount = null;
         Integer refundPercent = null;
         if (booking.getPaymentStatus() == PaymentStatus.REFUNDED) {
-            Payment refundPayment = paymentRepository.findRefundPaymentByBookingId(booking.getBookingId())
-                    .stream().findFirst().orElse(null);
-            if (refundPayment != null) {
-                refundedAmount = refundPayment.getAmount().abs();
-                if (booking.getTotalPrice() != null && booking.getTotalPrice().compareTo(BigDecimal.ZERO) > 0) {
-                    refundPercent = refundedAmount
-                            .multiply(BigDecimal.valueOf(100))
-                            .divide(booking.getTotalPrice(), 0, RoundingMode.HALF_UP)
-                            .intValue();
-                }
+            refundedAmount = paymentRepository.findRefundPaymentByBookingId(booking.getBookingId()).stream()
+                    .filter(p -> p.getPaymentStatus() == TransactionStatus.SUCCESS)
+                    .map(p -> p.getAmount().abs())
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
+            BigDecimal baseRefundable = paidAmount != null ? paidAmount.subtract(serviceFee) : BigDecimal.ZERO;
+            if (baseRefundable.compareTo(BigDecimal.ZERO) < 0) {
+                baseRefundable = BigDecimal.ZERO;
+            }
+
+            if (baseRefundable.compareTo(BigDecimal.ZERO) > 0) {
+                refundPercent = refundedAmount
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(baseRefundable, 0, RoundingMode.HALF_UP)
+                        .intValue();
+            } else if (paidAmount != null && paidAmount.compareTo(BigDecimal.ZERO) > 0) {
+                refundPercent = refundedAmount
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(paidAmount, 0, RoundingMode.HALF_UP)
+                        .intValue();
             }
         }
 
@@ -949,6 +970,7 @@ public class BookingServiceImpl implements BookingService {
                         .build())
                 .totalPrice(booking.getTotalPrice())
                 .serviceFee(booking.getServiceFee())
+                .paidAmount(paidAmount)
                 .status(booking.getBookingStatus().name().toLowerCase())
                 .paymentStatus(booking.getPaymentStatus().name().toLowerCase())
                 .refundedAmount(refundedAmount)
