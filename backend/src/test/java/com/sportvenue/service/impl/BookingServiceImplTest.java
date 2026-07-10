@@ -1100,7 +1100,7 @@ class BookingServiceImplTest {
         org.mockito.Mockito.lenient().when(bookingRepository.findById(100)).thenReturn(Optional.of(booking));
         org.mockito.Mockito.lenient().when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
         org.mockito.Mockito.lenient().when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(successPayment));
-        org.mockito.Mockito.lenient().when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(Optional.empty());
+        org.mockito.Mockito.lenient().when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(List.of());
         org.mockito.Mockito.lenient().when(paymentRepository.save(any(com.sportvenue.entity.Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         BookingDetailResponse response = bookingService.cancelBooking(principal, 100, "I want to cancel");
@@ -1139,7 +1139,7 @@ class BookingServiceImplTest {
         org.mockito.Mockito.lenient().when(bookingRepository.findById(100)).thenReturn(Optional.of(booking));
         org.mockito.Mockito.lenient().when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
         org.mockito.Mockito.lenient().when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(successPayment));
-        org.mockito.Mockito.lenient().when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(Optional.empty());
+        org.mockito.Mockito.lenient().when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(List.of());
         org.mockito.Mockito.lenient().when(paymentRepository.save(any(com.sportvenue.entity.Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         BookingDetailResponse response = bookingService.cancelBooking(principal, 100, "Too late cancellation");

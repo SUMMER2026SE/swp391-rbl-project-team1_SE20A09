@@ -521,7 +521,7 @@ class RefundServiceTest {
         when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
         when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
         when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
-        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(Optional.empty());
+        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(List.of());
         when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
@@ -551,7 +551,7 @@ class RefundServiceTest {
         when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
         when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
         when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
-        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(Optional.empty());
+        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(List.of());
         when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
@@ -581,7 +581,7 @@ class RefundServiceTest {
         when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
         when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
         when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
-        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(Optional.empty());
+        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(List.of());
 
         // Act
         RefundResponse response = refundService.processRefund(1, request, "owner@example.com");
@@ -608,7 +608,7 @@ class RefundServiceTest {
         when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
         when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
         when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
-        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(Optional.empty());
+        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(List.of());
         when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
@@ -641,7 +641,7 @@ class RefundServiceTest {
         when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
         when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
         when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
-        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(Optional.empty());
+        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(List.of());
 
         // Act
         RefundResponse response = refundService.processRefund(1, request, "owner@example.com");
