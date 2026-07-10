@@ -6,6 +6,7 @@ import { ArrowLeft, Clock, Calendar, HelpCircle, ChevronRight, AlertCircle, Load
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/landing/Footer";
 import { get, put } from "@/lib/api";
@@ -58,8 +59,8 @@ export default function CustomerRefundExceptionsPage() {
       setLoading(true);
       const res = await get<PageResponse>(`/refund-exceptions/me?page=${page}&size=10`);
       setData(res);
-    } catch (err: any) {
-      setError(err.message || "Không thể tải danh sách yêu cầu ngoại lệ.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Không thể tải danh sách yêu cầu ngoại lệ.");
     } finally {
       setLoading(false);
     }
@@ -82,8 +83,8 @@ export default function CustomerRefundExceptionsPage() {
           content: data.content.map(item => item.requestId === requestId ? updated : item)
         });
       }
-    } catch (err: any) {
-      toast.error(err.message || "Không thể leo thang yêu cầu.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Không thể leo thang yêu cầu.");
     } finally {
       setEscalatingId(null);
     }
@@ -105,8 +106,25 @@ export default function CustomerRefundExceptionsPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <div className="space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <Card key={i} className="rounded-3xl border-none shadow-sm bg-white overflow-hidden">
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="space-y-2">
+                      <Skeleton className="h-3 w-32" />
+                      <Skeleton className="h-5 w-48" />
+                    </div>
+                    <Skeleton className="h-6 w-28 rounded-full" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2 border-y border-slate-100">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-4 w-40" />
+                  </div>
+                  <Skeleton className="h-16 w-full rounded-2xl" />
+                </CardContent>
+              </Card>
+            ))}
           </div>
         ) : error ? (
           <Card className="rounded-3xl border-none shadow-sm p-6 text-center space-y-4">

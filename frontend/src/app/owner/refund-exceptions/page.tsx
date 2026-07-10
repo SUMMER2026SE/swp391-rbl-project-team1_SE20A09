@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Loader2, AlertCircle, FileText, Check, X, Calendar, User, Info, Clock } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AlertCircle, FileText, Check, X, Calendar, User, Info, Clock } from "lucide-react";
 import { get, put } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -65,8 +66,8 @@ export default function OwnerRefundExceptionsPage() {
       const res = await get<PageResponse>(`/owner/refund-exceptions?page=${pageNumber}&size=10`);
       setData(res);
       setPage(pageNumber);
-    } catch (err: any) {
-      setError(err.message || "Không thể tải danh sách yêu cầu.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Không thể tải danh sách yêu cầu.");
     } finally {
       setLoading(false);
     }
@@ -98,8 +99,8 @@ export default function OwnerRefundExceptionsPage() {
       toast.success(approved ? "Đã duyệt chấp thuận yêu cầu hoàn tiền." : "Đã từ chối yêu cầu.");
       setSelectedRequest(null);
       fetchRequests(page);
-    } catch (err: any) {
-      toast.error(err.message || "Có lỗi xảy ra khi cập nhật yêu cầu.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Có lỗi xảy ra khi cập nhật yêu cầu.");
     } finally {
       setSubmitting(false);
     }
@@ -108,8 +109,26 @@ export default function OwnerRefundExceptionsPage() {
   return (
     <div className="space-y-6">
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <div className="space-y-4">
+          {[...Array(3)].map((_, i) => (
+            <Card key={i} className="rounded-3xl border-none shadow-sm bg-white overflow-hidden">
+              <CardContent className="p-6 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-40" />
+                    <Skeleton className="h-5 w-52" />
+                  </div>
+                  <Skeleton className="h-6 w-28 rounded-full" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 py-2 border-y border-slate-100">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+                <Skeleton className="h-24 w-full rounded-2xl" />
+              </CardContent>
+            </Card>
+          ))}
         </div>
       ) : error ? (
         <Card className="rounded-3xl border-none shadow-sm p-6 text-center space-y-4">

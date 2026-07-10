@@ -61,8 +61,8 @@ export function RefundExceptionDialog({
       toast.success("Gửi yêu cầu ngoại lệ thành công! Chủ sân sẽ phản hồi.");
       onSubmitSuccess?.();
       handleOpenChange(false);
-    } catch (err: any) {
-      const message = err?.message || "Không thể gửi yêu cầu, vui lòng thử lại sau";
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Không thể gửi yêu cầu, vui lòng thử lại sau";
       toast.error(message);
     } finally {
       setSubmitting(false);
