@@ -10,6 +10,9 @@ import com.sportvenue.repository.ComplaintRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.ComplaintEscalationService;
 import com.sportvenue.service.NotificationService;
+import com.sportvenue.service.EmailService;
+import com.sportvenue.util.AfterCommitExecutor;
+import com.sportvenue.exception.ForbiddenException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -27,6 +30,8 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
     private final ComplaintRepository complaintRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final EmailService emailService;
+    private final AfterCommitExecutor afterCommitExecutor;
     
     // SLA: Owner must respond within 24 hours
     private static final int OWNER_RESPONSE_SLA_HOURS = 24;
@@ -38,6 +43,14 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
     public void escalateToAdmin(Integer complaintId, String reason, String requestedByEmail) {
         Complaint complaint = complaintRepository.findById(complaintId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khiếu nại ID: " + complaintId));
+        
+        if (!"SYSTEM".equals(requestedByEmail) && 
+            !complaint.getUser().getEmail().equals(requestedByEmail) &&
+            !userRepository.findByEmail(requestedByEmail)
+                .map(u -> u.getRole() != null && "Admin".equals(u.getRole().getRoleName()))
+                .orElse(false)) {
+            throw new ForbiddenException("Bạn không có quyền chuyển khiếu nại này");
+        }
         
         if (complaint.getStatus() == ComplaintStatus.RESOLVED || 
             complaint.getStatus() == ComplaintStatus.ESCALATED) {
@@ -87,6 +100,13 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
             String.valueOf(complaint.getComplaintId())
         );
         
+        afterCommitExecutor.execute(() -> emailService.sendComplaintResolvedEmail(
+            complaint.getUser().getEmail(),
+            complaint.getUser().getFullName(),
+            complaint.getComplaintId(),
+            resolution
+        ));
+        
         log.info("Owner {} resolved complaint {}, starting 48h customer objection period", 
                 ownerEmail, complaintId);
     }
@@ -96,6 +116,10 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
     public void customerObjectToResolution(Integer complaintId, String objectionReason, String customerEmail) {
         Complaint complaint = complaintRepository.findById(complaintId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khiếu nại ID: " + complaintId));
+        
+        if (!complaint.getUser().getEmail().equals(customerEmail)) {
+            throw new ForbiddenException("Bạn không có quyền thao tác trên khiếu nại này");
+        }
         
         if (complaint.getStatus() != ComplaintStatus.PENDING_ADMIN_REVIEW) {
             throw new BadRequestException("Chỉ có thể phản đối trong thời gian chờ xem xét");
@@ -183,18 +207,22 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
                     LocalDateTime.now());
         
         for (Complaint complaint : pendingComplaints) {
-            complaint.setStatus(ComplaintStatus.RESOLVED);
-            complaintRepository.save(complaint);
-            
-            // Notify customer that deadline passed
-            notificationService.createNotification(
-                complaint.getUser().getUserId(),
-                "Khiếu nại đã được chấp nhận",
-                String.format("Khiếu nại #%d đã được tự động chấp nhận do hết thời hạn phản hồi", 
-                             complaint.getComplaintId()),
-                NotificationType.COMPLAINT,
-                String.valueOf(complaint.getComplaintId())
-            );
+            try {
+                complaint.setStatus(ComplaintStatus.RESOLVED);
+                complaintRepository.save(complaint);
+                
+                // Notify customer that deadline passed
+                notificationService.createNotification(
+                    complaint.getUser().getUserId(),
+                    "Khiếu nại đã được chấp nhận",
+                    String.format("Khiếu nại #%d đã được tự động chấp nhận do hết thời hạn phản hồi", 
+                                 complaint.getComplaintId()),
+                    NotificationType.COMPLAINT,
+                    String.valueOf(complaint.getComplaintId())
+                );
+            } catch (Exception e) {
+                log.error("Lỗi khi xử lý processCustomerResponseDeadlines cho khiếu nại {}: {}", complaint.getComplaintId(), e.getMessage());
+            }
         }
         
         if (!pendingComplaints.isEmpty()) {
@@ -215,13 +243,17 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
                     slaThreshold);
         
         for (Complaint complaint : violations) {
-            complaint.setSlaViolated(true);
-            complaintRepository.save(complaint);
-            
-            // Auto-escalate SLA violations
-            escalateToAdmin(complaint.getComplaintId(), 
-                          "Tự động escalate - vi phạm SLA " + OWNER_RESPONSE_SLA_HOURS + "h", 
-                          "SYSTEM");
+            try {
+                complaint.setSlaViolated(true);
+                complaintRepository.save(complaint);
+                
+                // Auto-escalate SLA violations
+                escalateToAdmin(complaint.getComplaintId(), 
+                              "Tự động escalate - vi phạm SLA " + OWNER_RESPONSE_SLA_HOURS + "h", 
+                              "SYSTEM");
+            } catch (Exception e) {
+                log.error("Lỗi khi xử lý checkSlaViolations cho khiếu nại {}: {}", complaint.getComplaintId(), e.getMessage());
+            }
         }
         
         if (!violations.isEmpty()) {
@@ -229,11 +261,4 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
         }
     }
     
-    @Override
-    @Transactional
-    public void processAutoEscalation() {
-        // This method can be expanded for other auto-escalation rules
-        checkSlaViolations();
-        processCustomerResponseDeadlines();
-    }
 }

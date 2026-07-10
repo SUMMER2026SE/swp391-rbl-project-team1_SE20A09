@@ -7,10 +7,6 @@ public interface ComplaintEscalationService {
      */
     void escalateToAdmin(Integer complaintId, String reason, String requestedByEmail);
     
-    /**
-     * Auto-escalate complaints that have been in PENDING_ADMIN_REVIEW too long
-     */
-    void processAutoEscalation();
     
     /**
      * Finalize complaints after 48h customer objection period expires
