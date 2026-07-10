@@ -15,6 +15,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.domain.Specification;
+
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.enums.BookingStatus;
 
@@ -25,7 +28,16 @@ import jakarta.persistence.LockModeType;
  * Stub — Hoàng và Lượng mở rộng thêm query khi cần.
  */
 @Repository
-public interface BookingRepository extends JpaRepository<Booking, Integer> {
+public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaSpecificationExecutor<Booking> {
+
+    @Override
+    @EntityGraph(attributePaths = {
+        "user", "slot", "stadium",
+        "stadium.owner", "stadium.owner.user",
+        "stadium.parentStadium", "stadium.parentStadium.complex", "stadium.parentStadium.complex.owner", "stadium.parentStadium.complex.owner.user",
+        "stadium.complex", "stadium.complex.owner", "stadium.complex.owner.user"
+    })
+    Page<Booking> findAll(Specification<Booking> spec, Pageable pageable);
 
     @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "slot"})
     @Query("SELECT b FROM Booking b WHERE b.bookingId = :id")
@@ -178,6 +190,77 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("from") java.time.LocalDate from,
             @Param("to") java.time.LocalDate to);
 
+    @Query("""
+            SELECT b.reservationDate AS date,
+                   COALESCE(SUM(
+                       CASE
+                           WHEN b.totalPrice > b.serviceFee THEN b.totalPrice - b.serviceFee
+                           ELSE 0
+                       END
+                   ), 0) AS revenue
+            FROM Booking b
+            JOIN b.stadium s
+            WHERE s.owner.user.email = :ownerEmail
+            AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId)
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
+            AND b.reservationDate BETWEEN :startDate AND :endDate
+            GROUP BY b.reservationDate
+            ORDER BY b.reservationDate ASC
+            """)
+    List<com.sportvenue.repository.projection.DailyRevenueProjection> getOwnerDailyNetRevenue(
+            @Param("ownerEmail") String ownerEmail,
+            @Param("stadiumId") Integer stadiumId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
+
+    @Query("""
+            SELECT s.stadiumId AS stadiumId,
+                   s.stadiumName AS stadiumName,
+                   COUNT(DISTINCT b.bookingId) AS totalBookings,
+                   COALESCE(SUM(
+                       CASE
+                           WHEN b.totalPrice > b.serviceFee THEN b.totalPrice - b.serviceFee
+                           ELSE 0
+                       END
+                   ), 0) AS totalRevenue
+            FROM Booking b
+            JOIN b.stadium s
+            WHERE s.owner.user.email = :ownerEmail
+            AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId)
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
+            AND b.reservationDate BETWEEN :startDate AND :endDate
+            GROUP BY s.stadiumId, s.stadiumName
+            ORDER BY COALESCE(SUM(
+                       CASE
+                           WHEN b.totalPrice > b.serviceFee THEN b.totalPrice - b.serviceFee
+                           ELSE 0
+                       END
+                   ), 0) DESC
+            """)
+    List<com.sportvenue.repository.projection.VenueRevenueProjection> getOwnerVenueNetRevenueBreakdown(
+            @Param("ownerEmail") String ownerEmail,
+            @Param("stadiumId") Integer stadiumId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
+
+    @Query("""
+            SELECT COALESCE(SUM(
+                CASE
+                    WHEN b.totalPrice > b.serviceFee THEN b.totalPrice - b.serviceFee
+                    ELSE 0
+                END
+            ), 0)
+            FROM Booking b
+            JOIN b.stadium s
+            WHERE s.owner.user.email = :ownerEmail
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
+            AND b.reservationDate BETWEEN :startDate AND :endDate
+            """)
+    BigDecimal sumOwnerCurrentMonthNetRevenue(
+            @Param("ownerEmail") String ownerEmail,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
+
     /** Đếm số lượng đặt sân theo trạng thái — dùng cho Dashboard. */
     long countByStadiumStadiumIdAndBookingStatus(Integer stadiumId, BookingStatus status);
 
@@ -197,9 +280,18 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("status") BookingStatus status,
             Pageable pageable);
 
-    /** Lấy danh sách đặt sân thuộc các sân mà Owner sở hữu. */
+    /** Lấy booking thuộc các sân của Owner, có phân trang và filter trạng thái. */
     @EntityGraph(attributePaths = {"user", "stadium", "slot"})
-    List<Booking> findByStadiumOwnerUserEmailOrderByBookingDateDesc(String email);
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.stadium.owner.user.email = :email
+            AND (:status IS NULL OR b.bookingStatus = :status)
+            ORDER BY b.bookingDate DESC
+            """)
+    Page<Booking> findByOwnerEmailAndStatus(
+            @Param("email") String email,
+            @Param("status") BookingStatus status,
+            Pageable pageable);
 
     /** Lấy danh sách đặt sân của tất cả các sân thuộc Owner có phân trang và filter status */
     @EntityGraph(attributePaths = {"user", "stadium", "stadium.sportType", "slot"})
@@ -355,6 +447,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             AND b.reservationDate BETWEEN :start AND :end
             AND b.bookingStatus IN :statuses
             """)
+    @EntityGraph(attributePaths = {"user", "slot"})
     List<Booking> findWeeklyBookings(
             @Param("stadiumId") Integer stadiumId,
             @Param("start") LocalDate start,
@@ -470,6 +563,49 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     List<Booking> findCompletedUnreviewedBookings(
             @Param("userId") Integer userId,
             @Param("stadiumId") Integer stadiumId);
+
+    /**
+     * Lấy các booking CONFIRMED có reservation_date <= hôm nay.
+     * Lọc thô theo ngày — scheduler sẽ lọc chính xác theo endTime ở Java.
+     *
+     * <p>Lý do không so sánh date+time trong JPQL: reservationDate là LocalDate,
+     * slot.endTime là LocalTime — không thể combine thành LocalDateTime trong JPQL.
+     *
+     * <p>Dùng bởi {@code BookingCompletionScheduler}.
+     */
+    @EntityGraph(attributePaths = {"slot"})
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED
+            AND b.reservationDate >= :limitDate
+            AND b.reservationDate <= :today
+            """)
+    List<Booking> findConfirmedPastPlayTime(
+            @Param("limitDate") java.time.LocalDate limitDate,
+            @Param("today") java.time.LocalDate today);
+
+    /**
+     * Lấy các booking CONFIRMED, chưa nhắc (reminderSentAt IS NULL),
+     * có reservation_date trong khoảng [startDate, endDate].
+     *
+     * <p>Query lọc thô theo ngày. Scheduler sẽ lọc chính xác theo startTime
+     * để đảm bảo chỉ nhắc booking trong đúng 24h tới.
+     *
+     * <p>endDate nên được tính là {@code now.plusHours(24).toLocalDate()} (không phải
+     * {@code now.plusDays(1)}) để tránh bỏ sót booking ở biên ngày.
+     *
+     * <p>Dùng bởi {@code BookingReminderScheduler}.
+     */
+    @EntityGraph(attributePaths = {"user", "stadium", "slot"})
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED
+            AND b.reminderSentAt IS NULL
+            AND b.reservationDate BETWEEN :startDate AND :endDate
+            """)
+    List<Booking> findUpcomingUnremindedBookings(
+            @Param("startDate") java.time.LocalDate startDate,
+            @Param("endDate") java.time.LocalDate endDate);
 }
 
 

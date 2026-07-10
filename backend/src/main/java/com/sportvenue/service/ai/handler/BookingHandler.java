@@ -1,19 +1,14 @@
 package com.sportvenue.service.ai.handler;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.sportvenue.dto.request.CreateBookingRequest;
 import com.sportvenue.dto.response.AiChatTurnResponse;
 import com.sportvenue.dto.response.DraftBookingResponse;
 import com.sportvenue.dto.response.TimeSlotResponse;
 import com.sportvenue.entity.Stadium;
-import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.StadiumNodeType;
 import com.sportvenue.entity.enums.StadiumStatus;
-import com.sportvenue.exception.BadRequestException;
-import com.sportvenue.exception.DuplicateResourceException;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.UserRepository;
-import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.BookingService;
 import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.ai.AiConversationContextService;
@@ -73,35 +68,11 @@ public class BookingHandler {
             return errorResponse("Chưa xác định được sân bạn muốn đặt. Bạn muốn đặt sân nào? (Vd: sân bóng đá Thủ Đức)");
         }
 
-        // Resolve stadiumId
-        Integer stadiumId = null;
-        if (args.hasNonNull("stadiumId")) {
-            stadiumId = args.get("stadiumId").asInt();
-        } else if (args.hasNonNull("targetIndex")) {
-            int targetIndex = args.get("targetIndex").asInt();
-            stadiumId = conversationContextService.resolveStadiumIdByIndex(conversationKey, targetIndex).orElse(null);
-            if (stadiumId == null) {
-                log.warn("Resolve context failed for stadiumId. conversationKey={}, targetIndex={}", conversationKey, targetIndex);
+        Integer stadiumId = resolveStadiumId(args, conversationKey);
+        if (stadiumId == null) {
+            if (args.hasNonNull("targetIndex") && conversationContextService.resolveStadiumIdByIndex(conversationKey, args.get("targetIndex").asInt()).isEmpty()) {
                 return systemBugResponse("Không thể xác định được sân từ lịch sử chat. Vui lòng chọn lại sân bạn muốn đặt.");
             }
-        } else if (args.hasNonNull("keyword")) {
-            String keyword = args.get("keyword").asText().toLowerCase();
-            List<Integer> lastShown = conversationContextService.getLastShownStadiumIds(conversationKey);
-            if (lastShown != null && !lastShown.isEmpty()) {
-                List<Stadium> recentStadiums = stadiumRepository.findAllById(lastShown);
-                stadiumId = recentStadiums.stream()
-                        .filter(s -> s.getStadiumName().toLowerCase().contains(keyword))
-                        .findFirst()
-                        .map(Stadium::getStadiumId)
-                        .orElse(null);
-            }
-        }
-        
-        if (stadiumId == null) {
-            stadiumId = conversationContextService.getCurrentStadiumId(conversationKey).orElse(null);
-        }
-
-        if (stadiumId == null) {
             return errorResponse("Chưa xác định được sân bạn muốn đặt. Bạn muốn đặt sân nào? (Vd: sân bóng đá Thủ Đức)");
         }
         if (stadiumId <= 0) {
@@ -133,77 +104,24 @@ public class BookingHandler {
         }
 
         // Resolve slot
-        TimeSlotResponse targetSlot = null;
         List<TimeSlotResponse> slots = bookingService.getSlotsByDate(stadiumId, requestedDate);
-
-        if (args.hasNonNull("slotId")) {
-            int sid = args.get("slotId").asInt();
-            targetSlot = slots.stream().filter(s -> s.getSlotId() != null && s.getSlotId() == sid).findFirst().orElse(null);
-        } else if (args.hasNonNull("slotIndex")) {
-            int slotIndex = args.get("slotIndex").asInt();
-            Integer resolvedId = conversationContextService.resolveSlotIdByIndex(conversationKey, slotIndex).orElse(null);
-            if (resolvedId != null) {
-                targetSlot = slots.stream().filter(s -> s.getSlotId() != null && s.getSlotId().equals(resolvedId)).findFirst().orElse(null);
-            } else {
-                log.warn("Resolve context failed for slotId. conversationKey={}, slotIndex={}", conversationKey, slotIndex);
-                return systemBugResponse("Không thể xác định được khung giờ từ lịch sử chat. Vui lòng hỏi lại giờ trống.");
-            }
-        } else if (args.hasNonNull("startTime")) {
-            try {
-                java.time.LocalTime targetStartTime = java.time.LocalTime.parse(args.get("startTime").asText());
-                targetSlot = slots.stream()
-                        .filter(s -> s.getStartTime() != null && s.getStartTime().equals(targetStartTime))
-                        .findFirst().orElse(null);
-            } catch (Exception e) {
-                log.warn("Invalid startTime format: {}", e.getMessage());
-            }
-        }
+        TimeSlotResponse targetSlot = resolveSlot(args, conversationKey, slots);
 
         if (targetSlot == null) {
+            if (args.hasNonNull("slotIndex") && conversationContextService.resolveSlotIdByIndex(conversationKey, args.get("slotIndex").asInt()).isEmpty()) {
+                return systemBugResponse("Không thể xác định được khung giờ từ lịch sử chat. Vui lòng hỏi lại giờ trống.");
+            }
             return errorResponse("Chưa xác định được khung giờ bạn muốn đặt. Bạn muốn đặt lúc mấy giờ? (Vd: 2h chiều thứ 7)");
         }
 
-        if (!Boolean.TRUE.equals(targetSlot.getAvailable())) {
-            // Filter current available slots for today
-            if (requestedDate.isEqual(LocalDate.now(clock))) {
-                java.time.LocalTime nowVietnam = java.time.LocalTime.now(clock);
-                slots = slots.stream().filter(s -> s.getStartTime() != null && s.getStartTime().isAfter(nowVietnam)).toList();
-            }
-            if (slots.stream().noneMatch(s -> Boolean.TRUE.equals(s.getAvailable()))) {
-                return AiChatTurnResponse.builder()
-                        .message("Sân này hiện đã kín lịch trong ngày " + requestedDate + ". Vui lòng chọn ngày khác.")
-                        .intent("get_slots")
-                        .slots(slots)
-                        .build();
-            } else {
-                conversationContextService.saveLastShownSlots(conversationKey, slots.stream().map(TimeSlotResponse::getSlotId).toList());
-                conversationContextService.saveCurrentStadiumId(conversationKey, stadiumId);
-                return AiChatTurnResponse.builder()
-                        .message("Khung giờ bạn chọn hiện không có sẵn hoặc đã có người đặt. Đây là các giờ còn trống trong ngày " + requestedDate + " để bạn chọn:")
-                        .intent("get_slots")
-                        .slots(slots)
-                        .build();
-            }
+        AiChatTurnResponse availabilityResponse = checkSlotAvailability(targetSlot, slots, requestedDate, conversationKey, stadiumId);
+        if (availabilityResponse != null) {
+            return availabilityResponse;
         }
 
-        // Check duplicate pending bookings for this user
-        List<com.sportvenue.entity.enums.BookingStatus> pendingStatuses = List.of(
-                com.sportvenue.entity.enums.BookingStatus.PENDING,
-                com.sportvenue.entity.enums.BookingStatus.PENDING_PAYMENT
-        );
-        List<com.sportvenue.entity.Booking> duplicateBookings = bookingRepository.findUserActiveBookingsForSlot(
-                userId, targetSlot.getSlotId(), requestedDate, pendingStatuses);
-
-        if (!duplicateBookings.isEmpty()) {
-            com.sportvenue.entity.Booking dup = duplicateBookings.get(0);
-            return AiChatTurnResponse.builder()
-                    .message(String.format(
-                            "Bạn đã có một đơn đặt sân (Mã: BK%06d) đang chờ thanh toán cho khung giờ này rồi. Bạn có muốn xem lại và thanh toán không?",
-                            dup.getBookingId()
-                    ))
-                    .intent("create_booking") // Giữ intent bình thường nhưng trả ID để render thẻ Booking thành công/chờ thanh toán
-                    .bookingId(dup.getBookingId())
-                    .build();
+        AiChatTurnResponse duplicateResponse = checkDuplicateBookings(userId, targetSlot.getSlotId(), requestedDate);
+        if (duplicateResponse != null) {
+            return duplicateResponse;
         }
 
         // Tạo Draft Booking thay vì gọi createBooking
@@ -233,6 +151,108 @@ public class BookingHandler {
             }
         }
         return LocalDate.now(clock);
+    }
+
+    private Integer resolveStadiumId(JsonNode args, String conversationKey) {
+        Integer stadiumId = null;
+        if (args.hasNonNull("stadiumId")) {
+            stadiumId = args.get("stadiumId").asInt();
+        } else if (args.hasNonNull("targetIndex")) {
+            int targetIndex = args.get("targetIndex").asInt();
+            stadiumId = conversationContextService.resolveStadiumIdByIndex(conversationKey, targetIndex).orElse(null);
+            if (stadiumId == null) {
+                log.warn("Resolve context failed for stadiumId. conversationKey={}, targetIndex={}", conversationKey, targetIndex);
+            }
+        } else if (args.hasNonNull("keyword")) {
+            String keyword = args.get("keyword").asText().toLowerCase();
+            List<Integer> lastShown = conversationContextService.getLastShownStadiumIds(conversationKey);
+            if (lastShown != null && !lastShown.isEmpty()) {
+                List<Stadium> recentStadiums = stadiumRepository.findAllById(lastShown);
+                stadiumId = recentStadiums.stream()
+                        .filter(s -> s.getStadiumName().toLowerCase().contains(keyword))
+                        .findFirst()
+                        .map(Stadium::getStadiumId)
+                        .orElse(null);
+            }
+        }
+        
+        if (stadiumId == null) {
+            stadiumId = conversationContextService.getCurrentStadiumId(conversationKey).orElse(null);
+        }
+        return stadiumId;
+    }
+
+    private TimeSlotResponse resolveSlot(JsonNode args, String conversationKey, List<TimeSlotResponse> slots) {
+        if (args.hasNonNull("slotId")) {
+            int sid = args.get("slotId").asInt();
+            return slots.stream().filter(s -> s.getSlotId() != null && s.getSlotId() == sid).findFirst().orElse(null);
+        } else if (args.hasNonNull("slotIndex")) {
+            int slotIndex = args.get("slotIndex").asInt();
+            Integer resolvedId = conversationContextService.resolveSlotIdByIndex(conversationKey, slotIndex).orElse(null);
+            if (resolvedId != null) {
+                return slots.stream().filter(s -> s.getSlotId() != null && s.getSlotId().equals(resolvedId)).findFirst().orElse(null);
+            } else {
+                log.warn("Resolve context failed for slotId. conversationKey={}, slotIndex={}", conversationKey, slotIndex);
+                return null;
+            }
+        } else if (args.hasNonNull("startTime")) {
+            try {
+                java.time.LocalTime targetStartTime = java.time.LocalTime.parse(args.get("startTime").asText());
+                return slots.stream()
+                        .filter(s -> s.getStartTime() != null && s.getStartTime().equals(targetStartTime))
+                        .findFirst().orElse(null);
+            } catch (Exception e) {
+                log.warn("Invalid startTime format: {}", e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    private AiChatTurnResponse checkSlotAvailability(TimeSlotResponse targetSlot, List<TimeSlotResponse> slots, LocalDate requestedDate, String conversationKey, Integer stadiumId) {
+        if (!Boolean.TRUE.equals(targetSlot.getAvailable())) {
+            if (requestedDate.isEqual(LocalDate.now(clock))) {
+                java.time.LocalTime nowVietnam = java.time.LocalTime.now(clock);
+                slots = slots.stream().filter(s -> s.getStartTime() != null && s.getStartTime().isAfter(nowVietnam)).toList();
+            }
+            if (slots.stream().noneMatch(s -> Boolean.TRUE.equals(s.getAvailable()))) {
+                return AiChatTurnResponse.builder()
+                        .message("Sân này hiện đã kín lịch trong ngày " + requestedDate + ". Vui lòng chọn ngày khác.")
+                        .intent("get_slots")
+                        .slots(slots)
+                        .build();
+            } else {
+                conversationContextService.saveLastShownSlots(conversationKey, slots.stream().map(TimeSlotResponse::getSlotId).toList());
+                conversationContextService.saveCurrentStadiumId(conversationKey, stadiumId);
+                return AiChatTurnResponse.builder()
+                        .message("Khung giờ bạn chọn hiện không có sẵn hoặc đã có người đặt. Đây là các giờ còn trống trong ngày " + requestedDate + " để bạn chọn:")
+                        .intent("get_slots")
+                        .slots(slots)
+                        .build();
+            }
+        }
+        return null;
+    }
+
+    private AiChatTurnResponse checkDuplicateBookings(Integer userId, Integer slotId, LocalDate requestedDate) {
+        List<com.sportvenue.entity.enums.BookingStatus> pendingStatuses = List.of(
+                com.sportvenue.entity.enums.BookingStatus.PENDING,
+                com.sportvenue.entity.enums.BookingStatus.PENDING_PAYMENT
+        );
+        List<com.sportvenue.entity.Booking> duplicateBookings = bookingRepository.findUserActiveBookingsForSlot(
+                userId, slotId, requestedDate, pendingStatuses);
+
+        if (!duplicateBookings.isEmpty()) {
+            com.sportvenue.entity.Booking dup = duplicateBookings.get(0);
+            return AiChatTurnResponse.builder()
+                    .message(String.format(
+                            "Bạn đã có một đơn đặt sân (Mã: BK%06d) đang chờ thanh toán cho khung giờ này rồi. Bạn có muốn xem lại và thanh toán không?",
+                            dup.getBookingId()
+                    ))
+                    .intent("create_booking")
+                    .bookingId(dup.getBookingId())
+                    .build();
+        }
+        return null;
     }
 
     private AiChatTurnResponse errorResponse(String message) {

@@ -14,6 +14,7 @@ import { type BookingHistoryItem } from "@/lib/bookings-api";
 import { CancelBookingDialog } from "@/components/bookings/CancelBookingDialog";
 
 const STATUS_CONFIG = {
+  pending_payment: { label: "Chờ thanh toán", className: "bg-orange-50 text-orange-700 border-orange-200" },
   confirmed: { label: "Đã xác nhận", className: "bg-green-50 text-green-700 border-green-200" },
   pending: { label: "Chờ xác nhận", className: "bg-amber-50 text-amber-700 border-amber-200" },
   completed: { label: "Hoàn thành", className: "bg-slate-50 text-slate-600 border-slate-200" },
@@ -42,6 +43,7 @@ function getActionButtons(
     : `/booking/${booking.id}`;
 
   switch (booking.status) {
+    case "pending_payment":
     case "pending":
     case "confirmed":
       return (

@@ -13,8 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertCircle, MessageSquare, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
+import { AlertCircle, MessageSquare, ChevronDown, ChevronUp, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { get, post } from "@/lib/api";
+import type { PageResponse } from "@/types/common";
 import { toast } from "sonner";
 import { useComplaintWebSocket, type ComplaintChatEvent } from "@/hooks/useComplaintWebSocket";
 
@@ -47,6 +48,8 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
   const [resolveText, setResolveText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showDetails, setShowDetails] = useState(true);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   useEffect(() => {
     if (selectedComplaint) {
@@ -77,16 +80,26 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
   const fetchComplaints = useCallback(async () => {
     try {
       const endpoint = isOwner ? "/owner/complaints" : "/complaints";
-      const data = await get<Complaint[] | { content: Complaint[] }>(endpoint);
-      const list = Array.isArray(data) ? data : data?.content;
+      const data = await get<PageResponse<Complaint>>(
+        `${endpoint}?page=${page}&size=10`
+      );
+      const list = data.content;
       if (list && Array.isArray(list)) {
         setComplaints(list);
+        setTotalPages(data.totalPages);
+        setSelectedComplaint(current => current
+          ? list.find(item => item.complaintId === current.complaintId) ?? null
+          : null);
       } else {
         setComplaints([]);
       }
     } catch (error) {
       console.error("Failed to load complaints", error);
     }
+  }, [isOwner, page]);
+
+  useEffect(() => {
+    setPage(0);
   }, [isOwner]);
 
   useEffect(() => {
@@ -141,6 +154,9 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
       open: { label: "Mới", className: "bg-yellow-50 text-yellow-700 border-yellow-200" },
       in_progress: { label: "Đang xử lý", className: "bg-blue-50 text-blue-700 border-blue-200" },
       resolved: { label: "Đã giải quyết", className: "bg-green-50 text-green-700 border-green-200" },
+      escalated: { label: "Đã chuyển Admin", className: "bg-purple-50 text-purple-700 border-purple-200" },
+      pending_admin_review: { label: "Chờ phản hồi", className: "bg-orange-50 text-orange-700 border-orange-200" },
+      customer_withdrawn: { label: "Đã rút", className: "bg-slate-50 text-slate-700 border-slate-200" },
     };
     const item = config[s as keyof typeof config] || { label: status, className: "bg-gray-50 text-gray-700 border-gray-200" };
     return <Badge variant="outline" className={item.className}>{item.label}</Badge>;
@@ -207,6 +223,30 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
             <p>{isOwner ? "Bạn chưa có khiếu nại nào từ khách hàng" : "Bạn chưa tạo khiếu nại nào"}</p>
           </CardContent>
         </Card>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setPage(current => Math.max(0, current - 1))}
+            disabled={page === 0}
+          >
+            <ChevronLeft className="mr-1 h-4 w-4" /> Trang trước
+          </Button>
+          <span className="text-sm text-muted-foreground">Trang {page + 1} / {totalPages}</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
+            disabled={page >= totalPages - 1}
+          >
+            Trang sau <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
+        </div>
       )}
 
       {/* Complaint Detail Dialog */}
@@ -307,7 +347,7 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
               )}
 
               {/* Reply / Resolve Actions (Fixed at the Bottom) */}
-              {activeComplaint.status !== "resolved" && (
+              {!["resolved", "customer_withdrawn"].includes(activeComplaint.status) && (
                 <div className="flex-shrink-0 pt-4 border-t space-y-4">
                   <div className="space-y-2">
                     <Label>Nhắn tin phản hồi</Label>
@@ -322,7 +362,7 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
                     </div>
                   </div>
 
-                  {isOwner && (
+                  {isOwner && ["open", "in_progress"].includes(activeComplaint.status) && (
                     <div className="space-y-2 pt-4 border-t">
                       <Label className="text-green-700 font-semibold">Đóng & Giải quyết khiếu nại</Label>
                       <div className="flex gap-2">

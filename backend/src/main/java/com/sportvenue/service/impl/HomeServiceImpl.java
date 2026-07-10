@@ -179,7 +179,7 @@ public class HomeServiceImpl implements HomeService {
                 String.valueOf(booking.getBookingId()),
                 booking.getStadium() != null ? booking.getStadium().getStadiumName() : "N/A",
                 toSportLabel(sportName),
-                booking.getStadium() != null ? booking.getStadium().getAddress() : "N/A",
+                booking.getStadium() != null ? StadiumUtils.resolveAddress(booking.getStadium()) : "N/A",
                 date,
                 time,
                 status,
@@ -206,7 +206,7 @@ public class HomeServiceImpl implements HomeService {
                 stadium.getPricePerHour(),
                 rating,
                 reviewCount,
-                stadium.getAddress(),
+                StadiumUtils.resolveAddress(stadium),
                 StadiumUtils.resolveImageUrl(stadium),
                 saved
         );

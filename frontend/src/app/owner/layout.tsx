@@ -14,8 +14,10 @@ import {
   TrendingUp,
   Menu,
   Calendar as CalendarIcon,
+  HelpCircle,
 } from "lucide-react";
 import { OwnerNotificationBell } from "@/components/notifications/OwnerNotificationBell";
+import { ChatBadge } from "@/components/chat/ChatBadge";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { useState } from "react";
@@ -34,6 +36,7 @@ export default function OwnerLayout({
     { href: "/owner/venues", label: "Sân của tôi", icon: BarChart3 },
     { href: "/owner/bookings", label: "Lịch đặt", icon: Calendar },
     { href: "/owner/revenue", label: "Doanh thu", icon: Wallet },
+    { href: "/owner/refund-exceptions", label: "Ngoại lệ hoàn tiền", icon: HelpCircle },
     { href: "/owner/complaints", label: "Khiếu nại", icon: AlertTriangle },
     { href: "/owner/notifications", label: "Thông báo", icon: Bell },
   ];
@@ -43,6 +46,7 @@ export default function OwnerLayout({
     if (path.startsWith("/owner/venues")) return { title: "Sân của tôi", subtitle: "Quản lý danh sách sân thể thao" };
     if (path.startsWith("/owner/bookings")) return { title: "Lịch đặt", subtitle: "Quản lý lịch đặt sân" };
     if (path.startsWith("/owner/revenue")) return { title: "Doanh thu", subtitle: "Thống kê doanh thu" };
+    if (path.startsWith("/owner/refund-exceptions")) return { title: "Ngoại lệ hoàn tiền", subtitle: "Duyệt yêu cầu hoàn tiền bất khả kháng" };
     if (path.startsWith("/owner/complaints")) return { title: "Khiếu nại", subtitle: "Quản lý khiếu nại khách hàng" };
     if (path.startsWith("/owner/notifications")) return { title: "Thông báo", subtitle: "Thông báo hệ thống" };
     return { title: "Chủ sân", subtitle: "Hệ thống SportsBook" };
@@ -132,6 +136,7 @@ export default function OwnerLayout({
             </div>
 
             <OwnerNotificationBell />
+            <ChatBadge userId={(session?.user as { userId?: number })?.userId} />
 
             <div className="h-8 w-px bg-slate-200 hidden md:block"></div>
 

@@ -100,6 +100,7 @@ export interface JoinRequestResponse {
   endTime?: string;
   hostName?: string;
   hostEmail?: string;
+  hostUserId?: number;
   matchStatus?: "OPEN" | "FULL" | "CANCELLED" | "COMPLETED";
   matchingType?: "INDIVIDUAL" | "TEAM_VS_TEAM";
   cancelReason?: string;

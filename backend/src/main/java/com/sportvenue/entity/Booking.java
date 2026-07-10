@@ -1,7 +1,12 @@
 package com.sportvenue.entity;
 
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.entity.enums.PaymentStatus;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -19,10 +24,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import java.io.Serializable;
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 /**
  * Entity ánh xạ bảng bookings.
@@ -67,6 +68,10 @@ public class Booking implements Serializable {
     /** Tổng tiền thanh toán (có thể tính sau khi áp dụng khuyến mãi). */
     @Column(name = "total_price", nullable = false, precision = 10, scale = 2)
     private BigDecimal totalPrice;
+
+    /** Phí dịch vụ nền tảng tại thời điểm tạo đơn. */
+    @Column(name = "service_fee", nullable = false, precision = 10, scale = 2)
+    private BigDecimal serviceFee;
 
     /** Trạng thái đơn đặt sân — cần Owner xác nhận. */
     @Enumerated(EnumType.STRING)
@@ -123,4 +128,12 @@ public class Booking implements Serializable {
      */
     @Column(name = "cancel_reason", length = 255)
     private String cancelReason;
+
+    /**
+     * Thời điểm đã gửi nhắc lịch chơi cho khách.
+     * NULL = chưa nhắc, NOT NULL = đã nhắc — chống duplicate notification.
+     * Được thêm bởi migration V5.11, dùng bởi {@code BookingReminderScheduler}.
+     */
+    @Column(name = "reminder_sent_at")
+    private LocalDateTime reminderSentAt;
 }

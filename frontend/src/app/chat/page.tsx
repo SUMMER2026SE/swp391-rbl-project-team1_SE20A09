@@ -116,8 +116,10 @@ function ChatPage() {
   const handleWsMessage = useCallback((msg: ChatMessageDto) => {
     // Intercept SYSTEM action messages
     if (msg.messageType === 'SYSTEM' && msg.content.includes('"action"')) {
+      let action: string | undefined
       try {
         const data = JSON.parse(msg.content)
+        action = data.action
         if (data.action === 'RECALL') {
           setRecalledMessages(prev => new Set(prev).add(data.messageId))
         } else if (data.action === 'REACT') {
@@ -134,7 +136,7 @@ function ChatPage() {
           setPinnedMessage(prev => prev?.messageId === data.messageId ? null : prev)
         }
       } catch {}
-      return // Do not add to visible messages
+      if (!action || !['stadium_referral', 'match_referral', 'booking_referral'].includes(action)) return
     }
 
     if (selectedConv && msg.conversationId === selectedConv.conversationId) {
@@ -236,7 +238,13 @@ function ChatPage() {
   }, [currentUserId])
 
   async function loadConversations() {
-    try { const data = await getConversations(); setConversations(data) } catch { }
+    try {
+      const data = await getConversations(); setConversations(data)
+      const requestedId = typeof window === 'undefined' ? 0
+        : Number(new URLSearchParams(window.location.search).get('conversationId'))
+      const requested = data.find(c => c.conversationId === requestedId)
+      if (requested) selectConversation(requested)
+    } catch { }
   }
 
   async function loadMessages(convId: number) {
@@ -259,6 +267,7 @@ function ChatPage() {
             if (parsed.action === 'REACT_REMOVE') delete reacts[parsed.messageId]
             if (parsed.action === 'PIN') pinnedMsg = { messageId: parsed.messageId, content: parsed.contentStr }
             if (parsed.action === 'UNPIN' && pinnedMsg?.messageId === parsed.messageId) pinnedMsg = null
+            if (['stadium_referral', 'match_referral', 'booking_referral'].includes(parsed.action)) validMessages.push(m)
           } catch {}
         } else {
           validMessages.push(m)
@@ -750,6 +759,23 @@ function ChatPage() {
                         }
                         
                         if (msg.messageType === 'SYSTEM') {
+                          let context: any = null
+                          try { context = JSON.parse(mainContent) } catch {}
+                          if (context?.action === 'stadium_referral' || context?.action === 'booking_referral' || context?.action === 'match_referral') {
+                            const title = context.stadiumName || context.title || 'Ngữ cảnh trao đổi'
+                            const detail = context.playDate
+                              ? `${context.playDate}${context.time ? ` · ${context.time}` : ''}`
+                              : context.sportName || 'Thông tin được chia sẻ từ hệ thống'
+                            return (
+                              <div key={msg.messageId} className="flex justify-center my-3">
+                                <div className="w-full max-w-sm rounded-xl border bg-emerald-50/70 p-3 shadow-sm">
+                                  <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Ngữ cảnh trao đổi</p>
+                                  <p className="mt-1 text-sm font-semibold text-slate-900">{title}</p>
+                                  <p className="text-xs text-slate-600">{detail}</p>
+                                </div>
+                              </div>
+                            )
+                          }
                           return (
                             <div key={msg.messageId} className="flex justify-center my-2 animate-fade-in-up">
                               <div className="bg-muted/50 px-4 py-1.5 rounded-full text-xs text-muted-foreground font-medium border shadow-sm">

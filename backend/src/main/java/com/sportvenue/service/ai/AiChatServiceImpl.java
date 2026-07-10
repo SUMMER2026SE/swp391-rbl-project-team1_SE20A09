@@ -94,47 +94,7 @@ public class AiChatServiceImpl implements AiChatService {
             intentResult = objectMapper.readValue(result.text(), ExtractedIntentResult.class);
             log.info("Intent nhận diện: '{}' -> '{}'", request.getMessage(), intentResult.getIntent());
 
-            // --- Lớp bảo vệ (Rule-based Intent Override) ---
-            String msgLower = request.getMessage().toLowerCase(Locale.ROOT);
-            
-            if ("search_stadiums".equals(intentResult.getIntent()) || "get_slots".equals(intentResult.getIntent())) {
-                boolean hasBookingAction = msgLower.contains("đặt") || msgLower.contains("book") || msgLower.contains("giữ chỗ");
-                boolean hasTime = msgLower.matches(".*\\d+(h|:).*") || msgLower.contains("giờ") || msgLower.contains("chiều") || msgLower.contains("sáng") || msgLower.contains("tối") || msgLower.contains("mai");
-
-                if (hasBookingAction && hasTime) {
-                    log.warn("Rule-based check: Ghi đè intent từ {} thành create_booking do phát hiện keyword đặt sân + thời gian.", intentResult.getIntent());
-                    intentResult.setIntent("create_booking");
-
-                    // Chuyển đổi params - giữ nguyên tất cả tham số cũ và map thêm các tham số đặc biệt
-                    com.fasterxml.jackson.databind.node.ObjectNode newParams = objectMapper.createObjectNode();
-                    if (intentResult.getParams() != null && intentResult.getParams().isObject()) {
-                        newParams.setAll((com.fasterxml.jackson.databind.node.ObjectNode) intentResult.getParams());
-                        // Map lại các trường nếu cần thiết để đảm bảo BookingHandler nhận diện được
-                        if (intentResult.getParams().hasNonNull("targetDate")) {
-                            newParams.put("date", intentResult.getParams().get("targetDate").asText());
-                        }
-                    }
-                    intentResult.setParams(newParams);
-                }
-            } else if ("find_match".equals(intentResult.getIntent())) {
-                boolean hasJoinAction = msgLower.contains("tham gia") || msgLower.contains("xin slot") || msgLower.contains("cho vô") || msgLower.contains("đăng ký");
-                boolean hasTarget = msgLower.matches(".*(kèo|số)\\s*\\d+.*") || msgLower.contains("đầu tiên") || msgLower.contains("kèo đầu") || msgLower.contains("kèo trên");
-                
-                if (hasJoinAction && hasTarget) {
-                    log.warn("Rule-based check: Ghi đè intent từ {} thành join_match do phát hiện keyword tham gia + mục tiêu.", intentResult.getIntent());
-                    intentResult.setIntent("join_match");
-                    
-                    com.fasterxml.jackson.databind.node.ObjectNode newParams = objectMapper.createObjectNode();
-                    if (msgLower.contains("đầu") || msgLower.contains("1")) {
-                        newParams.put("matchIndex", 0);
-                    } else if (msgLower.contains("2")) {
-                        newParams.put("matchIndex", 1);
-                    } else if (msgLower.contains("3")) {
-                        newParams.put("matchIndex", 2);
-                    }
-                    intentResult.setParams(newParams);
-                }
-            }
+            applyRuleBasedOverrides(intentResult, request.getMessage());
 
         } catch (Exception e) {
             log.warn("Không parse được JSON intent từ Groq, dùng fallback unknown", e);
@@ -179,6 +139,47 @@ public class AiChatServiceImpl implements AiChatService {
                     AiChatTurnResponse.messageOnly(message.isBlank() ? FALLBACK_MESSAGE : message, intent);
             default -> AiChatTurnResponse.messageOnly(FALLBACK_MESSAGE, "unknown");
         };
+    }
+
+    private void applyRuleBasedOverrides(ExtractedIntentResult intentResult, String message) {
+        String msgLower = message.toLowerCase(Locale.ROOT);
+        
+        if ("search_stadiums".equals(intentResult.getIntent()) || "get_slots".equals(intentResult.getIntent())) {
+            boolean hasBookingAction = msgLower.contains("đặt") || msgLower.contains("book") || msgLower.contains("giữ chỗ");
+            boolean hasTime = msgLower.matches(".*\\d+(h|:).*") || msgLower.contains("giờ") || msgLower.contains("chiều") || msgLower.contains("sáng") || msgLower.contains("tối") || msgLower.contains("mai");
+
+            if (hasBookingAction && hasTime) {
+                log.warn("Rule-based check: Ghi đè intent từ {} thành create_booking do phát hiện keyword đặt sân + thời gian.", intentResult.getIntent());
+                intentResult.setIntent("create_booking");
+
+                com.fasterxml.jackson.databind.node.ObjectNode newParams = objectMapper.createObjectNode();
+                if (intentResult.getParams() != null && intentResult.getParams().isObject()) {
+                    newParams.setAll((com.fasterxml.jackson.databind.node.ObjectNode) intentResult.getParams());
+                    if (intentResult.getParams().hasNonNull("targetDate")) {
+                        newParams.put("date", intentResult.getParams().get("targetDate").asText());
+                    }
+                }
+                intentResult.setParams(newParams);
+            }
+        } else if ("find_match".equals(intentResult.getIntent())) {
+            boolean hasJoinAction = msgLower.contains("tham gia") || msgLower.contains("xin slot") || msgLower.contains("cho vô") || msgLower.contains("đăng ký");
+            boolean hasTarget = msgLower.matches(".*(kèo|số)\\s*\\d+.*") || msgLower.contains("đầu tiên") || msgLower.contains("kèo đầu") || msgLower.contains("kèo trên");
+            
+            if (hasJoinAction && hasTarget) {
+                log.warn("Rule-based check: Ghi đè intent từ {} thành join_match do phát hiện keyword tham gia + mục tiêu.", intentResult.getIntent());
+                intentResult.setIntent("join_match");
+                
+                com.fasterxml.jackson.databind.node.ObjectNode newParams = objectMapper.createObjectNode();
+                if (msgLower.contains("đầu") || msgLower.contains("1")) {
+                    newParams.put("matchIndex", 0);
+                } else if (msgLower.contains("2")) {
+                    newParams.put("matchIndex", 1);
+                } else if (msgLower.contains("3")) {
+                    newParams.put("matchIndex", 2);
+                }
+                intentResult.setParams(newParams);
+            }
+        }
     }
 
     private List<GroqClient.ChatMessage> toGroqHistory(List<AiChatTurnRequest.ChatMessage> history) {

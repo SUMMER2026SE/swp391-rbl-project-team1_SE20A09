@@ -10,7 +10,7 @@ export type BookingHistoryItem = {
   time: string;
   location: string;
   price: number;
-  status: "pending" | "confirmed" | "completed" | "cancelled";
+  status: "pending" | "pending_payment" | "confirmed" | "completed" | "cancelled";
 };
 
 /** Cấu trúc PageResponse trả về từ backend */
@@ -133,10 +133,19 @@ export type BookingDetailItem = {
   endTime: string;
   address: string;
   totalPrice: number;
+  /** Phí dịch vụ đã gồm trong totalPrice — 0 nếu backend cũ chưa trả field này. */
+  serviceFee: number;
+  /** Số tiền THỰC TẾ đã charge qua cổng — bằng 30% totalPrice nếu là đơn đặt cọc. Null nếu chưa thanh toán. */
+  paidAmount: number | null;
   status: "pending" | "pending_payment" | "confirmed" | "completed" | "cancelled";
   paymentStatus: string;
+  /** Số tiền thực tế đã hoàn — null nếu paymentStatus khác "refunded". */
+  refundedAmount: number | null;
+  /** % hoàn tương ứng refundedAmount — null nếu chưa hoàn. */
+  refundPercent: number | null;
   createdAt: string;
   note: string | null;
+  ownerUserId?: number;
 };
 
 export async function fetchBookingDetail(id: string | number): Promise<BookingDetailItem> {
@@ -153,10 +162,15 @@ export async function fetchBookingDetail(id: string | number): Promise<BookingDe
     endTime: data.slot?.endTime || "Chưa rõ",
     address: data.stadium?.address || "Chưa rõ",
     totalPrice: typeof data.totalPrice === "number" ? data.totalPrice : Number(data.totalPrice),
+    serviceFee: typeof data.serviceFee === "number" ? data.serviceFee : Number(data.serviceFee) || 0,
+    paidAmount: typeof data.paidAmount === "number" ? data.paidAmount : (data.paidAmount != null ? Number(data.paidAmount) : null),
     status: data.status,
     paymentStatus: data.paymentStatus,
+    refundedAmount: typeof data.refundedAmount === "number" ? data.refundedAmount : (data.refundedAmount != null ? Number(data.refundedAmount) : null),
+    refundPercent: typeof data.refundPercent === "number" ? data.refundPercent : (data.refundPercent != null ? Number(data.refundPercent) : null),
     createdAt: data.createdAt || "Chưa rõ",
     note: data.note || null,
+    ownerUserId: data.stadium?.ownerUserId,
   };
 }
 
@@ -226,7 +240,7 @@ export async function getSlotsByDate(
 // ── UC-CUS-01: Weekly schedule ──────────────────────────────────────────────
 
 /** Trạng thái của một slot trong weekly grid. */
-export type WeeklySlotStatus = "AVAILABLE" | "BOOKED" | "PAST" | "OWNER_CLOSED" | "MAINTENANCE";
+export type WeeklySlotStatus = "AVAILABLE" | "HELD" | "BOOKED" | "PAST" | "OWNER_CLOSED" | "MAINTENANCE";
 
 /** Một khung giờ của sân trong weekly grid — kèm trạng thái cho một ngày cụ thể. */
 export type WeeklySlotItem = {
@@ -237,6 +251,11 @@ export type WeeklySlotItem = {
   endTime: string;
   price: number;
   status: WeeklySlotStatus;
+  /** ISO local date-time; present while payment temporarily holds the slot. */
+  heldUntil?: string | null;
+  bookingId?: number;
+  customerId?: number;
+  customerDisplayName?: string;
 };
 
 /** Một ngày trong weekly grid — kèm tên thứ tiếng Việt. */
@@ -279,6 +298,12 @@ export async function getWeeklySlots(
   return res.data;
 }
 
+export async function getOwnerWeeklySlots(stadiumId: number, weekStart: string): Promise<WeeklySlotsResponse> {
+  return get<WeeklySlotsResponse>(
+    `/owner/bookings/stadiums/${stadiumId}/weekly-slots?weekStart=${encodeURIComponent(weekStart)}`
+  );
+}
+
 /**
  * Tạo đơn đặt sân đơn lẻ — POST /api/v1/bookings.
  * Trả 409 nếu slot đã bị đặt active trên cùng ngày; 400 nếu đã qua giờ.
@@ -301,13 +326,16 @@ export type BookingDetailResponse = CreateBookingResponse;
 
 /**
  * Hủy một đơn đặt sân — PUT /api/v1/bookings/{bookingId}/cancel.
- * Customer (chủ booking) hoặc Owner (chủ sân) đều có thể gọi.
+ * Customer (chủ booking) luôn gọi được. Owner (chủ sân) CHỈ gọi được khi booking
+ * chưa thu tiền thật (paymentStatus khác paid/deposited, vd đang awaiting_cash_payment) —
+ * booking đã thanh toán phải hủy qua trang Owner "Hoàn tiền" (processRefund) để áp dụng
+ * đúng chính sách hoàn tiền theo giờ, không né được qua endpoint này nữa.
  *
  * @param bookingId id của booking cần hủy.
  * @param reason   lý do hủy (tùy chọn, tối đa 255 ký tự — server validate).
  * @returns booking detail sau khi hủy (status=CANCELLED, cancelReason đã lưu).
  * @throws Error với message từ BE nếu booking không tồn tại / không có quyền /
- *         đang ở trạng thái COMPLETED hoặc CANCELLED.
+ *         đang ở trạng thái COMPLETED hoặc CANCELLED / Owner cố hủy booking đã thanh toán.
  */
 export async function cancelBooking(
   bookingId: number,
@@ -317,5 +345,26 @@ export async function cancelBooking(
     `/bookings/${bookingId}/cancel`,
     { reason: reason || null }
   );
+}
+
+export type RefundPreviewResponse = {
+  bookingId: number;
+  stadiumName: string;
+  customerName: string;
+  playTime: string;
+  originalPrice: number;
+  refundAmount: number;
+  refundPercentage: number;
+  bookingStatus: string;
+  paymentStatus: string;
+  processedAt: string;
+  reason: string;
+};
+
+/**
+ * Lấy thông tin xem trước hoàn tiền cho customer.
+ */
+export async function previewRefund(bookingId: number): Promise<RefundPreviewResponse> {
+  return get<RefundPreviewResponse>(`/bookings/${bookingId}/refund-preview`);
 }
 

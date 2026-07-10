@@ -2,7 +2,6 @@ package com.sportvenue.service;
 
 import com.sportvenue.dto.response.RevenueReportResponse;
 import com.sportvenue.dto.response.VenueRevenueDto;
-import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.projection.DailyRevenueProjection;
@@ -29,9 +28,6 @@ import static org.mockito.ArgumentMatchers.eq;
 class RevenueServiceImplTest {
 
     @Mock
-    private PaymentRepository paymentRepository;
-
-    @Mock
     private BookingRepository bookingRepository;
 
     @Mock
@@ -41,7 +37,7 @@ class RevenueServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        revenueService = new RevenueServiceImpl(paymentRepository, bookingRepository, stadiumRepository);
+        revenueService = new RevenueServiceImpl(bookingRepository, stadiumRepository);
     }
 
     @Test
@@ -59,7 +55,8 @@ class RevenueServiceImplTest {
         when(d2.getDate()).thenReturn(LocalDate.of(2026, 6, 2));
         when(d2.getRevenue()).thenReturn(BigDecimal.valueOf(1000000));
 
-        when(paymentRepository.getDailyRevenue(ownerEmail, null, startDate, endDate))
+        when(bookingRepository.getOwnerDailyNetRevenue(eq(ownerEmail), eq(null),
+                eq(startDate.toLocalDate()), eq(endDate.toLocalDate())))
                 .thenReturn(List.of(d1, d2));
 
         // Venue breakdown projections
@@ -69,7 +66,8 @@ class RevenueServiceImplTest {
         when(v1.getTotalBookings()).thenReturn(10L);
         when(v1.getTotalRevenue()).thenReturn(BigDecimal.valueOf(1500000));
 
-        when(paymentRepository.getVenueRevenueBreakdown(ownerEmail, null, startDate, endDate))
+        when(bookingRepository.getOwnerVenueNetRevenueBreakdown(eq(ownerEmail), eq(null),
+                eq(startDate.toLocalDate()), eq(endDate.toLocalDate())))
                 .thenReturn(List.of(v1));
 
         // Previous period projections (2 days earlier: May 30 to May 31)
@@ -79,7 +77,8 @@ class RevenueServiceImplTest {
         when(prevV1.getStadiumId()).thenReturn(1);
         when(prevV1.getTotalRevenue()).thenReturn(BigDecimal.valueOf(1000000));
 
-        when(paymentRepository.getVenueRevenueBreakdown(ownerEmail, null, prevStart, prevEnd))
+        when(bookingRepository.getOwnerVenueNetRevenueBreakdown(eq(ownerEmail), eq(null),
+                eq(prevStart.toLocalDate()), eq(prevEnd.toLocalDate())))
                 .thenReturn(List.of(prevV1));
 
         // Execute
@@ -139,7 +138,8 @@ class RevenueServiceImplTest {
         DailyRevenueProjection d1 = Mockito.mock(DailyRevenueProjection.class);
         when(d1.getDate()).thenReturn(LocalDate.of(2026, 6, 1));
         when(d1.getRevenue()).thenReturn(BigDecimal.valueOf(500000));
-        when(paymentRepository.getDailyRevenue(ownerEmail, null, startDate, endDate))
+        when(bookingRepository.getOwnerDailyNetRevenue(eq(ownerEmail), eq(null),
+                eq(startDate.toLocalDate()), eq(endDate.toLocalDate())))
                 .thenReturn(List.of(d1));
 
         // Venue breakdown projections
@@ -148,13 +148,15 @@ class RevenueServiceImplTest {
         when(v1.getStadiumName()).thenReturn("Stadium A");
         when(v1.getTotalBookings()).thenReturn(5L);
         when(v1.getTotalRevenue()).thenReturn(BigDecimal.valueOf(500000));
-        when(paymentRepository.getVenueRevenueBreakdown(ownerEmail, null, startDate, endDate))
+        when(bookingRepository.getOwnerVenueNetRevenueBreakdown(eq(ownerEmail), eq(null),
+                eq(startDate.toLocalDate()), eq(endDate.toLocalDate())))
                 .thenReturn(List.of(v1));
 
         // Previous period projections return zero revenue or empty
         LocalDateTime prevStart = startDate.minusDays(2);
         LocalDateTime prevEnd = endDate.minusDays(2);
-        when(paymentRepository.getVenueRevenueBreakdown(ownerEmail, null, prevStart, prevEnd))
+        when(bookingRepository.getOwnerVenueNetRevenueBreakdown(eq(ownerEmail), eq(null),
+                eq(prevStart.toLocalDate()), eq(prevEnd.toLocalDate())))
                 .thenReturn(List.of()); // Returns no projections, mapping defaults previous revenue to zero
 
         // Execute
@@ -175,7 +177,8 @@ class RevenueServiceImplTest {
                 .thenReturn(5L);
 
         // Mock current month revenue
-        when(paymentRepository.sumCurrentMonthRevenue(eq(ownerEmail), any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(bookingRepository.sumOwnerCurrentMonthNetRevenue(
+                eq(ownerEmail), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(BigDecimal.valueOf(10000000));
 
         // Mock pending bookings count

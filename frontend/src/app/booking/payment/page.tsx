@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { CreditCard, Banknote, Shield, Clock } from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
+import { calculatePlatformFee } from "@/lib/utils";
 import { createBooking } from "@/lib/bookings-api";
 
 interface BookingSummary {
@@ -160,7 +161,7 @@ function PaymentContent() {
 
   // Default fallback if session data is missing
   const activeSummary = summary;
-  const platformFee = 20000;
+  const platformFee = activeSummary ? calculatePlatformFee(activeSummary.venuePrice) : 0;
 
   if (!activeSummary) {
     return (

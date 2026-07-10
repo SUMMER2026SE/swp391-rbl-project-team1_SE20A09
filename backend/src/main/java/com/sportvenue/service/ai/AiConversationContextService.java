@@ -41,40 +41,52 @@ public class AiConversationContextService {
     }
 
     public void saveLastShownStadiums(String conversationKey, List<Integer> stadiumIds) {
-        if (conversationKey == null || stadiumIds == null || stadiumIds.isEmpty()) return;
+        if (conversationKey == null || stadiumIds == null || stadiumIds.isEmpty()) {
+            return;
+        }
         ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
         ctx.setLastShownStadiumIds(stadiumIds);
         save(conversationKey, ctx);
     }
 
     public void saveLastShownMatches(String conversationKey, List<Integer> matchIds) {
-        if (conversationKey == null || matchIds == null || matchIds.isEmpty()) return;
+        if (conversationKey == null || matchIds == null || matchIds.isEmpty()) {
+            return;
+        }
         ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
         ctx.setLastShownMatchIds(matchIds);
         save(conversationKey, ctx);
     }
 
     public void saveLastShownSlots(String conversationKey, List<Integer> slotIds) {
-        if (conversationKey == null || slotIds == null || slotIds.isEmpty()) return;
+        if (conversationKey == null || slotIds == null || slotIds.isEmpty()) {
+            return;
+        }
         ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
         ctx.setLastShownSlotIds(slotIds);
         save(conversationKey, ctx);
     }
 
     public void saveCurrentStadiumId(String conversationKey, Integer stadiumId) {
-        if (conversationKey == null || stadiumId == null) return;
+        if (conversationKey == null || stadiumId == null) {
+            return;
+        }
         ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
         ctx.setCurrentStadiumId(stadiumId);
         save(conversationKey, ctx);
     }
 
     public Optional<Integer> getCurrentStadiumId(String conversationKey) {
-        if (conversationKey == null) return Optional.empty();
+        if (conversationKey == null) {
+            return Optional.empty();
+        }
         return load(conversationKey).map(ConversationContext::getCurrentStadiumId);
     }
 
     public Optional<Integer> resolveStadiumIdByIndex(String conversationKey, int targetIndex) {
-        if (conversationKey == null) return Optional.empty();
+        if (conversationKey == null) {
+            return Optional.empty();
+        }
         return load(conversationKey)
                 .map(ConversationContext::getLastShownStadiumIds)
                 .filter(ids -> ids != null && targetIndex >= 0 && targetIndex < ids.size())
@@ -82,12 +94,16 @@ public class AiConversationContextService {
     }
 
     public List<Integer> getLastShownStadiumIds(String conversationKey) {
-        if (conversationKey == null) return null;
+        if (conversationKey == null) {
+            return null;
+        }
         return load(conversationKey).map(ConversationContext::getLastShownStadiumIds).orElse(null);
     }
 
     public Optional<Integer> resolveMatchIdByIndex(String conversationKey, int matchIndex) {
-        if (conversationKey == null) return Optional.empty();
+        if (conversationKey == null) {
+            return Optional.empty();
+        }
         return load(conversationKey)
                 .map(ConversationContext::getLastShownMatchIds)
                 .filter(ids -> ids != null && matchIndex >= 0 && matchIndex < ids.size())
@@ -95,7 +111,9 @@ public class AiConversationContextService {
     }
 
     public Optional<Integer> resolveSlotIdByIndex(String conversationKey, int slotIndex) {
-        if (conversationKey == null) return Optional.empty();
+        if (conversationKey == null) {
+            return Optional.empty();
+        }
         return load(conversationKey)
                 .map(ConversationContext::getLastShownSlotIds)
                 .filter(ids -> ids != null && slotIndex >= 0 && slotIndex < ids.size())
@@ -114,7 +132,9 @@ public class AiConversationContextService {
     private Optional<ConversationContext> load(String conversationKey) {
         try {
             String json = redisTemplate.opsForValue().get(KEY_PREFIX + conversationKey);
-            if (json == null) return Optional.empty();
+            if (json == null) {
+                return Optional.empty();
+            }
             return Optional.ofNullable(objectMapper.readValue(json, ConversationContext.class));
         } catch (Exception e) {
             log.warn("Không đọc được context (hoặc sai schema cũ), reset context: {}", e.getMessage());

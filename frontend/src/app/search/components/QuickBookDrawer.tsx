@@ -73,7 +73,10 @@ function getNext7Days() {
   for (let i = 0; i < 7; i++) {
     const d = new Date()
     d.setDate(d.getDate() + i)
-    const iso = d.toISOString().split('T')[0]
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const iso = `${year}-${month}-${day}`
     const label = d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' })
     const dayName =
       i === 0
@@ -147,11 +150,16 @@ interface DrawerState {
   pricePerHour: number | null
 }
 
+const today = new Date()
+const currentYear = today.getFullYear()
+const currentMonth = String(today.getMonth() + 1).padStart(2, '0')
+const currentDay = String(today.getDate()).padStart(2, '0')
+
 const INITIAL_STATE: DrawerState = {
   step: 1,
   selectedCourtId: null,
   selectedCourtName: '',
-  selectedDate: new Date().toISOString().split('T')[0],
+  selectedDate: `${currentYear}-${currentMonth}-${currentDay}`,
   selectedSlotId: null,
   selectedSlotLabel: '',
   pricePerHour: null,

@@ -3,8 +3,11 @@ package com.sportvenue.service;
 import com.sportvenue.dto.request.RefundRequest;
 import com.sportvenue.dto.response.OwnerBookingResponse;
 import com.sportvenue.dto.response.RefundResponse;
+import com.sportvenue.entity.enums.BookingStatus;
+import com.sportvenue.entity.enums.RefundReasonType;
 
-import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 public interface RefundService {
     
@@ -22,10 +25,20 @@ public interface RefundService {
      * Xem trước số tiền hoàn lại trước khi xác nhận hủy sân (Owner).
      *
      * @param bookingId ID của đơn đặt sân cần xem trước hoàn tiền
+     * @param reasonType Nguyên nhân hoàn tiền (Khách yêu cầu hay do sự cố sân)
      * @param ownerEmail Email của Owner đang thực hiện thao tác
      * @return Kết quả hoàn tiền ước tính chi tiết
      */
-    RefundResponse previewRefund(Integer bookingId, String ownerEmail);
+    RefundResponse previewRefund(Integer bookingId, RefundReasonType reasonType, String ownerEmail);
+
+    /**
+     * Xem trước số tiền hoàn lại trước khi xác nhận hủy sân (Customer).
+     *
+     * @param bookingId ID của đơn đặt sân
+     * @param customerEmail Email của Customer
+     * @return Kết quả hoàn tiền ước tính chi tiết
+     */
+    RefundResponse previewRefundForCustomer(Integer bookingId, String customerEmail);
 
     /**
      * Lấy trạng thái/kết quả hoàn tiền hiện tại của một đơn (dùng cho idempotency replay).
@@ -37,10 +50,13 @@ public interface RefundService {
     RefundResponse getRefundResponse(Integer bookingId, String ownerEmail);
 
     /**
-     * Lấy toàn bộ danh sách đặt sân của Owner để hiển thị trên Dashboard.
+     * Lấy danh sách đặt sân có phân trang của Owner.
      *
      * @param ownerEmail Email của Owner đang thực hiện thao tác
-     * @return Danh sách DTO chứa thông tin đặt sân
+     * @param status trạng thái cần lọc, null để lấy tất cả
+     * @param pageable thông tin phân trang
+     * @return Trang DTO chứa thông tin đặt sân
      */
-    List<OwnerBookingResponse> getOwnerBookings(String ownerEmail);
+    Page<OwnerBookingResponse> getOwnerBookings(
+            String ownerEmail, BookingStatus status, Pageable pageable);
 }

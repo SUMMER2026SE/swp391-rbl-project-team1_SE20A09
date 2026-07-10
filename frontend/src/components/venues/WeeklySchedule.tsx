@@ -32,6 +32,12 @@ export default function WeeklySchedule({ stadiumId, onSlotSelect }: WeeklySchedu
   const [weekStart, setWeekStart] = useState<string>(() => mondayOfThisWeek())
   const [data, setData] = useState<WeeklySlotsResponse | null>(null)
   const [loading, setLoading] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -106,6 +112,10 @@ export default function WeeklySchedule({ stadiumId, onSlotSelect }: WeeklySchedu
           <span>Đã đặt</span>
         </div>
         <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+          <span>Đang giữ chỗ</span>
+        </div>
+        <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-gray-300" />
           <span>Đã qua</span>
         </div>
@@ -125,7 +135,7 @@ export default function WeeklySchedule({ stadiumId, onSlotSelect }: WeeklySchedu
           data={data}
           emptyMessage="Sân chưa có khung giờ nào khả dụng cho tuần này."
           renderSlotBlock={(slot, date) => (
-            <SlotCell slot={slot} date={date} onPick={onSlotSelect} />
+            <SlotCell slot={slot} date={date} now={now} onPick={onSlotSelect} />
           )}
         />
       )}
@@ -138,10 +148,11 @@ export default function WeeklySchedule({ stadiumId, onSlotSelect }: WeeklySchedu
 interface SlotCellProps {
   slot: WeeklySlotItem
   date: string
+  now: number
   onPick: (slotId: number, date: string, startTime: string, price: number, endTime: string) => void
 }
 
-function SlotCell({ slot, date, onPick }: SlotCellProps) {
+function SlotCell({ slot, date, now, onPick }: SlotCellProps) {
   if (slot.status === 'BOOKED') {
     return (
       <div
@@ -149,6 +160,25 @@ function SlotCell({ slot, date, onPick }: SlotCellProps) {
         className="h-full w-full rounded-[6px] bg-[#fdf0f0] border-[0.5px] border-[#f5b7b7] flex items-center justify-center px-3 text-[13px] font-medium text-[#8a1c1c] select-none cursor-not-allowed"
       >
         Đã đặt
+      </div>
+    )
+  }
+
+  if (slot.status === 'HELD') {
+    const remainingSeconds = slot.heldUntil
+      ? Math.max(0, Math.ceil((new Date(slot.heldUntil).getTime() - now) / 1000))
+      : null
+    const countdown = remainingSeconds === null
+      ? null
+      : `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`
+    return (
+      <div
+        aria-disabled
+        title="Đơn đang chờ thanh toán; slot sẽ tự mở lại khi hết thời gian giữ chỗ."
+        className="h-full w-full rounded-[6px] bg-amber-50 border-[0.5px] border-amber-300 flex flex-col items-center justify-center px-2 text-[12px] font-medium text-amber-800 select-none cursor-not-allowed leading-tight"
+      >
+        <span>Đang giữ chỗ</span>
+        {countdown && <span className="font-semibold tabular-nums">{countdown}</span>}
       </div>
     )
   }

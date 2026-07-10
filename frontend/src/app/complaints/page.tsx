@@ -25,8 +25,9 @@ import {
 import { AlertCircle, Plus, MessageSquare, XCircle, SlidersHorizontal, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
 import { get, post } from "@/lib/api";
 import { toast } from "sonner";
-import { fetchMyBookings } from "@/lib/bookings-api";
+import { fetchMyBookings, type BookingHistoryItem } from "@/lib/bookings-api";
 import { useComplaintWebSocket, type ComplaintChatEvent } from "@/hooks/useComplaintWebSocket";
+import { useSearchParams } from "next/navigation";
 
 type ComplaintResponse = {
   from: string;
@@ -47,18 +48,22 @@ type Complaint = {
   resolvedDate?: string;
   resolution?: string;
   bookingId?: number;
+  customerResponseDeadline?: string;
+  escalatedAt?: string;
+  escalationReason?: string;
 };
 
 
 function ComplaintsPage() {
+  const searchParams = useSearchParams();
   const [complaints, setComplaints] = useState<Complaint[]>([]);
-  const [completedBookings, setCompletedBookings] = useState<any[]>([]);
+  const [eligibleBookings, setEligibleBookings] = useState<BookingHistoryItem[]>([]);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
 
   // Form states
   const [bookingId, setBookingId] = useState("");
-  const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [selectedBooking, setSelectedBooking] = useState<BookingHistoryItem | null>(null);
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
 
@@ -80,6 +85,10 @@ function ComplaintsPage() {
   // Close complaint states
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
   const [closingComplaint, setClosingComplaint] = useState(false);
+  const [escalating, setEscalating] = useState(false);
+  const [objecting, setObjecting] = useState(false);
+  const [objectionText, setObjectionText] = useState("");
+  const [showObjectDialog, setShowObjectDialog] = useState(false);
 
   const filteredComplaints = complaints
     .filter(c => statusFilter === "all" || c.status === statusFilter)
@@ -105,12 +114,17 @@ function ComplaintsPage() {
 
   const fetchBookings = useCallback(async () => {
     try {
-      const res = await fetchMyBookings(0, 100, "completed");
-      if (res && res.bookings) {
-        setCompletedBookings(res.bookings);
-      }
+      const [completedRes, cancelledRes] = await Promise.all([
+        fetchMyBookings(0, 100, "completed"),
+        fetchMyBookings(0, 100, "cancelled"),
+      ]);
+      const bookings = [
+        ...(completedRes?.bookings ?? []),
+        ...(cancelledRes?.bookings ?? []),
+      ];
+      setEligibleBookings(bookings);
     } catch (error) {
-      console.warn("Failed to fetch completed bookings", error);
+      console.warn("Failed to fetch eligible bookings", error);
     }
   }, []);
 
@@ -118,6 +132,15 @@ function ComplaintsPage() {
     fetchComplaints();
     fetchBookings();
   }, [fetchComplaints, fetchBookings]);
+
+  useEffect(() => {
+    const complaintIdParam = searchParams.get("complaintId");
+    if (!complaintIdParam || complaints.length === 0) return;
+    const target = complaints.find(c => String(c.complaintId) === complaintIdParam);
+    if (target) {
+      setSelectedComplaint(target);
+    }
+  }, [searchParams, complaints]);
 
   const handleWsEvent = useCallback((event: ComplaintChatEvent) => {
     const appendMessage = (c: Complaint): Complaint => {
@@ -197,12 +220,49 @@ function ComplaintsPage() {
     }
   };
 
+  const handleEscalateComplaint = async () => {
+    if (!selectedComplaint) return;
+    setEscalating(true);
+    try {
+      await post(`/complaints/${selectedComplaint.complaintId}/escalate`, {
+        reason: "Không hài lòng với cách xử lý của chủ sân",
+      });
+      await fetchComplaints();
+      toast.success("Đã chuyển khiếu nại lên Admin xử lý!");
+    } catch (error: any) {
+      toast.error(error.message || "Không thể escalate khiếu nại");
+    } finally {
+      setEscalating(false);
+    }
+  };
+
+  const handleObjectToResolution = async () => {
+    if (!selectedComplaint || !objectionText.trim()) return;
+    setObjecting(true);
+    try {
+      await post(`/complaints/${selectedComplaint.complaintId}/object`, {
+        reason: objectionText.trim(),
+      });
+      setShowObjectDialog(false);
+      setObjectionText("");
+      await fetchComplaints();
+      toast.success("Đã gửi phản đối. Khiếu nại được chuyển lên Admin.");
+    } catch (error: any) {
+      toast.error(error.message || "Không thể gửi phản đối");
+    } finally {
+      setObjecting(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const s = (status || "").toLowerCase();
     const config = {
       open: { label: "Mới", className: "bg-yellow-50 text-yellow-700 border-yellow-200" },
       in_progress: { label: "Đang xử lý", className: "bg-blue-50 text-blue-700 border-blue-200" },
       resolved: { label: "Đã giải quyết", className: "bg-green-50 text-green-700 border-green-200" },
+      escalated: { label: "Đã chuyển Admin", className: "bg-purple-50 text-purple-700 border-purple-200" },
+      pending_admin_review: { label: "Chờ phản hồi", className: "bg-orange-50 text-orange-700 border-orange-200" },
+      customer_withdrawn: { label: "Đã rút", className: "bg-slate-50 text-slate-700 border-slate-200" },
     };
     const item = config[s as keyof typeof config] || { label: status, className: "bg-gray-50 text-gray-700 border-gray-200" };
     return <Badge variant="outline" className={item.className}>{item.label}</Badge>;
@@ -249,6 +309,9 @@ function ComplaintsPage() {
                 <SelectItem value="open">Mới</SelectItem>
                 <SelectItem value="in_progress">Đang xử lý</SelectItem>
                 <SelectItem value="resolved">Đã giải quyết</SelectItem>
+                <SelectItem value="escalated">Đã chuyển Admin</SelectItem>
+                <SelectItem value="pending_admin_review">Chờ phản hồi</SelectItem>
+                <SelectItem value="customer_withdrawn">Đã rút</SelectItem>
               </SelectContent>
             </Select>
             <Select value={sortOrder} onValueChange={setSortOrder}>
@@ -342,26 +405,26 @@ function ComplaintsPage() {
 
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label htmlFor="bookingSelect">Chọn đơn đặt sân đã hoàn thành *</Label>
+              <Label htmlFor="bookingSelect">Chọn đơn đặt sân đã hoàn thành hoặc bị hủy *</Label>
               <Select
                 value={bookingId}
                 onValueChange={(val) => {
                   setBookingId(val);
-                  const b = completedBookings.find(x => String(x.id) === val);
-                  setSelectedBooking(b);
+                  const b = eligibleBookings.find(x => String(x.id) === val);
+                  setSelectedBooking(b || null);
                 }}
               >
                 <SelectTrigger id="bookingSelect">
                   <SelectValue placeholder="Chọn đơn đặt sân của bạn" />
                 </SelectTrigger>
                 <SelectContent>
-                  {completedBookings.map((b) => (
+                  {eligibleBookings.map((b) => (
                     <SelectItem key={b.id} value={String(b.id)}>
                       {`Đơn #${b.id} - ${b.venue} (${b.date} - ${b.time})`}
                     </SelectItem>
                   ))}
-                  {completedBookings.length === 0 && (
-                    <SelectItem value="none" disabled>Không có đơn đặt sân nào đã hoàn thành</SelectItem>
+                  {eligibleBookings.length === 0 && (
+                    <SelectItem value="none" disabled>Không có đơn đặt sân phù hợp</SelectItem>
                   )}
                 </SelectContent>
               </Select>
@@ -514,8 +577,26 @@ function ComplaintsPage() {
                 </div>
               )}
 
+              {/* Pending admin review banner */}
+              {activeComplaint.status === "pending_admin_review" && (
+                <div className="flex-shrink-0 bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-2">
+                  <p className="text-xs font-bold text-orange-800">Chủ sân đã đề xuất giải pháp</p>
+                  <p className="text-xs text-orange-700">
+                    Bạn có 48 giờ để phản hồi nếu không đồng ý.
+                    {activeComplaint.customerResponseDeadline && (
+                      <> Hạn: {new Date(activeComplaint.customerResponseDeadline).toLocaleString('vi-VN')}</>
+                    )}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setShowObjectDialog(true)}>
+                      Phản đối giải pháp
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Reply Box (Fixed at the Bottom) */}
-              {activeComplaint.status !== "resolved" && (
+              {!["resolved", "customer_withdrawn"].includes(activeComplaint.status) && (
                 <div className="flex-shrink-0 pt-4 border-t space-y-2">
                   <Label htmlFor="replyInput" className="font-semibold text-sm">Gửi phản hồi của bạn</Label>
                   <div className="flex gap-2">
@@ -540,15 +621,28 @@ function ComplaintsPage() {
                   </div>
 
                   {!showCloseConfirm ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full text-muted-foreground hover:text-red-600 hover:border-red-200"
-                      onClick={() => setShowCloseConfirm(true)}
-                    >
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Đóng khiếu nại
-                    </Button>
+                    <div className="flex flex-col gap-2">
+                      {["open", "in_progress"].includes(activeComplaint.status) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full text-purple-700 hover:text-purple-800 hover:border-purple-200"
+                          onClick={handleEscalateComplaint}
+                          disabled={escalating}
+                        >
+                          {escalating ? "Đang chuyển..." : "Chuyển lên Admin"}
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-muted-foreground hover:text-red-600 hover:border-red-200"
+                        onClick={() => setShowCloseConfirm(true)}
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Rút khiếu nại
+                      </Button>
+                    </div>
                   ) : (
                     <div className="bg-orange-50 border border-orange-200 dark:bg-orange-950/20 dark:border-orange-900/50 rounded-lg p-3 space-y-2">
                       <p className="text-sm font-medium text-orange-800 dark:text-orange-300">Xác nhận đóng khiếu nại?</p>
@@ -578,6 +672,30 @@ function ComplaintsPage() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Object to resolution dialog */}
+      <Dialog open={showObjectDialog} onOpenChange={setShowObjectDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Phản đối giải pháp của chủ sân</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            placeholder="Mô tả lý do bạn không đồng ý..."
+            value={objectionText}
+            onChange={(e) => setObjectionText(e.target.value)}
+            rows={4}
+          />
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" onClick={() => setShowObjectDialog(false)}>Hủy</Button>
+            <Button
+              onClick={handleObjectToResolution}
+              disabled={!objectionText.trim() || objecting}
+            >
+              {objecting ? "Đang gửi..." : "Gửi phản đối"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

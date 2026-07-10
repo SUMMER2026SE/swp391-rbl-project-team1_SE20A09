@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
  * UC-CUS-01: Một khung giờ trong weekly schedule — kèm trạng thái cho một ngày cụ thể.
@@ -13,6 +14,7 @@ import java.math.BigDecimal;
  * <p>Các giá trị {@code status}:</p>
  * <ul>
  *   <li>{@code AVAILABLE} — còn trống và chưa qua giờ.</li>
+ *   <li>{@code HELD} — đang được giữ tạm bởi đơn PENDING_PAYMENT.</li>
  *   <li>{@code BOOKED} — đã có đơn PENDING hoặc CONFIRMED trên ngày này.</li>
  *   <li>{@code PAST} — datetime bắt đầu (date + startTime) đã qua so với hiện tại.</li>
  * </ul>
@@ -31,6 +33,14 @@ public class WeeklySlotItemDto {
     /** HH:mm */
     private String endTime;
     private BigDecimal price;
-    /** AVAILABLE | BOOKED | PAST */
+    /** AVAILABLE | HELD | BOOKED | PAST */
     private String status;
+    /** ISO local date-time; only populated for HELD slots. */
+    private String heldUntil;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Integer bookingId;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Integer customerId;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String customerDisplayName;
 }

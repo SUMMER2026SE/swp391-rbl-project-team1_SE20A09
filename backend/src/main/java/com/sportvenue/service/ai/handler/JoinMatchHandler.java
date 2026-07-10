@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.sportvenue.dto.response.AiChatTurnResponse;
 import com.sportvenue.entity.MatchRequest;
 import com.sportvenue.entity.enums.MatchStatus;
-import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.repository.MatchRequestRepository;
 import com.sportvenue.service.MatchRequestService;
 import com.sportvenue.service.ai.AiConversationContextService;
@@ -14,7 +13,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.List;
 import java.util.Optional;
 
 /**

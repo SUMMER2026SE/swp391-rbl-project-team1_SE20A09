@@ -10,7 +10,9 @@ import {
   LayoutList,
   AlertCircle,
   TrendingUp,
-  X
+  CalendarRange,
+  X,
+  HelpCircle
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -23,11 +25,13 @@ export function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
 
   const MENU_ITEMS = [
     { id: 'dashboard', href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'bookings', href: '/admin/bookings', label: 'Đặt sân', icon: CalendarRange },
     { id: 'customers', href: '/admin/customers', label: 'Khách hàng', icon: Users },
     { id: 'owners', href: '/admin/owner-approvals', label: 'Chủ sân', icon: Building2 },
     { id: 'complexes', href: '/admin/complex-approvals', label: 'Tổ hợp', icon: MapPin },
     { id: 'categories', href: '/admin/sport-categories', label: 'Danh mục', icon: LayoutList },
     { id: 'complaints', href: '/admin/complaints', label: 'Khiếu nại', icon: AlertCircle },
+    { id: 'refund-exceptions', href: '/admin/refund-exceptions', label: 'Ngoại lệ hoàn tiền', icon: HelpCircle },
   ];
 
   return (

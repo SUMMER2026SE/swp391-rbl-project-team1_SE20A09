@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import type { ComponentProps } from 'react'
+import { Circle, MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { Star, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -38,14 +39,76 @@ const getUnifiedIcon = (isHovered: boolean = false): L.DivIcon | undefined => {
   })
 }
 
-// Component to recenter map when complexes change
-function MapRecenter({ center }: { center: [number, number] }) {
+const NEARBY_MARKER_THRESHOLD_METERS = 500
+const MARKER_OFFSET_RADIUS_PX = 28
+
+const distanceInMeters = (a: StadiumComplexDto, b: StadiumComplexDto): number => {
+  if (a.latitude == null || a.longitude == null || b.latitude == null || b.longitude == null) return Infinity
+  return L.latLng(a.latitude, a.longitude).distanceTo(L.latLng(b.latitude, b.longitude))
+}
+
+type SearchCircle = {
+  center: [number, number]
+  radiusMeters: number
+}
+
+function getOffsetForCluster(index: number, size: number): L.PointExpression {
+  if (size <= 1) return [0, 0]
+  const angle = (Math.PI * 2 * index) / size - Math.PI / 2
+  return [
+    Math.round(Math.cos(angle) * MARKER_OFFSET_RADIUS_PX),
+    Math.round(Math.sin(angle) * MARKER_OFFSET_RADIUS_PX),
+  ]
+}
+
+function OffsetMarker({
+  position,
+  pixelOffset,
+  children,
+  ...markerProps
+}: ComponentProps<typeof Marker> & {
+  position: [number, number]
+  pixelOffset: L.PointExpression
+}) {
+  const map = useMap()
+  const [zoom, setZoom] = useState(map.getZoom())
+
+  useEffect(() => {
+    const updateZoom = () => setZoom(map.getZoom())
+    map.on('zoomend', updateZoom)
+    return () => {
+      map.off('zoomend', updateZoom)
+    }
+  }, [map])
+
+  const markerPosition = useMemo(() => {
+    const point = map.project(position, zoom)
+    const offsetPoint = L.point(point).add(L.point(pixelOffset))
+    const latLng = map.unproject(offsetPoint, zoom)
+    return [latLng.lat, latLng.lng] as [number, number]
+  }, [map, pixelOffset, position, zoom])
+
+  return (
+    <Marker position={markerPosition} {...markerProps}>
+      {children}
+    </Marker>
+  )
+}
+
+// Component to recenter map when complexes or nearby search radius change
+function MapViewportHandler({ center, searchCircle }: { center: [number, number], searchCircle: SearchCircle | null }) {
   const map = useMap()
   useEffect(() => {
-    if (map) {
+    if (!map) return
+    if (searchCircle) {
+      const tempCircle = L.circle(searchCircle.center, { radius: searchCircle.radiusMeters }).addTo(map)
+      const circleBounds = tempCircle.getBounds()
+      tempCircle.remove()
+      map.fitBounds(circleBounds, { padding: [32, 32], animate: false })
+    } else {
       map.setView(center, map.getZoom(), { animate: false })
     }
-  }, [center, map])
+  }, [center, map, searchCircle])
   return null
 }
 
@@ -63,9 +126,12 @@ function MapFlyToHandler({ center }: { center: [number, number] | null }) {
 interface ComplexMapProps {
   complexes: StadiumComplexDto[]
   hoveredComplexId?: number | null
+  userLat?: number
+  userLng?: number
+  radiusInKm?: number
 }
 
-export default function ComplexMap({ complexes, hoveredComplexId }: ComplexMapProps) {
+export default function ComplexMap({ complexes, hoveredComplexId, userLat, userLng, radiusInKm }: ComplexMapProps) {
   const searchParams = useSearchParams()
   const sportTypeId = searchParams.get('sportTypeId')
   const detailHref = (complexId: number) =>
@@ -82,6 +148,31 @@ export default function ComplexMap({ complexes, hoveredComplexId }: ComplexMapPr
   const validComplexes = complexes.filter(
     (c) => c.latitude !== undefined && c.latitude !== null && c.longitude !== undefined && c.longitude !== null
   )
+
+  const markerOffsetsByComplexId = useMemo(() => {
+    const clusters: StadiumComplexDto[][] = []
+
+    validComplexes.forEach((complex) => {
+      const cluster = clusters.find((items) =>
+        items.some((item) => distanceInMeters(item, complex) <= NEARBY_MARKER_THRESHOLD_METERS)
+      )
+      if (cluster) {
+        cluster.push(complex)
+      } else {
+        clusters.push([complex])
+      }
+    })
+
+    const offsets = new Map<number, L.PointExpression>()
+    clusters.forEach((cluster) => {
+      cluster
+        .sort((a, b) => a.complexId - b.complexId)
+        .forEach((complex, index) => {
+          offsets.set(complex.complexId, getOffsetForCluster(index, cluster.length))
+        })
+    })
+    return offsets
+  }, [validComplexes])
 
   const hoveredComplex = hoveredComplexId ? validComplexes.find(c => c.complexId === hoveredComplexId) : null;
   const hoveredLat = hoveredComplex?.latitude
@@ -103,6 +194,19 @@ export default function ComplexMap({ complexes, hoveredComplexId }: ComplexMapPr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complexes])
 
+  const searchCircle: SearchCircle | null = useMemo(() => {
+    if (
+      userLat === undefined || userLng === undefined || radiusInKm === undefined
+      || Number.isNaN(userLat) || Number.isNaN(userLng) || Number.isNaN(radiusInKm)
+    ) {
+      return null
+    }
+    return {
+      center: [userLat, userLng],
+      radiusMeters: radiusInKm * 1000,
+    }
+  }, [radiusInKm, userLat, userLng])
+
   if (!mounted) return <div className="w-full h-full bg-muted animate-pulse rounded-2xl" />
 
   return (
@@ -117,8 +221,21 @@ export default function ComplexMap({ complexes, hoveredComplexId }: ComplexMapPr
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <MapRecenter center={mapCenter} />
+        <MapViewportHandler center={mapCenter} searchCircle={searchCircle} />
         <MapFlyToHandler center={hoveredCenter} />
+        {searchCircle && (
+          <Circle
+            center={searchCircle.center}
+            radius={searchCircle.radiusMeters}
+            pathOptions={{
+              color: '#059669',
+              fillColor: '#10b981',
+              fillOpacity: 0.12,
+              opacity: 0.65,
+              weight: 2,
+            }}
+          />
+        )}
         {validComplexes.map((complex) => {
           const formattedPrice = (() => {
             if (complex.minPrice !== undefined && complex.minPrice !== null) {
@@ -133,9 +250,10 @@ export default function ComplexMap({ complexes, hoveredComplexId }: ComplexMapPr
           const isHovered = hoveredComplexId === complex.complexId;
 
           return (
-            <Marker
+            <OffsetMarker
               key={complex.complexId}
               position={[complex.latitude!, complex.longitude!]}
+              pixelOffset={markerOffsetsByComplexId.get(complex.complexId) || [0, 0]}
               icon={getUnifiedIcon(isHovered)}
               zIndexOffset={isHovered ? 1000 : 0}
             >
@@ -189,7 +307,7 @@ export default function ComplexMap({ complexes, hoveredComplexId }: ComplexMapPr
                   </div>
                 </div>
               </Popup>
-            </Marker>
+            </OffsetMarker>
           )
         })}
       </MapContainer>

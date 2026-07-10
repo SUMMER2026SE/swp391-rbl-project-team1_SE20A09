@@ -101,18 +101,7 @@ public class StadiumSearchHandler {
         StadiumSearchRequest searchRequest = builder.build();
         PageResponse<StadiumResponse> result = publicStadiumService.searchStadiums(searchRequest);
 
-        List<StadiumResponse> stadiums = result.getContent();
-        if (stadiums.isEmpty()) {
-            List<StadiumResponse> fallback = findStadiumsByParentFacilityNameFallback(searchRequest.getKeyword());
-            if (!fallback.isEmpty()) {
-                stadiums = postProcessSearchResults(fallback);
-            } else {
-                List<StadiumResponse> retried = retrySearchWithoutNoisyKeyword(searchRequest);
-                stadiums = postProcessSearchResults(retried);
-            }
-        } else {
-            stadiums = postProcessSearchResults(stadiums);
-        }
+        List<StadiumResponse> stadiums = getStadiumsWithFallback(result.getContent(), searchRequest);
 
         // Vẫn rỗng dù đã thử theo tên (facility fallback/bỏ keyword nhiễu) — bộ lọc có thể đang
         // quá chặt (khu vực/giá/giờ) chứ không phải "không tồn tại". Nới lỏng dần thay vì báo
@@ -142,6 +131,19 @@ public class StadiumSearchHandler {
                 .intent("search_stadiums")
                 .stadiums(stadiums)
                 .build();
+    }
+
+    private List<StadiumResponse> getStadiumsWithFallback(List<StadiumResponse> stadiums, StadiumSearchRequest searchRequest) {
+        if (stadiums.isEmpty()) {
+            List<StadiumResponse> fallback = findStadiumsByParentFacilityNameFallback(searchRequest.getKeyword());
+            if (!fallback.isEmpty()) {
+                return postProcessSearchResults(fallback);
+            } else {
+                List<StadiumResponse> retried = retrySearchWithoutNoisyKeyword(searchRequest);
+                return postProcessSearchResults(retried);
+            }
+        }
+        return postProcessSearchResults(stadiums);
     }
 
     private record RelaxedSearchResult(List<StadiumResponse> stadiums, String relaxationNote) {

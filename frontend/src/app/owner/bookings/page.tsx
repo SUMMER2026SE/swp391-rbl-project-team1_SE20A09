@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +25,9 @@ import {
   User, 
   Calendar,
   AlertCircle,
-  HelpCircle
+  HelpCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   Dialog,
@@ -38,6 +40,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { get, post } from "@/lib/api";
+import { cancelBooking } from "@/lib/bookings-api";
+import type { PageResponse } from "@/types/common";
 
 interface BookingItem {
   id: number;
@@ -52,6 +56,7 @@ interface BookingItem {
   time: string;
   amount: number;
   refundAmount: number;
+  serviceFee?: number;
   paymentStatus: string;
   status: string;
   notes: string;
@@ -67,6 +72,8 @@ function BookingManagementPage() {
   const [selectedBooking, setSelectedBooking] = useState<BookingItem | null>(null);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [reasonType, setReasonType] = useState("CUSTOMER_REQUEST");
+  const [proofUrl, setProofUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Xem trước tiền hoàn từ Backend (Tránh clock skew của client)
@@ -77,25 +84,60 @@ function BookingManagementPage() {
   const [successData, setSuccessData] = useState<any>(null);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
 
+  // Hủy đơn chưa thu tiền (vd: đang chờ thu tiền mặt) — không có gì để hoàn nên
+  // dùng thẳng luồng cancelBooking() thay vì modal "Hủy & Hoàn Tiền" (yêu cầu
+  // có giao dịch PAID/DEPOSITED để tính % hoàn).
+  const [cancelOnlyBooking, setCancelOnlyBooking] = useState<BookingItem | null>(null);
+  const [cancelOnlyReason, setCancelOnlyReason] = useState("");
+  const [isCancelOnlySubmitting, setIsCancelOnlySubmitting] = useState(false);
+
   const [activeTab, setActiveTab] = useState("all");
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
 
   // Fetch danh sách đặt sân thực tế từ Backend
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await get<BookingItem[]>("/owner/bookings");
-      setBookingList(data);
+      const query = new URLSearchParams({
+        page: String(page),
+        size: "20",
+      });
+      if (activeTab !== "all") {
+        query.set("status", activeTab.toUpperCase());
+      }
+      const data = await get<any>(
+        `/owner/bookings?${query.toString()}`
+      );
+
+      // Defensive: hỗ trợ cả mảng phẳng (API cũ) và PageResponse (API mới),
+      // đồng thời không đưa dữ liệu sai kiểu vào state.
+      const list: BookingItem[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.content)
+          ? data.content
+          : [];
+      setBookingList(list);
+      setTotalPages(data?.totalPages ?? 0);
+      setTotalElements(data?.totalElements ?? list.length);
     } catch (error: any) {
       console.error("Error fetching bookings:", error);
       toast.error("Không thể tải danh sách đặt sân từ máy chủ: " + error.message);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [activeTab, page]);
 
   useEffect(() => {
     fetchBookings();
-  }, []);
+  }, [fetchBookings]);
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    setPage(0);
+    setExpandedRow(null);
+  };
 
   // Hàm tính toán dự phóng hoàn tiền ở Frontend (Hiển thị dự báo nhanh)
   const calculateExpectedRefund = (playTimeStr: string, price: number) => {
@@ -148,40 +190,62 @@ function BookingManagementPage() {
       unpaid: { label: "Chưa thanh toán", className: "bg-orange-100 text-orange-700 dark:bg-orange-950/30 dark:text-orange-400" },
       paid: { label: "Đã thanh toán", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" },
       refunded: { label: "Đã hoàn tiền", className: "bg-purple-100 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400" },
+      awaiting_cash_payment: { label: "Chờ thu tiền mặt", className: "bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400" },
     };
     const item = config[status.toLowerCase() as keyof typeof config] || { label: status, className: "bg-gray-100 text-gray-700" };
     return <Badge className={`${item.className} border-none shadow-none font-medium px-2.5 py-0.5`}>{item.label}</Badge>;
   };
 
   const filterBookings = (status?: string) => {
-    if (!status) return bookingList;
-    return bookingList.filter((b) => b.status.toLowerCase() === status.toLowerCase());
+    // Defensive: không bao giờ gọi .filter trên null/undefined/object.
+    const list = Array.isArray(bookingList) ? bookingList : [];
+    if (!status) return list;
+    return list.filter((b) => b.status && b.status.toLowerCase() === status.toLowerCase());
   };
 
-  // Mở modal hoàn tiền và lấy kết quả xem trước chính xác từ Backend (Tránh Clock Skew)
-  const handleOpenRefundModal = async (booking: BookingItem) => {
-    setSelectedBooking(booking);
-    setCancelReason("");
-    setIsCancelModalOpen(true);
-    setPreviewData(null);
+  // Load preview data mỗi khi mở modal hoặc thay đổi loại nguyên nhân hủy
+  const fetchRefundPreview = useCallback(async (bookingId: number, type: string) => {
     setIsPreviewLoading(true);
-
     try {
-      const data = await get<any>(`/owner/bookings/${booking.id}/refund/preview`);
+      const data = await get<any>(`/owner/bookings/${bookingId}/refund/preview?reasonType=${type}`);
       setPreviewData(data);
     } catch (error: any) {
       console.error("Error fetching refund preview:", error);
-      toast.error("Không thể xem trước thông tin hoàn tiền: " + error.message);
+      toast.error("Không tải được thông tin xem trước hoàn tiền.");
+      setPreviewData(null);
     } finally {
       setIsPreviewLoading(false);
     }
+  }, []);
+
+  const handleOpenRefundModal = (booking: BookingItem) => {
+    setSelectedBooking(booking);
+    setCancelReason("");
+    setReasonType("CUSTOMER_REQUEST");
+    setProofUrl("");
+    setIsCancelModalOpen(true);
+    setPreviewData(null);
+    fetchRefundPreview(booking.id, "CUSTOMER_REQUEST");
   };
+
+  // Lắng nghe thay đổi của reasonType để fetch lại preview
+  useEffect(() => {
+    if (selectedBooking && isCancelModalOpen) {
+      fetchRefundPreview(selectedBooking.id, reasonType);
+    }
+  }, [reasonType, selectedBooking, isCancelModalOpen, fetchRefundPreview]);
 
   // Hàm gửi Request thực tế lên Backend để thực hiện hoàn tiền
   const handleConfirmRefund = async () => {
     if (!selectedBooking) return;
-    if (!cancelReason.trim()) {
+
+    if (reasonType === "CUSTOMER_REQUEST" && !cancelReason.trim()) {
       toast.error("Vui lòng nhập lý do hủy đặt sân!");
+      return;
+    }
+
+    if (reasonType === "OWNER_FAULT" && !proofUrl.trim()) {
+      toast.error("Vui lòng cung cấp bằng chứng (link ảnh/mô tả) cho sự cố từ phía sân!");
       return;
     }
 
@@ -191,7 +255,9 @@ function BookingManagementPage() {
 
       // Gọi API thật
       const response = await post<any>(`/owner/bookings/${selectedBooking.id}/refund`, {
-        reason: cancelReason.trim()
+        reason: reasonType === "OWNER_FAULT" ? proofUrl.trim() : cancelReason.trim(),
+        reasonType,
+        proofUrl: reasonType === "OWNER_FAULT" ? proofUrl.trim() : null
       });
 
       // Thành công: Cập nhật state ở local
@@ -219,9 +285,29 @@ function BookingManagementPage() {
     }
   };
 
+  const handleConfirmCancelOnly = async () => {
+    if (!cancelOnlyBooking) return;
+    try {
+      setIsCancelOnlySubmitting(true);
+      await cancelBooking(cancelOnlyBooking.id, cancelOnlyReason.trim() || undefined);
+      setBookingList(prev => prev.map(b =>
+        b.id === cancelOnlyBooking.id ? { ...b, status: "cancelled" } : b
+      ));
+      toast.success("Đã hủy đơn thành công");
+      setCancelOnlyBooking(null);
+      setCancelOnlyReason("");
+    } catch (error: any) {
+      toast.error(error.message || "Không thể hủy đơn, vui lòng thử lại");
+    } finally {
+      setIsCancelOnlySubmitting(false);
+    }
+  };
+
   const BookingRow = ({ booking }: { booking: BookingItem }) => {
     const isExpanded = expandedRow === booking.id;
     const canRefund = booking.status.toLowerCase() === "confirmed" && booking.paymentStatus.toLowerCase() === "paid";
+    const canCancelUnpaid = booking.status.toLowerCase() === "confirmed"
+      && booking.paymentStatus.toLowerCase() === "awaiting_cash_payment";
 
     return (
       <>
@@ -243,7 +329,7 @@ function BookingManagementPage() {
           <td className="p-4 align-middle text-right text-emerald-600 dark:text-emerald-400 font-bold">
             {(() => {
               const isPaidType = booking.paymentStatus.toLowerCase() === "paid" || booking.paymentStatus.toLowerCase() === "refunded";
-              const netVal = isPaidType ? (booking.amount - booking.refundAmount) : 0;
+              const netVal = isPaidType ? (booking.amount - (booking.serviceFee || 0) - booking.refundAmount) : 0;
               return `${netVal.toLocaleString('vi-VN')}đ`;
             })()}
           </td>
@@ -256,14 +342,25 @@ function BookingManagementPage() {
           <td className="p-4 align-middle">
             <div className="flex gap-2 items-center justify-end">
               {canRefund && (
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   variant="destructive"
                   className="bg-rose-600 hover:bg-rose-700 text-white font-medium shadow-sm transition-all duration-200"
                   onClick={() => handleOpenRefundModal(booking)}
                 >
                   <RotateCcw className="h-3.5 w-3.5 mr-1.5 animate-spin-reverse" />
                   Hủy & Hoàn Tiền
+                </Button>
+              )}
+              {canCancelUnpaid && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400"
+                  onClick={() => setCancelOnlyBooking(booking)}
+                >
+                  <XCircle className="h-3.5 w-3.5 mr-1.5" />
+                  Hủy đơn
                 </Button>
               )}
               <Button
@@ -397,7 +494,11 @@ function BookingManagementPage() {
     return sum + (isPaidType ? b.amount : 0);
   }, 0);
   const totalRefundedAmount = activeBookings.reduce((sum, b) => sum + (b.refundAmount || 0), 0);
-  const totalNetAmount = totalGrossAmount - totalRefundedAmount;
+  const totalServiceFee = activeBookings.reduce((sum, b) => {
+    const isPaidType = b.paymentStatus.toLowerCase() === "paid" || b.paymentStatus.toLowerCase() === "refunded";
+    return sum + (isPaidType ? (b.serviceFee || 0) : 0);
+  }, 0);
+  const totalNetAmount = totalGrossAmount - totalRefundedAmount - totalServiceFee;
 
   return (
     <>
@@ -500,23 +601,23 @@ function BookingManagementPage() {
         </div>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b pb-2">
             <TabsList className="bg-muted/70 p-1 rounded-lg w-full lg:w-auto overflow-x-auto flex-nowrap whitespace-nowrap justify-start">
               <TabsTrigger value="all" className="font-semibold text-sm">
-                Tất cả ({bookingList.length})
+                Tất cả
               </TabsTrigger>
               <TabsTrigger value="pending" className="font-semibold text-sm">
-                Chờ duyệt ({filterBookings("pending").length})
+                Chờ duyệt
               </TabsTrigger>
               <TabsTrigger value="confirmed" className="font-semibold text-sm">
-                Đã xác nhận ({filterBookings("confirmed").length})
+                Đã xác nhận
               </TabsTrigger>
               <TabsTrigger value="completed" className="font-semibold text-sm">
-                Hoàn thành ({filterBookings("completed").length})
+                Hoàn thành
               </TabsTrigger>
               <TabsTrigger value="cancelled" className="font-semibold text-sm">
-                Đã hủy ({filterBookings("cancelled").length})
+                Đã hủy
               </TabsTrigger>
             </TabsList>
 
@@ -644,6 +745,31 @@ function BookingManagementPage() {
               </div>
             </CardContent>
           </Card>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(current => Math.max(0, current - 1))}
+                disabled={page === 0 || isLoading}
+              >
+                <ChevronLeft className="mr-1 h-4 w-4" /> Trang trước
+              </Button>
+              <span className="text-sm font-medium text-muted-foreground">
+                Trang {page + 1} / {totalPages} · {totalElements} đơn
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
+                disabled={page >= totalPages - 1 || isLoading}
+              >
+                Trang sau <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </Tabs>
       </div>
 
@@ -651,7 +777,7 @@ function BookingManagementPage() {
           POPUP 1: ĐỐI THOẠI XÁC NHẬN HỦY VÀ ƯỚC TÍNH HOÀN TIỀN (CONFIRM REFUND DIALOG)
           ────────────────────────────────────────────────────────────────────────── */}
       <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
-        <DialogContent className="max-w-md border dark:border-slate-800 shadow-2xl rounded-xl">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto border dark:border-slate-800 shadow-2xl rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2 text-rose-600">
               <RotateCcw className="h-5.5 w-5.5" />
@@ -710,11 +836,17 @@ function BookingManagementPage() {
                         Hoàn {previewData.refundPercentage}%
                       </Badge>
                     </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-slate-600 dark:text-slate-400">Tiền trả khách:</span>
-                      <span className="font-extrabold text-lg text-slate-900 dark:text-slate-100">{previewData.refundAmount.toLocaleString('vi-VN')}đ</span>
+                    {previewData.serviceFee > 0 && reasonType === "CUSTOMER_REQUEST" && (
+                      <div className="flex justify-between items-center text-xs text-rose-600 font-medium">
+                        <span>Phí dịch vụ (Không hoàn lại):</span>
+                        <span>-{previewData.serviceFee.toLocaleString('vi-VN')}đ</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center text-sm border-t pt-1.5 mt-1.5">
+                      <span className="text-slate-600 dark:text-slate-400 font-semibold">Tiền trả khách:</span>
+                      <span className="font-extrabold text-lg text-emerald-600 dark:text-emerald-400">{previewData.refundAmount.toLocaleString('vi-VN')}đ</span>
                     </div>
-                    <p className="text-[11px] leading-relaxed text-muted-foreground border-t pt-2 mt-1 italic">
+                    <p className="text-[11px] leading-relaxed text-muted-foreground border-t pt-2 mt-1.5 italic">
                       {previewData.refundPercentage === 100 
                         ? "Hủy trước giờ chơi >= 24 giờ. Khách hàng nhận lại toàn bộ tiền sân." 
                         : previewData.refundPercentage === 50 
@@ -731,16 +863,45 @@ function BookingManagementPage() {
                 )}
               </div>
 
-              {/* Lý do hủy */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">Lý do hủy sân <span className="text-rose-500">*</span></label>
-                <Textarea 
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder="Nhập lý do chi tiết hủy đặt sân (e.g. Khách yêu cầu bận việc đột xuất, Sân bảo trì đột xuất...)"
-                  className="min-h-[80px] focus:ring-1 focus:ring-rose-500 focus:outline-none"
-                />
+              {/* Chọn người chịu trách nhiệm */}
+              <div className="space-y-1.5 mt-2">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">Nguyên nhân hủy <span className="text-rose-500">*</span></label>
+                <Select value={reasonType} onValueChange={setReasonType}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Chọn nguyên nhân" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CUSTOMER_REQUEST">Khách hàng yêu cầu hủy</SelectItem>
+                    <SelectItem value="OWNER_FAULT">Sự cố từ phía sân (Mưa ngập, hỏng hóc...)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+
+              {reasonType === "OWNER_FAULT" && (
+                <div className="space-y-1.5 mt-2 p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900 rounded-md">
+                  <label className="block text-xs font-semibold text-rose-700 dark:text-rose-400">Bằng chứng sự cố <span className="text-rose-500">*</span></label>
+                  <p className="text-[11px] text-rose-600 mb-2">Bằng chứng này sẽ được lưu lại để Admin đối soát. Nếu khai báo sai, bạn có thể bị phạt.</p>
+                  <Textarea 
+                    value={proofUrl}
+                    onChange={(e) => setProofUrl(e.target.value)}
+                    placeholder="Mô tả chi tiết sự cố hoặc dán link ảnh bằng chứng vào đây..."
+                    className="min-h-[60px] focus:ring-1 focus:ring-rose-500 focus:outline-none"
+                  />
+                </div>
+              )}
+
+              {/* Lý do hủy — chỉ hiện khi khách yêu cầu hủy để tránh trùng lặp với bằng chứng sự cố */}
+              {reasonType === "CUSTOMER_REQUEST" && (
+                <div className="space-y-1.5 mt-2">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">Ghi chú hủy sân</label>
+                  <Textarea 
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    placeholder="Ghi chú thêm (không bắt buộc)..."
+                    className="min-h-[60px] focus:ring-1 focus:ring-primary focus:outline-none"
+                  />
+                </div>
+              )}
             </div>
           )}
 
@@ -847,6 +1008,63 @@ function BookingManagementPage() {
               Đóng và tiếp tục
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={cancelOnlyBooking !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCancelOnlyBooking(null);
+            setCancelOnlyReason("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md border dark:border-slate-800 shadow-2xl rounded-xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-amber-600">
+              <XCircle className="h-5 w-5" /> Hủy đơn đặt sân
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs">
+              Đơn <span className="font-mono font-semibold">{cancelOnlyBooking?.displayId}</span> đang chờ thu tiền mặt tại sân —
+              chưa thu tiền nên hủy sẽ không phát sinh hoàn tiền. Giờ chơi sẽ được giải phóng ngay.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 py-2">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              Lý do hủy (tùy chọn)
+            </label>
+            <Textarea
+              value={cancelOnlyReason}
+              onChange={(e) => setCancelOnlyReason(e.target.value)}
+              placeholder="Ví dụ: khách báo không tới, đặt trùng lịch..."
+              rows={3}
+              maxLength={255}
+              disabled={isCancelOnlySubmitting}
+            />
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setCancelOnlyBooking(null)}
+              disabled={isCancelOnlySubmitting}
+            >
+              Quay lại
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              className="rounded-xl"
+              onClick={handleConfirmCancelOnly}
+              disabled={isCancelOnlySubmitting}
+            >
+              {isCancelOnlySubmitting ? "Đang xử lý..." : "Xác nhận hủy"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

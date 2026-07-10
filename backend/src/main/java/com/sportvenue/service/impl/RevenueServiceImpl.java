@@ -4,7 +4,6 @@ import com.sportvenue.dto.response.RevenueDetailDto;
 import com.sportvenue.dto.response.RevenueReportResponse;
 import com.sportvenue.dto.response.OwnerDashboardSummaryResponse;
 import com.sportvenue.dto.response.VenueRevenueDto;
-import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.projection.DailyRevenueProjection;
@@ -34,7 +33,6 @@ public class RevenueServiceImpl implements RevenueService {
     /** Giới hạn tối đa khoảng thời gian query (365 ngày) để tránh OOM. */
     private static final long MAX_QUERY_DAYS = 365;
 
-    private final PaymentRepository paymentRepository;
     private final BookingRepository bookingRepository;
     private final StadiumRepository stadiumRepository;
 
@@ -46,8 +44,10 @@ public class RevenueServiceImpl implements RevenueService {
 
         log.info("Fetching revenue report for owner: {}, stadiumId: {}, start: {}, end: {}", ownerEmail, stadiumId, startDate, endDate);
 
-        // Lấy doanh thu theo ngày từ Payment table
-        List<DailyRevenueProjection> projections = paymentRepository.getDailyRevenue(ownerEmail, stadiumId, startDate, endDate);
+        // Owner revenue is calculated from completed bookings so cash payments are not missed.
+        // The dynamic platform fee is excluded because it is not Owner revenue.
+        List<DailyRevenueProjection> projections = bookingRepository.getOwnerDailyNetRevenue(
+                ownerEmail, stadiumId, startDate.toLocalDate(), endDate.toLocalDate());
 
         List<RevenueDetailDto> details = projections.stream()
                 .map(p -> RevenueDetailDto.builder()
@@ -60,10 +60,11 @@ public class RevenueServiceImpl implements RevenueService {
                 .map(RevenueDetailDto::getRevenue)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Lấy breakdown theo sân từ cùng nguồn Payment table (BUG-02 fix)
-        List<VenueRevenueProjection> venueProjections = paymentRepository.getVenueRevenueBreakdown(ownerEmail, stadiumId, startDate, endDate);
+        // Use the same completed-booking source for venue breakdown and total booking count.
+        List<VenueRevenueProjection> venueProjections = bookingRepository.getOwnerVenueNetRevenueBreakdown(
+                ownerEmail, stadiumId, startDate.toLocalDate(), endDate.toLocalDate());
 
-        // BUG-02 Fix: Tính totalBookings từ cùng nguồn Payment để nhất quán với totalRevenue
+        // Keep totalBookings aligned with the same source used for totalRevenue.
         Long totalBookings = venueProjections.stream()
                 .mapToLong(VenueRevenueProjection::getTotalBookings)
                 .sum();
@@ -94,7 +95,9 @@ public class RevenueServiceImpl implements RevenueService {
     private Map<Integer, BigDecimal> getPreviousRevenueMap(String ownerEmail, Integer stadiumId, LocalDateTime startDate, LocalDateTime endDate, long days) {
         LocalDateTime previousStartDate = startDate.minusDays(days);
         LocalDateTime previousEndDate = endDate.minusDays(days);
-        List<VenueRevenueProjection> previousProjections = paymentRepository.getVenueRevenueBreakdown(ownerEmail, stadiumId, previousStartDate, previousEndDate);
+        List<VenueRevenueProjection> previousProjections = bookingRepository.getOwnerVenueNetRevenueBreakdown(
+                ownerEmail, stadiumId, previousStartDate.toLocalDate(),
+                previousEndDate.toLocalDate());
 
         return previousProjections.stream()
                 .collect(Collectors.toMap(
@@ -152,7 +155,8 @@ public class RevenueServiceImpl implements RevenueService {
         LocalDateTime endOfMonth = now.toLocalDate().with(java.time.temporal.TemporalAdjusters.lastDayOfMonth()).atTime(LocalTime.MAX);
 
         long todayBookingsCount = bookingRepository.countTodayBookingsByOwnerEmail(ownerEmail, startOfToday, endOfToday);
-        BigDecimal currentMonthRevenue = paymentRepository.sumCurrentMonthRevenue(ownerEmail, startOfMonth, endOfMonth);
+        BigDecimal currentMonthRevenue = bookingRepository.sumOwnerCurrentMonthNetRevenue(
+                ownerEmail, startOfMonth.toLocalDate(), endOfMonth.toLocalDate());
         long pendingBookingsCount = bookingRepository.countPendingBookingsByOwnerEmail(ownerEmail);
 
         // Tỷ lệ lấp đầy trong 30 ngày qua

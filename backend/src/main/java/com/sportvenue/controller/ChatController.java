@@ -42,6 +42,13 @@ public class ChatController {
     private final ChatService chatService;
     private final SimpMessagingTemplate messagingTemplate;
 
+
+    @GetMapping("/matches/{matchId}/conversation")
+    public ResponseEntity<Map<String, Long>> getMatchConversation(
+            @AuthenticationPrincipal UserPrincipal principal, @PathVariable Integer matchId) {
+        Long conversationId = chatService.getOrCreateMatchGroupChat(matchId, principal.getUserId());
+        return ResponseEntity.ok(Map.of("conversationId", conversationId));
+    }
     // ── Conversations ────────────────────────────────────────────
 
     @GetMapping("/conversations")

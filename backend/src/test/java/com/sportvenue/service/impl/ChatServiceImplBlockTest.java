@@ -7,6 +7,8 @@ import com.sportvenue.repository.ChatConversationHiddenStateRepository;
 import com.sportvenue.repository.ChatConversationRepository;
 import com.sportvenue.repository.ChatMessageRepository;
 import com.sportvenue.repository.ChatbotLogRepository;
+import com.sportvenue.repository.JoinRequestRepository;
+import com.sportvenue.repository.MatchRequestRepository;
 import com.sportvenue.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +43,10 @@ class ChatServiceImplBlockTest {
     @Mock
     private ChatConversationHiddenStateRepository hiddenStateRepo;
     @Mock
+    private MatchRequestRepository matchRequestRepo;
+    @Mock
+    private JoinRequestRepository joinRequestRepo;
+    @Mock
     private SimpMessagingTemplate messagingTemplate;
 
     private ChatServiceImpl service;
@@ -50,7 +56,7 @@ class ChatServiceImplBlockTest {
     @BeforeEach
     void setUp() {
         service = new ChatServiceImpl(conversationRepo, messageRepo, chatbotLogRepo, userRepo,
-                hiddenStateRepo, messagingTemplate);
+                hiddenStateRepo, matchRequestRepo, joinRequestRepo, messagingTemplate);
         user1 = User.builder().userId(1).build();
         user2 = User.builder().userId(2).build();
     }

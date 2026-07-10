@@ -20,10 +20,13 @@ import {
   Send,
   CheckCircle2,
   Clock,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { get, post } from "@/lib/api";
 import { toast } from "sonner";
 import { useComplaintWebSocket, type ComplaintChatEvent } from "@/hooks/useComplaintWebSocket";
+import type { PageResponse } from "@/types/common";
 
 type ResponseItem = {
   from: string;
@@ -62,13 +65,27 @@ function AdminComplaintsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [stats, setStats] = useState({ totalCount: 0, openCount: 0, progressCount: 0, escalatedCount: 0, resolvedCount: 0 });
+  const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showOverrideDialog, setShowOverrideDialog] = useState(false);
+  const [overrideText, setOverrideText] = useState("");
 
   const fetchComplaints = useCallback(async () => {
     try {
-      const data = await get<{ content: Complaint[] }>("/admin/complaints");
+      setIsLoading(true);
+      const [data, statsData] = await Promise.all([
+        get<PageResponse<Complaint>>(`/admin/complaints?page=${page}&size=20`),
+        get<any>(`/admin/complaints/stats`)
+      ]);
       const list = data.content;
+      setStats(statsData);
       if (Array.isArray(list)) {
         setComplaints(list);
+        setTotalPages(data.totalPages);
+        setTotalElements(data.totalElements);
         setError(null);
         setSelectedComplaint(prev => {
           if (prev) {
@@ -82,7 +99,7 @@ function AdminComplaintsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     fetchComplaints();
@@ -142,8 +159,36 @@ function AdminComplaintsPage() {
       setResolutionText("");
       setShowResolveDialog(false);
       toast.success("Giải quyết khiếu nại thành công!");
+      fetchComplaints();
     } catch {
       toast.error("Giải quyết khiếu nại thất bại. Vui lòng thử lại.");
+    }
+  };
+
+  const handleApproveResolution = async () => {
+    if (!selectedComplaint) return;
+    try {
+      await post(`/admin/complaints/${selectedComplaint.complaintId}/approve`, {});
+      setShowApproveDialog(false);
+      toast.success("Đã chấp nhận giải pháp của chủ sân!");
+      fetchComplaints();
+    } catch {
+      toast.error("Không thể chấp nhận giải pháp.");
+    }
+  };
+
+  const handleOverrideResolution = async () => {
+    if (!overrideText.trim() || !selectedComplaint) return;
+    try {
+      await post(`/admin/complaints/${selectedComplaint.complaintId}/override`, {
+        resolution: overrideText.trim(),
+      });
+      setOverrideText("");
+      setShowOverrideDialog(false);
+      toast.success("Đã ghi đè giải pháp của chủ sân!");
+      fetchComplaints();
+    } catch {
+      toast.error("Không thể ghi đè giải pháp.");
     }
   };
 
@@ -164,15 +209,18 @@ function AdminComplaintsPage() {
         return { label: "Đã giải quyết", color: "bg-emerald-500 text-white" };
       case "in_progress":
         return { label: "Đang xử lý", color: "bg-blue-500 text-white" };
+      case "escalated":
+        return { label: "Đã chuyển Admin", color: "bg-purple-500 text-white" };
+      case "pending_admin_review":
+        return { label: "Chờ xem xét", color: "bg-orange-500 text-white" };
+      case "customer_withdrawn":
+        return { label: "Khách rút", color: "bg-slate-500 text-white" };
       default:
         return { label: "Mới nhận", color: "bg-amber-500 text-white" };
     }
   };
 
-  const totalCount = complaints.length;
-  const openCount = complaints.filter(c => c.status === "open").length;
-  const progressCount = complaints.filter(c => c.status === "in_progress").length;
-  const resolvedCount = complaints.filter(c => c.status === "resolved").length;
+  const { totalCount, openCount, progressCount, escalatedCount, resolvedCount } = stats;
 
   const filteredComplaints = complaints.filter(c => {
     const matchesStatus = filterStatus === "all" || c.status.toLowerCase() === filterStatus.toLowerCase();
@@ -214,7 +262,7 @@ function AdminComplaintsPage() {
       </div>
 
       {/* Quick Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card><CardContent className="p-5">
           <div className="text-xs text-muted-foreground font-medium">Tổng khiếu nại</div>
           <div className="text-2xl font-bold text-foreground mt-1">{totalCount}</div>
@@ -226,6 +274,10 @@ function AdminComplaintsPage() {
         <Card><CardContent className="p-5">
           <div className="text-xs text-muted-foreground font-medium">Đang giải quyết</div>
           <div className="text-2xl font-bold text-blue-500 mt-1">{progressCount}</div>
+        </CardContent></Card>
+        <Card><CardContent className="p-5">
+          <div className="text-xs text-muted-foreground font-medium">Cần Admin xử lý</div>
+          <div className="text-2xl font-bold text-purple-500 mt-1">{escalatedCount}</div>
         </CardContent></Card>
         <Card><CardContent className="p-5">
           <div className="text-xs text-muted-foreground font-medium">Đã đóng</div>
@@ -249,7 +301,10 @@ function AdminComplaintsPage() {
               <SelectItem value="all">Mọi trạng thái</SelectItem>
               <SelectItem value="open">Mới nhận</SelectItem>
               <SelectItem value="in_progress">Đang xử lý</SelectItem>
+              <SelectItem value="escalated">Đã chuyển Admin</SelectItem>
+              <SelectItem value="pending_admin_review">Chờ xem xét</SelectItem>
               <SelectItem value="resolved">Đã giải quyết</SelectItem>
+              <SelectItem value="customer_withdrawn">Khách rút</SelectItem>
             </SelectContent>
           </Select>
           <Select value={filterPriority} onValueChange={setFilterPriority}>
@@ -316,6 +371,33 @@ function AdminComplaintsPage() {
               );
             })
           )}
+          {totalPages > 1 && (
+            <div className="sticky bottom-0 flex items-center justify-center gap-3 rounded-lg border bg-card p-3 shadow-sm">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setPage(current => Math.max(0, current - 1))}
+                disabled={page === 0 || isLoading}
+                aria-label="Trang khiếu nại trước"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs font-medium text-muted-foreground">
+                Trang {page + 1} / {totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setPage(current => Math.min(totalPages - 1, current + 1))}
+                disabled={page >= totalPages - 1 || isLoading}
+                aria-label="Trang khiếu nại sau"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Chat/Detail side */}
@@ -336,15 +418,37 @@ function AdminComplaintsPage() {
                   </div>
                   <h2 className="text-base font-semibold text-foreground">{selectedComplaint.subject}</h2>
                 </div>
-                {selectedComplaint.status !== "resolved" && (
-                  <Button
-                    size="sm"
-                    onClick={() => setShowResolveDialog(true)}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium flex items-center gap-1.5"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Đóng khiếu nại
-                  </Button>
+                {selectedComplaint.status !== "resolved" && selectedComplaint.status !== "customer_withdrawn" && (
+                  <div className="flex flex-wrap gap-2">
+                    {["pending_admin_review", "escalated"].includes(selectedComplaint.status) && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setShowApproveDialog(true)}
+                          className="font-medium"
+                        >
+                          Chấp nhận giải pháp Owner
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setShowOverrideDialog(true)}
+                          className="font-medium"
+                        >
+                          Ghi đè giải pháp
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      size="sm"
+                      onClick={() => setShowResolveDialog(true)}
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      Đóng khiếu nại
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -455,7 +559,7 @@ function AdminComplaintsPage() {
               </div>
 
               {/* Chat reply input */}
-              {selectedComplaint.status !== "resolved" && (
+              {selectedComplaint.status !== "resolved" && selectedComplaint.status !== "customer_withdrawn" && (
                 <div className="p-4 border-t bg-card flex gap-2 items-center">
                   <Input
                     placeholder="Nhập nội dung tin nhắn của Quản trị viên..."
@@ -487,6 +591,43 @@ function AdminComplaintsPage() {
           )}
         </div>
       </div>
+
+      {/* Approve dialog */}
+      <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Chấp nhận giải pháp của chủ sân</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Xác nhận giải pháp hiện tại và đóng khiếu nại #{selectedComplaint?.complaintId}.
+          </p>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowApproveDialog(false)}>Hủy</Button>
+            <Button size="sm" onClick={handleApproveResolution}>Xác nhận</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Override dialog */}
+      <Dialog open={showOverrideDialog} onOpenChange={setShowOverrideDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ghi đè giải pháp của chủ sân</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            placeholder="Nhập giải pháp mới của Admin..."
+            value={overrideText}
+            onChange={e => setOverrideText(e.target.value)}
+            rows={4}
+          />
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowOverrideDialog(false)}>Hủy</Button>
+            <Button size="sm" onClick={handleOverrideResolution} disabled={!overrideText.trim()}>
+              Xác nhận ghi đè
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Resolve dialog */}
       <Dialog open={showResolveDialog} onOpenChange={setShowResolveDialog}>

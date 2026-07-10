@@ -39,14 +39,27 @@ public class BookingDetailResponse {
     @Schema(description = "Thông tin sân đã đặt")
     private StadiumInfo stadium;
 
-    @Schema(description = "Tổng tiền", example = "500000.00")
+    @Schema(description = "Tổng tiền (đã gồm phí dịch vụ)", example = "500000.00")
     private BigDecimal totalPrice;
+
+    @Schema(description = "Phí dịch vụ nền tảng đã gồm trong totalPrice", example = "20000.00")
+    private BigDecimal serviceFee;
+
+    @Schema(description = "Số tiền THỰC TẾ đã thanh toán qua cổng — bằng totalPrice nếu trả đủ, "
+            + "chỉ bằng 30% totalPrice nếu đặt cọc. Null nếu chưa thanh toán.", example = "519750.00")
+    private BigDecimal paidAmount;
 
     @Schema(description = "Trạng thái đơn — sau createBooking luôn là PENDING", example = "pending")
     private String status;
 
     @Schema(description = "Trạng thái thanh toán — sau createBooking luôn là UNPAID", example = "unpaid")
     private String paymentStatus;
+
+    @Schema(description = "Số tiền thực tế đã hoàn — chỉ có giá trị khi paymentStatus=REFUNDED", example = "0.00")
+    private BigDecimal refundedAmount;
+
+    @Schema(description = "Tỷ lệ % hoàn tương ứng refundedAmount/originalPayment — null nếu chưa hoàn", example = "0")
+    private Integer refundPercent;
 
     @Schema(description = "Ghi chú của khách (nếu có)")
     private String note;
@@ -81,6 +94,7 @@ public class BookingDetailResponse {
     @AllArgsConstructor
     public static class StadiumInfo {
         private Integer stadiumId;
+        private Integer ownerUserId;
         private String stadiumName;
         private String address;
         private String sportType;

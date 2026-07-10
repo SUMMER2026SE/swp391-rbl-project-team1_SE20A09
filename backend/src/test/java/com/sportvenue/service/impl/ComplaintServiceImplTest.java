@@ -19,6 +19,7 @@ import com.sportvenue.repository.ComplaintRepository;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.AdminDashboardService;
+import com.sportvenue.service.ComplaintEscalationService;
 import com.sportvenue.service.NotificationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -69,6 +70,10 @@ class ComplaintServiceImplTest {
 
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
+
+    @Mock private com.sportvenue.service.EmailService emailService;
+    @Mock private com.sportvenue.util.AfterCommitExecutor afterCommitExecutor;
+    @Mock private ComplaintEscalationService escalationService;
 
     @InjectMocks
     private ComplaintServiceImpl complaintService;
@@ -207,9 +212,9 @@ class ComplaintServiceImplTest {
         ComplaintResponse response = complaintService.closeComplaint(500, "customer@example.com");
 
         assertNotNull(response);
-        assertEquals("resolved", response.getStatus());
+        assertEquals("customer_withdrawn", response.getStatus());
         assertEquals("Khách hàng", response.getResponses().get(0).getFrom());
-        assertTrue(response.getResponses().get(0).getMessage().contains("đóng khiếu nại"));
+        assertTrue(response.getResponses().get(0).getMessage().contains("rút khiếu nại"));
 
         verify(notificationService).createNotification(
                 eq(20), eq("Khiếu nại đã được đóng"), anyString(), eq(NotificationType.COMPLAINT), eq("500"));
@@ -491,15 +496,68 @@ class ComplaintServiceImplTest {
         when(complaintRepository.findById(500)).thenReturn(Optional.of(complaint));
         when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
         when(ownerRepository.findByUserUserId(20)).thenReturn(Optional.of(owner));
+
+        Complaint pendingReview = Complaint.builder()
+                .complaintId(500)
+                .booking(booking)
+                .user(customer)
+                .status(ComplaintStatus.PENDING_ADMIN_REVIEW)
+                .createdAt(LocalDateTime.now())
+                .build();
+        when(complaintRepository.findById(500)).thenReturn(Optional.of(complaint), Optional.of(pendingReview));
         when(complaintRepository.save(any(Complaint.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ComplaintResponse response = complaintService.resolveComplaint(500, request, "owner@example.com");
 
         assertNotNull(response);
-        assertEquals("resolved", response.getStatus());
+        assertEquals("pending_admin_review", response.getStatus());
         assertEquals("Chủ sân", response.getResponses().get(0).getFrom());
         assertTrue(response.getResponses().get(0).getMessage().contains("Đã hoàn tiền cho khách"));
 
-        verify(notificationService).createNotification(eq(10), eq("Khiếu nại đã được giải quyết"), anyString(), eq(NotificationType.COMPLAINT), eq("500"));
+        verify(escalationService).startOwnerResolution(500, "Đã hoàn tiền cho khách", "owner@example.com");
+    }
+
+    @Test
+    void createComplaint_CancelledBooking_Success() {
+        CreateComplaintRequest request = CreateComplaintRequest.builder()
+                .bookingId(1)
+                .subject("Sân bị hủy")
+                .description("Chủ sân hủy do lỗi sân")
+                .build();
+
+        User user = User.builder().userId(10).firstName("John").lastName("Doe").email("customer@example.com").build();
+        User ownerUser = User.builder().userId(20).email("owner@example.com").build();
+        com.sportvenue.entity.Owner owner = com.sportvenue.entity.Owner.builder().ownerId(5).user(ownerUser).build();
+        com.sportvenue.entity.Stadium stadium = com.sportvenue.entity.Stadium.builder().stadiumId(100).owner(owner).stadiumName("Stadium A").build();
+
+        Booking booking = Booking.builder()
+                .bookingId(1)
+                .user(user)
+                .stadium(stadium)
+                .bookingStatus(BookingStatus.CANCELLED)
+                .build();
+
+        when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(user));
+        when(bookingRepository.findById(1)).thenReturn(Optional.of(booking));
+        when(complaintRepository.existsByBookingBookingIdAndStatusNot(1, ComplaintStatus.RESOLVED)).thenReturn(false);
+
+        Complaint complaint = Complaint.builder()
+                .complaintId(501)
+                .booking(booking)
+                .user(user)
+                .subject("Sân bị hủy")
+                .content("Chủ sân hủy do lỗi sân")
+                .priority(ComplaintPriority.MEDIUM)
+                .status(ComplaintStatus.OPEN)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        when(complaintRepository.save(any(Complaint.class))).thenReturn(complaint);
+
+        ComplaintResponse response = complaintService.createComplaint(request, "customer@example.com");
+
+        assertNotNull(response);
+        assertEquals(501, response.getComplaintId());
+        assertEquals("open", response.getStatus());
     }
 }
