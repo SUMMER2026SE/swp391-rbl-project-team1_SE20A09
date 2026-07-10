@@ -142,6 +142,33 @@ class RefundExceptionServiceImplTest {
     }
 
     @Test
+    @DisplayName("submitRequest: đơn đặt cọc (amount < baseCourtPrice) → BadRequestException")
+    void submitRequest_depositBookingBlocked_throwsBadRequest() {
+        cancelledBooking.setTotalPrice(new BigDecimal("150000"));
+        cancelledBooking.setServiceFee(new BigDecimal("10000"));
+
+        Payment depositPayment = Payment.builder()
+                .paymentId(10)
+                .booking(cancelledBooking)
+                .amount(new BigDecimal("45000"))
+                .paymentStatus(TransactionStatus.SUCCESS)
+                .build();
+
+        when(userRepository.findByEmail("customer@test.com")).thenReturn(Optional.of(customer));
+        when(bookingRepository.findById(100)).thenReturn(Optional.of(cancelledBooking));
+        when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(List.of());
+        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(depositPayment));
+
+        SubmitExceptionRequest req = new SubmitExceptionRequest();
+        req.setBookingId(100);
+        req.setReason("Lý do dài hơn 20 ký tự để qua validation.");
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> service.submitRequest("customer@test.com", req));
+        assertTrue(ex.getMessage().contains("không áp dụng cho đơn đặt cọc"));
+    }
+
+    @Test
     @DisplayName("submitRequest: booking chưa hủy (CONFIRMED) → BadRequestException")
     void submitRequest_bookingNotCancelled_throwsBadRequest() {
         cancelledBooking.setBookingStatus(BookingStatus.CONFIRMED);
