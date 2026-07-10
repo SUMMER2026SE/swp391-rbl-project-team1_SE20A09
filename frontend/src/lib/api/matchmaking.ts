@@ -64,6 +64,11 @@ export async function getActiveMatches(
   return res.data;
 }
 
+export async function getMatchDetail(matchId: number): Promise<MatchResponse> {
+  const res = await api.get<MatchResponse>(`/matchmaking/${matchId}`);
+  return res.data;
+}
+
 export async function joinMatchRequest(
   matchId: number,
   message = "",

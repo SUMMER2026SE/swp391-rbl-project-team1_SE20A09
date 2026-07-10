@@ -56,7 +56,7 @@ function AIAssistantPage() {
           <div className="px-6 py-3 border-b border-border/60 flex justify-between items-center bg-muted/10 shrink-0">
             <div className="flex items-center gap-2">
               <Bot className="h-4 w-4 text-primary animate-pulse" />
-              <span className="text-xs font-semibold text-gray-700">SportsBook Assistant</span>
+              <span className="text-xs font-semibold text-gray-700">SportHub Assistant</span>
             </div>
             {messages.length > 1 && (
               <Button

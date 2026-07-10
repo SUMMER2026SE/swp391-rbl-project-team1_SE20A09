@@ -357,6 +357,15 @@ public class MatchRequestServiceImpl implements MatchRequestService {
 
     @Override
     @Transactional(readOnly = true)
+    public MatchResponse getMatch(Integer matchId) {
+        log.info("Retrieving match detail for ID: {}", matchId);
+        MatchRequest match = matchRequestRepository.findById(matchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Match request not found with ID: " + matchId));
+        return mapToResponse(match);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<MatchResponse> getActiveMatches(Pageable pageable) {
         log.info("Retrieving active match requests with pagination and future dates: {}", pageable);
         LocalDate nowDate = LocalDate.now();

@@ -53,6 +53,7 @@ import {
   getMyCreatedMatches,
   getMyJoinedRequests,
   cancelMatchRequest,
+  getMatchDetail,
   MatchResponse,
   JoinRequestResponse,
 } from "@/lib/api/matchmaking";
@@ -284,7 +285,21 @@ function MatchRequestFeedPage() {
       return;
     }
 
-    setHasProcessedParam(true);
+    // Fallback: Fetch specific match details
+    const fetchAndShowMatch = async () => {
+      try {
+        const match = await getMatchDetail(paramMatchId);
+        setSelectedRequest(match);
+        setShowJoinDialog(true);
+      } catch (err) {
+        toast.error("Không tìm thấy thông tin kèo, có thể kèo đã bị xóa.");
+      } finally {
+        setHasProcessedParam(true);
+      }
+    };
+    
+    fetchAndShowMatch();
+
   }, [loadingFeed, loadingSidebar, session, myCreatedMatches, myJoinedRequests, matchRequests, searchParams, hasProcessedParam]);
 
   const getSkillLevelLabel = (level: string) => {

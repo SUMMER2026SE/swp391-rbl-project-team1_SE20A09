@@ -23,6 +23,14 @@ public interface MatchRequestService {
     MatchResponse createMatch(CreateMatchRequest request, Integer userId);
 
     /**
+     * Lấy thông tin chi tiết của một kèo ghép theo ID.
+     *
+     * @param matchId ID của kèo ghép
+     * @return MatchResponse thông tin kèo ghép
+     */
+    MatchResponse getMatch(Integer matchId);
+
+    /**
      * Lấy danh sách các kèo ghép đang mở (OPEN) có phân trang.
      *
      * @param pageable thông tin phân trang
