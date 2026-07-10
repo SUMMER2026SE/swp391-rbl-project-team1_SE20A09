@@ -15,9 +15,9 @@ import java.util.Optional;
 
 /**
  * Cache "kết quả vừa hiển thị" theo lượt chat — giải quyết câu hỏi kiểu "sân đầu tiên/thứ hai"
- * ở lượt sau bằng cách tra ID THẬT theo thứ tự đã hiển thị, thay vì để LLM tự đoán/bịa ID (xem
- * docs/ai_chatbot_rebuild_plan.md mục 6.2). Redis lỗi/timeout không được làm crash luồng chat
- * chính — mọi thao tác đọc/ghi đều nuốt lỗi và log warn.
+ * ở lượt sau bằng cách tra ID THẬT theo thứ tự đã hiển thị, thay vì để LLM tự đoán/bịa ID.
+ * Đồng thời giữ lại currentStadiumId để các bước booking không cần LLM nhắc lại ID sân.
+ * Redis lỗi/timeout không được làm crash luồng chat chính — mọi thao tác đọc/ghi đều nuốt lỗi và log warn.
  */
 @Slf4j
 @Component
@@ -30,56 +30,96 @@ public class AiConversationContextService {
     private static final String KEY_PREFIX = "ai_ctx:";
     private static final Duration TTL = Duration.ofMinutes(15);
 
-    public enum LastShownType {
-        STADIUM
-    }
-
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class LastShownResults {
-        private LastShownType type;
-        private List<Integer> ids;
+    public static class ConversationContext {
+        private List<Integer> lastShownStadiumIds;
+        private List<Integer> lastShownMatchIds;
+        private List<Integer> lastShownSlotIds;
+        private Integer currentStadiumId;
     }
 
     public void saveLastShownStadiums(String conversationKey, List<Integer> stadiumIds) {
-        if (conversationKey == null || stadiumIds == null || stadiumIds.isEmpty()) {
-            return;
-        }
-        save(conversationKey, new LastShownResults(LastShownType.STADIUM, stadiumIds));
+        if (conversationKey == null || stadiumIds == null || stadiumIds.isEmpty()) return;
+        ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
+        ctx.setLastShownStadiumIds(stadiumIds);
+        save(conversationKey, ctx);
     }
 
-    /** @param targetIndex 0-based, đúng thứ tự đã hiển thị cho người dùng ("sân đầu tiên" = 0). */
+    public void saveLastShownMatches(String conversationKey, List<Integer> matchIds) {
+        if (conversationKey == null || matchIds == null || matchIds.isEmpty()) return;
+        ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
+        ctx.setLastShownMatchIds(matchIds);
+        save(conversationKey, ctx);
+    }
+
+    public void saveLastShownSlots(String conversationKey, List<Integer> slotIds) {
+        if (conversationKey == null || slotIds == null || slotIds.isEmpty()) return;
+        ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
+        ctx.setLastShownSlotIds(slotIds);
+        save(conversationKey, ctx);
+    }
+
+    public void saveCurrentStadiumId(String conversationKey, Integer stadiumId) {
+        if (conversationKey == null || stadiumId == null) return;
+        ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
+        ctx.setCurrentStadiumId(stadiumId);
+        save(conversationKey, ctx);
+    }
+
+    public Optional<Integer> getCurrentStadiumId(String conversationKey) {
+        if (conversationKey == null) return Optional.empty();
+        return load(conversationKey).map(ConversationContext::getCurrentStadiumId);
+    }
+
     public Optional<Integer> resolveStadiumIdByIndex(String conversationKey, int targetIndex) {
-        if (conversationKey == null) {
-            return Optional.empty();
-        }
+        if (conversationKey == null) return Optional.empty();
         return load(conversationKey)
-                .filter(r -> r.getType() == LastShownType.STADIUM && r.getIds() != null)
-                .map(LastShownResults::getIds)
-                .filter(ids -> targetIndex >= 0 && targetIndex < ids.size())
+                .map(ConversationContext::getLastShownStadiumIds)
+                .filter(ids -> ids != null && targetIndex >= 0 && targetIndex < ids.size())
                 .map(ids -> ids.get(targetIndex));
     }
 
-    private void save(String conversationKey, LastShownResults results) {
+    public List<Integer> getLastShownStadiumIds(String conversationKey) {
+        if (conversationKey == null) return null;
+        return load(conversationKey).map(ConversationContext::getLastShownStadiumIds).orElse(null);
+    }
+
+    public Optional<Integer> resolveMatchIdByIndex(String conversationKey, int matchIndex) {
+        if (conversationKey == null) return Optional.empty();
+        return load(conversationKey)
+                .map(ConversationContext::getLastShownMatchIds)
+                .filter(ids -> ids != null && matchIndex >= 0 && matchIndex < ids.size())
+                .map(ids -> ids.get(matchIndex));
+    }
+
+    public Optional<Integer> resolveSlotIdByIndex(String conversationKey, int slotIndex) {
+        if (conversationKey == null) return Optional.empty();
+        return load(conversationKey)
+                .map(ConversationContext::getLastShownSlotIds)
+                .filter(ids -> ids != null && slotIndex >= 0 && slotIndex < ids.size())
+                .map(ids -> ids.get(slotIndex));
+    }
+
+    private void save(String conversationKey, ConversationContext results) {
         try {
             String json = objectMapper.writeValueAsString(results);
             redisTemplate.opsForValue().set(KEY_PREFIX + conversationKey, json, TTL);
         } catch (Exception e) {
-            log.warn("Không lưu được lastShownResults context (bỏ qua, không ảnh hưởng luồng chat chính): {}", e.getMessage());
+            log.warn("Không lưu được context (bỏ qua, không ảnh hưởng luồng chat chính): {}", e.getMessage());
         }
     }
 
-    private Optional<LastShownResults> load(String conversationKey) {
+    private Optional<ConversationContext> load(String conversationKey) {
         try {
             String json = redisTemplate.opsForValue().get(KEY_PREFIX + conversationKey);
-            if (json == null) {
-                return Optional.empty();
-            }
-            return Optional.ofNullable(objectMapper.readValue(json, LastShownResults.class));
+            if (json == null) return Optional.empty();
+            return Optional.ofNullable(objectMapper.readValue(json, ConversationContext.class));
         } catch (Exception e) {
-            log.warn("Không đọc được lastShownResults context (bỏ qua, coi như chưa có sân nào hiển thị): {}", e.getMessage());
+            log.warn("Không đọc được context (hoặc sai schema cũ), reset context: {}", e.getMessage());
             return Optional.empty();
         }
     }
 }
+

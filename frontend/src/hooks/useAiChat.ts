@@ -13,6 +13,10 @@ export interface MessageItem {
   slots?: TimeSlotResponse[] | null;
   matches?: MatchResponse[] | null;
   policyText?: string | null;
+  bookingId?: number | null; // ID booking vừa tạo (intent: create_booking) - deprecated
+  draftBooking?: any | null; // Thông tin booking nháp để user confirm
+  matchId?: number | null; // ID kèo vừa tham gia (intent: join_match)
+  draftJoinMatch?: any | null; // Thông tin kèo nháp để user confirm
   isHistory?: boolean; // Cờ đánh dấu tin nhắn load từ lịch sử cũ, không chạy lại typewriter
 }
 
@@ -41,7 +45,7 @@ export function useAiChat() {
         id: "welcome",
         type: "assistant",
         content:
-          "Xin chào! Tôi là trợ lý AI của SportsBook. Tôi có thể giúp bạn tìm sân, đặt lịch, hoặc gợi ý sân phù hợp. Bạn cần tôi giúp gì?",
+          "Xin chào! Tôi là trợ lý AI của SportHub. Tôi có thể giúp bạn:\n• Tìm sân theo môn, khu vực, giá\n• Xem giờ trống và đặt sân trực tiếp\n• Tìm kèo ghép và tham gia kèo\n\nBạn cần tôi giúp gì?",
         timestamp: new Date().toLocaleTimeString("vi-VN", {
           hour: "2-digit",
           minute: "2-digit",
@@ -99,6 +103,10 @@ export function useAiChat() {
         slots: result.slots,
         matches: result.matches,
         policyText: result.policyText,
+        bookingId: result.bookingId,
+        draftBooking: result.draftBooking,
+        matchId: result.matchId,
+        draftJoinMatch: result.draftJoinMatch,
         isHistory: false, // Tin nhắn mới, kích hoạt typewriter
       };
 
@@ -130,7 +138,7 @@ export function useAiChat() {
         id: "welcome-" + Date.now(),
         type: "assistant",
         content:
-          "Xin chào! Tôi là trợ lý AI của SportsBook. Tôi có thể giúp bạn tìm sân, đặt lịch, hoặc gợi ý sân phù hợp. Bạn cần tôi giúp gì?",
+          "Xin chào! Tôi là trợ lý AI của SportHub. Tôi có thể giúp bạn:\n• Tìm sân theo môn, khu vực, giá\n• Xem giờ trống và đặt sân trực tiếp\n• Tìm kèo ghép và tham gia kèo\n\nBạn cần tôi giúp gì?",
         timestamp: new Date().toLocaleTimeString("vi-VN", {
           hour: "2-digit",
           minute: "2-digit",

@@ -43,6 +43,10 @@ public class SlotAvailabilityHandler {
     }
 
     public AiChatTurnResponse handle(JsonNode args, String llmMessage, String conversationKey) {
+        if (args == null || args.isNull() || args.isMissingNode()) {
+            return errorResponse("Chưa xác định được sân bạn muốn xem — hãy tìm sân trước (vd hỏi \"tìm sân bóng đá ở Thủ Đức\") rồi hỏi lại giờ trống.");
+        }
+
         Integer stadiumId = resolveStadiumId(args, conversationKey);
         if (stadiumId == null) {
             return errorResponse("Chưa xác định được sân bạn muốn xem — hãy tìm sân trước (vd hỏi \"tìm sân bóng đá ở Thủ Đức\") rồi hỏi lại giờ trống.");
@@ -106,6 +110,11 @@ public class SlotAvailabilityHandler {
                     .slots(List.of())
                     .build();
         }
+
+        // Lưu slot IDs để user có thể chọn theo thứ tự khi đặt sân, đồng thời lưu lại sân hiện tại
+        conversationContextService.saveLastShownSlots(conversationKey,
+                slots.stream().map(TimeSlotResponse::getSlotId).toList());
+        conversationContextService.saveCurrentStadiumId(conversationKey, stadiumId);
 
         return AiChatTurnResponse.builder()
                 .message(llmMessage)

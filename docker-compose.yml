@@ -129,6 +129,7 @@ services:
       VNPAY_URL: ${VNPAY_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
       VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-http://localhost:8080/api/v1/payments/vnpay-return}
       VNPAY_FRONTEND_RETURN_URL: ${VNPAY_FRONTEND_RETURN_URL:-http://localhost:3000/payments/result}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
     volumes:
       - ./backend/uploads:/app/uploads
     ports:

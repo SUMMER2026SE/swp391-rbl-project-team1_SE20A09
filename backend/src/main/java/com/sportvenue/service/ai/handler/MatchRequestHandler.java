@@ -6,6 +6,7 @@ import com.sportvenue.dto.response.MatchResponse;
 import com.sportvenue.entity.SportType;
 import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.service.MatchRequestService;
+import com.sportvenue.service.ai.AiConversationContextService;
 import com.sportvenue.util.location.VietnamLocationResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,12 +29,37 @@ public class MatchRequestHandler {
     private final MatchRequestService matchRequestService;
     private final SportTypeRepository sportTypeRepository;
     private final VietnamLocationResolver locationResolver;
+    private final AiConversationContextService conversationContextService;
 
     /** Mặc định 5, chặn trần 10 — card UI trong khung chat không bị quá dài. */
     private static final int DEFAULT_SIZE = 5;
     private static final int MAX_SIZE = 10;
 
     public AiChatTurnResponse handle(JsonNode args, String llmMessage) {
+        return handle(args, llmMessage, null);
+    }
+
+    public AiChatTurnResponse handle(JsonNode args, String llmMessage, String conversationKey) {
+        if (args == null || args.isNull() || args.isMissingNode()) {
+            Pageable pageable = PageRequest.of(0, DEFAULT_SIZE);
+            Page<MatchResponse> matches = matchRequestService.getActiveMatches(pageable, null, null);
+            if (matches.isEmpty()) {
+                return AiChatTurnResponse.builder()
+                        .message("Hiện tại chưa có kèo ghép nào đang mở.")
+                        .intent("find_match")
+                        .matches(List.of())
+                        .build();
+            }
+            if (conversationKey != null) {
+                conversationContextService.saveLastShownMatches(conversationKey, matches.getContent().stream().map(MatchResponse::getMatchId).toList());
+            }
+            return AiChatTurnResponse.builder()
+                    .message(llmMessage != null && !llmMessage.isBlank() ? llmMessage : "Dưới đây là một số kèo ghép hiện đang mở:")
+                    .intent("find_match")
+                    .matches(matches.getContent())
+                    .build();
+        }
+
         int page = args.hasNonNull("page") ? args.get("page").asInt() : 0;
         int size = args.hasNonNull("size") ? Math.min(args.get("size").asInt(), MAX_SIZE) : DEFAULT_SIZE;
 
@@ -75,6 +101,14 @@ public class MatchRequestHandler {
                     .intent("find_match")
                     .matches(List.of())
                     .build();
+        }
+
+        // Lưu match IDs để user có thể chọn theo thứ tự khi tham gia kèo
+        if (conversationKey != null) {
+            List<Integer> matchIds = matches.getContent().stream()
+                    .map(MatchResponse::getMatchId)
+                    .toList();
+            conversationContextService.saveLastShownMatches(conversationKey, matchIds);
         }
 
         return AiChatTurnResponse.builder()

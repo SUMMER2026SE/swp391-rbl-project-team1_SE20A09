@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportvenue.dto.request.AiChatTurnRequest;
 import com.sportvenue.dto.response.AiChatTurnResponse;
 import com.sportvenue.security.UserPrincipal;
+import com.sportvenue.service.ai.handler.BookingHandler;
+import com.sportvenue.service.ai.handler.JoinMatchHandler;
 import com.sportvenue.service.ai.handler.MatchRequestHandler;
 import com.sportvenue.service.ai.handler.PolicyHandler;
 import com.sportvenue.service.ai.handler.SlotAvailabilityHandler;
@@ -40,6 +42,8 @@ public class AiChatServiceImpl implements AiChatService {
     private final SlotAvailabilityHandler slotAvailabilityHandler;
     private final MatchRequestHandler matchRequestHandler;
     private final PolicyHandler policyHandler;
+    private final BookingHandler bookingHandler;
+    private final JoinMatchHandler joinMatchHandler;
     private final AiUsageLogRepository aiUsageLogRepository;
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
@@ -80,43 +84,97 @@ public class AiChatServiceImpl implements AiChatService {
             log.debug("Groq raw JSON cho message '{}': {}", request.getMessage(), result.text());
         } catch (LlmGatewayException e) {
             log.error("Lỗi gọi Groq gateway (kind={}): {}", e.getKind(), e.getMessage());
-            return AiChatTurnResponse.messageOnly(FALLBACK_MESSAGE, "unknown");
+            String errorMessage = e.getKind() == LlmGatewayException.Kind.RATE_LIMITED 
+                    ? "Hệ thống trợ lý AI hiện đang quá tải do có quá nhiều yêu cầu. Vui lòng thử lại sau ít phút!" 
+                    : "Hệ thống AI đang tạm gián đoạn kết nối. Vui lòng thử lại sau.";
+            return AiChatTurnResponse.messageOnly(errorMessage, "unknown");
         }
 
         try {
             intentResult = objectMapper.readValue(result.text(), ExtractedIntentResult.class);
             log.info("Intent nhận diện: '{}' -> '{}'", request.getMessage(), intentResult.getIntent());
+
+            // --- Lớp bảo vệ (Rule-based Intent Override) ---
+            String msgLower = request.getMessage().toLowerCase(Locale.ROOT);
+            
+            if ("search_stadiums".equals(intentResult.getIntent()) || "get_slots".equals(intentResult.getIntent())) {
+                boolean hasBookingAction = msgLower.contains("đặt") || msgLower.contains("book") || msgLower.contains("giữ chỗ");
+                boolean hasTime = msgLower.matches(".*\\d+(h|:).*") || msgLower.contains("giờ") || msgLower.contains("chiều") || msgLower.contains("sáng") || msgLower.contains("tối") || msgLower.contains("mai");
+
+                if (hasBookingAction && hasTime) {
+                    log.warn("Rule-based check: Ghi đè intent từ {} thành create_booking do phát hiện keyword đặt sân + thời gian.", intentResult.getIntent());
+                    intentResult.setIntent("create_booking");
+
+                    // Chuyển đổi params - giữ nguyên tất cả tham số cũ và map thêm các tham số đặc biệt
+                    com.fasterxml.jackson.databind.node.ObjectNode newParams = objectMapper.createObjectNode();
+                    if (intentResult.getParams() != null && intentResult.getParams().isObject()) {
+                        newParams.setAll((com.fasterxml.jackson.databind.node.ObjectNode) intentResult.getParams());
+                        // Map lại các trường nếu cần thiết để đảm bảo BookingHandler nhận diện được
+                        if (intentResult.getParams().hasNonNull("targetDate")) {
+                            newParams.put("date", intentResult.getParams().get("targetDate").asText());
+                        }
+                    }
+                    intentResult.setParams(newParams);
+                }
+            } else if ("find_match".equals(intentResult.getIntent())) {
+                boolean hasJoinAction = msgLower.contains("tham gia") || msgLower.contains("xin slot") || msgLower.contains("cho vô") || msgLower.contains("đăng ký");
+                boolean hasTarget = msgLower.matches(".*(kèo|số)\\s*\\d+.*") || msgLower.contains("đầu tiên") || msgLower.contains("kèo đầu") || msgLower.contains("kèo trên");
+                
+                if (hasJoinAction && hasTarget) {
+                    log.warn("Rule-based check: Ghi đè intent từ {} thành join_match do phát hiện keyword tham gia + mục tiêu.", intentResult.getIntent());
+                    intentResult.setIntent("join_match");
+                    
+                    com.fasterxml.jackson.databind.node.ObjectNode newParams = objectMapper.createObjectNode();
+                    if (msgLower.contains("đầu") || msgLower.contains("1")) {
+                        newParams.put("matchIndex", 0);
+                    } else if (msgLower.contains("2")) {
+                        newParams.put("matchIndex", 1);
+                    } else if (msgLower.contains("3")) {
+                        newParams.put("matchIndex", 2);
+                    }
+                    intentResult.setParams(newParams);
+                }
+            }
+
         } catch (Exception e) {
             log.warn("Không parse được JSON intent từ Groq, dùng fallback unknown", e);
             intentResult = ExtractedIntentResult.unknown();
         }
 
-        // Lưu AiUsageLog
+        AiChatTurnResponse response = dispatch(intentResult, conversationKey, userId);
+
+        // Lưu AiUsageLog (lưu sau khi dispatch để lấy được intent cuối cùng có thể đã bị handler thay đổi do lỗi)
         try {
             AiUsageLog usageLog = AiUsageLog.builder()
                     .userId(userId)
-                    .feature(intentResult.getIntent())
+                    .feature(response.getIntent())
                     .modelUsed(model)
                     .inputTokens(result.inputTokens())
                     .outputTokens(result.outputTokens())
                     .latencyMs(latencyMs)
+                    .userInput(request.getMessage())
+                    .rawLlmResponse(result.text())
+                    .parsedIntent(intentResult.getIntent())
+                    .actionResult(objectMapper.writeValueAsString(response))
                     .build();
             aiUsageLogRepository.save(usageLog);
         } catch (Exception e) {
             log.error("Không thể ghi log AI usage", e);
         }
 
-        return dispatch(intentResult, conversationKey);
+        return response;
     }
 
-    private AiChatTurnResponse dispatch(ExtractedIntentResult result, String conversationKey) {
+    private AiChatTurnResponse dispatch(ExtractedIntentResult result, String conversationKey, Integer userId) {
         String intent = result.getIntent();
         String message = result.getMessage();
         return switch (intent) {
             case "search_stadiums" -> stadiumSearchHandler.handle(result.getParams(), message, conversationKey);
             case "get_slots" -> slotAvailabilityHandler.handle(result.getParams(), message, conversationKey);
-            case "find_match" -> matchRequestHandler.handle(result.getParams(), message);
+            case "find_match" -> matchRequestHandler.handle(result.getParams(), message, conversationKey);
             case "get_policy" -> policyHandler.handle(result.getParams(), message);
+            case "create_booking" -> bookingHandler.handle(result.getParams(), message, conversationKey, userId);
+            case "join_match" -> joinMatchHandler.handle(result.getParams(), message, conversationKey, userId);
             case "need_more_info", "out_of_scope" ->
                     AiChatTurnResponse.messageOnly(message.isBlank() ? FALLBACK_MESSAGE : message, intent);
             default -> AiChatTurnResponse.messageOnly(FALLBACK_MESSAGE, "unknown");

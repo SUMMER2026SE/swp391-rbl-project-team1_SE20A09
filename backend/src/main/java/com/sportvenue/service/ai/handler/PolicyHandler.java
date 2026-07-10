@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 public class PolicyHandler {
 
     public AiChatTurnResponse handle(JsonNode args, String llmMessage) {
-        if (!args.hasNonNull("topic")) {
+        if (args == null || args.isNull() || args.isMissingNode() || !args.hasNonNull("topic")) {
             return AiChatTurnResponse.builder()
                     .message("Bạn muốn hỏi về chính sách gì cụ thể — thanh toán, hủy sân hay hoàn tiền?")
                     .intent("get_policy")
