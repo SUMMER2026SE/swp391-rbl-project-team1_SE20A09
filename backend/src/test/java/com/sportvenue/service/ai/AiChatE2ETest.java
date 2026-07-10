@@ -187,6 +187,70 @@ class AiChatE2ETest {
     }
 
     @Test
+    void testSlotFilling_Search_BookNoTime_ProvideTime() {
+        User mockUser = new User();
+        mockUser.setUserId(1);
+        mockUser.setEmail("user@test.com");
+        UserPrincipal userPrincipal = new UserPrincipal(mockUser);
+
+        // Turn 1: Search
+        lenient().when(groqClient.chatJson(any(), anyString(), any(), any()))
+                .thenReturn(new GroqClient.GroqResult(
+                        "{\"intent\":\"search_stadiums\",\"message\":\"ok\",\"params\":{\"keyword\":\"Thủ Đức\"}}", 0, 0, 0))
+                .thenReturn(new GroqClient.GroqResult(
+                        "{\"intent\":\"create_booking\",\"message\":\"ok\",\"params\":{\"keyword\":\"Thủ Đức\",\"date\":\"2026-07-16\"}}", 0, 0, 0))
+                .thenReturn(new GroqClient.GroqResult(
+                        "{\"intent\":\"create_booking\",\"message\":\"ok\",\"params\":{\"startTime\":\"14:00\"}}", 0, 0, 0));
+
+        StadiumResponse searchRes = new StadiumResponse();
+        searchRes.setStadiumId(99);
+        searchRes.setStadiumName("Sân Thủ Đức 1");
+        lenient().when(publicStadiumService.searchStadiums(any())).thenReturn(
+                PageResponse.<StadiumResponse>builder().content(List.of(searchRes)).build());
+
+        AiChatTurnResponse res1 = aiChatService.handleChat(request("tìm sân thủ đức"), userPrincipal, "u:3");
+        assertThat(res1.getIntent()).isEqualTo("search_stadiums");
+
+        // Turn 2: Book but without time
+        // Giả lập Redis đang lưu lastShownStadiumIds = [99] (do Search vừa xong lưu lại)
+        String contextJson1 = "{\"lastShownStadiumIds\":[99]}";
+        lenient().when(redisTemplate.opsForValue().get("ai_ctx:u:3")).thenReturn(contextJson1);
+        
+        Stadium stadium = new Stadium();
+        stadium.setStadiumId(99);
+        stadium.setStadiumName("Sân Thủ Đức 1");
+        stadium.setNodeType(StadiumNodeType.COURT);
+        stadium.setStadiumStatus(StadiumStatus.AVAILABLE);
+
+        lenient().when(stadiumRepository.findAllById(List.of(99))).thenReturn(List.of(stadium));
+        lenient().when(stadiumRepository.findById(99)).thenReturn(Optional.of(stadium));
+
+        com.sportvenue.dto.response.TimeSlotResponse slotRes = new com.sportvenue.dto.response.TimeSlotResponse();
+        slotRes.setSlotId(1234);
+        slotRes.setStartTime(java.time.LocalTime.of(14, 0));
+        slotRes.setAvailable(true);
+        slotRes.setPricePerSlot(java.math.BigDecimal.valueOf(100000));
+        lenient().when(bookingService.getSlotsByDate(any(), any())).thenReturn(List.of(slotRes));
+
+        AiChatTurnResponse res2 = aiChatService.handleChat(request("đặt sân thủ đức vào ngày 16/7"), userPrincipal, "u:3");
+        // Hàm booking handler sẽ nhận ra thiếu time và hỏi lại, đồng thời lưu pending state (stadiumId=99, date=2026-07-16)
+        assertThat(res2.getIntent()).isEqualTo("create_booking");
+        assertThat(res2.getMessage()).contains("Chưa xác định được khung giờ");
+
+        // Turn 3: User provide time only
+        // Giả lập Redis lưu pending state từ lượt trước (Lưu ý: Mock cần tái hiện lại đúng trạng thái đã serialize)
+        String contextJson2 = "{\"lastShownStadiumIds\":[99], \"pendingAction\": {\"intent\": \"create_booking\", \"data\": {\"stadiumId\": 99, \"date\": \"2026-07-16\"}, \"missingField\": \"slot\"}}";
+        lenient().when(redisTemplate.opsForValue().get("ai_ctx:u:3")).thenReturn(contextJson2);
+
+        AiChatTurnResponse res3 = aiChatService.handleChat(request("2 giờ chiều"), userPrincipal, "u:3");
+        assertThat(res3.getIntent()).isEqualTo("confirm_booking");
+        assertThat(res3.getDraftBooking()).isNotNull();
+        assertThat(res3.getDraftBooking().getStartTime()).isEqualTo("14:00");
+        assertThat(res3.getDraftBooking().getDate()).isEqualTo("2026-07-16");
+        assertThat(res3.getDraftBooking().getStadiumId()).isEqualTo(99);
+    }
+
+    @Test
     void testSearchThenBookDirectly_ContextResolved() {
         User mockUser = new User();
         mockUser.setUserId(1);

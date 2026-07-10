@@ -64,6 +64,10 @@ public class BookingHandler {
             return errorResponse("Bạn cần đăng nhập để đặt sân qua chat. Vui lòng đăng nhập và thử lại.");
         }
 
+        // --- MERGE PENDING ACTION ---
+        mergePendingState(args, conversationKey);
+        // -----------------------------
+
         if (args == null || args.isNull() || args.isMissingNode()) {
             return errorResponse("Chưa xác định được sân bạn muốn đặt. Bạn muốn đặt sân nào? (Vd: sân bóng đá Thủ Đức)");
         }
@@ -111,6 +115,14 @@ public class BookingHandler {
             if (args.hasNonNull("slotIndex") && conversationContextService.resolveSlotIdByIndex(conversationKey, args.get("slotIndex").asInt()).isEmpty()) {
                 return systemBugResponse("Không thể xác định được khung giờ từ lịch sử chat. Vui lòng hỏi lại giờ trống.");
             }
+            
+            // Lưu pending state
+            java.util.Map<String, Object> data = new java.util.HashMap<>();
+            data.put("stadiumId", stadiumId);
+            data.put("date", requestedDate.toString());
+            conversationContextService.savePendingAction(conversationKey, 
+                    new AiConversationContextService.PendingAction("create_booking", data, "slot"));
+                    
             return errorResponse("Chưa xác định được khung giờ bạn muốn đặt. Bạn muốn đặt lúc mấy giờ? (Vd: 2h chiều thứ 7)");
         }
 
@@ -124,6 +136,33 @@ public class BookingHandler {
             return duplicateResponse;
         }
 
+        return createConfirmBookingResponse(stadium, requestedDate, targetSlot, conversationKey);
+    }
+
+    private void mergePendingState(JsonNode args, String conversationKey) {
+        if (args != null && args.isObject()) {
+            com.fasterxml.jackson.databind.node.ObjectNode mutableArgs = (com.fasterxml.jackson.databind.node.ObjectNode) args;
+            Optional<AiConversationContextService.PendingAction> pendingOpt = conversationContextService.getPendingAction(conversationKey);
+            if (pendingOpt.isPresent()) {
+                AiConversationContextService.PendingAction pending = pendingOpt.get();
+                if ("create_booking".equals(pending.getIntent()) && pending.getData() != null) {
+                    pending.getData().forEach((key, value) -> {
+                        if (!mutableArgs.hasNonNull(key) && value != null) {
+                            if (value instanceof Integer) {
+                                mutableArgs.put(key, (Integer) value);
+                            } else if (value instanceof String) {
+                                mutableArgs.put(key, (String) value);
+                            } else if (value instanceof Boolean) {
+                                mutableArgs.put(key, (Boolean) value);
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    }
+
+    private AiChatTurnResponse createConfirmBookingResponse(Stadium stadium, LocalDate requestedDate, TimeSlotResponse targetSlot, String conversationKey) {
         // Tạo Draft Booking thay vì gọi createBooking
         DraftBookingResponse draft = DraftBookingResponse.builder()
                 .stadiumId(stadium.getStadiumId())
@@ -132,6 +171,9 @@ public class BookingHandler {
                 .startTime(targetSlot.getStartTime().toString())
                 .price(targetSlot.getPricePerSlot())
                 .build();
+
+        // Hoàn thành booking -> clear pending action
+        conversationContextService.clearPendingAction(conversationKey);
 
         return AiChatTurnResponse.builder()
                 .message("Thông tin đặt sân đã sẵn sàng. Vui lòng kiểm tra lại và bấm nút bên dưới để tiến hành thanh toán.")

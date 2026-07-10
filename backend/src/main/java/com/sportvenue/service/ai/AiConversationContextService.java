@@ -33,11 +33,21 @@ public class AiConversationContextService {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    public static class PendingAction {
+        private String intent;
+        private java.util.Map<String, Object> data;
+        private String missingField;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class ConversationContext {
         private List<Integer> lastShownStadiumIds;
         private List<Integer> lastShownMatchIds;
         private List<Integer> lastShownSlotIds;
         private Integer currentStadiumId;
+        private PendingAction pendingAction;
     }
 
     public void saveLastShownStadiums(String conversationKey, List<Integer> stadiumIds) {
@@ -118,6 +128,31 @@ public class AiConversationContextService {
                 .map(ConversationContext::getLastShownSlotIds)
                 .filter(ids -> ids != null && slotIndex >= 0 && slotIndex < ids.size())
                 .map(ids -> ids.get(slotIndex));
+    }
+
+    public void savePendingAction(String conversationKey, PendingAction pendingAction) {
+        if (conversationKey == null) {
+            return;
+        }
+        ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
+        ctx.setPendingAction(pendingAction);
+        save(conversationKey, ctx);
+    }
+
+    public Optional<PendingAction> getPendingAction(String conversationKey) {
+        if (conversationKey == null) {
+            return Optional.empty();
+        }
+        return load(conversationKey).map(ConversationContext::getPendingAction);
+    }
+
+    public void clearPendingAction(String conversationKey) {
+        if (conversationKey == null) {
+            return;
+        }
+        ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
+        ctx.setPendingAction(null);
+        save(conversationKey, ctx);
     }
 
     private void save(String conversationKey, ConversationContext results) {
