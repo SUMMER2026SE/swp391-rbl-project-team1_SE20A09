@@ -108,5 +108,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
 
     @Query("SELECT p FROM Payment p WHERE p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.PENDING AND p.amount < 0 AND p.paidAt <= :threshold")
     List<Payment> findPendingRefundsOlderThan(@Param("threshold") LocalDateTime threshold);
+
+    @Query("SELECT p FROM Payment p WHERE p.booking.bookingId IN :bookingIds AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS AND p.amount > 0")
+    List<Payment> findSuccessPaymentsByBookingIds(@Param("bookingIds") List<Integer> bookingIds);
 }
 

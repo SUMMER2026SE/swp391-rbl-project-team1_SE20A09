@@ -447,6 +447,7 @@ public class RefundServiceImpl implements RefundService {
         List<Integer> bookingIds = bookings.getContent().stream()
                 .map(Booking::getBookingId).toList();
         java.util.Map<Integer, BigDecimal> refundMap = new java.util.HashMap<>();
+        java.util.Map<Integer, BigDecimal> successPaymentMap = new java.util.HashMap<>();
         if (!bookingIds.isEmpty()) {
             List<Payment> refundPayments = paymentRepository.findRefundPaymentsByBookingIds(bookingIds);
             for (Payment p : refundPayments) {
@@ -454,6 +455,12 @@ public class RefundServiceImpl implements RefundService {
                     Integer bid = p.getBooking().getBookingId();
                     BigDecimal amt = p.getAmount().abs();
                     refundMap.put(bid, refundMap.getOrDefault(bid, BigDecimal.ZERO).add(amt));
+                }
+            }
+            List<Payment> successPayments = paymentRepository.findSuccessPaymentsByBookingIds(bookingIds);
+            for (Payment p : successPayments) {
+                if (p.getBooking() != null && p.getAmount() != null) {
+                    successPaymentMap.put(p.getBooking().getBookingId(), p.getAmount());
                 }
             }
         }
@@ -470,6 +477,16 @@ public class RefundServiceImpl implements RefundService {
             String endTimeStr = b.getSlot().getEndTime().toString();
 
             BigDecimal refundAmt = refundMap.getOrDefault(b.getBookingId(), BigDecimal.ZERO);
+            BigDecimal successPaid = successPaymentMap.getOrDefault(b.getBookingId(), BigDecimal.ZERO);
+
+            // Nếu đơn bị hủy, số tiền thực tế khách đã trả qua cổng thanh toán chỉ là số tiền thanh toán thành công (Paid hoặc Deposited).
+            // Nếu không bị hủy (COMPLETED, CONFIRMED...), khách sẽ thanh toán đủ b.getTotalPrice() (online hoặc tiền mặt).
+            BigDecimal bookingAmt = b.getTotalPrice();
+            if (b.getBookingStatus() == com.sportvenue.entity.enums.BookingStatus.CANCELLED) {
+                bookingAmt = successPaid;
+            }
+
+            BigDecimal serviceFee = b.getServiceFee() != null ? b.getServiceFee() : BigDecimal.ZERO;
 
             return OwnerBookingResponse.builder()
                     .id(b.getBookingId())
@@ -478,8 +495,9 @@ public class RefundServiceImpl implements RefundService {
                     .venue(b.getStadium().getStadiumName())
                     .date(b.getReservationDate().toString())
                     .time(startTimeStr + " - " + endTimeStr)
-                    .amount(b.getTotalPrice())
+                    .amount(bookingAmt)
                     .refundAmount(refundAmt)
+                    .serviceFee(serviceFee)
                     .paymentStatus(b.getPaymentStatus().name().toLowerCase())
                     .status(b.getBookingStatus().name().toLowerCase())
                     .notes(b.getNote() != null ? b.getNote() : "")

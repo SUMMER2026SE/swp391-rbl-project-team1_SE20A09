@@ -56,6 +56,7 @@ interface BookingItem {
   time: string;
   amount: number;
   refundAmount: number;
+  serviceFee?: number;
   paymentStatus: string;
   status: string;
   notes: string;
@@ -328,7 +329,7 @@ function BookingManagementPage() {
           <td className="p-4 align-middle text-right text-emerald-600 dark:text-emerald-400 font-bold">
             {(() => {
               const isPaidType = booking.paymentStatus.toLowerCase() === "paid" || booking.paymentStatus.toLowerCase() === "refunded";
-              const netVal = isPaidType ? (booking.amount - booking.refundAmount) : 0;
+              const netVal = isPaidType ? (booking.amount - (booking.serviceFee || 0) - booking.refundAmount) : 0;
               return `${netVal.toLocaleString('vi-VN')}đ`;
             })()}
           </td>
@@ -493,7 +494,11 @@ function BookingManagementPage() {
     return sum + (isPaidType ? b.amount : 0);
   }, 0);
   const totalRefundedAmount = activeBookings.reduce((sum, b) => sum + (b.refundAmount || 0), 0);
-  const totalNetAmount = totalGrossAmount - totalRefundedAmount;
+  const totalServiceFee = activeBookings.reduce((sum, b) => {
+    const isPaidType = b.paymentStatus.toLowerCase() === "paid" || b.paymentStatus.toLowerCase() === "refunded";
+    return sum + (isPaidType ? (b.serviceFee || 0) : 0);
+  }, 0);
+  const totalNetAmount = totalGrossAmount - totalRefundedAmount - totalServiceFee;
 
   return (
     <>
