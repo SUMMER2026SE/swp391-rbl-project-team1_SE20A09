@@ -12,6 +12,7 @@ import com.sportvenue.exception.AppException;
 import com.sportvenue.exception.ErrorCode;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.StadiumRepository;
+import com.sportvenue.service.AccountStatusService;
 import com.sportvenue.service.AdminOwnerService;
 import com.sportvenue.service.EmailService;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
     private final OwnerRepository ownerRepository;
     private final StadiumRepository stadiumRepository;
     private final EmailService emailService;
+    private final AccountStatusService accountStatusService;
 
     @Override
     public PageResponse<AdminOwnerResponse> getOwners(String search, String accountStatusStr, String approvedStatusStr,
@@ -105,7 +107,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
         }
 
         User user = owner.getUser();
-        user.setAccountStatus(isEnabled ? AccountStatus.ACTIVE : AccountStatus.BLOCKED);
+        accountStatusService.applyAdminLockState(user, isEnabled);
         user.setLockReason(reason);
 
         // Lock: chỉ set AVAILABLE → MAINTENANCE (CLOSED giữ nguyên)
