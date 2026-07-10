@@ -554,6 +554,7 @@ public class ComplaintServiceImpl implements ComplaintService {
                 .slaViolated(c.getSlaViolated())
                 .build();
     }
+
     @Override
     @Transactional(readOnly = true)
     public com.sportvenue.dto.response.ComplaintStatsDto getAdminComplaintStats() {
