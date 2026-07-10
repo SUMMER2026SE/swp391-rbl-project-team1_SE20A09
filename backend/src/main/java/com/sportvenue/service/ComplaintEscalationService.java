@@ -1,11 +1,5 @@
 package com.sportvenue.service;
 
-<<<<<<< HEAD
-=======
-import com.sportvenue.entity.Complaint;
-import com.sportvenue.entity.enums.ComplaintStatus;
-
->>>>>>> e4e6fe320314df9ca632bbe1575a693a3eb1766a
 public interface ComplaintEscalationService {
     
     /**
