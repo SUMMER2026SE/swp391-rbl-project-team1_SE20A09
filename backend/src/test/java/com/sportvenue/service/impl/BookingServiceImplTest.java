@@ -678,6 +678,65 @@ class BookingServiceImplTest {
     }
 
     @Test
+    @DisplayName("cancelBooking: customer cancels <12h before play time -> 0% refund, gateway skipped, no error")
+    void cancelBooking_customerCancels_below12h_skipsGatewayAndSucceeds() {
+        // Arrange: giờ chơi còn 5h nữa -> tiering trả về 0% (docs/qa_findings_refactor_plan.md mục 1.3)
+        LocalDateTime targetPlayTime = LocalDateTime.now().plusHours(5);
+        slot.setStartTime(targetPlayTime.toLocalTime());
+
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("150000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .reservationDate(targetPlayTime.toLocalDate())
+                .build();
+
+        com.sportvenue.entity.Payment originalPayment = com.sportvenue.entity.Payment.builder()
+                .paymentId(1)
+                .booking(booking)
+                .amount(new BigDecimal("150000"))
+                .transactionCode("TXN123")
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.SUCCESS)
+                .build();
+
+        when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        when(bookingRepository.findById(100)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(originalPayment));
+        when(paymentRepository.save(any(com.sportvenue.entity.Payment.class))).thenAnswer(inv -> inv.getArgument(0));
+        // findRefundPaymentByBookingId được gọi 2 lần với 2 mục đích khác nhau trong cùng luồng:
+        // lần 1 (trong processLocalCancellationTx) là guard chống double-refund — TRƯỚC khi hủy,
+        // chưa có refund payment nào nên phải rỗng; lần 2 (trong toBookingDetailResponse) lấy
+        // refund payment vừa tạo để hiển thị — lúc này mới có. Query dùng amount <= 0 nên PHẢI
+        // tìm thấy payment 0đ ở lần 2 — đây chính là bug thực tế đã gặp: query cũ dùng "< 0" bỏ
+        // sót refund 0đ, khiến trang chi tiết booking hiện "Đang xử lý..." mãi thay vì "0đ (0%)".
+        when(paymentRepository.findRefundPaymentByBookingId(100))
+                .thenReturn(List.of())
+                .thenReturn(List.of(com.sportvenue.entity.Payment.builder()
+                        .paymentId(2).amount(BigDecimal.ZERO)
+                        .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.SUCCESS)
+                        .build()));
+
+        // Act — không được throw BadRequestException("Lỗi hoàn tiền qua cổng thanh toán...")
+        BookingDetailResponse response = bookingService.cancelBooking(principal, 100, "Bận đột xuất");
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
+        assertEquals(PaymentStatus.REFUNDED, booking.getPaymentStatus());
+        verify(paymentService, never()).processRefund(any(), any(), any());
+        verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(
+                p -> p.getAmount().compareTo(BigDecimal.ZERO) == 0));
+        assertEquals(0, BigDecimal.ZERO.compareTo(response.getRefundedAmount()),
+                "refundedAmount phải là 0đ, không được null (mới hiện đúng UI thay vì 'Đang xử lý...' mãi)");
+        assertEquals(0, response.getRefundPercent());
+    }
+
+    @Test
     @DisplayName("cancelBooking: venue owner can cancel booking successfully -> success")
     void cancelBooking_byVenueOwner_success() {
         // Arrange
@@ -913,7 +972,7 @@ class BookingServiceImplTest {
                 .build();
 
         when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
-        when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(Optional.of(pendingRefund));
+        when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(List.of(pendingRefund));
 
         // Act & Assert
         BadRequestException ex = assertThrows(BadRequestException.class,

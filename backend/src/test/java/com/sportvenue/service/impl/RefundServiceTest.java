@@ -496,7 +496,7 @@ class RefundServiceTest {
         when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
         when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
         when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
-        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(Optional.of(pendingRefund));
+        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(List.of(pendingRefund));
 
         // Act & Assert
         BadRequestException ex = assertThrows(BadRequestException.class, 

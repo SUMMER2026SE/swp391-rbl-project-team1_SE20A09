@@ -120,7 +120,7 @@ public class RefundServiceImpl implements RefundService {
             validateOwnershipAndStatus(booking, owner);
 
             // Kiểm tra xem đã có giao dịch hoàn tiền nào (PENDING hoặc SUCCESS) đang tồn tại chưa để tránh Double Refund
-            paymentRepository.findRefundPaymentByBookingId(bookingId).ifPresent(p -> {
+            paymentRepository.findRefundPaymentByBookingId(bookingId).stream().findFirst().ifPresent(p -> {
                 if (p.getPaymentStatus() == TransactionStatus.PENDING || p.getPaymentStatus() == TransactionStatus.SUCCESS) {
                     throw new BadRequestException("Yêu cầu hoàn tiền đang được xử lý hoặc đã thành công.");
                 }
@@ -218,7 +218,7 @@ public class RefundServiceImpl implements RefundService {
         return LocalDateTime.of(booking.getReservationDate(), booking.getSlot().getStartTime());
     }
 
-    private RefundCalculation calculateRefund(Booking booking, Payment originalPayment,
+    static RefundCalculation calculateRefund(Booking booking, Payment originalPayment,
             RefundReasonType reasonType, String proofUrl, boolean isPreview) {
         BigDecimal baseAmount = originalPayment != null ? originalPayment.getAmount() : booking.getTotalPrice();
 
@@ -473,7 +473,7 @@ public class RefundServiceImpl implements RefundService {
 
     @Getter
     @RequiredArgsConstructor
-    private static class RefundCalculation {
+    static class RefundCalculation {
         private final int percentage;
         private final BigDecimal amount;
     }

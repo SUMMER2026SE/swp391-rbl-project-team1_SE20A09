@@ -137,6 +137,10 @@ export type BookingDetailItem = {
   serviceFee: number;
   status: "pending" | "pending_payment" | "confirmed" | "completed" | "cancelled";
   paymentStatus: string;
+  /** Số tiền thực tế đã hoàn — null nếu paymentStatus khác "refunded". */
+  refundedAmount: number | null;
+  /** % hoàn tương ứng refundedAmount — null nếu chưa hoàn. */
+  refundPercent: number | null;
   createdAt: string;
   note: string | null;
   ownerUserId?: number;
@@ -159,6 +163,8 @@ export async function fetchBookingDetail(id: string | number): Promise<BookingDe
     serviceFee: typeof data.serviceFee === "number" ? data.serviceFee : Number(data.serviceFee) || 0,
     status: data.status,
     paymentStatus: data.paymentStatus,
+    refundedAmount: typeof data.refundedAmount === "number" ? data.refundedAmount : (data.refundedAmount != null ? Number(data.refundedAmount) : null),
+    refundPercent: typeof data.refundPercent === "number" ? data.refundPercent : (data.refundPercent != null ? Number(data.refundPercent) : null),
     createdAt: data.createdAt || "Chưa rõ",
     note: data.note || null,
     ownerUserId: data.stadium?.ownerUserId,

@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Clock, Calendar, Star, MessageSquare, AlertCircle, Loader2, Info } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Calendar, Star, MessageSquare, AlertCircle, Loader2, Info, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { post } from '@/lib/api';
+import { post, get, put } from '@/lib/api';
 import { fetchBookingDetail, type BookingDetailItem } from '@/lib/bookings-api';
 import { initiateVnpayPayment } from '@/lib/payments-api';
 import { toast } from 'sonner';
@@ -18,6 +18,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/landing/Footer';
 import { chatUrl, createContextualConversation } from '@/lib/contextual-chat';
+import { RefundExceptionDialog } from '@/components/bookings/RefundExceptionDialog';
 
 const STATUS_CONFIG = {
   confirmed: { label: "Đã xác nhận", className: "bg-green-50 text-green-700 border-green-200" },
@@ -33,6 +34,16 @@ const PAYMENT_STATUS_CONFIG = {
   paid: { label: "Đã thanh toán", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   refunded: { label: "Đã hoàn tiền", className: "bg-blue-50 text-blue-700 border-blue-200" },
   awaiting_cash_payment: { label: "Chờ thu tiền mặt", className: "bg-amber-50 text-amber-700 border-amber-200" }
+} as const;
+
+const EXCEPTION_STATUS_CONFIG = {
+  PENDING_OWNER: { label: "Chờ Owner duyệt", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  APPROVED_OWNER: { label: "Chấp nhận (Chờ hoàn)", className: "bg-green-50 text-green-700 border-green-200" },
+  REJECTED_OWNER: { label: "Owner từ chối", className: "bg-red-50 text-red-700 border-red-200" },
+  PENDING_ADMIN: { label: "Chờ Admin duyệt (Leo thang)", className: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  APPROVED_ADMIN: { label: "Đã hoàn tiền (Admin)", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  REJECTED_ADMIN: { label: "Từ chối cuối (Admin)", className: "bg-slate-50 text-slate-700 border-slate-200" },
+  EXPIRED: { label: "Đã hết hạn", className: "bg-slate-50 text-slate-500 border-slate-200" },
 } as const;
 
 function getStatusBadge(status: BookingDetailItem["status"]) {
@@ -66,6 +77,10 @@ export default function BookingDetailPage() {
   const [submitting, setSubmitting] = useState(false);
   const [paying, setPaying] = useState(false);
   const [chatStarting, setChatStarting] = useState(false);
+  
+  const [exceptionRequest, setExceptionRequest] = useState<any | null>(null);
+  const [exceptionDialogOpen, setExceptionDialogOpen] = useState(false);
+  const [escalating, setEscalating] = useState(false);
 
   const handleMessageOwner = async () => {
     if (!booking?.ownerUserId) return toast.error('Không tìm thấy tài khoản chủ sân');
@@ -80,6 +95,15 @@ export default function BookingDetailPage() {
     finally { setChatStarting(false); }
   };
 
+  const loadExceptionData = async (bookingId: string) => {
+    try {
+      const data = await get<any>(`/refund-exceptions/booking/${bookingId}/latest`);
+      setExceptionRequest(data || null);
+    } catch {
+      setExceptionRequest(null);
+    }
+  };
+
   useEffect(() => {
     const loadData = async () => {
       if (!params?.id) return;
@@ -87,6 +111,9 @@ export default function BookingDetailPage() {
         setLoading(true);
         const data = await fetchBookingDetail(params.id as string);
         setBooking(data);
+        if (data.status === 'cancelled') {
+          await loadExceptionData(params.id as string);
+        }
       } catch (err: any) {
         setError(err.message || 'Không thể tải chi tiết đặt sân');
       } finally {
@@ -96,6 +123,20 @@ export default function BookingDetailPage() {
 
     loadData();
   }, [params?.id]);
+
+  const handleEscalate = async () => {
+    if (!exceptionRequest) return;
+    try {
+      setEscalating(true);
+      const res = await put<any>(`/refund-exceptions/${exceptionRequest.requestId}/escalate`);
+      toast.success("Đã leo thang yêu cầu lên Admin thành công!");
+      setExceptionRequest(res);
+    } catch (err: any) {
+      toast.error(err.message || "Có lỗi xảy ra khi leo thang.");
+    } finally {
+      setEscalating(false);
+    }
+  };
 
   const handlePayWithVnpay = async (option: string = "FULL") => {
     if (!booking) return;
@@ -301,6 +342,20 @@ export default function BookingDetailPage() {
                     </div>
                     {getPaymentStatusBadge(booking.paymentStatus)}
                   </div>
+
+                  {booking.paymentStatus === 'refunded' && (
+                    <>
+                      <Separator className="bg-slate-100" />
+                      <div className="flex justify-between items-center text-sm bg-blue-50/60 -mx-2 px-2 py-2 rounded-xl">
+                        <span className="text-blue-700 font-semibold">Đã hoàn tiền</span>
+                        <span className="font-bold text-blue-700">
+                          {booking.refundedAmount !== null
+                            ? `${booking.refundedAmount.toLocaleString('vi-VN')}đ${booking.refundPercent !== null ? ` (${booking.refundPercent}%)` : ''}`
+                            : 'Đang xử lý...'}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -331,6 +386,102 @@ export default function BookingDetailPage() {
               </div>
             </Card>
           </div>
+
+          {booking.status === 'cancelled' && (
+            <Card className="rounded-3xl border border-slate-100 shadow-sm bg-white p-6">
+              <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <HelpCircle className="h-5 w-5 text-emerald-500" />
+                Xem xét ngoại lệ hoàn tiền
+              </h3>
+              
+              {exceptionRequest ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-500">Trạng thái yêu cầu:</span>
+                    <Badge variant="outline" className={`${EXCEPTION_STATUS_CONFIG[exceptionRequest.status as keyof typeof EXCEPTION_STATUS_CONFIG]?.className || "bg-slate-50 text-slate-600"} font-bold px-3 py-1 rounded-full text-[10px] uppercase tracking-wider`}>
+                      {EXCEPTION_STATUS_CONFIG[exceptionRequest.status as keyof typeof EXCEPTION_STATUS_CONFIG]?.label || exceptionRequest.status}
+                    </Badge>
+                  </div>
+                  
+                  <div className="rounded-2xl bg-slate-50 p-4 space-y-3 text-sm">
+                    <div>
+                      <span className="font-semibold text-slate-700">Lý do của bạn:</span>
+                      <p className="text-slate-600 mt-1 italic">"{exceptionRequest.reason}"</p>
+                    </div>
+
+                    {exceptionRequest.evidenceUrl && (
+                      <div className="space-y-1.5">
+                        <span className="font-semibold text-slate-700">Bằng chứng đã gửi:</span>
+                        <a
+                          href={exceptionRequest.evidenceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block border border-slate-200 rounded-xl overflow-hidden bg-white hover:opacity-90 transition-opacity max-w-xs"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={exceptionRequest.evidenceUrl}
+                            alt="Bằng chứng bất khả kháng"
+                            className="w-full object-contain max-h-52 bg-white"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).style.display = "none";
+                              e.currentTarget.nextElementSibling?.classList.remove("hidden");
+                            }}
+                          />
+                          <span className="hidden block px-3 py-2 text-xs text-primary break-all">
+                            {exceptionRequest.evidenceUrl}
+                          </span>
+                        </a>
+                      </div>
+                    )}
+                    
+                    {exceptionRequest.refundPercent !== null && (
+                      <div>
+                        <span className="font-semibold text-slate-700">Tỷ lệ hoàn tiền được duyệt:</span>
+                        <span className="ml-2 font-bold text-emerald-600">{exceptionRequest.refundPercent}%</span>
+                      </div>
+                    )}
+
+                    {exceptionRequest.ownerNote && (
+                      <div>
+                        <span className="font-semibold text-slate-700">Phản hồi từ Chủ sân:</span>
+                        <p className="text-slate-600 mt-1">"{exceptionRequest.ownerNote}"</p>
+                      </div>
+                    )}
+
+                    {exceptionRequest.adminNote && (
+                      <div>
+                        <span className="font-semibold text-slate-700">Quyết định từ Admin:</span>
+                        <p className="text-slate-600 mt-1">"{exceptionRequest.adminNote}"</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {exceptionRequest.canEscalate && (
+                    <Button
+                      onClick={handleEscalate}
+                      disabled={escalating}
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl h-11 disabled:opacity-60"
+                    >
+                      {escalating ? "Đang xử lý..." : "Leo thang lên Ban quản trị (Admin)"}
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-600 leading-relaxed">
+                    Đơn hủy sát giờ nhận hoàn tiền 0%. Nếu bạn gặp sự cố bất khả kháng (sức khỏe, tai nạn...), bạn có thể gửi yêu cầu kèm bằng chứng để Chủ sân và Admin xem xét hoàn lại 50% hoặc 100%.
+                  </p>
+                  <Button
+                    onClick={() => setExceptionDialogOpen(true)}
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl h-11"
+                  >
+                    Nộp yêu cầu ngoại lệ
+                  </Button>
+                </div>
+              )}
+            </Card>
+          )}
 
           {/* Action Buttons */}
           <Card className="rounded-3xl border-none shadow-sm bg-slate-900 p-6">
@@ -405,6 +556,17 @@ export default function BookingDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Refund Exception Dialog */}
+      <RefundExceptionDialog
+        bookingId={exceptionDialogOpen && booking ? parseInt(booking.id, 10) : null}
+        onOpenChange={setExceptionDialogOpen}
+        onSubmitSuccess={() => {
+          if (booking) {
+            loadExceptionData(booking.id);
+          }
+        }}
+      />
     </div>
   );
 }
