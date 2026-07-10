@@ -189,9 +189,11 @@ class BookingServiceImplTest {
         // Assert
         assertNotNull(response);
         assertEquals(99, response.getBookingId());
-        // totalPrice = 150000 (slot) + 50000*2=100000 (accessory) + 20000 (service) = 270000
-        assertEquals(0, new BigDecimal("270000.00").compareTo(response.getTotalPrice()),
-                "totalPrice phải = slot + accessories + serviceFee (20k)");
+        // totalPrice = 150000 (slot) + 50000*2=100000 (accessory) + 10000 (service) = 260000
+        assertEquals(0, new BigDecimal("260000.00").compareTo(response.getTotalPrice()),
+                "totalPrice phải = slot + accessories + serviceFee (10k)");
+        assertEquals(0, new BigDecimal("10000.00").compareTo(response.getServiceFee()),
+                "serviceFee phải được tính động là 10k");
 
         // Verify accessory đã được persist với bookingId
         ArgumentCaptor<List<BookingAccessory>> captor = ArgumentCaptor.forClass(List.class);
@@ -235,8 +237,8 @@ class BookingServiceImplTest {
 
         BookingDetailResponse response = bookingService.createBooking(principal, request);
 
-        // 150000 + 0 + 20000 = 170000
-        assertEquals(0, new BigDecimal("170000.00").compareTo(response.getTotalPrice()));
+        // 150000 + 0 + 10000 = 160000
+        assertEquals(0, new BigDecimal("160000.00").compareTo(response.getTotalPrice()));
         verify(bookingAccessoryRepository, never()).saveAll(anyList());
     }
 
@@ -737,8 +739,8 @@ class BookingServiceImplTest {
     }
 
     @Test
-    @DisplayName("cancelBooking: venue owner can cancel booking successfully -> success")
-    void cancelBooking_byVenueOwner_success() {
+    @DisplayName("cancelBooking: venue owner can cancel an UNPAID booking directly (nothing to refund) -> success")
+    void cancelBooking_byVenueOwner_whenUnpaid_success() {
         // Arrange
         User ownerUser = User.builder()
                 .userId(99)
@@ -764,12 +766,13 @@ class BookingServiceImplTest {
 
         UserPrincipal ownerPrincipal = new UserPrincipal(ownerUser);
 
-        when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByIdForUpdate(100)).thenReturn(Optional.of(booking));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
 
-        // Act
+        // Act — không có gì để hoàn (chưa thu tiền thật) nên Owner được hủy thẳng, không cần qua /refund
         BookingDetailResponse response = bookingService.cancelBooking(ownerPrincipal, 100, "Owner closed court");
-        
+
         // Assert
         assertNotNull(response);
         assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
@@ -1042,7 +1045,108 @@ class BookingServiceImplTest {
         // Act
         BookingDetailResponse res = bookingService.createBooking(principal, req);
 
-        // Assert: priceOverride (200000) + serviceFee (20000) = 220000
-        assertEquals(new BigDecimal("220000"), res.getTotalPrice());
+        // Assert: priceOverride (200000) + serviceFee (10000) = 210000
+        assertEquals(new BigDecimal("210000"), res.getTotalPrice());
     }
+
+    @Test
+    @DisplayName("calculateServiceFee: floor limit test")
+    void calculateServiceFee_floorLimit() {
+        // 5% of 100k = 5k < 10k -> should floor to 10k
+        BigDecimal fee = BookingServiceImpl.calculateServiceFee(new BigDecimal("100000"));
+        assertEquals(new BigDecimal("10000"), fee);
+    }
+
+    @Test
+    @DisplayName("calculateServiceFee: normal percentage test")
+    void calculateServiceFee_normalPercentage() {
+        // 5% of 400k = 20k -> should be 20k
+        BigDecimal fee = BookingServiceImpl.calculateServiceFee(new BigDecimal("400000"));
+        assertEquals(new BigDecimal("20000"), fee);
+    }
+
+    @Test
+    @DisplayName("calculateServiceFee: ceiling limit test")
+    void calculateServiceFee_ceilingLimit() {
+        // 5% of 800k = 40k > 30k -> should cap at 30k
+        BigDecimal fee = BookingServiceImpl.calculateServiceFee(new BigDecimal("800000"));
+        assertEquals(new BigDecimal("30000"), fee);
+    }
+
+    @Test
+    @DisplayName("cancelBooking: Customer cancellation applies tiered refund and deducts service fee")
+    void cancelBooking_customerRequest_appliesTieringAndDeductsServiceFee() {
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("150000"))
+                .serviceFee(new BigDecimal("10000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .reservationDate(LocalDate.now().plusDays(2)) // far future (>=24h)
+                .build();
+
+        com.sportvenue.entity.Payment successPayment = com.sportvenue.entity.Payment.builder()
+                .paymentId(100)
+                .amount(new BigDecimal("150000"))
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.SUCCESS)
+                .paymentMethod(com.sportvenue.entity.enums.PaymentMethod.VNPAY)
+                .transactionCode("TX123")
+                .build();
+
+        org.mockito.Mockito.lenient().when(bookingRepository.findByIdForUpdate(100)).thenReturn(Optional.of(booking));
+        org.mockito.Mockito.lenient().when(bookingRepository.findById(100)).thenReturn(Optional.of(booking));
+        org.mockito.Mockito.lenient().when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        org.mockito.Mockito.lenient().when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(successPayment));
+        org.mockito.Mockito.lenient().when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(Optional.empty());
+        org.mockito.Mockito.lenient().when(paymentRepository.save(any(com.sportvenue.entity.Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BookingDetailResponse response = bookingService.cancelBooking(principal, 100, "I want to cancel");
+
+        assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
+        assertEquals("I want to cancel", booking.getCancelReason());
+        verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(p -> p.getAmount().compareTo(new BigDecimal("-140000")) == 0));
+    }
+
+    @Test
+    @DisplayName("cancelBooking: Customer cancellation less than 12 hours before play time -> 0% refund")
+    void cancelBooking_customerRequest_appliesTieringAndDeductsServiceFee_below12h() {
+        LocalDateTime targetPlayTime = LocalDateTime.now().plusHours(5);
+        Booking booking = Booking.builder()
+                .bookingId(100)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("150000"))
+                .serviceFee(new BigDecimal("10000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .reservationDate(targetPlayTime.toLocalDate())
+                .build();
+        slot.setStartTime(targetPlayTime.toLocalTime());
+
+        com.sportvenue.entity.Payment successPayment = com.sportvenue.entity.Payment.builder()
+                .paymentId(100)
+                .amount(new BigDecimal("150000"))
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.SUCCESS)
+                .paymentMethod(com.sportvenue.entity.enums.PaymentMethod.VNPAY)
+                .transactionCode("TX123")
+                .build();
+
+        org.mockito.Mockito.lenient().when(bookingRepository.findByIdForUpdate(100)).thenReturn(Optional.of(booking));
+        org.mockito.Mockito.lenient().when(bookingRepository.findById(100)).thenReturn(Optional.of(booking));
+        org.mockito.Mockito.lenient().when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
+        org.mockito.Mockito.lenient().when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(successPayment));
+        org.mockito.Mockito.lenient().when(paymentRepository.findRefundPaymentByBookingId(100)).thenReturn(Optional.empty());
+        org.mockito.Mockito.lenient().when(paymentRepository.save(any(com.sportvenue.entity.Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BookingDetailResponse response = bookingService.cancelBooking(principal, 100, "Too late cancellation");
+
+        assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
+        verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(p -> p.getAmount().compareTo(BigDecimal.ZERO) == 0));
+    }
+
 }
+

@@ -220,13 +220,20 @@ public class RefundServiceImpl implements RefundService {
 
     static RefundCalculation calculateRefund(Booking booking, Payment originalPayment,
             RefundReasonType reasonType, String proofUrl, boolean isPreview) {
-        BigDecimal baseAmount = originalPayment != null ? originalPayment.getAmount() : booking.getTotalPrice();
+        BigDecimal paidAmount = originalPayment != null ? originalPayment.getAmount() : booking.getTotalPrice();
 
         if (reasonType == RefundReasonType.OWNER_FAULT) {
             if (!isPreview && (proofUrl == null || proofUrl.trim().isEmpty())) {
                 throw new BadRequestException("Bắt buộc phải cung cấp bằng chứng (ảnh/mô tả) khi lỗi do chủ sân");
             }
-            return new RefundCalculation(100, baseAmount);
+            return new RefundCalculation(100, paidAmount);
+        }
+
+        // Khách tự hủy -> Phí dịch vụ không hoàn trả (non-refundable)
+        BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
+        BigDecimal baseAmount = paidAmount.subtract(serviceFee);
+        if (baseAmount.compareTo(BigDecimal.ZERO) < 0) {
+            baseAmount = BigDecimal.ZERO;
         }
 
         LocalDateTime playTime = playTime(booking);
@@ -241,7 +248,7 @@ public class RefundServiceImpl implements RefundService {
             refundAmount = baseAmount;
         } else if (hoursDiff >= 12.0) {
             refundPercentage = 50;
-            refundAmount = baseAmount.multiply(new BigDecimal("0.5"));
+            refundAmount = baseAmount.multiply(new BigDecimal("0.5")).setScale(0, java.math.RoundingMode.HALF_UP);
         } else {
             refundPercentage = 0;
             refundAmount = BigDecimal.ZERO;
@@ -270,6 +277,7 @@ public class RefundServiceImpl implements RefundService {
                 .customerName(booking.getUser().getFirstName() + " " + booking.getUser().getLastName())
                 .playTime(playTime(booking))
                 .originalPrice(booking.getTotalPrice())
+                .serviceFee(booking.getServiceFee())
                 .refundAmount(calc.getAmount())
                 .refundPercentage(calc.getPercentage())
                 .bookingStatus(booking.getBookingStatus().name())
@@ -312,6 +320,7 @@ public class RefundServiceImpl implements RefundService {
                 .customerName(booking.getUser().getFirstName() + " " + booking.getUser().getLastName())
                 .playTime(playTime(booking))
                 .originalPrice(booking.getTotalPrice())
+                .serviceFee(booking.getServiceFee())
                 .refundAmount(calculation.getAmount())
                 .refundPercentage(calculation.getPercentage())
                 .bookingStatus(booking.getBookingStatus().name())

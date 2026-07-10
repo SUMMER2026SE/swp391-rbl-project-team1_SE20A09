@@ -15,6 +15,7 @@ import { Calendar, MapPin, Minus, Plus } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { toast } from "sonner";
+import { calculatePlatformFee } from "@/lib/utils";
 
 
 
@@ -193,7 +194,7 @@ function BookingContent() {
     : venue.pricePerHour;
   const venuePrice = rawPrice ?? 0;
 
-  const platformFee = 20000;
+  const platformFee = calculatePlatformFee(venuePrice);
 
   const calculateAccessoryTotal = () => {
     return accessoryItems.reduce((total, item) => {

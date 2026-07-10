@@ -18,6 +18,7 @@ public class RefundResponse {
     private String customerName;
     private LocalDateTime playTime;
     private BigDecimal originalPrice;
+    private BigDecimal serviceFee;
     private BigDecimal refundAmount;
     private Integer refundPercentage; // 100, 50, hoặc 0
     private String bookingStatus;      // CANCELLED

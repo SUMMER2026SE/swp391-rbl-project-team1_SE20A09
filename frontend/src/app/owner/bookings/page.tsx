@@ -237,7 +237,8 @@ function BookingManagementPage() {
   // Hàm gửi Request thực tế lên Backend để thực hiện hoàn tiền
   const handleConfirmRefund = async () => {
     if (!selectedBooking) return;
-    if (!cancelReason.trim()) {
+
+    if (reasonType === "CUSTOMER_REQUEST" && !cancelReason.trim()) {
       toast.error("Vui lòng nhập lý do hủy đặt sân!");
       return;
     }
@@ -253,7 +254,7 @@ function BookingManagementPage() {
 
       // Gọi API thật
       const response = await post<any>(`/owner/bookings/${selectedBooking.id}/refund`, {
-        reason: cancelReason.trim(),
+        reason: reasonType === "OWNER_FAULT" ? proofUrl.trim() : cancelReason.trim(),
         reasonType,
         proofUrl: reasonType === "OWNER_FAULT" ? proofUrl.trim() : null
       });
@@ -771,7 +772,7 @@ function BookingManagementPage() {
           POPUP 1: ĐỐI THOẠI XÁC NHẬN HỦY VÀ ƯỚC TÍNH HOÀN TIỀN (CONFIRM REFUND DIALOG)
           ────────────────────────────────────────────────────────────────────────── */}
       <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
-        <DialogContent className="max-w-md border dark:border-slate-800 shadow-2xl rounded-xl">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto border dark:border-slate-800 shadow-2xl rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2 text-rose-600">
               <RotateCcw className="h-5.5 w-5.5" />
@@ -830,11 +831,17 @@ function BookingManagementPage() {
                         Hoàn {previewData.refundPercentage}%
                       </Badge>
                     </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-slate-600 dark:text-slate-400">Tiền trả khách:</span>
-                      <span className="font-extrabold text-lg text-slate-900 dark:text-slate-100">{previewData.refundAmount.toLocaleString('vi-VN')}đ</span>
+                    {previewData.serviceFee > 0 && reasonType === "CUSTOMER_REQUEST" && (
+                      <div className="flex justify-between items-center text-xs text-rose-600 font-medium">
+                        <span>Phí dịch vụ (Không hoàn lại):</span>
+                        <span>-{previewData.serviceFee.toLocaleString('vi-VN')}đ</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center text-sm border-t pt-1.5 mt-1.5">
+                      <span className="text-slate-600 dark:text-slate-400 font-semibold">Tiền trả khách:</span>
+                      <span className="font-extrabold text-lg text-emerald-600 dark:text-emerald-400">{previewData.refundAmount.toLocaleString('vi-VN')}đ</span>
                     </div>
-                    <p className="text-[11px] leading-relaxed text-muted-foreground border-t pt-2 mt-1 italic">
+                    <p className="text-[11px] leading-relaxed text-muted-foreground border-t pt-2 mt-1.5 italic">
                       {previewData.refundPercentage === 100 
                         ? "Hủy trước giờ chơi >= 24 giờ. Khách hàng nhận lại toàn bộ tiền sân." 
                         : previewData.refundPercentage === 50 
@@ -878,16 +885,18 @@ function BookingManagementPage() {
                 </div>
               )}
 
-              {/* Lý do hủy */}
-              <div className="space-y-1.5 mt-2">
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">Ghi chú hủy sân</label>
-                <Textarea 
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder="Ghi chú thêm (không bắt buộc)..."
-                  className="min-h-[60px] focus:ring-1 focus:ring-primary focus:outline-none"
-                />
-              </div>
+              {/* Lý do hủy — chỉ hiện khi khách yêu cầu hủy để tránh trùng lặp với bằng chứng sự cố */}
+              {reasonType === "CUSTOMER_REQUEST" && (
+                <div className="space-y-1.5 mt-2">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">Ghi chú hủy sân</label>
+                  <Textarea 
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    placeholder="Ghi chú thêm (không bắt buộc)..."
+                    className="min-h-[60px] focus:ring-1 focus:ring-primary focus:outline-none"
+                  />
+                </div>
+              )}
             </div>
           )}
 

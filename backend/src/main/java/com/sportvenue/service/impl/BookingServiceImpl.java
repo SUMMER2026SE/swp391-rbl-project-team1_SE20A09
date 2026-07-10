@@ -88,8 +88,20 @@ public class BookingServiceImpl implements BookingService {
     private static final List<BookingStatus> ACTIVE_STATUSES =
             List.of(BookingStatus.PENDING_PAYMENT, BookingStatus.PENDING, BookingStatus.CONFIRMED);
 
-    /** Phí dịch vụ cố định (VNĐ) — server-side only, KHÔNG nhận từ client. */
-    private static final BigDecimal SERVICE_FEE = new BigDecimal("20000");
+    /**
+     * Tính toán phí dịch vụ động dựa trên giá sân: 5% giá sân cơ sở, sàn 10k, trần 30k.
+     */
+    public static BigDecimal calculateServiceFee(BigDecimal basePrice) {
+        BigDecimal rawFee = basePrice.multiply(new BigDecimal("0.05"));
+        BigDecimal fee = rawFee.setScale(0, java.math.RoundingMode.HALF_UP);
+        if (fee.compareTo(new BigDecimal("10000")) < 0) {
+            return new BigDecimal("10000");
+        }
+        if (fee.compareTo(new BigDecimal("30000")) > 0) {
+            return new BigDecimal("30000");
+        }
+        return fee;
+    }
 
     /** UC-CUS-01: Booking mới tạo được giữ 5 phút chờ thanh toán. */
     private static final long PAYMENT_HOLD_MINUTES = 5L;
@@ -164,16 +176,17 @@ public class BookingServiceImpl implements BookingService {
                 : slot.getPricePerSlot();
 
         AccessoryComputation accessoryComp = computeAccessories(request.getAccessories());
+        BigDecimal serviceFee = calculateServiceFee(basePrice);
         BigDecimal totalPrice = basePrice
                 .add(accessoryComp.total)
-                .add(SERVICE_FEE);
+                .add(serviceFee);
 
-        Booking saved = persistBooking(customer, stadium, slot, request, totalPrice,
+        Booking saved = persistBooking(customer, stadium, slot, request, totalPrice, serviceFee,
                 accessoryComp.entities);
 
-        log.info("✅ UC-CUS-01: Customer {} đặt sân {} slot {} ngày {} — bookingId={}, totalPrice={}",
+        log.info("✅ UC-CUS-01: Customer {} đặt sân {} slot {} ngày {} — bookingId={}, totalPrice={}, serviceFee={}",
                 customer.getEmail(), stadium.getStadiumId(), slot.getSlotId(),
-                request.getReservationDate(), saved.getBookingId(), totalPrice);
+                request.getReservationDate(), saved.getBookingId(), totalPrice, serviceFee);
 
         return toBookingDetailResponse(saved, stadium, slot);
     }
@@ -236,7 +249,7 @@ public class BookingServiceImpl implements BookingService {
 
     /** Persist booking + accessories trong cùng transaction. */
     private Booking persistBooking(User customer, Stadium stadium, TimeSlot slot,
-                                   CreateBookingRequest request, BigDecimal totalPrice,
+                                   CreateBookingRequest request, BigDecimal totalPrice, BigDecimal serviceFee,
                                    List<BookingAccessory> accessories) {
         LocalDateTime now = LocalDateTime.now();
         Booking booking = Booking.builder()
@@ -244,6 +257,7 @@ public class BookingServiceImpl implements BookingService {
                 .stadium(stadium)
                 .slot(slot)
                 .totalPrice(totalPrice)
+                .serviceFee(serviceFee)
                 .bookingStatus(BookingStatus.PENDING_PAYMENT)
                 .paymentStatus(PaymentStatus.UNPAID)
                 .reservationDate(request.getReservationDate())
@@ -375,7 +389,7 @@ public class BookingServiceImpl implements BookingService {
 
                 originalPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
                         .stream().findFirst().orElse(null);
-                
+
                 if (originalPayment != null) {
                     // docs/qa_findings_refactor_plan.md mục 1.2: PHẢI áp cùng công thức tiering
                     // (24h/12h/OWNER_FAULT) với /owner/bookings/{id}/refund — trước đây hoàn thẳng
@@ -934,7 +948,7 @@ public class BookingServiceImpl implements BookingService {
                         .imageUrl(imageUrl)
                         .build())
                 .totalPrice(booking.getTotalPrice())
-                .serviceFee(SERVICE_FEE)
+                .serviceFee(booking.getServiceFee())
                 .status(booking.getBookingStatus().name().toLowerCase())
                 .paymentStatus(booking.getPaymentStatus().name().toLowerCase())
                 .refundedAmount(refundedAmount)
