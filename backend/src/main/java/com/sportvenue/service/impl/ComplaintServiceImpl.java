@@ -19,6 +19,7 @@ import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.ComplaintRepository;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.service.ComplaintEscalationService;
 import com.sportvenue.service.ComplaintService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,6 +54,7 @@ public class ComplaintServiceImpl implements ComplaintService {
     private final com.sportvenue.service.AdminDashboardService adminDashboardService;
     private final EmailService emailService;
     private final AfterCommitExecutor afterCommitExecutor;
+    private final ComplaintEscalationService escalationService;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -89,8 +91,10 @@ public class ComplaintServiceImpl implements ComplaintService {
             throw new BadRequestException("Bạn không có quyền khiếu nại đơn đặt sân này!");
         }
 
-        if (booking.getBookingStatus() != BookingStatus.COMPLETED) {
-            throw new BadRequestException("Bạn chỉ có thể khiếu nại đơn đặt sân đã hoàn thành!");
+        // Allow complaints for COMPLETED (normal case) and CANCELLED (owner fault cases)
+        if (booking.getBookingStatus() != BookingStatus.COMPLETED && 
+            booking.getBookingStatus() != BookingStatus.CANCELLED) {
+            throw new BadRequestException("Bạn chỉ có thể khiếu nại đơn đặt sân đã hoàn thành hoặc bị hủy!");
         }
 
         if (complaintRepository.existsByBookingBookingIdAndStatusNot(request.getBookingId(), ComplaintStatus.RESOLVED)) {
@@ -159,7 +163,8 @@ public class ComplaintServiceImpl implements ComplaintService {
         Complaint complaint = complaintRepository.findById(complaintId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khiếu nại ID: " + complaintId));
 
-        if (complaint.getStatus() == ComplaintStatus.RESOLVED) {
+        if (complaint.getStatus() == ComplaintStatus.RESOLVED
+                || complaint.getStatus() == ComplaintStatus.CUSTOMER_WITHDRAWN) {
             throw new BadRequestException("Không thể phản hồi khiếu nại đã giải quyết xong.");
         }
 
@@ -264,52 +269,37 @@ public class ComplaintServiceImpl implements ComplaintService {
             throw new BadRequestException("Khiếu nại này đã được giải quyết trước đó!");
         }
 
+        // Use escalation service to start 48h customer objection period
+        escalationService.startOwnerResolution(complaintId, request.getResolution().trim(), ownerEmail);
+
+        complaint = complaintRepository.findById(complaintId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khiếu nại ID: " + complaintId));
+
+        // Add resolution message to chat
         List<ComplaintResponse.ResponseItem> items = deserializeResponses(complaint.getResponse());
         items.add(ComplaintResponse.ResponseItem.builder()
                 .from("Chủ sân")
-                .message("Đã giải quyết: " + request.getResolution().trim())
+                .message("Đã đề xuất giải pháp: " + request.getResolution().trim() + "\n(Khách hàng có 48h để phản hồi)")
                 .time(LocalDateTime.now().format(FORMATTER))
                 .build());
 
         complaint.setResponse(serializeResponses(items));
-        complaint.setStatus(ComplaintStatus.RESOLVED);
-
         Complaint saved = complaintRepository.save(complaint);
 
-        notificationService.createNotification(
-                complaint.getUser().getUserId(),
-                "Khiếu nại đã được giải quyết",
-                "Chủ sân đã giải quyết khiếu nại #" + complaintId,
-                NotificationType.COMPLAINT,
-                String.valueOf(saved.getComplaintId())
-        );
-
+        // Send WebSocket message
         messagingTemplate.convertAndSend(
                 "/topic/complaint/" + saved.getComplaintId(),
                 ComplaintChatEventDTO.builder()
                         .complaintId(saved.getComplaintId())
                         .from("Chủ sân")
-                        .message("Đã giải quyết: " + request.getResolution().trim())
+                        .message("Đã đề xuất giải pháp: " + request.getResolution().trim() + "\n(Khách hàng có 48h để phản hồi)")
                         .time(LocalDateTime.now().format(FORMATTER))
-                        .newStatus("resolved")
+                        .newStatus("pending_admin_review")
                         .build()
         );
 
-        // Xóa cache dashboard — số liệu khiếu nại mở thay đổi (OPEN → RESOLVED)
+        // Xóa cache dashboard — số liệu khiếu nại thay đổi
         adminDashboardService.evictDashboardCache();
-
-        afterCommitExecutor.execute(() -> {
-            try {
-                emailService.sendComplaintResolvedEmail(
-                        complaint.getUser().getEmail(),
-                        complaint.getUser().getFirstName() + " " + complaint.getUser().getLastName(),
-                        complaint.getComplaintId(),
-                        request.getResolution()
-                );
-            } catch (Exception e) {
-                log.error("Failed to send complaint resolved email", e);
-            }
-        });
 
         return mapToResponse(saved);
     }
@@ -329,19 +319,20 @@ public class ComplaintServiceImpl implements ComplaintService {
             throw new BadRequestException("Bạn không có quyền đóng khiếu nại này!");
         }
 
-        if (complaint.getStatus() == ComplaintStatus.RESOLVED) {
+        if (complaint.getStatus() == ComplaintStatus.RESOLVED
+                || complaint.getStatus() == ComplaintStatus.CUSTOMER_WITHDRAWN) {
             throw new BadRequestException("Khiếu nại này đã được giải quyết trước đó!");
         }
 
         List<ComplaintResponse.ResponseItem> items = deserializeResponses(complaint.getResponse());
         items.add(ComplaintResponse.ResponseItem.builder()
                 .from("Khách hàng")
-                .message("Khách hàng đã đóng khiếu nại.")
+                .message("Khách hàng đã rút khiếu nại.")
                 .time(LocalDateTime.now().format(FORMATTER))
                 .build());
 
         complaint.setResponse(serializeResponses(items));
-        complaint.setStatus(ComplaintStatus.RESOLVED);
+        complaint.setStatus(ComplaintStatus.CUSTOMER_WITHDRAWN);
 
         Complaint saved = complaintRepository.save(complaint);
 
@@ -358,16 +349,26 @@ public class ComplaintServiceImpl implements ComplaintService {
                 ComplaintChatEventDTO.builder()
                         .complaintId(saved.getComplaintId())
                         .from("Khách hàng")
-                        .message("Khách hàng đã đóng khiếu nại.")
+                        .message("Khách hàng đã rút khiếu nại.")
                         .time(LocalDateTime.now().format(FORMATTER))
-                        .newStatus("resolved")
+                        .newStatus("customer_withdrawn")
                         .build()
         );
 
-        // Xóa cache dashboard — số liệu khiếu nại mở thay đổi (OPEN → RESOLVED)
+        // Xóa cache dashboard — số liệu khiếu nại mở thay đổi
         adminDashboardService.evictDashboardCache();
 
         return mapToResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public Page<ComplaintResponse> getEscalatedComplaints(Pageable pageable) {
+        log.info("Admin fetching escalated complaints");
+        return complaintRepository.findByStatusInOrderByEscalatedAtDesc(
+                List.of(ComplaintStatus.ESCALATED, ComplaintStatus.PENDING_ADMIN_REVIEW),
+                pageable
+        ).map(this::mapToResponse);
     }
 
     @Transactional(readOnly = true)
@@ -545,6 +546,25 @@ public class ComplaintServiceImpl implements ComplaintService {
                 .ownerEmail(ownerEmail)
                 .bookingStatus(bookingStatus)
                 .responses(responsesList)
+                .resolvedAt(c.getResolvedAt() != null ? c.getResolvedAt().toString() : null)
+                .customerResponseDeadline(c.getCustomerResponseDeadline() != null
+                        ? c.getCustomerResponseDeadline().toString() : null)
+                .escalatedAt(c.getEscalatedAt() != null ? c.getEscalatedAt().toString() : null)
+                .escalationReason(c.getEscalationReason())
+                .slaViolated(c.getSlaViolated())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.sportvenue.dto.response.ComplaintStatsDto getAdminComplaintStats() {
+        return com.sportvenue.dto.response.ComplaintStatsDto.builder()
+                .totalCount(complaintRepository.count())
+                .openCount(complaintRepository.countByStatus(ComplaintStatus.OPEN))
+                .progressCount(complaintRepository.countByStatus(ComplaintStatus.IN_PROGRESS))
+                .escalatedCount(complaintRepository.countByStatus(ComplaintStatus.ESCALATED) + 
+                              complaintRepository.countByStatus(ComplaintStatus.PENDING_ADMIN_REVIEW))
+                .resolvedCount(complaintRepository.countByStatus(ComplaintStatus.RESOLVED))
                 .build();
     }
 }

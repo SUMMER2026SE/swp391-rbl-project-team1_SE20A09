@@ -154,6 +154,9 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
       open: { label: "Mới", className: "bg-yellow-50 text-yellow-700 border-yellow-200" },
       in_progress: { label: "Đang xử lý", className: "bg-blue-50 text-blue-700 border-blue-200" },
       resolved: { label: "Đã giải quyết", className: "bg-green-50 text-green-700 border-green-200" },
+      escalated: { label: "Đã chuyển Admin", className: "bg-purple-50 text-purple-700 border-purple-200" },
+      pending_admin_review: { label: "Chờ phản hồi", className: "bg-orange-50 text-orange-700 border-orange-200" },
+      customer_withdrawn: { label: "Đã rút", className: "bg-slate-50 text-slate-700 border-slate-200" },
     };
     const item = config[s as keyof typeof config] || { label: status, className: "bg-gray-50 text-gray-700 border-gray-200" };
     return <Badge variant="outline" className={item.className}>{item.label}</Badge>;
@@ -344,7 +347,7 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
               )}
 
               {/* Reply / Resolve Actions (Fixed at the Bottom) */}
-              {activeComplaint.status !== "resolved" && (
+              {!["resolved", "customer_withdrawn"].includes(activeComplaint.status) && (
                 <div className="flex-shrink-0 pt-4 border-t space-y-4">
                   <div className="space-y-2">
                     <Label>Nhắn tin phản hồi</Label>
@@ -359,7 +362,7 @@ export function ComplaintList({ isOwner }: { isOwner: boolean }) {
                     </div>
                   </div>
 
-                  {isOwner && (
+                  {isOwner && ["open", "in_progress"].includes(activeComplaint.status) && (
                     <div className="space-y-2 pt-4 border-t">
                       <Label className="text-green-700 font-semibold">Đóng & Giải quyết khiếu nại</Label>
                       <div className="flex gap-2">

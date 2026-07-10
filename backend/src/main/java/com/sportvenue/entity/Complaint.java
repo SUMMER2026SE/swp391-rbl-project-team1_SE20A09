@@ -1,7 +1,11 @@
 package com.sportvenue.entity;
 
+import java.io.Serializable;
+import java.time.LocalDateTime;
+
 import com.sportvenue.entity.enums.ComplaintPriority;
 import com.sportvenue.entity.enums.ComplaintStatus;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -19,9 +23,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import java.io.Serializable;
-import java.time.LocalDateTime;
 
 /**
  * Entity ánh xạ bảng complaints.
@@ -85,4 +86,34 @@ public class Complaint implements Serializable {
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    /** Thời điểm Owner resolve khiếu nại (cho 48h customer objection period) */
+    @Column(name = "resolved_at")
+    private LocalDateTime resolvedAt;
+
+    /** Hạn cuối khách hàng phản hồi (48h từ resolved_at) */
+    @Column(name = "customer_response_deadline")
+    private LocalDateTime customerResponseDeadline;
+
+    /** Thời điểm được chuyển lên Admin */
+    @Column(name = "escalated_at")
+    private LocalDateTime escalatedAt;
+
+    /** Lý do escalation (auto/manual) */
+    @Column(name = "escalation_reason", columnDefinition = "TEXT")
+    private String escalationReason;
+
+    /** Admin đã xem xét khiếu nại này */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "admin_reviewed_by")
+    private User adminReviewedBy;
+
+    /** Thời điểm Admin xem xét */
+    @Column(name = "admin_reviewed_at")
+    private LocalDateTime adminReviewedAt;
+
+    /** Có vi phạm SLA phản hồi không */
+    @Column(name = "sla_violated")
+    @Builder.Default
+    private Boolean slaViolated = false;
 }
