@@ -56,7 +56,7 @@ class RevenueServiceImplTest {
         when(d2.getRevenue()).thenReturn(BigDecimal.valueOf(1000000));
 
         when(bookingRepository.getOwnerDailyNetRevenue(eq(ownerEmail), eq(null),
-                eq(startDate.toLocalDate()), eq(endDate.toLocalDate()), any(BigDecimal.class)))
+                eq(startDate.toLocalDate()), eq(endDate.toLocalDate())))
                 .thenReturn(List.of(d1, d2));
 
         // Venue breakdown projections
@@ -67,7 +67,7 @@ class RevenueServiceImplTest {
         when(v1.getTotalRevenue()).thenReturn(BigDecimal.valueOf(1500000));
 
         when(bookingRepository.getOwnerVenueNetRevenueBreakdown(eq(ownerEmail), eq(null),
-                eq(startDate.toLocalDate()), eq(endDate.toLocalDate()), any(BigDecimal.class)))
+                eq(startDate.toLocalDate()), eq(endDate.toLocalDate())))
                 .thenReturn(List.of(v1));
 
         // Previous period projections (2 days earlier: May 30 to May 31)
@@ -78,7 +78,7 @@ class RevenueServiceImplTest {
         when(prevV1.getTotalRevenue()).thenReturn(BigDecimal.valueOf(1000000));
 
         when(bookingRepository.getOwnerVenueNetRevenueBreakdown(eq(ownerEmail), eq(null),
-                eq(prevStart.toLocalDate()), eq(prevEnd.toLocalDate()), any(BigDecimal.class)))
+                eq(prevStart.toLocalDate()), eq(prevEnd.toLocalDate())))
                 .thenReturn(List.of(prevV1));
 
         // Execute
@@ -139,7 +139,7 @@ class RevenueServiceImplTest {
         when(d1.getDate()).thenReturn(LocalDate.of(2026, 6, 1));
         when(d1.getRevenue()).thenReturn(BigDecimal.valueOf(500000));
         when(bookingRepository.getOwnerDailyNetRevenue(eq(ownerEmail), eq(null),
-                eq(startDate.toLocalDate()), eq(endDate.toLocalDate()), any(BigDecimal.class)))
+                eq(startDate.toLocalDate()), eq(endDate.toLocalDate())))
                 .thenReturn(List.of(d1));
 
         // Venue breakdown projections
@@ -149,14 +149,14 @@ class RevenueServiceImplTest {
         when(v1.getTotalBookings()).thenReturn(5L);
         when(v1.getTotalRevenue()).thenReturn(BigDecimal.valueOf(500000));
         when(bookingRepository.getOwnerVenueNetRevenueBreakdown(eq(ownerEmail), eq(null),
-                eq(startDate.toLocalDate()), eq(endDate.toLocalDate()), any(BigDecimal.class)))
+                eq(startDate.toLocalDate()), eq(endDate.toLocalDate())))
                 .thenReturn(List.of(v1));
 
         // Previous period projections return zero revenue or empty
         LocalDateTime prevStart = startDate.minusDays(2);
         LocalDateTime prevEnd = endDate.minusDays(2);
         when(bookingRepository.getOwnerVenueNetRevenueBreakdown(eq(ownerEmail), eq(null),
-                eq(prevStart.toLocalDate()), eq(prevEnd.toLocalDate()), any(BigDecimal.class)))
+                eq(prevStart.toLocalDate()), eq(prevEnd.toLocalDate())))
                 .thenReturn(List.of()); // Returns no projections, mapping defaults previous revenue to zero
 
         // Execute
@@ -178,7 +178,7 @@ class RevenueServiceImplTest {
 
         // Mock current month revenue
         when(bookingRepository.sumOwnerCurrentMonthNetRevenue(
-                eq(ownerEmail), any(LocalDate.class), any(LocalDate.class), any(BigDecimal.class)))
+                eq(ownerEmail), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(BigDecimal.valueOf(10000000));
 
         // Mock pending bookings count
