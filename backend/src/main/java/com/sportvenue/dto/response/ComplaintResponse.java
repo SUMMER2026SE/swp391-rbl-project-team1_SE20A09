@@ -32,6 +32,11 @@ public class ComplaintResponse {
     private String ownerEmail;
     private String bookingStatus;
     private List<ResponseItem> responses;
+    private String resolvedAt;
+    private String customerResponseDeadline;
+    private String escalatedAt;
+    private String escalationReason;
+    private Boolean slaViolated;
 
     @Data
     @Builder

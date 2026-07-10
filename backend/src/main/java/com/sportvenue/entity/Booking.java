@@ -69,6 +69,10 @@ public class Booking implements Serializable {
     @Column(name = "total_price", nullable = false, precision = 10, scale = 2)
     private BigDecimal totalPrice;
 
+    /** Phí dịch vụ nền tảng tại thời điểm tạo đơn. */
+    @Column(name = "service_fee", nullable = false, precision = 10, scale = 2)
+    private BigDecimal serviceFee;
+
     /** Trạng thái đơn đặt sân — cần Owner xác nhận. */
     @Enumerated(EnumType.STRING)
     @Column(name = "booking_status", nullable = false, length = 20)

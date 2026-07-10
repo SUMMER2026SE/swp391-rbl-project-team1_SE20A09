@@ -1,5 +1,8 @@
 package com.sportvenue.repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -11,7 +14,7 @@ import com.sportvenue.entity.enums.ComplaintStatus;
 
 /**
  * Repository cho Complaint entity.
- * Stub — Hoàng mở rộng thêm khi implement UC-OWN-09.
+ * Enhanced với escalation workflow support.
  */
 @Repository
 public interface ComplaintRepository extends JpaRepository<Complaint, Integer> {
@@ -37,5 +40,18 @@ public interface ComplaintRepository extends JpaRepository<Complaint, Integer> {
 
     /** Kiểm tra xem đơn đặt sân có khiếu nại chưa được giải quyết không. */
     boolean existsByBookingBookingIdAndStatusNot(Integer bookingId, ComplaintStatus status);
+
+    /** Lấy khiếu nại đã quá hạn customer response (cho scheduled task). */
+    List<Complaint> findByStatusAndCustomerResponseDeadlineBefore(
+            ComplaintStatus status, LocalDateTime deadline);
+
+    /** Lấy khiếu nại vi phạm SLA (cho scheduled task). */
+    List<Complaint> findByStatusInAndCreatedAtBeforeAndSlaViolatedFalse(
+            List<ComplaintStatus> statuses, LocalDateTime threshold);
+
+    /** Lấy khiếu nại đang chờ Admin xử lý. */
+    @EntityGraph(attributePaths = {"user", "booking", "booking.stadium", "booking.stadium.owner"})
+    Page<Complaint> findByStatusInOrderByEscalatedAtDesc(
+            List<ComplaintStatus> statuses, Pageable pageable);
 }
 

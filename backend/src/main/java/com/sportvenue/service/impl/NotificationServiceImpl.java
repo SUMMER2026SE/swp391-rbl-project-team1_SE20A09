@@ -12,6 +12,8 @@ import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import com.sportvenue.event.NotificationEvent;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,7 @@ public class NotificationServiceImpl implements NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -79,6 +82,23 @@ public class NotificationServiceImpl implements NotificationService {
         
         notificationRepository.save(notification);
         log.info("Created notification for user {}: {}", userId, title);
+    }
+
+    @Override
+    public void publishNotificationEvent(Integer userId,
+                                         String title,
+                                         String message,
+                                         NotificationType type,
+                                         String relatedResourceId) {
+        NotificationEvent event = NotificationEvent.builder()
+                .userId(userId)
+                .title(title)
+                .message(message)
+                .type(type)
+                .relatedResourceId(relatedResourceId)
+                .build();
+
+        eventPublisher.publishEvent(event);
     }
 
     private NotificationResponse mapToResponse(Notification notification) {

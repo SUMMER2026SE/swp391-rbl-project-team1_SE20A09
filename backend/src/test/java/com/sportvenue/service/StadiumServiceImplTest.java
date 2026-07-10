@@ -83,6 +83,12 @@ class StadiumServiceImplTest {
     @Mock
     private StadiumComplexRepository stadiumComplexRepository;
 
+    @Mock
+    private EmailService emailService;
+
+    @Mock
+    private com.sportvenue.util.AfterCommitExecutor afterCommitExecutor;
+
     private StadiumServiceImpl stadiumService;
 
     @BeforeEach
@@ -101,7 +107,9 @@ class StadiumServiceImplTest {
                 notificationService,
                 userRepository,
                 env,
-                stadiumComplexRepository);
+                stadiumComplexRepository,
+                emailService,
+                afterCommitExecutor);
     }
 
     @Test

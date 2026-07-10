@@ -92,9 +92,8 @@ function AIAssistantPage() {
               {messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`flex gap-3 ${
-                    msg.type === "user" ? "flex-row-reverse" : ""
-                  }`}
+                  className={`flex gap-3 ${msg.type === "user" ? "flex-row-reverse" : ""
+                    }`}
                 >
                   <Avatar className="h-10 w-10 flex-shrink-0">
                     {msg.type === "assistant" ? (
@@ -107,16 +106,14 @@ function AIAssistantPage() {
                   </Avatar>
 
                   <div
-                    className={`flex-1 ${
-                      msg.type === "user" ? "text-right" : ""
-                    }`}
+                    className={`flex-1 ${msg.type === "user" ? "text-right" : ""
+                      }`}
                   >
                     <div
-                      className={`inline-block max-w-md md:max-w-lg ${
-                        msg.type === "user"
+                      className={`inline-block max-w-md md:max-w-lg ${msg.type === "user"
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted"
-                      } rounded-lg px-4 py-3`}
+                        } rounded-lg px-4 py-3`}
                     >
                       <p className="text-sm">{msg.content}</p>
                     </div>

@@ -61,6 +61,10 @@ class RefundServiceTest {
     @Mock
     private TransactionTemplate transactionTemplate;
 
+    @Mock private com.sportvenue.service.EmailService emailService;
+    @Mock private com.sportvenue.service.NotificationService notificationService;
+    @Mock private com.sportvenue.util.AfterCommitExecutor afterCommitExecutor;
+
     @InjectMocks
     private RefundServiceImpl refundService;
 
@@ -177,7 +181,7 @@ class RefundServiceTest {
 
         // Assert
         assertEquals(50, response.getRefundPercentage());
-        assertEquals(new BigDecimal("75000.0"), response.getRefundAmount());
+        assertEquals(new BigDecimal("75000"), response.getRefundAmount());
     }
 
     @Test
@@ -391,18 +395,19 @@ class RefundServiceTest {
     @Test
     @DisplayName("previewRefundForCustomer: Should refund 100% of the deposit amount instead of total price when cancelled >= 24 hours")
     void previewRefundForCustomer_DepositBooking_ShouldRefundCorrectPercentageOfDeposit() {
-        // Arrange
+        // Arrange — đặt cọc bị khách tự hủy (CUSTOMER_REQUEST) -> KHÔNG hoàn, bất kể còn bao lâu
+        // tới giờ chơi (đúng bản chất tiền cọc giữ chỗ, xem RefundServiceImpl.calculateRefund).
         User customer = User.builder()
                 .userId(2).email("customer@example.com").build();
         booking.setUser(customer);
         booking.setTotalPrice(new BigDecimal("1000000"));
-        booking.setReservationDate(LocalDate.now().plusDays(2)); // > 24h
+        booking.setReservationDate(LocalDate.now().plusDays(2)); // > 24h — không còn ý nghĩa với cọc
         booking.setPaymentStatus(PaymentStatus.DEPOSITED);
-        
+
         Stadium stadiumMock = new Stadium();
         stadiumMock.setStadiumName("Test Stadium");
         booking.setStadium(stadiumMock);
-        
+
         TimeSlot ts = new TimeSlot();
         ts.setStartTime(LocalTime.now());
         booking.setSlot(ts);
@@ -419,9 +424,37 @@ class RefundServiceTest {
         RefundResponse response = refundService.previewRefundForCustomer(1, "customer@example.com");
 
         // Assert
-        assertEquals(100, response.getRefundPercentage());
-        assertEquals(0, new BigDecimal("300000").compareTo(response.getRefundAmount()), 
-                "Refund amount should be exactly the deposit amount (300000)");
+        assertEquals(0, response.getRefundPercentage());
+        assertEquals(0, BigDecimal.ZERO.compareTo(response.getRefundAmount()),
+                "Đặt cọc bị khách tự hủy -> mất cọc, không hoàn (0đ)");
+    }
+
+    @Test
+    @DisplayName("calculateRefund: DEPOSIT + OWNER_FAULT -> vẫn hoàn 100% cọc (không phải lỗi khách)")
+    void calculateRefund_depositBooking_ownerFault_stillRefundsFull() {
+        User customer = User.builder().userId(2).email("customer@example.com").build();
+        booking.setUser(customer);
+        booking.setTotalPrice(new BigDecimal("1000000"));
+        booking.setReservationDate(LocalDate.now().plusDays(2));
+        booking.setPaymentStatus(PaymentStatus.DEPOSITED);
+
+        Stadium stadiumMock = new Stadium();
+        stadiumMock.setStadiumName("Test Stadium");
+        booking.setStadium(stadiumMock);
+
+        TimeSlot ts = new TimeSlot();
+        ts.setStartTime(LocalTime.now());
+        booking.setSlot(ts);
+
+        Payment depositPayment = Payment.builder()
+                .paymentId(1).booking(booking).amount(new BigDecimal("300000"))
+                .transactionCode("TXN123").paymentStatus(TransactionStatus.SUCCESS).build();
+
+        RefundServiceImpl.RefundCalculation calc = RefundServiceImpl.calculateRefund(
+                booking, depositPayment, RefundReasonType.OWNER_FAULT, "http://proof.jpg", false);
+
+        assertEquals(100, calc.getPercentage());
+        assertEquals(0, new BigDecimal("300000").compareTo(calc.getAmount()));
     }
 
     @Test
@@ -492,12 +525,158 @@ class RefundServiceTest {
         when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
         when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
         when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
-        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(Optional.of(pendingRefund));
+        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(List.of(pendingRefund));
 
         // Act & Assert
         BadRequestException ex = assertThrows(BadRequestException.class, 
                 () -> refundService.processRefund(1, request, "owner@example.com"));
         
         assertTrue(ex.getMessage().contains("đang được xử lý hoặc đã thành công"));
+    }
+
+    @Test
+    @DisplayName("processRefund: CUSTOMER_REQUEST with serviceFee and >= 24 hours -> deducts fee and refunds 100% net")
+    void processRefund_customerRequest_deductsServiceFee_and_appliesTiering_above24h() {
+        // Arrange
+        booking.setTotalPrice(new BigDecimal("150000"));
+        booking.setServiceFee(new BigDecimal("10000"));
+        booking.setReservationDate(LocalDate.now().plusDays(2)); // far future
+        
+        RefundRequest request = new RefundRequest();
+        request.setReason("Customer requested");
+        request.setReasonType(RefundReasonType.CUSTOMER_REQUEST);
+
+        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
+        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(List.of());
+        when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        RefundResponse response = refundService.processRefund(1, request, "owner@example.com");
+
+        // Assert: 150000 (total) - 10000 (fee) = 140000 base. >= 24h -> 100% net = 140000.
+        assertEquals(new BigDecimal("140000"), response.getRefundAmount());
+        assertEquals(100, response.getRefundPercentage());
+    }
+
+    @Test
+    @DisplayName("processRefund: CUSTOMER_REQUEST with serviceFee and 12-24 hours -> deducts fee and refunds 50% net")
+    void processRefund_customerRequest_deductsServiceFee_and_appliesTiering_between12And24h() {
+        // Arrange
+        booking.setTotalPrice(new BigDecimal("150000"));
+        booking.setServiceFee(new BigDecimal("10000"));
+        // Calculate play time 18 hours in the future
+        LocalDateTime targetPlayTime = LocalDateTime.now().plusHours(18);
+        booking.setReservationDate(targetPlayTime.toLocalDate());
+        slot.setStartTime(targetPlayTime.toLocalTime());
+
+        RefundRequest request = new RefundRequest();
+        request.setReason("Customer requested");
+        request.setReasonType(RefundReasonType.CUSTOMER_REQUEST);
+
+        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
+        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(List.of());
+        when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        RefundResponse response = refundService.processRefund(1, request, "owner@example.com");
+
+        // Assert: (150000 - 10000) * 50% = 70000.
+        assertEquals(new BigDecimal("70000"), response.getRefundAmount());
+        assertEquals(50, response.getRefundPercentage());
+    }
+
+    @Test
+    @DisplayName("processRefund: CUSTOMER_REQUEST with serviceFee and < 12 hours -> deducts fee and refunds 0% net")
+    void processRefund_customerRequest_deductsServiceFee_and_appliesTiering_below12h() {
+        // Arrange
+        booking.setTotalPrice(new BigDecimal("150000"));
+        booking.setServiceFee(new BigDecimal("10000"));
+        // Calculate play time 5 hours in the future
+        LocalDateTime targetPlayTime = LocalDateTime.now().plusHours(5);
+        booking.setReservationDate(targetPlayTime.toLocalDate());
+        slot.setStartTime(targetPlayTime.toLocalTime());
+
+        RefundRequest request = new RefundRequest();
+        request.setReason("Customer requested");
+        request.setReasonType(RefundReasonType.CUSTOMER_REQUEST);
+
+        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
+        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(List.of());
+
+        // Act
+        RefundResponse response = refundService.processRefund(1, request, "owner@example.com");
+
+        // Assert: 0% net = 0.
+        assertEquals(BigDecimal.ZERO, response.getRefundAmount());
+        assertEquals(0, response.getRefundPercentage());
+    }
+
+    @Test
+    @DisplayName("processRefund: OWNER_FAULT with serviceFee -> refunds full amount including service fee")
+    void processRefund_ownerFault_refundsFullAmount_includingServiceFee() {
+        // Arrange
+        booking.setTotalPrice(new BigDecimal("150000"));
+        booking.setServiceFee(new BigDecimal("10000"));
+        booking.setReservationDate(LocalDate.now().plusDays(2));
+
+        RefundRequest request = new RefundRequest();
+        request.setReason("Owner fault cancellation");
+        request.setReasonType(RefundReasonType.OWNER_FAULT);
+        request.setProofUrl("http://image.proof");
+
+        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
+        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(List.of());
+        when(paymentRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        RefundResponse response = refundService.processRefund(1, request, "owner@example.com");
+
+        // Assert: refunds full amount = 150000 (100% paidAmount)
+        assertEquals(new BigDecimal("150000"), response.getRefundAmount());
+        assertEquals(100, response.getRefundPercentage());
+    }
+
+    @Test
+    @DisplayName("processRefund: CUSTOMER_REQUEST where serviceFee exceeds paidAmount -> clamps baseAmount to zero")
+    void processRefund_customerRequest_serviceFeeExceedsPaidAmount_clampsToZero() {
+        // Arrange
+        booking.setTotalPrice(new BigDecimal("15000")); // paidAmount = 15000
+        booking.setServiceFee(new BigDecimal("20000")); // serviceFee = 20000
+        booking.setReservationDate(LocalDate.now().plusDays(2)); // >= 24h
+
+        RefundRequest request = new RefundRequest();
+        request.setReason("Customer requested");
+        request.setReasonType(RefundReasonType.CUSTOMER_REQUEST);
+
+        originalPayment = Payment.builder()
+                .paymentId(100)
+                .amount(new BigDecimal("15000"))
+                .paymentStatus(TransactionStatus.SUCCESS)
+                .build();
+
+        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
+        when(paymentRepository.findRefundPaymentByBookingId(1)).thenReturn(List.of());
+
+        // Act
+        RefundResponse response = refundService.processRefund(1, request, "owner@example.com");
+
+        // Assert: 15000 (paid) - 20000 (fee) < 0 -> baseAmount = 0 -> refundAmount = 0
+        assertEquals(BigDecimal.ZERO, response.getRefundAmount());
+        assertEquals(100, response.getRefundPercentage());
     }
 }

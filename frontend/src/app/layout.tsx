@@ -13,7 +13,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "SportVenue - Hệ thống đặt sân thể thao trực tuyến",
+  title: "SportsBook - Hệ thống đặt sân thể thao trực tuyến",
   description: "Đặt sân bóng đá, cầu lông, tennis và nhiều môn thể thao khác một cách dễ dàng và nhanh chóng.",
 };
 
