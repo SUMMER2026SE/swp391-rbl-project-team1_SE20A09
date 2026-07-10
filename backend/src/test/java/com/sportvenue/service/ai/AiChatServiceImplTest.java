@@ -2,6 +2,8 @@ package com.sportvenue.service.ai;
 
 import com.sportvenue.dto.request.AiChatTurnRequest;
 import com.sportvenue.dto.response.AiChatTurnResponse;
+import com.sportvenue.service.ai.handler.BookingHandler;
+import com.sportvenue.service.ai.handler.JoinMatchHandler;
 import com.sportvenue.service.ai.handler.MatchRequestHandler;
 import com.sportvenue.service.ai.handler.PolicyHandler;
 import com.sportvenue.service.ai.handler.SlotAvailabilityHandler;
@@ -37,6 +39,10 @@ class AiChatServiceImplTest {
     @Mock
     private PolicyHandler policyHandler;
     @Mock
+    private BookingHandler bookingHandler;
+    @Mock
+    private JoinMatchHandler joinMatchHandler;
+    @Mock
     private com.sportvenue.repository.AiUsageLogRepository aiUsageLogRepository;
 
     private AiChatServiceImpl service;
@@ -44,7 +50,7 @@ class AiChatServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new AiChatServiceImpl(groqClient, stadiumSearchHandler, slotAvailabilityHandler,
-                matchRequestHandler, policyHandler, aiUsageLogRepository);
+                matchRequestHandler, policyHandler, bookingHandler, joinMatchHandler, aiUsageLogRepository);
     }
 
     private AiChatTurnRequest request(String message) {

@@ -32,6 +32,18 @@ public class AiChatTurnResponse {
 
     private String policyText;
 
+    /** ID của booking vừa tạo (intent: create_booking) - sẽ bị deprecate khi bỏ auto-book */
+    private Integer bookingId;
+
+    /** Thông tin booking nháp (intent: confirm_booking) */
+    private DraftBookingResponse draftBooking;
+
+    /** ID của kèo ghép vừa tham gia (intent: join_match) */
+    private Integer matchId;
+
+    /** Thông tin kèo ghép nháp (intent: confirm_join_match) */
+    private DraftJoinMatchResponse draftJoinMatch;
+
     public static AiChatTurnResponse messageOnly(String message, String intent) {
         return AiChatTurnResponse.builder().message(message).intent(intent).build();
     }

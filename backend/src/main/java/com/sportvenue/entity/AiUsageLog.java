@@ -46,6 +46,24 @@ public class AiUsageLog {
 
     @Column(name = "latency_ms")
     private Long latencyMs;
+    
+    @Column(name = "user_input", columnDefinition = "TEXT")
+    private String userInput;
+    
+    @Column(name = "raw_llm_response", columnDefinition = "TEXT")
+    private String rawLlmResponse;
+    
+    @Column(name = "parsed_intent", length = 50)
+    private String parsedIntent;
+    
+    @Column(name = "resolved_stadium_id")
+    private Integer resolvedStadiumId;
+    
+    @Column(name = "resolved_slot_id")
+    private Integer resolvedSlotId;
+    
+    @Column(name = "action_result", columnDefinition = "TEXT")
+    private String actionResult;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
