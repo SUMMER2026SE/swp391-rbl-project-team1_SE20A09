@@ -70,55 +70,7 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
         User customer = findUserByEmail(customerEmail);
         Booking booking = findBookingById(req.getBookingId());
 
-        // 1. Booking phải thuộc về khách đang gọi
-        if (!booking.getUser().getUserId().equals(customer.getUserId())) {
-            throw new ForbiddenException("Bạn không có quyền gửi yêu cầu cho đơn này.");
-        }
-        // 2. Booking phải ở trạng thái CANCELLED
-        if (booking.getBookingStatus() != BookingStatus.CANCELLED) {
-            throw new BadRequestException("Chỉ có thể gửi yêu cầu ngoại lệ cho đơn đã hủy.");
-        }
-        // 3. Lấy refund Payment gốc (nếu có) — dùng chung cho check 72h lẫn double-refund guard
-        // bên dưới. booking.getBookingDate() là thời điểm TẠO đơn (updatable=false, không đổi
-        // khi hủy) — KHÔNG dùng được để tính "72h kể từ khi hủy". paidAt của refund Payment
-        // (set tại processLocalCancellationTx/RefundServiceImpl lúc xử lý hủy) mới đúng mốc này;
-        // fallback về bookingDate chỉ cho case hiếm không có Payment nào (booking chưa từng thanh toán).
-        Optional<Payment> existingRefund = paymentRepository.findRefundPaymentByBookingId(req.getBookingId())
-                .stream().findFirst();
-        LocalDateTime cancelledAt = existingRefund.map(Payment::getPaidAt).orElse(booking.getBookingDate());
-        if (cancelledAt != null && cancelledAt.isBefore(LocalDateTime.now().minusHours(SUBMIT_DEADLINE_HOURS))) {
-            throw new BadRequestException("Đã quá " + SUBMIT_DEADLINE_HOURS + "h kể từ khi hủy đơn — không thể gửi yêu cầu.");
-        }
-        // 4. Chưa có request đang xử lý
-        if (refundExceptionRepository.existsByBookingBookingIdAndStatusIn(req.getBookingId(), ACTIVE_STATUSES)) {
-            throw new BadRequestException("Đơn này đã có yêu cầu ngoại lệ đang được xử lý.");
-        }
-        // 5. Phải từng có 1 giao dịch thanh toán THẬT qua cổng thanh toán — booking hủy thẳng khi
-        // đang chờ thu tiền mặt tại sân (AWAITING_CASH_PAYMENT/UNPAID) không tạo Payment SUCCESS
-        // nào, không có gì để hoàn nên không cho gửi yêu cầu (tránh crash ở bước trigger refund
-        // sau này khi Owner/Admin duyệt).
-        Payment originalPayment = paymentRepository.findSuccessPaymentsByBookingId(req.getBookingId())
-                .stream().findFirst().orElse(null);
-        if (originalPayment == null) {
-            throw new BadRequestException("Đơn này chưa từng thanh toán qua cổng thanh toán — không có gì để hoàn.");
-        }
-        // 5.5 Chặn đơn đặt cọc — Chỉ áp dụng yêu cầu ngoại lệ cho đơn thanh toán toàn bộ (100%)
-        BigDecimal totalPrice = booking.getTotalPrice() != null ? booking.getTotalPrice() : BigDecimal.ZERO;
-        BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
-        BigDecimal baseCourtPrice = totalPrice.subtract(serviceFee);
-        if (originalPayment.getAmount().compareTo(baseCourtPrice) < 0) {
-            throw new BadRequestException("Yêu cầu ngoại lệ không áp dụng cho đơn đặt cọc (chỉ áp dụng cho đơn thanh toán toàn bộ).");
-        }
-        // 6. [Guard] Chỉ áp dụng cho booking đã hoàn 0% hoặc một phần (vd 50%) — nếu đã hoàn ĐỦ
-        // 100% giá trị đã thanh toán (dù do tiering ≥24h hay do OWNER_FAULT) thì không còn gì để
-        // xin ngoại lệ thêm. So sánh với originalPayment.getAmount() thay vì chỉ kiểm tra "có
-        // hoàn hay không" — vì hoàn 50% vẫn hợp lệ để nộp yêu cầu, chỉ hoàn ĐỦ 100% mới chặn.
-        existingRefund.ifPresent(refund -> {
-            if (refund.getPaymentStatus() != TransactionStatus.FAILED
-                    && refund.getAmount().abs().compareTo(originalPayment.getAmount()) >= 0) {
-                throw new BadRequestException("Booking đã được hoàn tiền toàn bộ — không đủ điều kiện xin ngoại lệ.");
-            }
-        });
+        validateSubmitRequest(customer, booking, req);
 
         RefundExceptionRequest request = RefundExceptionRequest.builder()
                 .booking(booking)
@@ -144,6 +96,48 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
 
         log.info("[RefundException] Created requestId={} for bookingId={}", saved.getRequestId(), req.getBookingId());
         return toResponse(saved);
+    }
+
+    private void validateSubmitRequest(User customer, Booking booking, SubmitExceptionRequest req) {
+        // 1. Booking phải thuộc về khách đang gọi
+        if (!booking.getUser().getUserId().equals(customer.getUserId())) {
+            throw new ForbiddenException("Bạn không có quyền gửi yêu cầu cho đơn này.");
+        }
+        // 2. Booking phải ở trạng thái CANCELLED
+        if (booking.getBookingStatus() != BookingStatus.CANCELLED) {
+            throw new BadRequestException("Chỉ có thể gửi yêu cầu ngoại lệ cho đơn đã hủy.");
+        }
+        // 3. Lấy refund Payment gốc (nếu có)
+        Optional<Payment> existingRefund = paymentRepository.findRefundPaymentByBookingId(req.getBookingId())
+                .stream().findFirst();
+        LocalDateTime cancelledAt = existingRefund.map(Payment::getPaidAt).orElse(booking.getBookingDate());
+        if (cancelledAt != null && cancelledAt.isBefore(LocalDateTime.now().minusHours(SUBMIT_DEADLINE_HOURS))) {
+            throw new BadRequestException("Đã quá " + SUBMIT_DEADLINE_HOURS + "h kể từ khi hủy đơn — không thể gửi yêu cầu.");
+        }
+        // 4. Chưa có request đang xử lý
+        if (refundExceptionRepository.existsByBookingBookingIdAndStatusIn(req.getBookingId(), ACTIVE_STATUSES)) {
+            throw new BadRequestException("Đơn này đã có yêu cầu ngoại lệ đang được xử lý.");
+        }
+        // 5. Phải từng có 1 giao dịch thanh toán THẬT qua cổng thanh toán
+        Payment originalPayment = paymentRepository.findSuccessPaymentsByBookingId(req.getBookingId())
+                .stream().findFirst().orElse(null);
+        if (originalPayment == null) {
+            throw new BadRequestException("Đơn này chưa từng thanh toán qua cổng thanh toán — không có gì để hoàn.");
+        }
+        // 5.5 Chặn đơn đặt cọc — Chỉ áp dụng yêu cầu ngoại lệ cho đơn thanh toán toàn bộ (100%)
+        BigDecimal totalPrice = booking.getTotalPrice() != null ? booking.getTotalPrice() : BigDecimal.ZERO;
+        BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
+        BigDecimal baseCourtPrice = totalPrice.subtract(serviceFee);
+        if (originalPayment.getAmount().compareTo(baseCourtPrice) < 0) {
+            throw new BadRequestException("Yêu cầu ngoại lệ không áp dụng cho đơn đặt cọc (chỉ áp dụng cho đơn thanh toán toàn bộ).");
+        }
+        // 6. [Guard] Chỉ áp dụng cho booking đã hoàn 0% hoặc một phần
+        existingRefund.ifPresent(refund -> {
+            if (refund.getPaymentStatus() != TransactionStatus.FAILED
+                    && refund.getAmount().abs().compareTo(originalPayment.getAmount()) >= 0) {
+                throw new BadRequestException("Booking đã được hoàn tiền toàn bộ — không đủ điều kiện xin ngoại lệ.");
+            }
+        });
     }
 
     @Override
