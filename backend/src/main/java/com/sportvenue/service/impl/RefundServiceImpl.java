@@ -120,7 +120,7 @@ public class RefundServiceImpl implements RefundService {
             validateOwnershipAndStatus(booking, owner);
 
             // Kiểm tra xem đã có giao dịch hoàn tiền nào (PENDING hoặc SUCCESS) đang tồn tại chưa để tránh Double Refund
-            paymentRepository.findRefundPaymentByBookingId(bookingId).ifPresent(p -> {
+            paymentRepository.findRefundPaymentByBookingId(bookingId).stream().findFirst().ifPresent(p -> {
                 if (p.getPaymentStatus() == TransactionStatus.PENDING || p.getPaymentStatus() == TransactionStatus.SUCCESS) {
                     throw new BadRequestException("Yêu cầu hoàn tiền đang được xử lý hoặc đã thành công.");
                 }
@@ -227,6 +227,14 @@ public class RefundServiceImpl implements RefundService {
                 throw new BadRequestException("Bắt buộc phải cung cấp bằng chứng (ảnh/mô tả) khi lỗi do chủ sân");
             }
             return new RefundCalculation(100, paidAmount);
+        }
+
+        // Đặt cọc bị khách tự hủy -> giữ chỗ, KHÔNG hoàn lại (đúng bản chất tiền cọc trong thực
+        // tế: cam kết giữ chỗ, mất nếu không đến), bất kể còn bao lâu tới giờ chơi — khác hẳn
+        // thanh toán đầy đủ vẫn áp tiering 24h/12h bên dưới. Lỗi do sân (nhánh OWNER_FAULT phía
+        // trên) vẫn hoàn 100% cọc như bình thường vì không phải lỗi của khách.
+        if (booking.getPaymentStatus() == PaymentStatus.DEPOSITED) {
+            return new RefundCalculation(0, BigDecimal.ZERO);
         }
 
         // Khách tự hủy -> Phí dịch vụ không hoàn trả (non-refundable)
@@ -439,6 +447,7 @@ public class RefundServiceImpl implements RefundService {
         List<Integer> bookingIds = bookings.getContent().stream()
                 .map(Booking::getBookingId).toList();
         java.util.Map<Integer, BigDecimal> refundMap = new java.util.HashMap<>();
+        java.util.Map<Integer, BigDecimal> successPaymentMap = new java.util.HashMap<>();
         if (!bookingIds.isEmpty()) {
             List<Payment> refundPayments = paymentRepository.findRefundPaymentsByBookingIds(bookingIds);
             for (Payment p : refundPayments) {
@@ -446,6 +455,12 @@ public class RefundServiceImpl implements RefundService {
                     Integer bid = p.getBooking().getBookingId();
                     BigDecimal amt = p.getAmount().abs();
                     refundMap.put(bid, refundMap.getOrDefault(bid, BigDecimal.ZERO).add(amt));
+                }
+            }
+            List<Payment> successPayments = paymentRepository.findSuccessPaymentsByBookingIds(bookingIds);
+            for (Payment p : successPayments) {
+                if (p.getBooking() != null && p.getAmount() != null) {
+                    successPaymentMap.put(p.getBooking().getBookingId(), p.getAmount());
                 }
             }
         }
@@ -462,6 +477,16 @@ public class RefundServiceImpl implements RefundService {
             String endTimeStr = b.getSlot().getEndTime().toString();
 
             BigDecimal refundAmt = refundMap.getOrDefault(b.getBookingId(), BigDecimal.ZERO);
+            BigDecimal successPaid = successPaymentMap.getOrDefault(b.getBookingId(), BigDecimal.ZERO);
+
+            // Nếu đơn bị hủy, số tiền thực tế khách đã trả qua cổng thanh toán chỉ là số tiền thanh toán thành công (Paid hoặc Deposited).
+            // Nếu không bị hủy (COMPLETED, CONFIRMED...), khách sẽ thanh toán đủ b.getTotalPrice() (online hoặc tiền mặt).
+            BigDecimal bookingAmt = b.getTotalPrice();
+            if (b.getBookingStatus() == com.sportvenue.entity.enums.BookingStatus.CANCELLED) {
+                bookingAmt = successPaid;
+            }
+
+            BigDecimal serviceFee = b.getServiceFee() != null ? b.getServiceFee() : BigDecimal.ZERO;
 
             return OwnerBookingResponse.builder()
                     .id(b.getBookingId())
@@ -470,8 +495,9 @@ public class RefundServiceImpl implements RefundService {
                     .venue(b.getStadium().getStadiumName())
                     .date(b.getReservationDate().toString())
                     .time(startTimeStr + " - " + endTimeStr)
-                    .amount(b.getTotalPrice())
+                    .amount(bookingAmt)
                     .refundAmount(refundAmt)
+                    .serviceFee(serviceFee)
                     .paymentStatus(b.getPaymentStatus().name().toLowerCase())
                     .status(b.getBookingStatus().name().toLowerCase())
                     .notes(b.getNote() != null ? b.getNote() : "")

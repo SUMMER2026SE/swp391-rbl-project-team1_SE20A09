@@ -55,6 +55,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -380,7 +381,7 @@ public class BookingServiceImpl implements BookingService {
 
             if (wasReallyPaid) {
                 // Kiểm tra xem đã có giao dịch hoàn tiền nào (PENDING hoặc SUCCESS) đang tồn tại chưa để tránh Double Refund
-                paymentRepository.findRefundPaymentByBookingId(bookingId).ifPresent(p -> {
+                paymentRepository.findRefundPaymentByBookingId(bookingId).stream().findFirst().ifPresent(p -> {
                     if (p.getPaymentStatus() == TransactionStatus.PENDING || p.getPaymentStatus() == TransactionStatus.SUCCESS) {
                         throw new BadRequestException("Yêu cầu hủy đơn và hoàn tiền đang được xử lý hoặc đã thành công.");
                     }
@@ -390,6 +391,9 @@ public class BookingServiceImpl implements BookingService {
                         .stream().findFirst().orElse(null);
 
                 if (originalPayment != null) {
+                    // docs/qa_findings_refactor_plan.md mục 1.2: PHẢI áp cùng công thức tiering
+                    // (24h/12h/OWNER_FAULT) với /owner/bookings/{id}/refund — trước đây hoàn thẳng
+                    // 100% originalPayment.getAmount() bất kể còn bao lâu tới giờ chơi.
                     RefundServiceImpl.RefundCalculation calculation = RefundServiceImpl.calculateRefund(
                             booking, originalPayment, RefundReasonType.CUSTOMER_REQUEST, null, false);
 
@@ -459,13 +463,23 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private void processGatewayRefundTx(CancelProcessContext ctx, Integer bookingId, String reason, Integer currentUserId) {
-        boolean gatewaySuccess = false;
-        try {
-            paymentService.processRefund(ctx.originalPayment, ctx.refundPayment.getAmount().abs(), 
-                    reason != null ? reason : "Khách hàng tự hủy");
+        BigDecimal refundAmount = ctx.refundPayment.getAmount().abs();
+
+        boolean gatewaySuccess;
+        if (refundAmount.compareTo(BigDecimal.ZERO) == 0) {
+            // Hủy <12h trước giờ chơi -> tiering trả về 0đ (docs/qa_findings_refactor_plan.md mục 1.3).
+            // Không có gì để hoàn nên KHÔNG gọi cổng thanh toán (gateway thật/mock đều từ chối
+            // yêu cầu hoàn 0đ) — coi như "thành công" luôn để booking chuyển CANCELLED bình thường.
             gatewaySuccess = true;
-        } catch (Exception e) {
-            log.error("Refund gateway failed for customer cancel booking {}", bookingId, e);
+        } else {
+            gatewaySuccess = false;
+            try {
+                paymentService.processRefund(ctx.originalPayment, refundAmount,
+                        reason != null ? reason : "Khách hàng tự hủy");
+                gatewaySuccess = true;
+            } catch (Exception e) {
+                log.error("Refund gateway failed for customer cancel booking {}", bookingId, e);
+            }
         }
 
         final boolean finalSuccess = gatewaySuccess;
@@ -897,6 +911,45 @@ public class BookingServiceImpl implements BookingService {
             sportType = stadium.getSportType().getSportName();
         }
 
+        // Số tiền THỰC TẾ đã charge qua cổng — khác totalPrice khi là đơn đặt cọc (chỉ thu 30%),
+        // để FE hiển thị rõ "Đã đặt cọc: Xđ" thay vì chỉ ghi nhãn "Đặt cọc" mà không rõ số tiền.
+        BigDecimal paidAmount = paymentRepository.findSuccessPaymentsByBookingId(booking.getBookingId())
+                .stream().findFirst()
+                .map(Payment::getAmount)
+                .orElse(null);
+
+        // Hiển thị số tiền/% thực tế đã hoàn cho khách theo dõi — trước đây chỉ có badge
+        // "Đã hoàn tiền" chung chung, không rõ hoàn bao nhiêu (0%, 50%, hay 100%).
+        // Cộng dồn TẤT CẢ payment hoàn tiền SUCCESS (không chỉ lấy 1 dòng mới nhất) — vì luồng
+        // "Yêu cầu ngoại lệ" có thể tạo thêm payment hoàn bổ sung (top-up) sau lần hoàn gốc, lấy
+        // 1 dòng sẽ hiện thiếu số tiền thực đã nhận. % tính trên paidAmount (số tiền thực đã
+        // charge) chứ không phải totalPrice — vì đơn đặt cọc chỉ thu 30% totalPrice.
+        BigDecimal refundedAmount = null;
+        Integer refundPercent = null;
+        if (booking.getPaymentStatus() == PaymentStatus.REFUNDED) {
+            refundedAmount = paymentRepository.findRefundPaymentByBookingId(booking.getBookingId()).stream()
+                    .filter(p -> p.getPaymentStatus() == TransactionStatus.SUCCESS)
+                    .map(p -> p.getAmount().abs())
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
+            BigDecimal baseRefundable = paidAmount != null ? paidAmount.subtract(serviceFee) : BigDecimal.ZERO;
+            if (baseRefundable.compareTo(BigDecimal.ZERO) < 0) {
+                baseRefundable = BigDecimal.ZERO;
+            }
+
+            if (baseRefundable.compareTo(BigDecimal.ZERO) > 0) {
+                refundPercent = refundedAmount
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(baseRefundable, 0, RoundingMode.HALF_UP)
+                        .intValue();
+            } else if (paidAmount != null && paidAmount.compareTo(BigDecimal.ZERO) > 0) {
+                refundPercent = refundedAmount
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(paidAmount, 0, RoundingMode.HALF_UP)
+                        .intValue();
+            }
+        }
+
         return BookingDetailResponse.builder()
                 .bookingId(booking.getBookingId())
                 .displayId("BK" + String.format("%06d", booking.getBookingId()))
@@ -917,8 +970,11 @@ public class BookingServiceImpl implements BookingService {
                         .build())
                 .totalPrice(booking.getTotalPrice())
                 .serviceFee(booking.getServiceFee())
+                .paidAmount(paidAmount)
                 .status(booking.getBookingStatus().name().toLowerCase())
                 .paymentStatus(booking.getPaymentStatus().name().toLowerCase())
+                .refundedAmount(refundedAmount)
+                .refundPercent(refundPercent)
                 .note(booking.getNote())
                 .expiredAt(booking.getExpiredAt())
                 .createdAt(booking.getBookingDate())
