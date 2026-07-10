@@ -182,7 +182,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             SELECT b.reservationDate AS date,
                    COALESCE(SUM(
                        CASE
-                           WHEN b.totalPrice > :serviceFee THEN b.totalPrice - :serviceFee
+                           WHEN b.totalPrice > b.serviceFee THEN b.totalPrice - b.serviceFee
                            ELSE 0
                        END
                    ), 0) AS revenue
@@ -199,8 +199,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("ownerEmail") String ownerEmail,
             @Param("stadiumId") Integer stadiumId,
             @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate,
-            @Param("serviceFee") BigDecimal serviceFee);
+            @Param("endDate") LocalDate endDate);
 
     @Query("""
             SELECT s.stadiumId AS stadiumId,
@@ -208,7 +207,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
                    COUNT(DISTINCT b.bookingId) AS totalBookings,
                    COALESCE(SUM(
                        CASE
-                           WHEN b.totalPrice > :serviceFee THEN b.totalPrice - :serviceFee
+                           WHEN b.totalPrice > b.serviceFee THEN b.totalPrice - b.serviceFee
                            ELSE 0
                        END
                    ), 0) AS totalRevenue
@@ -221,7 +220,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             GROUP BY s.stadiumId, s.stadiumName
             ORDER BY COALESCE(SUM(
                        CASE
-                           WHEN b.totalPrice > :serviceFee THEN b.totalPrice - :serviceFee
+                           WHEN b.totalPrice > b.serviceFee THEN b.totalPrice - b.serviceFee
                            ELSE 0
                        END
                    ), 0) DESC
@@ -230,13 +229,12 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
             @Param("ownerEmail") String ownerEmail,
             @Param("stadiumId") Integer stadiumId,
             @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate,
-            @Param("serviceFee") BigDecimal serviceFee);
+            @Param("endDate") LocalDate endDate);
 
     @Query("""
             SELECT COALESCE(SUM(
                 CASE
-                    WHEN b.totalPrice > :serviceFee THEN b.totalPrice - :serviceFee
+                    WHEN b.totalPrice > b.serviceFee THEN b.totalPrice - b.serviceFee
                     ELSE 0
                 END
             ), 0)
@@ -249,8 +247,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer> {
     BigDecimal sumOwnerCurrentMonthNetRevenue(
             @Param("ownerEmail") String ownerEmail,
             @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate,
-            @Param("serviceFee") BigDecimal serviceFee);
+            @Param("endDate") LocalDate endDate);
 
     /** Đếm số lượng đặt sân theo trạng thái — dùng cho Dashboard. */
     long countByStadiumStadiumIdAndBookingStatus(Integer stadiumId, BookingStatus status);
