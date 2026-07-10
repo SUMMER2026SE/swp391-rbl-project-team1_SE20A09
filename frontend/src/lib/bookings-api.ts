@@ -135,8 +135,14 @@ export type BookingDetailItem = {
   totalPrice: number;
   /** Phí dịch vụ đã gồm trong totalPrice — 0 nếu backend cũ chưa trả field này. */
   serviceFee: number;
+  /** Số tiền THỰC TẾ đã charge qua cổng — bằng 30% totalPrice nếu là đơn đặt cọc. Null nếu chưa thanh toán. */
+  paidAmount: number | null;
   status: "pending" | "pending_payment" | "confirmed" | "completed" | "cancelled";
   paymentStatus: string;
+  /** Số tiền thực tế đã hoàn — null nếu paymentStatus khác "refunded". */
+  refundedAmount: number | null;
+  /** % hoàn tương ứng refundedAmount — null nếu chưa hoàn. */
+  refundPercent: number | null;
   createdAt: string;
   note: string | null;
   ownerUserId?: number;
@@ -157,8 +163,11 @@ export async function fetchBookingDetail(id: string | number): Promise<BookingDe
     address: data.stadium?.address || "Chưa rõ",
     totalPrice: typeof data.totalPrice === "number" ? data.totalPrice : Number(data.totalPrice),
     serviceFee: typeof data.serviceFee === "number" ? data.serviceFee : Number(data.serviceFee) || 0,
+    paidAmount: typeof data.paidAmount === "number" ? data.paidAmount : (data.paidAmount != null ? Number(data.paidAmount) : null),
     status: data.status,
     paymentStatus: data.paymentStatus,
+    refundedAmount: typeof data.refundedAmount === "number" ? data.refundedAmount : (data.refundedAmount != null ? Number(data.refundedAmount) : null),
+    refundPercent: typeof data.refundPercent === "number" ? data.refundPercent : (data.refundPercent != null ? Number(data.refundPercent) : null),
     createdAt: data.createdAt || "Chưa rõ",
     note: data.note || null,
     ownerUserId: data.stadium?.ownerUserId,

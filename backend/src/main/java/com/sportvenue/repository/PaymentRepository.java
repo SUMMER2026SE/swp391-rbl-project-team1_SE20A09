@@ -69,10 +69,21 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
             @Param("startOfMonth") LocalDateTime startOfMonth,
             @Param("endOfMonth") LocalDateTime endOfMonth);
 
-    @Query("SELECT p FROM Payment p WHERE p.booking.bookingId = :bookingId AND p.amount < 0")
-    Optional<Payment> findRefundPaymentByBookingId(@Param("bookingId") Integer bookingId);
+    /**
+     * Tìm TẤT CẢ payment "hoàn tiền" của 1 booking, mới nhất trước — caller lấy phần tử đầu qua
+     * {@code .stream().findFirst()}. Dùng {@code <= 0} (không phải {@code < 0}) vì hủy <12h trước
+     * giờ chơi hợp lệ trả về refund 0đ (docs/qa_findings_refactor_plan.md mục 1.3); payment gốc
+     * (tiền khách trả) luôn dương nên không lo trùng với payment gốc.
+     *
+     * <p>Trả về List thay vì {@code Optional<Payment>} vì 1 booking có thể có NHIỀU payment hoàn
+     * tiền theo thời gian (vd: payment hoàn 0đ lúc hủy ban đầu + payment hoàn bổ sung từ luồng
+     * "Yêu cầu ngoại lệ hoàn tiền" được duyệt sau đó) — dùng {@code Optional} trực tiếp ở đây sẽ
+     * ném {@code NonUniqueResultException} khi có ≥2 dòng khớp.</p>
+     */
+    @Query("SELECT p FROM Payment p WHERE p.booking.bookingId = :bookingId AND p.amount <= 0 ORDER BY p.paidAt DESC")
+    List<Payment> findRefundPaymentByBookingId(@Param("bookingId") Integer bookingId);
 
-    @Query("SELECT p FROM Payment p WHERE p.booking.bookingId IN :bookingIds AND p.amount < 0")
+    @Query("SELECT p FROM Payment p WHERE p.booking.bookingId IN :bookingIds AND p.amount <= 0")
     List<Payment> findRefundPaymentsByBookingIds(@Param("bookingIds") List<Integer> bookingIds);
 
     /**
@@ -97,5 +108,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
 
     @Query("SELECT p FROM Payment p WHERE p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.PENDING AND p.amount < 0 AND p.paidAt <= :threshold")
     List<Payment> findPendingRefundsOlderThan(@Param("threshold") LocalDateTime threshold);
+
+    @Query("SELECT p FROM Payment p WHERE p.booking.bookingId IN :bookingIds AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS AND p.amount > 0")
+    List<Payment> findSuccessPaymentsByBookingIds(@Param("bookingIds") List<Integer> bookingIds);
 }
 
