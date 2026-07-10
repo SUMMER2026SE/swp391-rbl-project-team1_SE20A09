@@ -1,16 +1,5 @@
 package com.sportvenue.controller;
 
-import com.sportvenue.dto.request.CreateComplaintRequest;
-import com.sportvenue.dto.request.ReplyComplaintRequest;
-import com.sportvenue.dto.request.ResolveComplaintRequest;
-import com.sportvenue.dto.response.ComplaintResponse;
-import com.sportvenue.dto.response.PageResponse;
-import com.sportvenue.security.UserPrincipal;
-import com.sportvenue.service.ComplaintService;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
@@ -24,6 +13,21 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
+
+import com.sportvenue.dto.request.CreateComplaintRequest;
+import com.sportvenue.dto.request.ReplyComplaintRequest;
+import com.sportvenue.dto.request.ResolveComplaintRequest;
+import com.sportvenue.dto.response.ComplaintResponse;
+import com.sportvenue.dto.response.PageResponse;
+import com.sportvenue.security.UserPrincipal;
+import com.sportvenue.service.ComplaintEscalationService;
+import com.sportvenue.service.ComplaintService;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @RestController
@@ -34,6 +38,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ComplaintController {
 
     private final ComplaintService complaintService;
+    private final ComplaintEscalationService escalationService;
 
     @GetMapping("/owner/complaints")
     @PreAuthorize("hasRole('Owner')")
@@ -143,5 +148,63 @@ public class ComplaintController {
         log.info("REST request to resolve complaint {} by admin", id);
         ComplaintResponse response = complaintService.resolveComplaintByAdmin(id, request);
         return ResponseEntity.ok(response);
+    }
+
+    // NEW ESCALATION ENDPOINTS
+    
+    @PostMapping("/complaints/{id}/escalate")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(summary = "Khách hàng escalate khiếu nại lên Admin")
+    public ResponseEntity<Void> customerEscalateComplaint(
+            @PathVariable Integer id,
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        String reason = body.getOrDefault("reason", "Không hài lòng với cách xử lý của chủ sân");
+        escalationService.escalateToAdmin(id, reason, userPrincipal.getUsername());
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/complaints/{id}/object")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(summary = "Khách hàng phản đối giải pháp của Owner")
+    public ResponseEntity<Void> customerObjectToResolution(
+            @PathVariable Integer id,
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        String objectionReason = body.getOrDefault("reason", "Không đồng ý với giải pháp");
+        escalationService.customerObjectToResolution(id, objectionReason, userPrincipal.getUsername());
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/admin/complaints/{id}/approve")
+    @PreAuthorize("hasRole('Admin')")
+    @Operation(summary = "Admin chấp nhận giải pháp của Owner")
+    public ResponseEntity<Void> adminApproveResolution(
+            @PathVariable Integer id,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        escalationService.adminApproveResolution(id, userPrincipal.getUsername());
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/admin/complaints/{id}/override")
+    @PreAuthorize("hasRole('Admin')")
+    @Operation(summary = "Admin ghi đè giải pháp của Owner")
+    public ResponseEntity<Void> adminOverrideResolution(
+            @PathVariable Integer id,
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        String newResolution = body.get("resolution");
+        escalationService.adminOverrideResolution(id, newResolution, userPrincipal.getUsername());
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/admin/complaints/escalated")
+    @PreAuthorize("hasRole('Admin')")
+    @Operation(summary = "Admin xem danh sách khiếu nại đã escalate")
+    public ResponseEntity<PageResponse<ComplaintResponse>> listEscalatedComplaints(
+            @PageableDefault(size = 20, sort = "escalatedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        log.info("REST request to get escalated complaints for Admin");
+        // Sẽ implement method này trong ComplaintService
+        return ResponseEntity.ok(PageResponse.of(complaintService.getEscalatedComplaints(pageable)));
     }
 }

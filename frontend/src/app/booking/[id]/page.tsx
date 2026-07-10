@@ -115,7 +115,7 @@ export default function BookingDetailPage() {
     if (!complaintText.trim() || !booking) return;
     try {
       setSubmitting(true);
-      await post(`/complaints`, {
+      const response = await post<{ complaintId: number }>(`/complaints`, {
         bookingId: parseInt(booking.id),
         subject: "Khiếu nại từ đơn đặt sân #" + booking.displayId,
         description: complaintText.trim() 
@@ -123,6 +123,7 @@ export default function BookingDetailPage() {
       toast.success("Đã gửi khiếu nại thành công! Chủ sân sẽ sớm phản hồi.");
       setComplaintOpen(false);
       setComplaintText("");
+      router.push(`/complaints?complaintId=${response.complaintId}`);
     } catch (err: any) {
       toast.error(err.message || "Có lỗi xảy ra khi gửi khiếu nại.");
     } finally {
@@ -365,9 +366,19 @@ export default function BookingDetailPage() {
                 </>
               )}
               {booking.status === 'cancelled' && (
-                <Button asChild variant="secondary" className="rounded-2xl w-full font-bold h-12">
-                  <Link href="/search">Đặt sân khác</Link>
-                </Button>
+                <>
+                  <Button 
+                    variant="outline" 
+                    className="rounded-2xl flex-1 font-bold h-12 bg-transparent text-white border-white/20 hover:bg-white/10"
+                    onClick={() => setComplaintOpen(true)}
+                  >
+                    <AlertCircle className="h-4 w-4 mr-2 text-red-400" />
+                    Gửi khiếu nại
+                  </Button>
+                  <Button asChild variant="secondary" className="rounded-2xl flex-1 font-bold h-12">
+                    <Link href="/search">Đặt sân khác</Link>
+                  </Button>
+                </>
               )}
             </div>
           </Card>

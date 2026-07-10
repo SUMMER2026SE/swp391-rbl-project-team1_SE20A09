@@ -32,4 +32,7 @@ public interface ComplaintService {
 
     /** Admin đóng giải quyết khiếu nại. */
     ComplaintResponse resolveComplaintByAdmin(Integer complaintId, ResolveComplaintRequest request);
+
+    /** Admin lấy danh sách khiếu nại đã escalate hoặc chờ xem xét. */
+    Page<ComplaintResponse> getEscalatedComplaints(Pageable pageable);
 }

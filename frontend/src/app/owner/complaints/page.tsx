@@ -125,6 +125,9 @@ function OwnerComplaintsPage() {
       open: { label: "Mới", className: "bg-yellow-50 text-yellow-700 border-yellow-200" },
       in_progress: { label: "Đang xử lý", className: "bg-blue-50 text-blue-700 border-blue-200" },
       resolved: { label: "Đã giải quyết", className: "bg-green-50 text-green-700 border-green-200" },
+      escalated: { label: "Đã chuyển Admin", className: "bg-purple-50 text-purple-700 border-purple-200" },
+      pending_admin_review: { label: "Chờ khách phản hồi", className: "bg-orange-50 text-orange-700 border-orange-200" },
+      customer_withdrawn: { label: "Khách rút", className: "bg-slate-50 text-slate-700 border-slate-200" },
     };
     const item = config[s as keyof typeof config] || { label: status, className: "bg-gray-50 text-gray-700 border-gray-200" };
     return <Badge variant="outline" className={item.className}>{item.label}</Badge>;
@@ -221,7 +224,7 @@ function OwnerComplaintsPage() {
                   <h2 className="text-lg font-bold text-foreground">{selectedComplaint.subject}</h2>
                 </div>
 
-                {selectedComplaint.status !== "resolved" && (
+                {["open", "in_progress"].includes(selectedComplaint.status) && (
                   <Button
                     size="sm"
                     className="bg-green-600 hover:bg-green-700 text-white"
@@ -265,7 +268,7 @@ function OwnerComplaintsPage() {
                   </div>
                 )}
 
-                {/* Resolution Statement */}
+                 {/* Resolution Statement */}
                 {selectedComplaint.status === "resolved" && selectedComplaint.resolution && (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-2">
                     <h4 className="flex items-center gap-2 text-green-800 font-bold text-sm">
@@ -273,13 +276,34 @@ function OwnerComplaintsPage() {
                       Đã thống nhất giải quyết thành công
                     </h4>
                     <p className="text-sm text-green-700 font-semibold">{selectedComplaint.resolution}</p>
-                    <p className="text-[10px] text-green-600">Ngày giải quyết: {new Date(selectedComplaint.resolvedDate as string).toLocaleDateString('vi-VN')}</p>
+                    <p className="text-[10px] text-green-600">Ngày giải quyết: {selectedComplaint.resolvedDate ? new Date(selectedComplaint.resolvedDate).toLocaleDateString('vi-VN') : ''}</p>
+                  </div>
+                )}
+
+                {selectedComplaint.status === "customer_withdrawn" && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-2">
+                    <h4 className="flex items-center gap-2 text-slate-800 font-bold text-sm">
+                      <CheckCircle className="h-5 w-5 text-slate-700" />
+                      Khách hàng đã rút khiếu nại
+                    </h4>
+                  </div>
+                )}
+
+                {selectedComplaint.status === "pending_admin_review" && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 space-y-2">
+                    <h4 className="flex items-center gap-2 text-orange-800 font-bold text-sm">
+                      <Clock className="h-5 w-5 text-orange-700" />
+                      Chờ khách phản hồi giải pháp (tối đa 48h)
+                    </h4>
+                    {selectedComplaint.resolution && (
+                      <p className="text-sm text-orange-700 font-semibold">{selectedComplaint.resolution}</p>
+                    )}
                   </div>
                 )}
               </CardContent>
 
               {/* Send panel */}
-              {selectedComplaint.status !== "resolved" && (
+              {!["resolved", "customer_withdrawn"].includes(selectedComplaint.status) && (
                 <div className="border-t bg-card p-4 flex gap-2">
                   <Textarea
                     placeholder="Viết tin nhắn phản hồi..."
