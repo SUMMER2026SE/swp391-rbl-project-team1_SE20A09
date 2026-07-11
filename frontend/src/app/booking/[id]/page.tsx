@@ -254,6 +254,9 @@ export default function BookingDetailPage() {
                     <h1 className="text-2xl md:text-3xl font-bold text-white leading-tight">
                       {booking.venueName}
                     </h1>
+                    {booking.complexName && (
+                      <p className="text-sm text-white/80 mt-0.5">{booking.complexName}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md p-1.5 rounded-2xl border border-white/20">
                     {getStatusBadge(booking.status)}

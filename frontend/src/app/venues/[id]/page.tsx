@@ -23,7 +23,16 @@ export default async function VenueDetailPage({ params }: PageProps) {
     notFound()
   }
 
-  // --- Render VenueDetail for courts ---
+  // Nếu sân này thuộc 1 complex, chuyển sang trang complex (có đầy đủ ngữ cảnh: tên
+  // khu phức hợp + danh sách sân con) thay vì hiện trang sân đơn lẻ trơ trụi ở dưới.
+  // Đặt TRƯỚC getVenueDetail() để tránh fetch thừa khi sắp redirect. Không đặt trong
+  // try/catch — redirect() throw 1 exception nội bộ để Next.js xử lý, không phải lỗi thật.
+  const ref = await getCourtWithComplex(venueId)
+  if (ref?.complexId != null) {
+    redirect(`/complexes/${ref.complexId}?courtId=${venueId}`)
+  }
+
+  // --- Render VenueDetail for courts (sân độc lập, không thuộc complex nào) ---
   let venue
   try {
     venue = await getVenueDetail(venueId)

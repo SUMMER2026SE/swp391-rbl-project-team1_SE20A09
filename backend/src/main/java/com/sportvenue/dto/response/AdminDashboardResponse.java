@@ -45,6 +45,7 @@ public class AdminDashboardResponse {
         private Integer bookingId;
         private String customerName;
         private String stadiumName;
+        private String complexName;
         private BigDecimal totalPrice;
         private String bookingStatus;
         private LocalDateTime bookingDate;

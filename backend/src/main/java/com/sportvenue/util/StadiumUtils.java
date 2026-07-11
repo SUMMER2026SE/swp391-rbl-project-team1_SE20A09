@@ -37,6 +37,21 @@ public class StadiumUtils {
         return null;
     }
 
+    /** Resolve the name of the Complex a Facility/Court belongs to — null if standalone/legacy data. */
+    public static String resolveComplexName(Stadium stadium) {
+        if (stadium == null) {
+            return null;
+        }
+        if (stadium.getComplex() != null) {
+            return stadium.getComplex().getName();
+        }
+        if (stadium.getParentStadium() != null
+                && stadium.getParentStadium().getComplex() != null) {
+            return stadium.getParentStadium().getComplex().getName();
+        }
+        return null;
+    }
+
     public static String toSportLabel(String sportName) {
         return switch (sportName) {
             case "Football" -> "Bóng đá";

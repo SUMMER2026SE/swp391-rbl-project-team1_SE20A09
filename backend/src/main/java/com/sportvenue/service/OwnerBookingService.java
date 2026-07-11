@@ -233,6 +233,7 @@ public class OwnerBookingService {
                 .stadium(BookingResponse.StadiumInfo.builder()
                         .stadiumId(stadium.getStadiumId())
                         .stadiumName(stadium.getStadiumName())
+                        .complexName(StadiumUtils.resolveComplexName(stadium))
                         .address(StadiumUtils.resolveAddress(stadium))
                         .sportType(stadium.getSportType().getSportName())
                         .build())

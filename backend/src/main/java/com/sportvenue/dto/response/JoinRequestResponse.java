@@ -29,6 +29,7 @@ public class JoinRequestResponse {
     // Rich match details for user sidebar/history
     private String matchTitle;
     private String stadiumName;
+    private String complexName;
     private String sportName;
     private java.time.LocalDate playDate;
     private java.time.LocalTime startTime;

@@ -114,6 +114,9 @@ function BookingCard({
               <h3 className="truncate text-base font-bold text-slate-900 md:text-lg">
                 {booking.venue}
               </h3>
+              {booking.complexName && (
+                <p className="truncate text-xs text-slate-400">{booking.complexName}</p>
+              )}
               <p className="text-sm font-medium text-slate-500">{booking.sportType}</p>
             </div>
           </div>
