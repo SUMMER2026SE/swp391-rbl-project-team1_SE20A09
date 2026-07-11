@@ -2,6 +2,7 @@ export type FeaturedVenue = {
   id: number;
   image: string;
   name: string;
+  complexName?: string | null;
   sportType: string;
   sportKey: string;
   price: number;

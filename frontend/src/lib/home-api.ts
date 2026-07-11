@@ -39,6 +39,7 @@ export type HomeDashboardResponse = {
 type VenueSummaryApi = {
   id: number;
   name: string;
+  complexName?: string | null;
   sportType: string;
   sportKey: string;
   pricePerHour: number;
@@ -54,6 +55,7 @@ export function mapVenueToCard(venue: VenueSummaryApi): FeaturedVenue {
     id: venue.id,
     image: venue.imageUrl,
     name: venue.name,
+    complexName: venue.complexName,
     sportType: venue.sportType,
     sportKey: venue.sportKey,
     price: venue.pricePerHour,
