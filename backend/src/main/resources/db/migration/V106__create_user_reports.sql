@@ -22,7 +22,7 @@ CREATE TABLE reports (
     )),
     CONSTRAINT chk_reports_not_self CHECK (reporter_id <> reportee_id),
     CONSTRAINT chk_reports_has_context CHECK (
-        booking_id IS NOT NULL OR match_request_id IS NOT NULL OR join_request_id IS NOT NULL OR stadium_id IS NOT NULL
+        booking_id IS NOT NULL OR match_request_id IS NOT NULL OR join_request_id IS NOT NULL
     )
 );
 
@@ -40,4 +40,3 @@ CREATE INDEX idx_reports_created_at ON reports(created_at);
 CREATE INDEX idx_reports_booking_id ON reports(booking_id);
 CREATE INDEX idx_reports_match_request_id ON reports(match_request_id);
 CREATE INDEX idx_reports_join_request_id ON reports(join_request_id);
-CREATE INDEX idx_reports_stadium_id ON reports(stadium_id);
