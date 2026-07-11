@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Search, Loader2 } from "lucide-react";
@@ -72,7 +73,7 @@ const fetchOwners = async (page: number, size: number, search: string, accountSt
   return data.result;
 };
 
-export default function AdminOwnersPage() {
+function AdminOwnersContent() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
@@ -136,11 +137,7 @@ export default function AdminOwnersPage() {
   const actionText = dialogIsEnabled ? "mở khóa" : "khóa";
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50/50 min-h-screen">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Quản lý Chủ Sân</h1>
-      </div>
-
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-4 bg-white p-4 rounded-lg shadow-sm border border-gray-100">
         <div className="relative flex-1 min-w-[250px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
@@ -349,6 +346,23 @@ export default function AdminOwnersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+export default function AdminOwnersPage() {
+  const pathname = usePathname();
+
+  if (pathname.startsWith("/admin/users")) {
+    return <AdminOwnersContent />;
+  }
+
+  return (
+    <div className="p-6 space-y-6 bg-gray-50/50 min-h-screen">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Quản lý Chủ Sân</h1>
+      </div>
+      <AdminOwnersContent />
     </div>
   );
 }

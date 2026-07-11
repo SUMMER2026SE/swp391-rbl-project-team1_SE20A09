@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Search, Loader2 } from "lucide-react";
@@ -86,7 +87,7 @@ const fetchCustomers = async (page: number, size: number, search: string, status
 
 
 
-export default function AdminCustomersPage() {
+function AdminCustomersContent() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
@@ -169,9 +170,8 @@ export default function AdminCustomersPage() {
   };
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Quản lý Khách hàng</h1>
+    <div className="space-y-6">
+      <div className="flex justify-end">
         
         <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
           <DialogTrigger asChild>
@@ -351,6 +351,23 @@ export default function AdminCustomersPage() {
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+export default function AdminCustomersPage() {
+  const pathname = usePathname();
+
+  if (pathname.startsWith("/admin/users")) {
+    return <AdminCustomersContent />;
+  }
+
+  return (
+    <div className="p-8 space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Quản lý Khách hàng</h1>
+      </div>
+      <AdminCustomersContent />
     </div>
   );
 }

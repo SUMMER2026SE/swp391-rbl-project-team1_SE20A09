@@ -17,9 +17,9 @@ import { CheckCircle, XCircle, MapPin, Building, Loader2, Mail, Phone, Calendar 
 import { adminOwnerService, OwnerDetail } from "@/lib/services/admin-owner";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
-export default function OwnerApprovalPage() {
+function OwnerApprovalContent() {
   const router = useRouter();
   const { data: session, status: sessionStatus } = useSession();
 
@@ -266,17 +266,7 @@ export default function OwnerApprovalPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Duyệt hồ sơ chủ sân</h1>
-          <p className="text-muted-foreground mt-1">Xem xét hồ sơ đăng ký kinh doanh và yêu cầu nâng cấp lên Chủ sân.</p>
-        </div>
-        <Button variant="outline" onClick={() => router.push("/admin/dashboard")}>
-          Quay lại Dashboard
-        </Button>
-      </div>
-
+    <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList className="mb-6">
             <TabsTrigger value="PENDING">Chờ duyệt</TabsTrigger>
@@ -396,6 +386,30 @@ export default function OwnerApprovalPage() {
             </div>
           </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+export default function OwnerApprovalPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+
+  if (pathname.startsWith("/admin/users")) {
+    return <OwnerApprovalContent />;
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold">Duyệt hồ sơ chủ sân</h1>
+          <p className="text-muted-foreground mt-1">Xem xét hồ sơ đăng ký kinh doanh và yêu cầu nâng cấp lên Chủ sân.</p>
+        </div>
+        <Button variant="outline" onClick={() => router.push("/admin/dashboard")}>
+          Quay lại Dashboard
+        </Button>
+      </div>
+      <OwnerApprovalContent />
     </div>
   );
 }

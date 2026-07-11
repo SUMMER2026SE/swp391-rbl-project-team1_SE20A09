@@ -22,14 +22,52 @@ export default function AdminUsersPage() {
   const [ownerTab, setOwnerTab] = useState<OwnerTab>("accounts");
 
   useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    setMainTab(normalizeMainTab(searchParams.get("tab")));
-    setOwnerTab(normalizeOwnerTab(searchParams.get("ownerTab")));
+    const syncFromUrl = () => {
+      const searchParams = new URLSearchParams(window.location.search);
+      setMainTab(normalizeMainTab(searchParams.get("tab")));
+      setOwnerTab(normalizeOwnerTab(searchParams.get("ownerTab")));
+    };
+
+    syncFromUrl();
+    window.addEventListener("popstate", syncFromUrl);
+    return () => window.removeEventListener("popstate", syncFromUrl);
   }, []);
+
+  const updateUrl = (nextMainTab: MainTab, nextOwnerTab: OwnerTab) => {
+    const searchParams = new URLSearchParams(window.location.search);
+
+    if (nextMainTab === "owners") {
+      searchParams.set("tab", "owners");
+      if (nextOwnerTab === "approvals") {
+        searchParams.set("ownerTab", "approvals");
+      } else {
+        searchParams.delete("ownerTab");
+      }
+    } else {
+      searchParams.delete("tab");
+      searchParams.delete("ownerTab");
+    }
+
+    const query = searchParams.toString();
+    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}`;
+    window.history.replaceState(null, "", nextUrl);
+  };
+
+  const handleMainTabChange = (value: string) => {
+    const nextMainTab = value as MainTab;
+    setMainTab(nextMainTab);
+    updateUrl(nextMainTab, ownerTab);
+  };
+
+  const handleOwnerTabChange = (value: string) => {
+    const nextOwnerTab = value as OwnerTab;
+    setOwnerTab(nextOwnerTab);
+    updateUrl("owners", nextOwnerTab);
+  };
 
   return (
     <div className="space-y-6">
-      <Tabs value={mainTab} onValueChange={(value) => setMainTab(value as MainTab)}>
+      <Tabs value={mainTab} onValueChange={handleMainTabChange}>
         <TabsList className="mb-4">
           <TabsTrigger value="customers">Khách hàng</TabsTrigger>
           <TabsTrigger value="owners">Chủ sân</TabsTrigger>
@@ -40,7 +78,7 @@ export default function AdminUsersPage() {
         </TabsContent>
 
         <TabsContent value="owners" className="mt-0 space-y-4">
-          <Tabs value={ownerTab} onValueChange={(value) => setOwnerTab(value as OwnerTab)}>
+          <Tabs value={ownerTab} onValueChange={handleOwnerTabChange}>
             <TabsList>
               <TabsTrigger value="accounts">Quản lý tài khoản</TabsTrigger>
               <TabsTrigger value="approvals">Duyệt hồ sơ</TabsTrigger>
