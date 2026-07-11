@@ -19,22 +19,19 @@ public interface ReportRepository extends JpaRepository<Report, Integer> {
 
     @EntityGraph(attributePaths = {
             "reporter", "reporter.role", "reportee", "reportee.role",
-            "booking", "matchRequest", "joinRequest", "stadium", "resolvedBy", "resolvedBy.role",
-            "evidenceUrls"
+            "booking", "matchRequest", "joinRequest", "stadium", "resolvedBy", "resolvedBy.role"
     })
     Optional<Report> findWithDetailsByReportId(Integer reportId);
 
     @EntityGraph(attributePaths = {
             "reporter", "reporter.role", "reportee", "reportee.role",
-            "booking", "matchRequest", "joinRequest", "stadium", "resolvedBy", "resolvedBy.role",
-            "evidenceUrls"
+            "booking", "matchRequest", "joinRequest", "stadium", "resolvedBy", "resolvedBy.role"
     })
     Page<Report> findByReporterUserIdOrderByCreatedAtDesc(Integer reporterId, Pageable pageable);
 
     @EntityGraph(attributePaths = {
             "reporter", "reporter.role", "reportee", "reportee.role",
-            "booking", "matchRequest", "joinRequest", "stadium", "resolvedBy", "resolvedBy.role",
-            "evidenceUrls"
+            "booking", "matchRequest", "joinRequest", "stadium", "resolvedBy", "resolvedBy.role"
     })
     @Query("""
             SELECT r FROM Report r

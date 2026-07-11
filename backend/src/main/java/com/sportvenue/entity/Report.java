@@ -21,6 +21,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.BatchSize;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
@@ -83,6 +84,7 @@ public class Report implements Serializable {
     @ElementCollection
     @CollectionTable(name = "report_evidence_urls", joinColumns = @JoinColumn(name = "report_id"))
     @Column(name = "evidence_url", nullable = false, length = 500)
+    @BatchSize(size = 50)
     @Builder.Default
     private List<String> evidenceUrls = new ArrayList<>();
 
