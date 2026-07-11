@@ -5,11 +5,16 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import jakarta.persistence.LockModeType;
+
 import com.sportvenue.entity.Payment;
+import com.sportvenue.entity.enums.PaymentMethod;
+import com.sportvenue.entity.enums.TransactionStatus;
 import com.sportvenue.repository.projection.DailyRevenueProjection;
 import com.sportvenue.repository.projection.VenueRevenueProjection;
 
@@ -26,6 +31,27 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
 
        /** Tìm payment theo mã giao dịch — dùng khi xử lý callback từ VNPay/MoMo. */
        Optional<Payment> findByTransactionCode(String transactionCode);
+
+       /**
+        * Tìm payment theo mã giao dịch kèm Pessimistic Write Lock — dùng cho VNPay return VÀ IPN,
+        * tránh race condition khi cả 2 callback cùng cố cập nhật 1 Payment row gần như đồng thời.
+        */
+       @Lock(LockModeType.PESSIMISTIC_WRITE)
+       @Query("SELECT p FROM Payment p WHERE p.transactionCode = :txnRef")
+       Optional<Payment> findByTransactionCodeForUpdate(@Param("txnRef") String txnRef);
+
+       /**
+        * Tìm payment CASH đang chờ xác nhận (PENDING) mới nhất của 1 booking — dùng khi Owner xác
+        * nhận đã thu tiền mặt. Dùng {@code @Query} tường minh thay vì derived method name có dấu
+        * gạch dưới ({@code Booking_BookingId}) — vi phạm quy tắc đặt tên method của Checkstyle.
+        */
+       @Query("SELECT p FROM Payment p WHERE p.booking.bookingId = :bookingId "
+               + "AND p.paymentMethod = :paymentMethod AND p.paymentStatus = :paymentStatus "
+               + "ORDER BY p.paymentId DESC")
+       List<Payment> findCashPaymentsByBookingIdAndMethodAndStatus(
+               @Param("bookingId") Integer bookingId,
+               @Param("paymentMethod") PaymentMethod paymentMethod,
+               @Param("paymentStatus") TransactionStatus paymentStatus);
 
        @Query("SELECT CAST(p.paidAt AS date) as date, SUM(p.amount) as revenue " +
            "FROM Payment p " +

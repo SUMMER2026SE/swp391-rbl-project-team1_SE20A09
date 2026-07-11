@@ -9,8 +9,10 @@ import com.sportvenue.entity.enums.AccountStatus;
 import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.entity.enums.StadiumStatus;
 import com.sportvenue.exception.AppException;
+import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.StadiumRepository;
+import com.sportvenue.service.AccountStatusService;
 import com.sportvenue.service.EmailService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -46,6 +49,9 @@ class AdminOwnerServiceImplTest {
 
     @Mock
     private EmailService emailService;
+
+    @org.mockito.Spy
+    private AccountStatusService accountStatusService;
 
     @InjectMocks
     private AdminOwnerServiceImpl adminOwnerService;
@@ -105,6 +111,7 @@ class AdminOwnerServiceImplTest {
 
         User user = new User();
         user.setEmail("owner@example.com");
+        user.setAccountStatus(AccountStatus.ACTIVE);
 
         Owner owner = new Owner();
         owner.setApprovedStatus(ApprovedStatus.APPROVED);
@@ -167,5 +174,28 @@ class AdminOwnerServiceImplTest {
         when(ownerRepository.findById(ownerId)).thenReturn(Optional.of(owner));
 
         assertThrows(AppException.class, () -> adminOwnerService.lockUnlockOwner(ownerId, false, null));
+    }
+
+    @Test
+    void lockUnlockOwner_PendingAccount_ThrowsExceptionAndDoesNotCascadeStadiums() {
+        Integer ownerId = 1;
+
+        User user = new User();
+        user.setEmail("owner@example.com");
+        user.setAccountStatus(AccountStatus.PENDING);
+
+        Owner owner = new Owner();
+        owner.setApprovedStatus(ApprovedStatus.APPROVED);
+        owner.setUser(user);
+
+        when(ownerRepository.findById(ownerId)).thenReturn(Optional.of(owner));
+
+        BadRequestException exception = assertThrows(BadRequestException.class, () ->
+                adminOwnerService.lockUnlockOwner(ownerId, true, null));
+
+        assertEquals("Không thể khóa/mở khóa tài khoản đang chờ xác thực email.", exception.getMessage());
+        assertEquals(AccountStatus.PENDING, user.getAccountStatus());
+        verify(stadiumRepository, never()).findByOwnerOwnerId(ownerId);
+        verify(stadiumRepository, never()).saveAll(anyList());
     }
 }

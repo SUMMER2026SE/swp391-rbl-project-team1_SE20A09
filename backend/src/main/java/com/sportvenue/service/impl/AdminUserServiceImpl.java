@@ -5,6 +5,7 @@ import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.AccountStatus;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.service.AccountStatusService;
 import com.sportvenue.service.AdminUserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminUserServiceImpl implements AdminUserService {
 
     private final UserRepository userRepository;
+    private final AccountStatusService accountStatusService;
 
     private static final String ROLE_CUSTOMER = "Customer";
 
@@ -81,8 +83,7 @@ public class AdminUserServiceImpl implements AdminUserService {
             throw new com.sportvenue.exception.ResourceNotFoundException("Người dùng không phải là khách hàng (Customer).");
         }
 
-        AccountStatus newStatus = Boolean.TRUE.equals(enabled) ? AccountStatus.ACTIVE : AccountStatus.BLOCKED;
-        customer.setAccountStatus(newStatus);
+        AccountStatus newStatus = accountStatusService.applyAdminLockState(customer, enabled);
         userRepository.save(customer);
         
         log.info("Successfully updated account status to {} for customer id={}", newStatus, id);

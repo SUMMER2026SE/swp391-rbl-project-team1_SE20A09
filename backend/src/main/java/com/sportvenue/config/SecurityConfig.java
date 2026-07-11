@@ -53,6 +53,8 @@ public class SecurityConfig {
             // UC-CUS-02: VNPay redirect về /api/v1/payments/vnpay-return — public vì
             // VNPay gọi browser redirect tới đây (không có Bearer token).
             "/api/v1/payments/vnpay-return",
+            // VNPay IPN — gọi server-to-server, cũng không có Bearer token.
+            "/api/v1/payments/vnpay-ipn",
             "/actuator/health",
             "/actuator/info",
             "/swagger-ui.html",

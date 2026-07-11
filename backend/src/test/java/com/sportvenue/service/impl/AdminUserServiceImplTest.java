@@ -5,7 +5,9 @@ import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.AccountStatus;
 import com.sportvenue.entity.enums.UserRank;
+import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.service.AccountStatusService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +25,8 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,6 +34,9 @@ public class AdminUserServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @org.mockito.Spy
+    private AccountStatusService accountStatusService;
 
     @InjectMocks
     private AdminUserServiceImpl adminUserService;
@@ -208,5 +215,22 @@ public class AdminUserServiceImplTest {
         
         assertEquals(AccountStatus.BLOCKED, customerUser.getAccountStatus());
         org.mockito.Mockito.verify(userRepository).save(customerUser);
+    }
+
+    @Test
+    void lockUnlockCustomer_pendingAccount_throwsExceptionAndDoesNotChangeStatus() {
+        User customerUser = User.builder()
+                .userId(2)
+                .accountStatus(AccountStatus.PENDING)
+                .role(com.sportvenue.entity.Role.builder().roleName("Customer").build())
+                .build();
+        when(userRepository.findById(2)).thenReturn(java.util.Optional.of(customerUser));
+
+        BadRequestException exception = assertThrows(BadRequestException.class, () ->
+                adminUserService.lockUnlockCustomer(2, true, 1));
+
+        assertEquals("Không thể khóa/mở khóa tài khoản đang chờ xác thực email.", exception.getMessage());
+        assertEquals(AccountStatus.PENDING, customerUser.getAccountStatus());
+        verify(userRepository, never()).save(any());
     }
 }

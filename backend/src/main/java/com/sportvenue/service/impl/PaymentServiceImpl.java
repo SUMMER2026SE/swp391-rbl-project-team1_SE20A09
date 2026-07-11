@@ -1,6 +1,7 @@
 package com.sportvenue.service.impl;
 
 import com.sportvenue.config.VNPayConfig;
+import com.sportvenue.dto.response.VnpayIpnResponse;
 import com.sportvenue.dto.response.VnpayPaymentUrlResponse;
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.Payment;
@@ -16,12 +17,12 @@ import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.PaymentService;
 import com.sportvenue.service.EmailService;
 import com.sportvenue.service.NotificationService;
+import com.sportvenue.service.VnpayRefundGateway;
 import com.sportvenue.util.AfterCommitExecutor;
 import com.sportvenue.util.VNPayUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import com.sportvenue.exception.PaymentGatewayRefundException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,6 +61,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final EmailService emailService;
     private final NotificationService notificationService;
     private final AfterCommitExecutor afterCommitExecutor;
+    private final VnpayRefundGateway vnpayRefundGateway;
 
     @Override
     @Transactional
@@ -175,57 +177,122 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public ReturnResult handleVnpayReturn(HttpServletRequest request) {
+        CallbackOutcome outcome = processVnpayCallback(request);
+        return switch (outcome.status()) {
+            case SUCCESS, ALREADY_CONFIRMED -> new ReturnResult(true, outcome.bookingId(), null);
+            case PAYMENT_FAILED -> new ReturnResult(false, outcome.bookingId(), outcome.detail());
+            case INVALID_SIGNATURE -> new ReturnResult(false, outcome.bookingId(), "invalid_hash");
+            case INVALID_AMOUNT -> new ReturnResult(false, outcome.bookingId(), "invalid_amount");
+            case ORDER_NOT_FOUND -> throw new BadRequestException(
+                    "Không tìm thấy payment với txnRef: " + outcome.detail());
+            case UNKNOWN_ERROR -> throw new BadRequestException(outcome.detail());
+        };
+    }
+
+    @Override
+    @Transactional
+    public VnpayIpnResponse handleVnpayIpn(HttpServletRequest request) {
+        CallbackOutcome outcome = processVnpayCallback(request);
+        return switch (outcome.status()) {
+            case SUCCESS, PAYMENT_FAILED ->
+                    VnpayIpnResponse.builder().rspCode("00").message("Confirm Success").build();
+            case ALREADY_CONFIRMED ->
+                    VnpayIpnResponse.builder().rspCode("02").message("Order already confirmed").build();
+            case ORDER_NOT_FOUND ->
+                    VnpayIpnResponse.builder().rspCode("01").message("Order not found").build();
+            case INVALID_AMOUNT ->
+                    VnpayIpnResponse.builder().rspCode("04").message("Invalid amount").build();
+            case INVALID_SIGNATURE ->
+                    VnpayIpnResponse.builder().rspCode("97").message("Invalid signature").build();
+            case UNKNOWN_ERROR ->
+                    VnpayIpnResponse.builder().rspCode("99").message("Unknown error").build();
+        };
+    }
+
+    /**
+     * Core xử lý dùng chung cho return (browser redirect) và IPN (server-to-server) — xem
+     * {@link PaymentService#processVnpayCallback} cho mô tả từng bước. Không ném exception cho các
+     * lỗi nghiệp vụ dự kiến; caller ({@link #handleVnpayReturn}/{@link #handleVnpayIpn}) tự map
+     * {@link CallbackOutcome} sang định dạng response riêng.
+     */
+    @Override
+    @Transactional
+    public CallbackOutcome processVnpayCallback(HttpServletRequest request) {
         Map<String, String> vnpParams = VNPayUtil.extractVnpParams(request.getParameterMap());
 
         if (vnpParams.isEmpty()) {
-            throw new BadRequestException("Không nhận được tham số VNPay");
+            return new CallbackOutcome(CallbackStatus.UNKNOWN_ERROR, null, "Không nhận được tham số VNPay");
         }
 
         // 1. Xác thực checksum — KHÔNG dùng stub, kiểm tra thật
         if (!VNPayUtil.verifyChecksum(vnpParams, vnPayConfig.getHashSecret())) {
-            log.warn("VNPay return có checksum không hợp lệ — txnRef={}",
-                    vnpParams.get("vnp_TxnRef"));
+            log.warn("VNPay callback có checksum không hợp lệ — txnRef={}", vnpParams.get("vnp_TxnRef"));
             Integer fallbackBookingId = VNPayUtil.extractBookingIdFromOrderInfo(
                     vnpParams.get("vnp_OrderInfo"));
-            return new ReturnResult(false, fallbackBookingId, "invalid_hash");
+            return new CallbackOutcome(CallbackStatus.INVALID_SIGNATURE, fallbackBookingId, "invalid_hash");
         }
 
         String txnRef = vnpParams.get("vnp_TxnRef");
         if (txnRef == null || txnRef.isBlank()) {
-            throw new BadRequestException("Thiếu vnp_TxnRef trong callback");
+            return new CallbackOutcome(CallbackStatus.UNKNOWN_ERROR, null, "Thiếu vnp_TxnRef trong callback");
         }
 
-        Payment payment = paymentRepository.findByTransactionCode(txnRef)
-                .orElseThrow(() -> new BadRequestException(
-                        "Không tìm thấy payment với txnRef: " + txnRef));
-
-        // Chỉ xử lý lần đầu — nếu đã SUCCESS thì idempotent trả về success luôn
-        if (payment.getPaymentStatus() == TransactionStatus.SUCCESS) {
-            Booking alreadyPaid = payment.getBooking();
-            return new ReturnResult(true,
-                    alreadyPaid != null ? alreadyPaid.getBookingId() : null,
-                    null);
+        // 2. Lookup có Pessimistic Write Lock — tránh race giữa return-redirect và IPN cùng ghi 1 row
+        Payment payment = paymentRepository.findByTransactionCodeForUpdate(txnRef).orElse(null);
+        if (payment == null) {
+            return new CallbackOutcome(CallbackStatus.ORDER_NOT_FOUND, null, txnRef);
         }
 
-        String responseCode = vnpParams.get("vnp_ResponseCode");
         Booking booking = payment.getBooking();
+        Integer bookingId = booking != null ? booking.getBookingId() : null;
+
+        // 3. Idempotent — đã được xử lý thành công trước đó (return hoặc IPN tới trước)
+        if (payment.getPaymentStatus() == TransactionStatus.SUCCESS) {
+            return new CallbackOutcome(CallbackStatus.ALREADY_CONFIRMED, bookingId, null);
+        }
+
+        // 4. Xác thực vnp_Amount khớp số tiền payment gốc — chặn callback giả mạo sửa số tiền
+        long expectedAmount;
+        try {
+            expectedAmount = payment.getAmount().multiply(BigDecimal.valueOf(100)).longValueExact();
+        } catch (ArithmeticException ex) {
+            expectedAmount = -1L;
+        }
+        long vnpAmount;
+        try {
+            vnpAmount = Long.parseLong(vnpParams.get("vnp_Amount"));
+        } catch (NumberFormatException ex) {
+            vnpAmount = -1L;
+        }
+        if (vnpAmount != expectedAmount) {
+            log.warn("VNPay callback amount không khớp — txnRef={}, expected={}, got={}",
+                    txnRef, expectedAmount, vnpAmount);
+            return new CallbackOutcome(CallbackStatus.INVALID_AMOUNT, bookingId, "amount_mismatch");
+        }
+
+        // 5. Xử lý thành công/thất bại
+        String responseCode = vnpParams.get("vnp_ResponseCode");
         boolean success = "00".equals(responseCode);
 
         if (success) {
-            processSuccessfulPayment(payment, booking, txnRef);
+            processSuccessfulPayment(payment, booking, txnRef, vnpParams);
         } else {
             processFailedPayment(payment, booking, txnRef, responseCode);
         }
-
         paymentRepository.save(payment);
 
-        Integer bookingId = booking != null ? booking.getBookingId() : null;
-        return new ReturnResult(success, bookingId, success ? null : ("response_code=" + responseCode));
+        return new CallbackOutcome(
+                success ? CallbackStatus.SUCCESS : CallbackStatus.PAYMENT_FAILED,
+                bookingId,
+                success ? null : ("response_code=" + responseCode));
     }
 
-    private void processSuccessfulPayment(Payment payment, Booking booking, String txnRef) {
+    private void processSuccessfulPayment(Payment payment, Booking booking, String txnRef,
+                                          Map<String, String> vnpParams) {
         payment.setPaymentStatus(TransactionStatus.SUCCESS);
         payment.setPaidAt(LocalDateTime.now());
+        payment.setGatewayTransactionNo(vnpParams.get("vnp_TransactionNo"));
+        payment.setGatewayPayDate(vnpParams.get("vnp_PayDate"));
         if (booking != null) {
             booking.setBookingStatus(BookingStatus.CONFIRMED);
             if (payment.getAmount().compareTo(booking.getTotalPrice()) >= 0) {
@@ -328,51 +395,11 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public void processRefund(Payment originalPayment, BigDecimal refundAmount, String refundReason) {
-        log.info("Bắt đầu xử lý hoàn tiền qua cổng thanh toán (Mock): Method={}, TxnRef={}, Amount={}, Reason={}", 
-                 originalPayment.getPaymentMethod(), originalPayment.getTransactionCode(), refundAmount, refundReason);
-        
-        try {
-            // TODO: Replace this mock implementation with actual HTTP Client (RestTemplate/WebClient) call to VNPay/MoMo refund API in production.
-            // Giả lập delay gọi API
-            Thread.sleep(500);
-            
-            // Giả lập logic kiểm tra kết quả trả về từ VNPay/MoMo
-            // Trong thực tế, ở đây sẽ gửi HTTP POST request có signature đến cổng thanh toán
-            boolean isSuccess = true; 
-            
-            // Giả lập lỗi ngẫu nhiên hoặc dựa trên điều kiện cụ thể để test rollback nếu cần
-            if (refundAmount.compareTo(BigDecimal.ZERO) <= 0) {
-                isSuccess = false;
-                throw new PaymentGatewayRefundException("Số tiền hoàn phải lớn hơn 0");
-            }
-            
-            if (!isSuccess) {
-                throw new PaymentGatewayRefundException("Cổng thanh toán từ chối yêu cầu hoàn tiền");
-            }
-            
-            log.info("Hoàn tiền qua cổng thanh toán thành công (Mock): TxnRef={}", originalPayment.getTransactionCode());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new PaymentGatewayRefundException("Lỗi kết nối timeout tới cổng thanh toán", e);
-        } catch (PaymentGatewayRefundException e) {
-            log.error("Lỗi hoàn tiền qua cổng thanh toán: {}", e.getMessage());
-            throw e;
-        } catch (Exception e) {
-            log.error("Lỗi không xác định khi hoàn tiền qua cổng thanh toán", e);
-            throw new PaymentGatewayRefundException("Lỗi không xác định khi hoàn tiền qua cổng thanh toán", e);
-        }
+        vnpayRefundGateway.refund(originalPayment, refundAmount, refundReason);
     }
 
     @Override
     public boolean checkRefundStatus(Payment refundPayment) {
-        log.info("Kiểm tra trạng thái hoàn tiền (QueryDR) qua cổng thanh toán (Mock): TxnRef={}", refundPayment.getTransactionCode());
-        try {
-            // TODO: Call actual QueryDR API of VNPay/MoMo
-            Thread.sleep(300);
-            return true; // Giả sử thành công
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new PaymentGatewayRefundException("Lỗi timeout khi đối soát", e);
-        }
+        return vnpayRefundGateway.queryRefundStatus(refundPayment);
     }
 }

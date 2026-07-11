@@ -1,10 +1,12 @@
 package com.sportvenue.controller;
 
+import com.sportvenue.dto.booking.BookingDetailResponse;
 import com.sportvenue.dto.request.BookingActionRequest;
 import com.sportvenue.dto.response.BookingResponse;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.security.RequireApprovedOwner;
 import com.sportvenue.security.UserPrincipal;
+import com.sportvenue.service.BookingService;
 import com.sportvenue.service.OwnerBookingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -43,6 +45,7 @@ import com.sportvenue.dto.response.WeeklySlotResponse;
 public class OwnerBookingController {
 
     private final OwnerBookingService ownerBookingService;
+    private final BookingService bookingService;
 
     @GetMapping("/stadiums/{stadiumId}/weekly-slots")
     @PreAuthorize("hasRole('Owner')")
@@ -94,5 +97,21 @@ public class OwnerBookingController {
                 userPrincipal.getUser().getUserId(),
                 bookingId, request);
         return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Owner xác nhận ĐÃ THU tiền mặt tại sân cho 1 booking đang {@code AWAITING_CASH_PAYMENT}.
+     * Idempotent — gọi lại trên đơn đã {@code PAID} trả về trạng thái hiện tại, không lỗi.
+     */
+    @PutMapping("/{bookingId}/confirm-cash-payment")
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(summary = "Xác nhận đã thu tiền mặt",
+               description = "Owner xác nhận đã thu tiền mặt tại sân cho đơn đang chờ thu tiền — "
+                       + "chuyển paymentStatus AWAITING_CASH_PAYMENT sang PAID.")
+    public ResponseEntity<BookingDetailResponse> confirmCashPayment(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable Integer bookingId) {
+
+        return ResponseEntity.ok(bookingService.confirmCashPaymentReceived(userPrincipal, bookingId));
     }
 }
