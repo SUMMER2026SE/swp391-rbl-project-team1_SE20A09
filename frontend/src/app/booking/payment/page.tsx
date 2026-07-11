@@ -14,6 +14,8 @@ import Image from "next/image";
 import { toast } from "sonner";
 import { calculatePlatformFee } from "@/lib/utils";
 import { createBooking } from "@/lib/bookings-api";
+import { initiateVnpayPayment } from "@/lib/payments-api";
+import { post } from "@/lib/api";
 
 interface BookingSummary {
   venueId: number;
@@ -132,22 +134,18 @@ function PaymentContent() {
       }
 
       // Xử lý thanh toán ngay lập tức
-      const { post } = await import("@/lib/api");
       if (paymentMethod === "vnpay" || paymentMethod === "vnpay_deposit") {
         const option = paymentMethod === "vnpay_deposit" ? "DEPOSIT" : "FULL";
-        const response = await post<{ paymentUrl?: string }>(
-          `/bookings/${newBookingId}/pay?paymentOption=${option}`,
-          {}
-        );
-        if (response.paymentUrl) {
-          window.location.href = response.paymentUrl;
+        const { paymentUrl } = await initiateVnpayPayment(newBookingId, option);
+        if (paymentUrl) {
+          window.location.href = paymentUrl;
           return;
         } else {
           toast.error("Không tạo được URL thanh toán VNPay.");
         }
       } else {
         await post(`/bookings/${newBookingId}/confirm-payment`, {});
-        toast.success("Thanh toán thành công! Sân của bạn đã được đặt.");
+        toast.success("Đặt sân thành công! Vui lòng thanh toán tiền mặt tại sân khi đến chơi.");
         sessionStorage.removeItem("booking_summary");
         router.push("/profile?tab=bookings");
       }
