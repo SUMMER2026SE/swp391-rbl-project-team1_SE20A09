@@ -35,7 +35,7 @@ class AdminOwnerControllerTest {
     @Test
     void getOwners_Success() {
         // Arrange
-        int page = 1;
+        int page = 0;
         int size = 10;
         String search = "test";
         String accountStatus = "ACTIVE";
@@ -69,15 +69,15 @@ class AdminOwnerControllerTest {
         String invalidSortBy = "invalidField";
         PageResponse<AdminOwnerResponse> pageResponse = new PageResponse<>();
         
-        when(adminOwnerService.getOwners(isNull(), isNull(), isNull(), eq(1), eq(10), eq("createdAt"), eq("desc")))
+        when(adminOwnerService.getOwners(isNull(), isNull(), isNull(), eq(0), eq(10), eq("createdAt"), eq("desc")))
                 .thenReturn(pageResponse);
 
         // Act
         ResponseEntity<ApiResponse<PageResponse<AdminOwnerResponse>>> result = 
-                adminOwnerController.getOwners(1, 10, null, null, null, invalidSortBy, "desc");
+                adminOwnerController.getOwners(0, 10, null, null, null, invalidSortBy, "desc");
 
         // Assert
         assertEquals(HttpStatus.OK, result.getStatusCode());
-        verify(adminOwnerService).getOwners(isNull(), isNull(), isNull(), eq(1), eq(10), eq("createdAt"), eq("desc"));
+        verify(adminOwnerService).getOwners(isNull(), isNull(), isNull(), eq(0), eq(10), eq("createdAt"), eq("desc"));
     }
 }

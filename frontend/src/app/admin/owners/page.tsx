@@ -63,7 +63,7 @@ interface ApiResponse<T> {
 }
 
 const fetchOwners = async (page: number, size: number, search: string, accountStatus: string, approvedStatus: string) => {
-  const params: Record<string, string | number> = { page: page + 1, size }; // Spring Boot is 1-indexed, but UI usually 0-indexed for state
+  const params: Record<string, string | number> = { page, size };
   if (search) params.search = search;
   if (accountStatus && accountStatus !== "ALL") params.accountStatus = accountStatus;
   if (approvedStatus && approvedStatus !== "ALL") params.approvedStatus = approvedStatus;

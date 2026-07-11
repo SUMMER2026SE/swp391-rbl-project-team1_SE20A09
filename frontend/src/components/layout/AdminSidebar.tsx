@@ -5,8 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
-  Building2,
-  ClipboardCheck,
   MapPin,
   LayoutList,
   AlertCircle,
@@ -27,9 +25,7 @@ export function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
   const MENU_ITEMS = [
     { id: 'dashboard', href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'bookings', href: '/admin/bookings', label: 'Đặt sân', icon: CalendarRange },
-    { id: 'customers', href: '/admin/customers', label: 'Khách hàng', icon: Users },
-    { id: 'owners', href: '/admin/owners', label: 'Chủ sân', icon: Building2 },
-    { id: 'owner-approvals', href: '/admin/owner-approvals', label: 'Duyệt chủ sân', icon: ClipboardCheck },
+    { id: 'users', href: '/admin/users', label: 'Người dùng', icon: Users },
     { id: 'complexes', href: '/admin/complex-approvals', label: 'Tổ hợp', icon: MapPin },
     { id: 'categories', href: '/admin/sport-categories', label: 'Danh mục', icon: LayoutList },
     { id: 'complaints', href: '/admin/complaints', label: 'Khiếu nại', icon: AlertCircle },
@@ -60,6 +56,11 @@ export function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
             const Icon = item.icon;
             const isActive = item.href === '/admin/dashboard'
               ? pathname === item.href
+              : item.href === '/admin/users'
+                ? pathname.startsWith('/admin/users')
+                  || pathname.startsWith('/admin/customers')
+                  || pathname.startsWith('/admin/owners')
+                  || pathname.startsWith('/admin/owner-approvals')
               : pathname.startsWith(item.href);
 
             return (

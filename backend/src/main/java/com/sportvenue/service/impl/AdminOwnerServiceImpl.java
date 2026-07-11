@@ -59,7 +59,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
             sortColumn = "createdAt";
         }
 
-        Pageable pageable = PageRequest.of(page - 1, size, Sort.by(direction, sortColumn));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortColumn));
 
         AccountStatus accStatus = null;
         if (accountStatusStr != null && !accountStatusStr.isBlank()) {
@@ -86,7 +86,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
 
         PageResponse<AdminOwnerResponse> response = new PageResponse<>();
         response.setContent(ownerPage.getContent());
-        response.setPageNumber(ownerPage.getNumber() + 1);
+        response.setPageNumber(ownerPage.getNumber());
         response.setPageSize(ownerPage.getSize());
         response.setTotalElements(ownerPage.getTotalElements());
         response.setTotalPages(ownerPage.getTotalPages());
