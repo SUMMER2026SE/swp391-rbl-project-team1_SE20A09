@@ -6,10 +6,12 @@ import com.sportvenue.entity.Report;
 import com.sportvenue.entity.Role;
 import com.sportvenue.entity.SportType;
 import com.sportvenue.entity.Stadium;
+import com.sportvenue.entity.StadiumComplex;
 import com.sportvenue.entity.TimeSlot;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.entity.enums.ReportCategory;
+import com.sportvenue.entity.enums.StadiumNodeType;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -99,18 +101,41 @@ class ReportRepositoryTest {
                 .build();
         entityManager.persist(sportType);
 
-        Stadium stadium = Stadium.builder()
+        StadiumComplex complex = StadiumComplex.builder()
                 .owner(owner)
-                .sportType(sportType)
-                .stadiumName("Test Stadium")
+                .name("Test Complex")
                 .address("Test address")
                 .approvedStatus(ApprovedStatus.APPROVED)
+                .build();
+        entityManager.persist(complex);
+
+        Stadium facility = Stadium.builder()
+                .owner(owner)
+                .sportType(sportType)
+                .stadiumName("Test Facility")
+                .address("Test address")
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .nodeType(StadiumNodeType.FACILITY)
+                .complex(complex)
                 .pricePerHour(BigDecimal.valueOf(100000))
                 .build();
-        entityManager.persist(stadium);
+        entityManager.persist(facility);
+
+        Stadium court = Stadium.builder()
+                .owner(owner)
+                .sportType(sportType)
+                .stadiumName("Test Court")
+                .address("Test address")
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .nodeType(StadiumNodeType.COURT)
+                .complex(complex)
+                .parentStadium(facility)
+                .pricePerHour(BigDecimal.valueOf(100000))
+                .build();
+        entityManager.persist(court);
 
         TimeSlot slot = TimeSlot.builder()
-                .stadium(stadium)
+                .stadium(court)
                 .startTime(LocalTime.of(8, 0))
                 .endTime(LocalTime.of(9, 0))
                 .pricePerSlot(BigDecimal.valueOf(100000))
@@ -119,7 +144,7 @@ class ReportRepositoryTest {
 
         Booking booking = Booking.builder()
                 .user(customer)
-                .stadium(stadium)
+                .stadium(court)
                 .slot(slot)
                 .totalPrice(BigDecimal.valueOf(100000))
                 .serviceFee(BigDecimal.valueOf(10000))
