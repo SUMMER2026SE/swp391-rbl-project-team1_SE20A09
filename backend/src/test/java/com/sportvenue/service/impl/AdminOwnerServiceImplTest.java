@@ -61,7 +61,7 @@ class AdminOwnerServiceImplTest {
         String search = "test";
         String accountStatusStr = "ACTIVE";
         String approvedStatusStr = "APPROVED";
-        int page = 1;
+        int page = 0;
         int size = 10;
         String sortBy = "businessName";
         String sortDir = "asc";
@@ -86,7 +86,7 @@ class AdminOwnerServiceImplTest {
         String search = null;
         String accountStatusStr = "INVALID_STATUS";
         String approvedStatusStr = "INVALID_STATUS";
-        int page = 1;
+        int page = 0;
         int size = 10;
         String sortBy = "createdAt";
         String sortDir = "desc";

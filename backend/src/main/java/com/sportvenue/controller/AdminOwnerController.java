@@ -55,7 +55,9 @@ public class AdminOwnerController {
             description = "Admin lấy danh sách chủ sân có lọc theo từ khóa tìm kiếm, trạng thái tài khoản, trạng thái duyệt."
     )
     public ResponseEntity<ApiResponse<PageResponse<AdminOwnerResponse>>> getOwners(
-            @RequestParam(defaultValue = "1") int page,
+            @Parameter(description = "Số trang (0-indexed)", example = "0")
+            @jakarta.validation.constraints.Min(value = 0, message = "Số trang (page) không được nhỏ hơn 0")
+            @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String accountStatus,

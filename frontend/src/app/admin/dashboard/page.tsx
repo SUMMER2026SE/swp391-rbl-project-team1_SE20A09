@@ -504,7 +504,7 @@ export default function AdminDashboardPage() {
           <h2 className="text-lg font-bold text-slate-900 mb-6">Yêu cầu xử lý</h2>
           <div className="space-y-4 flex-1">
             <Link
-              href="/admin/owner-approvals"
+              href="/admin/users?tab=owners&ownerTab=approvals"
               className="flex items-center justify-between p-4 rounded-xl border border-slate-100 bg-slate-50 hover:bg-slate-100 hover:border-slate-200 transition-colors cursor-pointer group"
             >
               <div className="flex items-center gap-3">

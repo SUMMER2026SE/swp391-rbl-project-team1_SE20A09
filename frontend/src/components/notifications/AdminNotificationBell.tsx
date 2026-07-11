@@ -72,7 +72,7 @@ function formatTimestamp(iso: string): string {
 
 /** Route for the action button — separate from item click */
 function getHref(type: NotificationType): string {
-  if (type === "OWNER_APPROVAL") return "/admin/owner-approvals";
+  if (type === "OWNER_APPROVAL") return "/admin/users?tab=owners&ownerTab=approvals";
   if (type === "STADIUM_APPROVAL") return "/admin/stadium-approvals";
   if (type === "BOOKING") return "/admin/bookings";
   return "/admin/complaints";
