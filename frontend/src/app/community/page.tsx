@@ -450,7 +450,8 @@ function MatchRequestFeedPage() {
       req.title.toLowerCase().includes(searchKeyword.toLowerCase()) ||
       (req.description &&
         req.description.toLowerCase().includes(searchKeyword.toLowerCase())) ||
-      req.stadiumName.toLowerCase().includes(searchKeyword.toLowerCase());
+      req.stadiumName.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+      (req.complexName && req.complexName.toLowerCase().includes(searchKeyword.toLowerCase()));
 
     const matchesSport =
       filterSport === "all" ||
@@ -692,10 +693,10 @@ function MatchRequestFeedPage() {
                               </span>
                             </div>
 
-                            <div className="flex items-center text-slate-600 bg-slate-50 px-2.5 py-1 rounded-md max-w-xs md:max-w-sm truncate" title={`${request.stadiumName} (${request.stadiumAddress})`}>
+                            <div className="flex items-center text-slate-600 bg-slate-50 px-2.5 py-1 rounded-md max-w-xs md:max-w-sm truncate" title={`${request.stadiumName}${request.complexName ? ` — ${request.complexName}` : ""} (${request.stadiumAddress})`}>
                               <MapPin className="h-3.5 w-3.5 mr-1.5 text-slate-500" />
                               <span>
-                                {request.stadiumName}
+                                {request.complexName ? `${request.stadiumName} — ${request.complexName}` : request.stadiumName}
                               </span>
                             </div>
                           </div>
@@ -1222,6 +1223,7 @@ function MatchRequestFeedPage() {
                       Sân vận động:{" "}
                       <strong className="text-slate-700">
                         {selectedRequest.stadiumName}
+                        {selectedRequest.complexName && ` (${selectedRequest.complexName})`}
                       </strong>
                     </div>
                     <div>
@@ -1314,7 +1316,7 @@ function MatchRequestFeedPage() {
                   </Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-y-2.5 gap-x-6 text-xs font-semibold text-slate-500 border-t border-slate-200/60 pt-3">
-                  <div>Sân bóng: <span className="text-slate-800 font-bold">{selectedManageMatch.stadiumName}</span></div>
+                  <div>Sân bóng: <span className="text-slate-800 font-bold">{selectedManageMatch.stadiumName}{selectedManageMatch.complexName && ` (${selectedManageMatch.complexName})`}</span></div>
                   <div>Ngày chơi: <span className="text-slate-800 font-bold">{new Date(selectedManageMatch.playDate).toLocaleDateString("vi-VN")}</span></div>
                   <div>Giờ chơi: <span className="text-slate-800 font-bold">{selectedManageMatch.startTime.substring(0, 5)} - {selectedManageMatch.endTime.substring(0, 5)}</span></div>
                   <div>Sĩ số hiện tại: <span className="text-slate-800 font-bold">{selectedManageMatch.currentPlayers}/{selectedManageMatch.matchingType === "TEAM_VS_TEAM" ? "2 đội" : selectedManageMatch.maxPlayers}</span></div>
@@ -1507,8 +1509,13 @@ function MatchRequestFeedPage() {
                   {selectedJoinedRequest.stadiumName && (
                     <div className="flex justify-between items-center py-1.5 border-b border-slate-200/50">
                       <span className="text-slate-400">Địa điểm</span>
-                      <strong className="text-slate-800 font-bold max-w-[200px] truncate" title={selectedJoinedRequest.stadiumName}>
-                        {selectedJoinedRequest.stadiumName}
+                      <strong
+                        className="text-slate-800 font-bold max-w-[200px] truncate"
+                        title={`${selectedJoinedRequest.stadiumName}${selectedJoinedRequest.complexName ? ` — ${selectedJoinedRequest.complexName}` : ""}`}
+                      >
+                        {selectedJoinedRequest.complexName
+                          ? `${selectedJoinedRequest.stadiumName} — ${selectedJoinedRequest.complexName}`
+                          : selectedJoinedRequest.stadiumName}
                       </strong>
                     </div>
                   )}

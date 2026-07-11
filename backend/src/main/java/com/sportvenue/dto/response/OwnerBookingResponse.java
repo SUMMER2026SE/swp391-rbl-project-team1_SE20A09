@@ -16,6 +16,7 @@ public class OwnerBookingResponse {
     private String displayId;
     private CustomerInfo customer;
     private String venue;
+    private String complexName;
     private String date;
     private String time;
     private BigDecimal amount;

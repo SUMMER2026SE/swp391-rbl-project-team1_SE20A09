@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 public record VenueSummaryDto(
         Integer id,
         String name,
+        String complexName,
         String sportType,
         String sportKey,
         BigDecimal pricePerHour,

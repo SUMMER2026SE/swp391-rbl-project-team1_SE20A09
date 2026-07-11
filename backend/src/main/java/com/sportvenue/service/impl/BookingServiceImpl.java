@@ -933,6 +933,7 @@ public class BookingServiceImpl implements BookingService {
                 .id(String.valueOf(booking.getBookingId()))
                 .displayId("BK" + String.format("%06d", booking.getBookingId()))
                 .venue(stadium != null ? stadium.getStadiumName() : "Sân chưa biết")
+                .complexName(stadium != null ? StadiumUtils.resolveComplexName(stadium) : null)
                 .sportType(sportType != null ? sportType.getSportName() : "Khác")
                 .imageUrl(imageUrl != null ? imageUrl : "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=300&auto=format&fit=crop")
                 .date(dateStr)
@@ -1034,6 +1035,7 @@ public class BookingServiceImpl implements BookingService {
                         .ownerUserId(stadium.resolveOwner() != null && stadium.resolveOwner().getUser() != null
                                 ? stadium.resolveOwner().getUser().getUserId() : null)
                         .stadiumName(stadium.getStadiumName())
+                        .complexName(StadiumUtils.resolveComplexName(stadium))
                         .address(StadiumUtils.resolveAddress(stadium))
                         .sportType(sportType)
                         .imageUrl(imageUrl)

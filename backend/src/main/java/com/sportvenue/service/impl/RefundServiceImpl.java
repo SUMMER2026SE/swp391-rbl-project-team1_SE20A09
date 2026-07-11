@@ -29,6 +29,7 @@ import com.sportvenue.service.PaymentService;
 import com.sportvenue.service.EmailService;
 import com.sportvenue.service.NotificationService;
 import com.sportvenue.util.AfterCommitExecutor;
+import com.sportvenue.util.StadiumUtils;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -493,6 +494,7 @@ public class RefundServiceImpl implements RefundService {
                     .displayId("BK" + String.format("%06d", b.getBookingId()))
                     .customer(customerInfo)
                     .venue(b.getStadium().getStadiumName())
+                    .complexName(StadiumUtils.resolveComplexName(b.getStadium()))
                     .date(b.getReservationDate().toString())
                     .time(startTimeStr + " - " + endTimeStr)
                     .amount(bookingAmt)

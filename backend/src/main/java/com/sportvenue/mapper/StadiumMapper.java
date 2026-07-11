@@ -34,6 +34,7 @@ public interface StadiumMapper {
     @Mapping(target = "distanceInKm", ignore = true)
     @Mapping(target = "nodeType", expression = "java(stadium.getNodeType() != null ? stadium.getNodeType().name() : null)")
     @Mapping(target = "complexId", expression = "java(stadium.getComplex() != null ? stadium.getComplex().getComplexId() : null)")
+    @Mapping(target = "complexName", expression = "java(com.sportvenue.util.StadiumUtils.resolveComplexName(stadium))")
     @Mapping(target = "parentStadiumId", expression = "java(stadium.getParentStadium() != null ? stadium.getParentStadium().getStadiumId() : null)")
     @Mapping(target = "underMaintenanceToday", ignore = true)
     StadiumResponse toResponse(Stadium stadium);

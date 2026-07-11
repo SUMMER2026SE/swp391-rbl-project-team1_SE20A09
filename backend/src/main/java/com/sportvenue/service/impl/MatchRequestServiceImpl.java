@@ -31,6 +31,7 @@ import com.sportvenue.dto.response.JoinRequestResponse;
 import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.MatchRequestService;
 import com.sportvenue.service.ChatService;
+import com.sportvenue.util.StadiumUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -504,6 +505,10 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                                 (req.getMatchRequest().getPreferredCourt() != null ? req.getMatchRequest().getPreferredCourt().getStadiumName() :
                                         (req.getMatchRequest().getPreferredFacility() != null ? req.getMatchRequest().getPreferredFacility().getStadiumName() :
                                                 (req.getMatchRequest().getComplex() != null ? req.getMatchRequest().getComplex().getName() : null))))
+                        .complexName(req.getMatchRequest().getStadium() != null ? StadiumUtils.resolveComplexName(req.getMatchRequest().getStadium()) :
+                                (req.getMatchRequest().getPreferredCourt() != null ? StadiumUtils.resolveComplexName(req.getMatchRequest().getPreferredCourt()) :
+                                        (req.getMatchRequest().getPreferredFacility() != null ? StadiumUtils.resolveComplexName(req.getMatchRequest().getPreferredFacility()) :
+                                                (req.getMatchRequest().getComplex() != null ? req.getMatchRequest().getComplex().getName() : null))))
                         .sportName(req.getMatchRequest().getSportType().getSportName())
                         .playDate(req.getMatchRequest().getPlayDate())
                         .startTime(req.getMatchRequest().getStartTime())
@@ -634,6 +639,10 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                                 (req.getMatchRequest().getPreferredCourt() != null ? req.getMatchRequest().getPreferredCourt().getStadiumName() :
                                         (req.getMatchRequest().getPreferredFacility() != null ? req.getMatchRequest().getPreferredFacility().getStadiumName() :
                                                 (req.getMatchRequest().getComplex() != null ? req.getMatchRequest().getComplex().getName() : null))))
+                        .complexName(req.getMatchRequest().getStadium() != null ? StadiumUtils.resolveComplexName(req.getMatchRequest().getStadium()) :
+                                (req.getMatchRequest().getPreferredCourt() != null ? StadiumUtils.resolveComplexName(req.getMatchRequest().getPreferredCourt()) :
+                                        (req.getMatchRequest().getPreferredFacility() != null ? StadiumUtils.resolveComplexName(req.getMatchRequest().getPreferredFacility()) :
+                                                (req.getMatchRequest().getComplex() != null ? req.getMatchRequest().getComplex().getName() : null))))
                         .sportName(req.getMatchRequest().getSportType().getSportName())
                         .playDate(req.getMatchRequest().getPlayDate())
                         .startTime(req.getMatchRequest().getStartTime())
@@ -695,6 +704,10 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                 .stadiumName(match.getStadium() != null ? match.getStadium().getStadiumName() :
                         (match.getPreferredCourt() != null ? match.getPreferredCourt().getStadiumName() :
                                 (match.getPreferredFacility() != null ? match.getPreferredFacility().getStadiumName() :
+                                        (match.getComplex() != null ? match.getComplex().getName() : null))))
+                .complexName(match.getStadium() != null ? StadiumUtils.resolveComplexName(match.getStadium()) :
+                        (match.getPreferredCourt() != null ? StadiumUtils.resolveComplexName(match.getPreferredCourt()) :
+                                (match.getPreferredFacility() != null ? StadiumUtils.resolveComplexName(match.getPreferredFacility()) :
                                         (match.getComplex() != null ? match.getComplex().getName() : null))))
                 .stadiumAddress(match.getStadium() != null && match.getStadium().getAddress() != null ? match.getStadium().getAddress() :
                         (match.getComplex() != null ? match.getComplex().getAddress() : null))

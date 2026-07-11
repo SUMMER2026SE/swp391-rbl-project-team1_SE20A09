@@ -38,6 +38,7 @@ export interface AdminBookingResponse {
   customerName: string;
   customerEmail: string;
   stadiumName: string;
+  complexName?: string | null;
   ownerName: string;
   totalPrice: number;
   serviceFee: number;
@@ -368,6 +369,9 @@ export default function AdminBookingsPage() {
                   <TableCell>
                     <div className="flex flex-col">
                       <span className="font-medium text-slate-900">{booking.stadiumName}</span>
+                      {booking.complexName && (
+                        <span className="text-xs text-slate-400">{booking.complexName}</span>
+                      )}
                       <span className="text-xs text-slate-500">Chủ: {booking.ownerName}</span>
                     </div>
                   </TableCell>
@@ -468,6 +472,9 @@ export default function AdminBookingsPage() {
               <div className="space-y-1">
                 <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Sân & Đối tác</h4>
                 <p className="font-semibold text-foreground">{selectedBooking.stadiumName}</p>
+                {selectedBooking.complexName && (
+                  <p className="text-xs text-muted-foreground">{selectedBooking.complexName}</p>
+                )}
                 <p className="text-xs text-muted-foreground">Chủ sân: {selectedBooking.ownerName}</p>
               </div>
 

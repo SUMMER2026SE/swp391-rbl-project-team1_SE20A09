@@ -19,6 +19,7 @@ public class AdminBookingResponse {
     private String customerName;
     private String customerEmail;
     private String stadiumName;
+    private String complexName;
     private String ownerName;
     private BigDecimal totalPrice;
     private BigDecimal serviceFee;

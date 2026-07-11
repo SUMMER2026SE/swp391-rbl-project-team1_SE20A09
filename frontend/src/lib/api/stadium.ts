@@ -21,6 +21,8 @@ export interface StadiumResponse {
   isFootballType?: boolean
   firstImageUrl: string | null
   amenities: Amenity[]
+  /** Tên khu phức hợp chứa sân — undefined/null nếu sân độc lập. */
+  complexName?: string | null
 }
 
 export interface PageResponse<T> {

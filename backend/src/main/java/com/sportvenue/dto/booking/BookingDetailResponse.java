@@ -96,6 +96,7 @@ public class BookingDetailResponse {
         private Integer stadiumId;
         private Integer ownerUserId;
         private String stadiumName;
+        private String complexName;
         private String address;
         private String sportType;
         private String imageUrl;

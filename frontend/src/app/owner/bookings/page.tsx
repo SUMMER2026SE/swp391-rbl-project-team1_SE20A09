@@ -52,6 +52,8 @@ interface BookingItem {
     email: string;
   };
   venue: string;
+  /** Tên khu phức hợp chứa sân — null nếu sân độc lập. Cùng 1 Owner có thể có nhiều complex dùng trùng tên sân con (vd "Sân 1"). */
+  complexName?: string | null;
   date: string;
   time: string;
   amount: number;
@@ -344,7 +346,12 @@ function BookingManagementPage() {
           </td>
           <td className="p-4 align-middle font-mono text-sm font-semibold text-primary">{booking.displayId}</td>
           <td className="p-4 align-middle font-medium">{booking.customer.name}</td>
-          <td className="p-4 align-middle text-muted-foreground">{booking.venue}</td>
+          <td className="p-4 align-middle text-muted-foreground">
+            <div>{booking.venue}</div>
+            {booking.complexName && (
+              <div className="text-xs text-muted-foreground/70">{booking.complexName}</div>
+            )}
+          </td>
           <td className="p-4 align-middle text-sm">{booking.date}</td>
           <td className="p-4 align-middle text-sm font-medium">{booking.time}</td>
           <td className="p-4 align-middle text-right font-semibold text-slate-900 dark:text-slate-100">
@@ -453,6 +460,12 @@ function BookingManagementPage() {
                       <span className="text-muted-foreground">Sân chơi:</span>
                       <span className="font-medium">{booking.venue}</span>
                     </div>
+                    {booking.complexName && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Khu phức hợp:</span>
+                        <span className="font-medium">{booking.complexName}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Khung giờ:</span>
                       <span className="font-medium">{booking.time}</span>

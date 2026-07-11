@@ -23,6 +23,7 @@ import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.ComplaintRepository;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.PaymentRepository;
+import com.sportvenue.util.StadiumUtils;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.AdminDashboardService;
@@ -167,6 +168,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .map(booking -> {
                     String customerName = booking.getUser() != null ? booking.getUser().getFullName() : "N/A";
                     String stadiumName = booking.getStadium() != null ? booking.getStadium().getStadiumName() : "N/A";
+                    String complexName = booking.getStadium() != null
+                            ? StadiumUtils.resolveComplexName(booking.getStadium()) : null;
                     String timeSlot = booking.getSlot() != null
                             ? booking.getSlot().getStartTime() + " - " + booking.getSlot().getEndTime()
                             : "N/A";
@@ -175,6 +178,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                             .bookingId(booking.getBookingId())
                             .customerName(customerName)
                             .stadiumName(stadiumName)
+                            .complexName(complexName)
                             .totalPrice(booking.getTotalPrice())
                             .bookingStatus(booking.getBookingStatus().name())
                             .bookingDate(booking.getBookingDate())

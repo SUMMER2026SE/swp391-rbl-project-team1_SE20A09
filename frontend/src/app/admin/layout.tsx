@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, createContext, useContext } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
 import { AdminSidebar } from "@/components/layout/AdminSidebar";
@@ -10,30 +10,7 @@ import { AdminNotificationBell } from "@/components/notifications/AdminNotificat
 import { ChatBadge } from "@/components/chat/ChatBadge";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-
-// ── Date Filter Context ──────────────────────────────────────────────────────
-export interface DateRange {
-  startDate: string; // yyyy-MM-dd
-  endDate: string;   // yyyy-MM-dd
-}
-
-interface DateFilterContextValue {
-  dateRange: DateRange | null;
-  isFilterOpen: boolean;
-  setIsFilterOpen: (v: boolean) => void;
-  applyDateRange: (range: DateRange) => void;
-}
-
-export const DateFilterContext = createContext<DateFilterContextValue>({
-  dateRange: null,
-  isFilterOpen: false,
-  setIsFilterOpen: () => {},
-  applyDateRange: () => {},
-});
-
-export function useDateFilter() {
-  return useContext(DateFilterContext);
-}
+import { DateRange, DateFilterContext } from "./date-filter-context";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function formatLabel(range: DateRange): string {
