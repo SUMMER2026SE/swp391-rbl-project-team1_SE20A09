@@ -31,7 +31,7 @@ import {
   XCircle,
   X,
 } from "lucide-react";
-import { useDateFilter, type DateRange } from "@/app/admin/layout";
+import { useDateFilter, type DateRange } from "@/app/admin/date-filter-context";
 
 interface BookingTrendDto {
   date: string;   // yyyy-MM-dd

@@ -152,6 +152,7 @@ export type BookingDetailItem = {
   createdAt: string;
   note: string | null;
   ownerUserId?: number;
+  stadiumId?: number;
 };
 
 export async function fetchBookingDetail(id: string | number): Promise<BookingDetailItem> {
@@ -178,6 +179,7 @@ export async function fetchBookingDetail(id: string | number): Promise<BookingDe
     createdAt: data.createdAt || "Chưa rõ",
     note: data.note || null,
     ownerUserId: data.stadium?.ownerUserId,
+    stadiumId: data.stadium?.stadiumId,
   };
 }
 

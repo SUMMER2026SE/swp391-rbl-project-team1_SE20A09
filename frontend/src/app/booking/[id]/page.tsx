@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Clock, Calendar, Star, MessageSquare, AlertCircle, Loader2, Info, HelpCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Calendar, Star, MessageSquare, AlertCircle, Loader2, Info, HelpCircle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -267,14 +267,24 @@ export default function BookingDetailPage() {
             </div>
             
             <CardContent className="p-6">
-              <div className="flex items-start gap-3">
-                <div className="bg-slate-50 p-2 rounded-xl">
-                  <MapPin className="h-5 w-5 text-primary" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="bg-slate-50 p-2 rounded-xl shrink-0">
+                    <MapPin className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Địa chỉ</p>
+                    <p className="text-slate-700 font-medium leading-relaxed">{booking.address}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Địa chỉ</p>
-                  <p className="text-slate-700 font-medium leading-relaxed">{booking.address}</p>
-                </div>
+                {booking.stadiumId && (
+                  <Button asChild variant="outline" size="sm" className="rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 gap-1.5 shrink-0 self-start sm:self-center">
+                    <Link href={`/venues/${booking.stadiumId}`}>
+                      Xem chi tiết sân
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

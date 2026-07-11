@@ -1,13 +1,8 @@
 /**
- * /venues/[id] — backward compatibility redirect (Server Component).
- *
- * 1. Calls getCourtWithComplex() to check if this stadium belongs to a complex.
- *    If yes → HTTP 307 redirect to /complexes/{complexId}?courtId={id}.
- * 2. Falls back to rendering the legacy VenueDetail for unmigrated stadiums.
+ * /venues/[id] — Render VenueDetail for courts (Server Component).
  */
-import { redirect, notFound } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { getVenueDetail } from '@/lib/api/venue'
-import { getCourtWithComplex } from '@/lib/api/complex'
 import VenueDetail from '@/components/venues/VenueDetail'
 import { Header } from '@/components/layout/Header'
 
@@ -23,16 +18,7 @@ export default async function VenueDetailPage({ params }: PageProps) {
     notFound()
   }
 
-  // Nếu sân này thuộc 1 complex, chuyển sang trang complex (có đầy đủ ngữ cảnh: tên
-  // khu phức hợp + danh sách sân con) thay vì hiện trang sân đơn lẻ trơ trụi ở dưới.
-  // Đặt TRƯỚC getVenueDetail() để tránh fetch thừa khi sắp redirect. Không đặt trong
-  // try/catch — redirect() throw 1 exception nội bộ để Next.js xử lý, không phải lỗi thật.
-  const ref = await getCourtWithComplex(venueId)
-  if (ref?.complexId != null) {
-    redirect(`/complexes/${ref.complexId}?courtId=${venueId}`)
-  }
-
-  // --- Render VenueDetail for courts (sân độc lập, không thuộc complex nào) ---
+  // --- Render VenueDetail for courts ---
   let venue
   try {
     venue = await getVenueDetail(venueId)
