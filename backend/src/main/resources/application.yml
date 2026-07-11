@@ -150,6 +150,11 @@ vnpay:
   currency-code: VND
   locale: vn
   order-type: other
+  refund:
+    # mock-enabled=true: dùng MockVnpayRefundGateway (không gọi HTTP thật) — mặc định cho tới khi
+    # có credential VNPay hỗ trợ Refund/QueryDR. Đổi sang false + thêm HttpVnpayRefundGateway khi có.
+    mock-enabled: ${VNPAY_REFUND_MOCK_ENABLED:true}
+    url: ${VNPAY_REFUND_URL:https://sandbox.vnpayment.vn/merchant_webapi/api/transaction}
 
 # ── Swagger / SpringDoc ───────────────────────────────────
 springdoc:
