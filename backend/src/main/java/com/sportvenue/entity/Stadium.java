@@ -144,6 +144,16 @@ public class Stadium implements Serializable {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    @Column(name = "admin_suspended", nullable = false)
+    @Builder.Default
+    private Boolean adminSuspended = false;
+
+    @Column(name = "admin_suspended_reason", columnDefinition = "TEXT")
+    private String adminSuspendedReason;
+
+    @Column(name = "admin_suspended_at")
+    private LocalDateTime adminSuspendedAt;
+
     /** Danh sách ảnh của sân — cascade xóa khi xóa sân. */
     @OneToMany(mappedBy = "stadium", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
