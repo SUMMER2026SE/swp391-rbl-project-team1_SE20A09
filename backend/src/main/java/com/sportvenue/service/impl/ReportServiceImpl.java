@@ -166,6 +166,7 @@ public class ReportServiceImpl implements ReportService {
         }
         validateJoinMatchConsistency(context);
         attachRequestedStadium(request, context);
+        validateReportBoundary(request, context);
         return context;
     }
 
@@ -191,9 +192,20 @@ public class ReportServiceImpl implements ReportService {
         context.stadium = requested;
     }
 
+    private void validateReportBoundary(CreateReportRequest request, ReportContext context) {
+        if (!context.hasAnyContext()) {
+            throw new BadRequestException("Bao cao phai gan voi booking, keo ghep hoac san.");
+        }
+        if (context.hasOnlyStadiumContext() && request.getCategory() != ReportCategory.FAKE_LISTING) {
+            throw new BadRequestException(
+                    "Bao cao chi gan san chi danh cho niem yet gia. Van de chat luong/dich vu can tao khieu nai booking.");
+        }
+    }
+
     private void validateRealInteraction(User reporter, User reportee, ReportContext context) {
         boolean valid = hasBookingInteraction(reporter, reportee, context.booking)
-                || hasMatchInteraction(reporter, reportee, context);
+                || hasMatchInteraction(reporter, reportee, context)
+                || hasStadiumListingInteraction(reporter, reportee, context);
         if (!valid) {
             throw new BadRequestException("Reporter và reportee phải có tương tác thực trong booking hoặc kèo ghép.");
         }
@@ -219,6 +231,17 @@ public class ReportServiceImpl implements ReportService {
         }
         Set<Integer> participants = getApprovedMatchParticipants(match);
         return participants.contains(reporter.getUserId()) && participants.contains(reportee.getUserId());
+    }
+
+    private boolean hasStadiumListingInteraction(User reporter, User reportee, ReportContext context) {
+        if (!context.hasOnlyStadiumContext()) {
+            return false;
+        }
+        Owner owner = context.stadium.resolveOwner();
+        Integer ownerUserId = owner != null && owner.getUser() != null ? owner.getUser().getUserId() : null;
+        return ownerUserId != null
+                && reportee.getUserId().equals(ownerUserId)
+                && !reporter.getUserId().equals(ownerUserId);
     }
 
     private boolean isHostJoinPair(User reporter, User reportee, JoinRequest joinRequest) {
@@ -306,5 +329,13 @@ public class ReportServiceImpl implements ReportService {
         private MatchRequest matchRequest;
         private JoinRequest joinRequest;
         private Stadium stadium;
+
+        private boolean hasAnyContext() {
+            return booking != null || matchRequest != null || joinRequest != null || stadium != null;
+        }
+
+        private boolean hasOnlyStadiumContext() {
+            return stadium != null && booking == null && matchRequest == null && joinRequest == null;
+        }
     }
 }

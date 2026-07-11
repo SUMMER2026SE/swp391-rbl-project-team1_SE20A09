@@ -111,6 +111,57 @@ class ReportServiceImplTest {
     }
 
     @Test
+    void createReport_customerReportsOwnerFakeListingThroughStadium_success() {
+        User customer = user(10, "customer@example.com", "Customer");
+        User ownerUser = user(20, "owner@example.com", "Owner");
+        Stadium stadium = stadium(ownerUser);
+
+        when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
+        when(userRepository.findById(20)).thenReturn(Optional.of(ownerUser));
+        when(reportRepository.countByReporterUserIdAndCreatedAtBetween(any(), any(), any())).thenReturn(0L);
+        when(stadiumRepository.findById(100)).thenReturn(Optional.of(stadium));
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> {
+            Report report = invocation.getArgument(0);
+            report.setReportId(1000);
+            return report;
+        });
+
+        ReportResponse response = reportService.createReport(CreateReportRequest.builder()
+                .reporteeId(20)
+                .stadiumId(100)
+                .category(ReportCategory.FAKE_LISTING)
+                .description("Fake listing")
+                .build(), "customer@example.com");
+
+        assertEquals(1000, response.getReportId());
+        assertEquals(ReportCategory.FAKE_LISTING, response.getCategory());
+        assertEquals(10, response.getReporter().getUserId());
+        assertEquals(20, response.getReportee().getUserId());
+        assertEquals(100, response.getStadiumId());
+    }
+
+    @Test
+    void createReport_stadiumOnlyQualityIssue_throwsBadRequest() {
+        User customer = user(10, "customer@example.com", "Customer");
+        User ownerUser = user(20, "owner@example.com", "Owner");
+        Stadium stadium = stadium(ownerUser);
+
+        when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
+        when(userRepository.findById(20)).thenReturn(Optional.of(ownerUser));
+        when(reportRepository.countByReporterUserIdAndCreatedAtBetween(any(), any(), any())).thenReturn(0L);
+        when(stadiumRepository.findById(100)).thenReturn(Optional.of(stadium));
+
+        assertThrows(BadRequestException.class, () -> reportService.createReport(CreateReportRequest.builder()
+                .reporteeId(20)
+                .stadiumId(100)
+                .category(ReportCategory.OTHER)
+                .description("Service quality issue")
+                .build(), "customer@example.com"));
+
+        verify(reportRepository, never()).save(any());
+    }
+
+    @Test
     void createReport_dailyLimitReached_throwsBadRequest() {
         User reporter = user(20, "owner@example.com", "Owner");
         User reportee = user(10, "customer@example.com", "Customer");
@@ -159,5 +210,10 @@ class ReportServiceImplTest {
         Owner owner = Owner.builder().ownerId(5).user(ownerUser).build();
         Stadium stadium = Stadium.builder().stadiumId(100).stadiumName("Sân A").owner(owner).build();
         return Booking.builder().bookingId(1).user(customer).stadium(stadium).build();
+    }
+
+    private Stadium stadium(User ownerUser) {
+        Owner owner = Owner.builder().ownerId(5).user(ownerUser).build();
+        return Stadium.builder().stadiumId(100).stadiumName("San A").owner(owner).build();
     }
 }
