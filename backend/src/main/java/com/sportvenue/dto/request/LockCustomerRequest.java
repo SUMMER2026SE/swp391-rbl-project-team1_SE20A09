@@ -16,4 +16,10 @@ public class LockCustomerRequest {
 
     @NotNull(message = "Trạng thái enabled không được để trống")
     private Boolean enabled;
+
+    private String reason;
+
+    public LockCustomerRequest(Boolean enabled) {
+        this.enabled = enabled;
+    }
 }

@@ -47,4 +47,9 @@ public interface ReportRepository extends JpaRepository<Report, Integer> {
             Integer reporterId,
             LocalDateTime startOfDay,
             LocalDateTime endOfDay);
+
+    long countByReporteeUserIdAndCategoryAndStatus(
+            Integer reporteeId,
+            ReportCategory category,
+            ReportStatus status);
 }

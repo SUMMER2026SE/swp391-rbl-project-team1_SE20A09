@@ -6,6 +6,7 @@ import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.AccountStatus;
 import com.sportvenue.entity.enums.NotificationType;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.service.AccountStatusHistoryService;
 import com.sportvenue.service.AccountStatusService;
 import com.sportvenue.service.AdminUserService;
 import com.sportvenue.service.NotificationService;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminUserServiceImpl implements AdminUserService {
 
     private final UserRepository userRepository;
+    private final AccountStatusHistoryService accountStatusHistoryService;
     private final AccountStatusService accountStatusService;
     private final NotificationService notificationService;
 
@@ -72,7 +74,7 @@ public class AdminUserServiceImpl implements AdminUserService {
 
     @Override
     @Transactional
-    public void lockUnlockCustomer(Integer id, Boolean enabled, Integer currentAdminId) {
+    public void lockUnlockCustomer(Integer id, Boolean enabled, Integer currentAdminId, String reason) {
         log.info("Admin {} requesting to lock/unlock customer id={}, enabled={}", currentAdminId, id, enabled);
 
         if (id.equals(currentAdminId)) {
@@ -86,13 +88,17 @@ public class AdminUserServiceImpl implements AdminUserService {
             throw new com.sportvenue.exception.ResourceNotFoundException("Người dùng không phải là khách hàng (Customer).");
         }
 
+        AccountStatus previousStatus = customer.getAccountStatus();
         AccountStatus newStatus = accountStatusService.applyAdminLockState(customer, enabled);
+        customer.setLockReason(Boolean.TRUE.equals(enabled) ? null : reason);
+        accountStatusHistoryService.recordStatusChange(customer, currentAdminId, previousStatus, newStatus, reason);
         userRepository.save(customer);
         if (newStatus == AccountStatus.BLOCKED) {
             notificationService.createNotification(
                     customer.getUserId(),
                     "Tài khoản đã bị khóa",
-                    "Tài khoản của bạn đã bị Admin khóa. Bạn có thể gửi kháng cáo trong hệ thống.",
+                    "Tài khoản của bạn đã bị Admin khóa. Lý do: "
+                            + (reason == null || reason.isBlank() ? "Không có ghi chú." : reason),
                     NotificationType.ACCOUNT_LOCK,
                     "USER-" + customer.getUserId());
         }

@@ -11,6 +11,7 @@ import com.sportvenue.entity.Report;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.JoinRequestStatus;
+import com.sportvenue.entity.enums.NotificationType;
 import com.sportvenue.entity.enums.ReportCategory;
 import com.sportvenue.entity.enums.ReportStatus;
 import com.sportvenue.exception.BadRequestException;
@@ -21,6 +22,7 @@ import com.sportvenue.repository.MatchRequestRepository;
 import com.sportvenue.repository.ReportRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.service.NotificationService;
 import com.sportvenue.service.ReportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +45,7 @@ import java.util.Set;
 public class ReportServiceImpl implements ReportService {
 
     private static final int DAILY_REPORT_LIMIT = 5;
+    private static final int VERIFIED_REPORT_REVIEW_THRESHOLD = 3;
 
     private final ReportRepository reportRepository;
     private final UserRepository userRepository;
@@ -50,6 +53,7 @@ public class ReportServiceImpl implements ReportService {
     private final MatchRequestRepository matchRequestRepository;
     private final JoinRequestRepository joinRequestRepository;
     private final StadiumRepository stadiumRepository;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -78,7 +82,9 @@ public class ReportServiceImpl implements ReportService {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        return mapToResponse(reportRepository.save(report));
+        Report saved = reportRepository.save(report);
+        notifyReporteeAboutNewReport(saved);
+        return mapToResponse(saved);
     }
 
     @Override
@@ -117,6 +123,7 @@ public class ReportServiceImpl implements ReportService {
     public ReportResponse updateReportStatus(Integer reportId, ResolveReportRequest request, String adminEmail) {
         Report report = findReport(reportId);
         User admin = findUserByEmail(adminEmail);
+        ReportStatus previousStatus = report.getStatus();
         ReportStatus status = request.getStatus();
 
         report.setStatus(status);
@@ -129,7 +136,71 @@ public class ReportServiceImpl implements ReportService {
             report.setResolvedAt(null);
         }
 
-        return mapToResponse(reportRepository.save(report));
+        Report saved = reportRepository.save(report);
+        notifyReporterAboutResolution(saved, previousStatus);
+        handleVerifiedReportStrike(saved, previousStatus);
+        return mapToResponse(saved);
+    }
+
+    private void notifyReporteeAboutNewReport(Report report) {
+        notificationService.createNotification(
+                report.getReportee().getUserId(),
+                "Bạn có một báo cáo mới",
+                "Một báo cáo hành vi đã được gửi tới Admin để xem xét. Hệ thống không hiển thị danh tính người báo cáo.",
+                NotificationType.REPORT,
+                "REPORT-" + report.getReportId());
+    }
+
+    private void notifyReporterAboutResolution(Report report, ReportStatus previousStatus) {
+        if (previousStatus == report.getStatus()) {
+            return;
+        }
+        if (report.getStatus() != ReportStatus.ACTION_TAKEN && report.getStatus() != ReportStatus.DISMISSED) {
+            return;
+        }
+        notificationService.createNotification(
+                report.getReporter().getUserId(),
+                "Báo cáo đã được xử lý",
+                report.getStatus() == ReportStatus.ACTION_TAKEN
+                        ? "Admin đã xác nhận báo cáo và thực hiện hành động phù hợp."
+                        : "Admin đã xem xét và bác bỏ báo cáo này.",
+                NotificationType.REPORT,
+                "REPORT-" + report.getReportId());
+    }
+
+    private void handleVerifiedReportStrike(Report report, ReportStatus previousStatus) {
+        if (report.getStatus() != ReportStatus.ACTION_TAKEN || previousStatus == ReportStatus.ACTION_TAKEN) {
+            return;
+        }
+        long verifiedCount = reportRepository.countByReporteeUserIdAndCategoryAndStatus(
+                report.getReportee().getUserId(), report.getCategory(), ReportStatus.ACTION_TAKEN);
+
+        if (verifiedCount == 1) {
+            notificationService.createNotification(
+                    report.getReportee().getUserId(),
+                    "Cảnh báo hành vi",
+                    "Admin đã xác nhận một báo cáo thuộc nhóm " + report.getCategory().name()
+                            + ". Vui lòng điều chỉnh hành vi để tránh bị xem xét khóa tài khoản.",
+                    NotificationType.REPORT,
+                    "REPORT-" + report.getReportId());
+        }
+
+        if (verifiedCount == VERIFIED_REPORT_REVIEW_THRESHOLD) {
+            notifyAdminsAboutVerifiedReportThreshold(report, verifiedCount);
+        }
+    }
+
+    private void notifyAdminsAboutVerifiedReportThreshold(Report report, long verifiedCount) {
+        String resourceId = "USER-" + report.getReportee().getUserId() + "-REPORT-" + report.getCategory().name();
+        userRepository.findAllAdmins().forEach(admin ->
+                notificationService.createNotification(
+                        admin.getUserId(),
+                        "User cần review khẩn",
+                        report.getReportee().getFullName() + " đã có " + verifiedCount
+                                + " báo cáo đã xác nhận cùng nhóm " + report.getCategory().name()
+                                + ". Vui lòng review thủ công, không tự động khóa tài khoản.",
+                        NotificationType.REPORT,
+                        resourceId));
     }
 
     private void validateReporter(User reporter, User reportee) {

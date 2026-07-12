@@ -16,6 +16,7 @@ import com.sportvenue.repository.MatchRequestRepository;
 import com.sportvenue.repository.ReportRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.service.NotificationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -53,6 +54,9 @@ class ReportServiceImplTest {
 
     @Mock
     private StadiumRepository stadiumRepository;
+
+    @Mock
+    private NotificationService notificationService;
 
     @InjectMocks
     private ReportServiceImpl reportService;

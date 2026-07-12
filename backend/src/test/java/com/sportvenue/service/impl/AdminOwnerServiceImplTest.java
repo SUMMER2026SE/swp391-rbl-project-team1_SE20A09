@@ -12,6 +12,7 @@ import com.sportvenue.exception.AppException;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.StadiumRepository;
+import com.sportvenue.service.AccountStatusHistoryService;
 import com.sportvenue.service.AccountStatusService;
 import com.sportvenue.service.EmailService;
 import com.sportvenue.service.NotificationService;
@@ -53,6 +54,9 @@ class AdminOwnerServiceImplTest {
 
     @Mock
     private NotificationService notificationService;
+
+    @Mock
+    private AccountStatusHistoryService accountStatusHistoryService;
 
     @org.mockito.Spy
     private AccountStatusService accountStatusService;

@@ -13,6 +13,7 @@ import com.sportvenue.exception.AppException;
 import com.sportvenue.exception.ErrorCode;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.StadiumRepository;
+import com.sportvenue.service.AccountStatusHistoryService;
 import com.sportvenue.service.AccountStatusService;
 import com.sportvenue.service.AdminOwnerService;
 import com.sportvenue.service.EmailService;
@@ -36,6 +37,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
     private final OwnerRepository ownerRepository;
     private final StadiumRepository stadiumRepository;
     private final EmailService emailService;
+    private final AccountStatusHistoryService accountStatusHistoryService;
     private final AccountStatusService accountStatusService;
     private final NotificationService notificationService;
 
@@ -100,7 +102,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
 
     @Override
     @Transactional
-    public void lockUnlockOwner(Integer ownerId, boolean isEnabled, String reason) {
+    public void lockUnlockOwner(Integer ownerId, boolean isEnabled, String reason, Integer currentAdminId) {
         log.info("Request to {} account for ownerId: {}", isEnabled ? "unlock" : "lock", ownerId);
         Owner owner = ownerRepository.findById(ownerId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
@@ -110,8 +112,10 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
         }
 
         User user = owner.getUser();
-        accountStatusService.applyAdminLockState(user, isEnabled);
-        user.setLockReason(reason);
+        AccountStatus previousStatus = user.getAccountStatus();
+        AccountStatus newStatus = accountStatusService.applyAdminLockState(user, isEnabled);
+        user.setLockReason(isEnabled ? null : reason);
+        accountStatusHistoryService.recordStatusChange(user, currentAdminId, previousStatus, newStatus, reason);
         if (!isEnabled) {
             notificationService.createNotification(
                     user.getUserId(),
