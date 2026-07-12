@@ -9,6 +9,8 @@ export enum NotificationType {
   COMPLAINT = 'COMPLAINT',
   OWNER_APPROVAL = 'OWNER_APPROVAL',
   STADIUM_APPROVAL = 'STADIUM_APPROVAL',
+  ACCOUNT_LOCK = 'ACCOUNT_LOCK',
+  APPEAL = 'APPEAL',
 }
 
 export interface NotificationResponse {

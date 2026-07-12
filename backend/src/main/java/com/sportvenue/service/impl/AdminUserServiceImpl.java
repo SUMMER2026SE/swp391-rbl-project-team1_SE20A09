@@ -4,9 +4,11 @@ import com.sportvenue.dto.response.AdminCustomerResponse;
 import com.sportvenue.dto.response.PageResponse;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.AccountStatus;
+import com.sportvenue.entity.enums.NotificationType;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.AccountStatusService;
 import com.sportvenue.service.AdminUserService;
+import com.sportvenue.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -25,6 +27,7 @@ public class AdminUserServiceImpl implements AdminUserService {
 
     private final UserRepository userRepository;
     private final AccountStatusService accountStatusService;
+    private final NotificationService notificationService;
 
     private static final String ROLE_CUSTOMER = "Customer";
 
@@ -85,6 +88,14 @@ public class AdminUserServiceImpl implements AdminUserService {
 
         AccountStatus newStatus = accountStatusService.applyAdminLockState(customer, enabled);
         userRepository.save(customer);
+        if (newStatus == AccountStatus.BLOCKED) {
+            notificationService.createNotification(
+                    customer.getUserId(),
+                    "Tài khoản đã bị khóa",
+                    "Tài khoản của bạn đã bị Admin khóa. Bạn có thể gửi kháng cáo trong hệ thống.",
+                    NotificationType.ACCOUNT_LOCK,
+                    "USER-" + customer.getUserId());
+        }
         
         log.info("Successfully updated account status to {} for customer id={}", newStatus, id);
     }

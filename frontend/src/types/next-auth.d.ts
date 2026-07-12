@@ -15,6 +15,7 @@ declare module "next-auth" {
       userRank: string;
       userPoint: number;
       accountStatus: string;
+      lockReason?: string;
     } & DefaultSession["user"];
   }
 
@@ -31,6 +32,7 @@ declare module "next-auth" {
       userRank: string;
       userPoint: number;
       accountStatus: string;
+      lockReason?: string;
     };
   }
 }
@@ -50,6 +52,7 @@ declare module "next-auth/jwt" {
       userRank: string;
       userPoint: number;
       accountStatus: string;
+      lockReason?: string;
     };
   }
 }

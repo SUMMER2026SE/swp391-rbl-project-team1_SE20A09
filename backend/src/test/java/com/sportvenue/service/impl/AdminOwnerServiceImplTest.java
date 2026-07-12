@@ -14,6 +14,7 @@ import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.service.AccountStatusService;
 import com.sportvenue.service.EmailService;
+import com.sportvenue.service.NotificationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -49,6 +50,9 @@ class AdminOwnerServiceImplTest {
 
     @Mock
     private EmailService emailService;
+
+    @Mock
+    private NotificationService notificationService;
 
     @org.mockito.Spy
     private AccountStatusService accountStatusService;
