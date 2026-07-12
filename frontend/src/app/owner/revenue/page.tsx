@@ -146,31 +146,38 @@ function RevenueReportPage() {
       return;
     }
 
-    import("xlsx").then((XLSX) => {
-      const data = [
-        { "Tên sân": `BÁO CÁO DOANH THU (${format(parseISO(startDate), 'dd/MM/yyyy')} - ${format(parseISO(endDate), 'dd/MM/yyyy')})` },
-        { "Tên sân": "" },
-        ...reportData.venueRevenues.map((v) => ({
-          "Tên sân": v.stadiumName,
-          "Số lượt đặt": v.totalBookings,
-          "Doanh thu (VND)": v.totalRevenue.toLocaleString('vi-VN') + " đ",
-          "Tỷ lệ lấp đầy (%)": v.occupancy + "%",
-          "Xu hướng": v.trend,
-        })),
+    import("exceljs").then(async ({ Workbook }) => {
+      const workbook = new Workbook();
+      const sheet = workbook.addWorksheet("Doanh Thu");
+      sheet.columns = [
+        { width: 30 },
+        { width: 15 },
+        { width: 20 },
+        { width: 18 },
+        { width: 15 },
       ];
 
-      const ws = XLSX.utils.json_to_sheet(data);
-      ws['!cols'] = [
-        { wch: 30 },
-        { wch: 15 },
-        { wch: 20 },
-        { wch: 18 },
-        { wch: 15 },
-      ];
+      sheet.addRow([`BÁO CÁO DOANH THU (${format(parseISO(startDate), 'dd/MM/yyyy')} - ${format(parseISO(endDate), 'dd/MM/yyyy')})`]);
+      sheet.addRow([]);
+      sheet.addRow(["Tên sân", "Số lượt đặt", "Doanh thu (VND)", "Tỷ lệ lấp đầy (%)", "Xu hướng"]);
+      reportData.venueRevenues.forEach((v) => {
+        sheet.addRow([
+          v.stadiumName,
+          v.totalBookings,
+          v.totalRevenue.toLocaleString('vi-VN') + " đ",
+          v.occupancy + "%",
+          v.trend,
+        ]);
+      });
 
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Doanh Thu");
-      XLSX.writeFile(wb, `Bao_Cao_Doanh_Thu_${format(parseISO(startDate), 'yyyyMMdd')}_${format(parseISO(endDate), 'yyyyMMdd')}.xlsx`);
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Bao_Cao_Doanh_Thu_${format(parseISO(startDate), 'yyyyMMdd')}_${format(parseISO(endDate), 'yyyyMMdd')}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
       toast.success("Xuất Excel thành công!");
     }).catch(() => {
       // RULE-03: Không dùng console.error trong production

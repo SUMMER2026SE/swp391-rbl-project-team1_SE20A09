@@ -7,12 +7,13 @@ import VenueDetail from '@/components/venues/VenueDetail'
 import { Header } from '@/components/layout/Header'
 
 interface PageProps {
-  params: { id: string }
-  searchParams: Record<string, string | string[] | undefined>
+  params: Promise<{ id: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }
 
 export default async function VenueDetailPage({ params }: PageProps) {
-  const venueId = parseInt(params.id, 10)
+  const { id } = await params
+  const venueId = parseInt(id, 10)
 
   if (isNaN(venueId)) {
     notFound()
