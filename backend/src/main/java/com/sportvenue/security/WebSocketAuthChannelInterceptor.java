@@ -1,5 +1,6 @@
 package com.sportvenue.security;
 
+import com.sportvenue.entity.enums.AccountStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
@@ -41,6 +42,10 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
             }
             String email = jwtTokenProvider.getEmailFromJWT(token);
             UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+            if (isBlockedUser(userDetails)) {
+                log.warn("Blocked user {} attempted WebSocket CONNECT", email);
+                throw new MessagingException("WebSocket CONNECT rejected: account is blocked");
+            }
             UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
                     userDetails, null, userDetails.getAuthorities());
             accessor.setUser(auth);
@@ -53,5 +58,10 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
         }
 
         return message;
+    }
+
+    private boolean isBlockedUser(UserDetails userDetails) {
+        return userDetails instanceof UserPrincipal userPrincipal
+                && userPrincipal.getUser().getAccountStatus() == AccountStatus.BLOCKED;
     }
 }

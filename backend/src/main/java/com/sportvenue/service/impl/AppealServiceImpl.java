@@ -4,6 +4,7 @@ import com.sportvenue.dto.request.CreateAppealRequest;
 import com.sportvenue.dto.request.ReviewAppealRequest;
 import com.sportvenue.dto.response.AppealResponse;
 import com.sportvenue.entity.Appeal;
+import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.AccountStatus;
 import com.sportvenue.entity.enums.AppealStatus;
@@ -11,8 +12,10 @@ import com.sportvenue.entity.enums.NotificationType;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.AppealRepository;
+import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.security.UserPrincipal;
+import com.sportvenue.service.AdminOwnerService;
 import com.sportvenue.service.AppealService;
 import com.sportvenue.service.NotificationService;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +34,8 @@ public class AppealServiceImpl implements AppealService {
 
     private final AppealRepository appealRepository;
     private final UserRepository userRepository;
+    private final OwnerRepository ownerRepository;
+    private final AdminOwnerService adminOwnerService;
     private final NotificationService notificationService;
 
     @Override
@@ -93,10 +98,7 @@ public class AppealServiceImpl implements AppealService {
         appeal.setAdminNote(trimToNull(request.getAdminNote()));
 
         if (request.getStatus() == AppealStatus.APPROVED) {
-            User lockedUser = appeal.getUser();
-            lockedUser.setAccountStatus(AccountStatus.ACTIVE);
-            lockedUser.setLockReason(null);
-            userRepository.save(lockedUser);
+            unlockAppealedUser(appeal.getUser());
         }
 
         Appeal saved = appealRepository.save(appeal);
@@ -110,6 +112,18 @@ public class AppealServiceImpl implements AppealService {
         }
         return userRepository.findById(userPrincipal.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng."));
+    }
+
+    private void unlockAppealedUser(User lockedUser) {
+        ownerRepository.findByUserUserId(lockedUser.getUserId())
+                .map(Owner::getOwnerId)
+                .ifPresentOrElse(
+                        ownerId -> adminOwnerService.lockUnlockOwner(ownerId, true, null),
+                        () -> {
+                            lockedUser.setAccountStatus(AccountStatus.ACTIVE);
+                            lockedUser.setLockReason(null);
+                            userRepository.save(lockedUser);
+                        });
     }
 
     private List<String> normalizeEvidenceUrls(List<String> evidenceUrls) {

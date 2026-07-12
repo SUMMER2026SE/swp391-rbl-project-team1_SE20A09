@@ -4,6 +4,7 @@ import com.sportvenue.dto.request.CreateAppealRequest;
 import com.sportvenue.dto.request.ReviewAppealRequest;
 import com.sportvenue.dto.response.AppealResponse;
 import com.sportvenue.entity.Appeal;
+import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.Role;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.AccountStatus;
@@ -11,8 +12,10 @@ import com.sportvenue.entity.enums.AppealStatus;
 import com.sportvenue.entity.enums.NotificationType;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.repository.AppealRepository;
+import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.security.UserPrincipal;
+import com.sportvenue.service.AdminOwnerService;
 import com.sportvenue.service.NotificationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +42,12 @@ class AppealServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private OwnerRepository ownerRepository;
+
+    @Mock
+    private AdminOwnerService adminOwnerService;
 
     @Mock
     private NotificationService notificationService;
@@ -121,6 +130,7 @@ class AppealServiceImplTest {
 
         when(userRepository.findById(1)).thenReturn(Optional.of(admin));
         when(appealRepository.findById(99)).thenReturn(Optional.of(appeal));
+        when(ownerRepository.findByUserUserId(10)).thenReturn(Optional.empty());
         when(appealRepository.save(any(Appeal.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         AppealResponse response = appealService.reviewAppeal(99, request, new UserPrincipal(admin));
@@ -135,6 +145,44 @@ class AppealServiceImplTest {
                 any(),
                 eq(NotificationType.APPEAL),
                 eq("APPEAL-99"));
+    }
+
+    @Test
+    void reviewAppeal_ApprovedOwner_UsesOwnerUnlockCascade() {
+        User admin = user(1, "Admin", AccountStatus.ACTIVE);
+        User lockedOwnerUser = user(20, "Owner", AccountStatus.BLOCKED);
+        lockedOwnerUser.setLockReason("Violation");
+        Owner owner = Owner.builder()
+                .ownerId(77)
+                .user(lockedOwnerUser)
+                .businessName("Owner Business")
+                .build();
+        Appeal appeal = Appeal.builder()
+                .appealId(100)
+                .user(lockedOwnerUser)
+                .appealText("Please review.")
+                .status(AppealStatus.PENDING)
+                .build();
+
+        ReviewAppealRequest request = new ReviewAppealRequest();
+        request.setStatus(AppealStatus.APPROVED);
+        request.setAdminNote("Accepted");
+
+        when(userRepository.findById(1)).thenReturn(Optional.of(admin));
+        when(appealRepository.findById(100)).thenReturn(Optional.of(appeal));
+        when(ownerRepository.findByUserUserId(20)).thenReturn(Optional.of(owner));
+        when(appealRepository.save(any(Appeal.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AppealResponse response = appealService.reviewAppeal(100, request, new UserPrincipal(admin));
+
+        assertEquals(AppealStatus.APPROVED, response.getStatus());
+        verify(adminOwnerService).lockUnlockOwner(77, true, null);
+        verify(notificationService).createNotification(
+                eq(20),
+                any(),
+                any(),
+                eq(NotificationType.APPEAL),
+                eq("APPEAL-100"));
     }
 
     private User user(Integer id, String roleName, AccountStatus status) {
