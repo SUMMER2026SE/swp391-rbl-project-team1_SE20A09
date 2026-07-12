@@ -122,6 +122,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
         } else {
             toUpdate = stadiums.stream()
                     .filter(s -> s.getStadiumStatus() == StadiumStatus.MAINTENANCE)
+                    .filter(s -> !Boolean.TRUE.equals(s.getAdminSuspended()))
                     .peek(s -> s.setStadiumStatus(StadiumStatus.AVAILABLE))
                     .toList();
         }
