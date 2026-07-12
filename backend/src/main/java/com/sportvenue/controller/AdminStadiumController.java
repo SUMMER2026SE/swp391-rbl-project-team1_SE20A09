@@ -43,4 +43,18 @@ public class AdminStadiumController {
                 .message("Stadium suspended successfully")
                 .build());
     }
+
+    @PatchMapping("/{stadiumId}/unsuspend")
+    @Operation(
+            summary = "Unsuspend a single stadium",
+            description = "Allows Admin to clear an Admin suspension and reactivate one stadium."
+    )
+    public ResponseEntity<ApiResponse<Void>> unsuspendStadium(
+            @Parameter(description = "Stadium ID", example = "1") @PathVariable Integer stadiumId) {
+        stadiumService.unsuspendStadiumByAdmin(stadiumId);
+        return ResponseEntity.ok(ApiResponse.<Void>builder()
+                .code(200)
+                .message("Stadium unsuspended successfully")
+                .build());
+    }
 }

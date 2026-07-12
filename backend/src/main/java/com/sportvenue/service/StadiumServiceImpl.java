@@ -488,6 +488,28 @@ public class StadiumServiceImpl implements StadiumService {
 
     @Override
     @Transactional
+    public void unsuspendStadiumByAdmin(Integer stadiumId) {
+        log.info("Admin requesting unsuspend for stadium {}", stadiumId);
+        Stadium stadium = stadiumRepository.findById(stadiumId)
+                .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
+
+        if (stadium.getStadiumStatus() == StadiumStatus.CLOSED) {
+            throw new BadRequestException("Cannot unsuspend a closed stadium.");
+        }
+        if (!Boolean.TRUE.equals(stadium.getAdminSuspended())) {
+            throw new BadRequestException("Stadium is not suspended by Admin.");
+        }
+
+        stadium.setAdminSuspended(false);
+        stadium.setAdminSuspendedReason(null);
+        stadium.setAdminSuspendedAt(null);
+        stadium.setStadiumStatus(StadiumStatus.AVAILABLE);
+        stadiumRepository.save(stadium);
+        log.info("Stadium {} successfully unsuspended by Admin", stadiumId);
+    }
+
+    @Override
+    @Transactional
     public void deleteStadium(Integer stadiumId, Integer userId) {
         log.info("Owner {} requesting delete for stadium {}", userId, stadiumId);
         Owner owner = ownerRepository.findByUserUserId(userId)

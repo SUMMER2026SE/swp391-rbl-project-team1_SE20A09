@@ -46,4 +46,15 @@ class AdminStadiumControllerTest {
         assertEquals(HttpStatus.OK, result.getStatusCode());
         verify(stadiumService).suspendStadiumByAdmin(10, null);
     }
+
+    @Test
+    void unsuspendStadiumDelegatesToService() {
+        ResponseEntity<ApiResponse<Void>> result = adminStadiumController.unsuspendStadium(10);
+
+        assertEquals(HttpStatus.OK, result.getStatusCode());
+        assertNotNull(result.getBody());
+        assertEquals(200, result.getBody().getCode());
+        assertEquals("Stadium unsuspended successfully", result.getBody().getMessage());
+        verify(stadiumService).unsuspendStadiumByAdmin(10);
+    }
 }

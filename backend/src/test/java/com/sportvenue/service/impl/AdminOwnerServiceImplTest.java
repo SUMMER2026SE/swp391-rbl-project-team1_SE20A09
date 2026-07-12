@@ -158,6 +158,39 @@ class AdminOwnerServiceImplTest {
     }
 
     @Test
+    void lockUnlockOwner_Unlock_DoesNotReactivateAdminSuspendedStadium() {
+        Integer ownerId = 1;
+
+        User user = new User();
+        user.setEmail("owner@example.com");
+        user.setAccountStatus(AccountStatus.BLOCKED);
+
+        Owner owner = new Owner();
+        owner.setApprovedStatus(ApprovedStatus.APPROVED);
+        owner.setUser(user);
+        owner.setBusinessName("Test Business");
+
+        Stadium ownerLockedStadium = new Stadium();
+        ownerLockedStadium.setStadiumStatus(StadiumStatus.MAINTENANCE);
+
+        Stadium adminSuspendedStadium = new Stadium();
+        adminSuspendedStadium.setStadiumStatus(StadiumStatus.MAINTENANCE);
+        adminSuspendedStadium.setAdminSuspended(true);
+
+        when(ownerRepository.findById(ownerId)).thenReturn(Optional.of(owner));
+        when(stadiumRepository.findByOwnerOwnerId(ownerId))
+                .thenReturn(List.of(ownerLockedStadium, adminSuspendedStadium));
+
+        adminOwnerService.lockUnlockOwner(ownerId, true, null);
+
+        assertEquals(AccountStatus.ACTIVE, user.getAccountStatus());
+        assertEquals(StadiumStatus.AVAILABLE, ownerLockedStadium.getStadiumStatus());
+        assertEquals(StadiumStatus.MAINTENANCE, adminSuspendedStadium.getStadiumStatus());
+        assertEquals(Boolean.TRUE, adminSuspendedStadium.getAdminSuspended());
+        verify(stadiumRepository).saveAll(anyList());
+    }
+
+    @Test
     void lockUnlockOwner_OwnerNotFound_ThrowsException() {
         when(ownerRepository.findById(999)).thenReturn(Optional.empty());
 
