@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import type { ComponentProps } from 'react'
+import { Component, useEffect, useMemo, useState } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 import { Circle, MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { Star, MapPin } from 'lucide-react'
@@ -11,6 +11,29 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import 'leaflet/dist/leaflet.css'
+
+// react-leaflet's MapContainer isn't fully React Strict Mode-safe: its internal
+// "context" state can end up stale (non-null but pointing at an already-removed
+// Leaflet instance) after React's dev-mode double-invoke of effects, so a later
+// remount can call `new L.Map(node)` on a DOM node whose `_leaflet_id` was never
+// cleared, throwing "Map container is already initialized." Catching that here
+// and remounting with a fresh key guarantees a brand-new DOM node + fresh state.
+class MapErrorBoundary extends Component<{ children: ReactNode; onRetry: () => void }, { hasError: boolean }> {
+  state = { hasError: false }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch() {
+    this.props.onRetry()
+  }
+
+  render() {
+    if (this.state.hasError) return null
+    return this.props.children
+  }
+}
 
 const getUnifiedIcon = (isHovered: boolean = false): L.DivIcon | undefined => {
   if (typeof window === 'undefined') return undefined;
@@ -140,6 +163,7 @@ export default function ComplexMap({ complexes, hoveredComplexId, userLat, userL
       : `/complexes/${complexId}?tab=courts`
 
   const [mounted, setMounted] = useState(false)
+  const [mapKey, setMapKey] = useState(0)
 
   useEffect(() => {
     setMounted(true)
@@ -211,6 +235,7 @@ export default function ComplexMap({ complexes, hoveredComplexId, userLat, userL
 
   return (
     <div className="w-full h-full relative bg-muted rounded-2xl overflow-hidden z-10 border border-gray-100 shadow-inner">
+      <MapErrorBoundary key={mapKey} onRetry={() => setMapKey((k) => k + 1)}>
       <MapContainer
         center={mapCenter}
         zoom={12}
@@ -311,6 +336,7 @@ export default function ComplexMap({ complexes, hoveredComplexId, userLat, userL
           )
         })}
       </MapContainer>
+      </MapErrorBoundary>
     </div>
   )
 }
