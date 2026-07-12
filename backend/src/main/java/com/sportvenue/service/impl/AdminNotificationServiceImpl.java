@@ -39,7 +39,8 @@ public class AdminNotificationServiceImpl implements AdminNotificationService {
     private static final List<NotificationType> ADMIN_TYPES = List.of(
             NotificationType.OWNER_APPROVAL,
             NotificationType.STADIUM_APPROVAL,
-            NotificationType.COMPLAINT
+            NotificationType.COMPLAINT,
+            NotificationType.APPEAL
     );
 
     @Override

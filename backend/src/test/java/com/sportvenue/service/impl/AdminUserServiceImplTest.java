@@ -8,6 +8,7 @@ import com.sportvenue.entity.enums.UserRank;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.AccountStatusService;
+import com.sportvenue.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +38,9 @@ public class AdminUserServiceImplTest {
 
     @org.mockito.Spy
     private AccountStatusService accountStatusService;
+
+    @Mock
+    private NotificationService notificationService;
 
     @InjectMocks
     private AdminUserServiceImpl adminUserService;

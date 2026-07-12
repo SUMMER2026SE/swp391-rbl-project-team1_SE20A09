@@ -74,6 +74,7 @@ function formatTimestamp(iso: string): string {
 function getHref(type: NotificationType): string {
   if (type === "OWNER_APPROVAL") return "/admin/users?tab=owners&ownerTab=approvals";
   if (type === "STADIUM_APPROVAL") return "/admin/stadium-approvals";
+  if (type === "APPEAL") return "/admin/appeals";
   if (type === "BOOKING") return "/admin/bookings";
   return "/admin/complaints";
 }

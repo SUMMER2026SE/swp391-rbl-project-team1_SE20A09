@@ -7,6 +7,7 @@ import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.AccountStatus;
 import com.sportvenue.entity.enums.ApprovedStatus;
+import com.sportvenue.entity.enums.NotificationType;
 import com.sportvenue.entity.enums.StadiumStatus;
 import com.sportvenue.exception.AppException;
 import com.sportvenue.exception.ErrorCode;
@@ -15,6 +16,7 @@ import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.service.AccountStatusService;
 import com.sportvenue.service.AdminOwnerService;
 import com.sportvenue.service.EmailService;
+import com.sportvenue.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -35,6 +37,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
     private final StadiumRepository stadiumRepository;
     private final EmailService emailService;
     private final AccountStatusService accountStatusService;
+    private final NotificationService notificationService;
 
     @Override
     public PageResponse<AdminOwnerResponse> getOwners(String search, String accountStatusStr, String approvedStatusStr,
@@ -109,6 +112,15 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
         User user = owner.getUser();
         accountStatusService.applyAdminLockState(user, isEnabled);
         user.setLockReason(reason);
+        if (!isEnabled) {
+            notificationService.createNotification(
+                    user.getUserId(),
+                    "Tài khoản đã bị khóa",
+                    "Tài khoản của bạn đã bị Admin khóa. Lý do: "
+                            + (reason == null || reason.isBlank() ? "Không có ghi chú." : reason),
+                    NotificationType.ACCOUNT_LOCK,
+                    "USER-" + user.getUserId());
+        }
 
         // Lock: chỉ set AVAILABLE → MAINTENANCE (CLOSED giữ nguyên)
         // Unlock: chỉ set MAINTENANCE → AVAILABLE (CLOSED giữ nguyên)

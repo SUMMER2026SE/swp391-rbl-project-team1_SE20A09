@@ -206,9 +206,6 @@ public class AuthServiceImpl implements AuthService {
 
             user = userRepository.save(user);
         } else {
-            if (user.getAccountStatus() == AccountStatus.BLOCKED) {
-                throw new BadRequestException("Tài khoản của bạn đã bị khóa.");
-            }
             boolean updated = false;
             if (!user.getIsVerified()) {
                 user.setIsVerified(true);
@@ -336,6 +333,7 @@ public class AuthServiceImpl implements AuthService {
                 .userRank(user.getUserRank() != null ? user.getUserRank().name() : null)
                 .userPoint(user.getUserPoint())
                 .accountStatus(user.getAccountStatus() != null ? user.getAccountStatus().name() : null)
+                .lockReason(user.getLockReason())
                 .build();
     }
 

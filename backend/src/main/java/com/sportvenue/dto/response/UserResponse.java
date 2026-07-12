@@ -22,4 +22,5 @@ public class UserResponse {
     private String userRank;
     private Integer userPoint;
     private String accountStatus;
+    private String lockReason;
 }
