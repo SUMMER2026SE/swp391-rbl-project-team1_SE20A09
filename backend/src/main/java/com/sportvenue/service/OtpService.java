@@ -65,12 +65,17 @@ public class OtpService {
         // Success
         otpToken.setUsed(true);
         user.setIsVerified(true);
-        
-        // Owner accounts must remain PENDING until approved by admin
-        if (!"Owner".equals(user.getRole().getRoleName())) {
-            user.setAccountStatus(com.sportvenue.entity.enums.AccountStatus.ACTIVE);
-        }
-        
+
+        // User.accountStatus chỉ phản ánh "tài khoản đã xác thực email chưa" —
+        // luôn promote lên ACTIVE ngay khi verify OTP thành công, kể cả Owner.
+        // Owner CHƯA được Admin duyệt vẫn có thể đăng nhập (đúng thiết kế: cho
+        // login nhưng giới hạn UI/tính năng theo Owner.approvedStatus riêng —
+        // xem owner/layout.tsx + @RequireApprovedOwner ở backend) — trước đây
+        // Owner bị giữ ở PENDING tại đây, khiến UserPrincipal.isEnabled() coi
+        // là tài khoản bị vô hiệu hoá và chặn đăng nhập luôn (DisabledException),
+        // không phải chỉ giới hạn tính năng như mong muốn.
+        user.setAccountStatus(com.sportvenue.entity.enums.AccountStatus.ACTIVE);
+
         otpTokenRepository.save(otpToken);
         userRepository.save(user);
         
