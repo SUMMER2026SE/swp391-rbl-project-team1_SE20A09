@@ -92,28 +92,28 @@ const COMPLAINT_STATUSES = [
 
 const LABELS: Record<string, string> = {
   REPORT: "Report",
-  COMPLAINT: "Complaint",
-  Customer: "Khach hang",
-  Owner: "Chu san",
-  NO_SHOW: "Khong den",
-  PROPERTY_DAMAGE: "Pha hoai tai san",
-  HARASSMENT: "Quay roi",
-  FRAUD: "Gian lan",
-  PAYMENT_ABUSE: "Lam dung thanh toan",
-  FAKE_LISTING: "Listing gia",
-  OTHER: "Khac",
-  LOW: "Thap",
-  MEDIUM: "Trung binh",
+  COMPLAINT: "Khiếu nại",
+  Customer: "Khách hàng",
+  Owner: "Chủ sân",
+  NO_SHOW: "Không đến",
+  PROPERTY_DAMAGE: "Phá hoại tài sản",
+  HARASSMENT: "Quấy rối",
+  FRAUD: "Gian lận",
+  PAYMENT_ABUSE: "Lạm dụng thanh toán",
+  FAKE_LISTING: "Listing giả",
+  OTHER: "Khác",
+  LOW: "Thấp",
+  MEDIUM: "Trung bình",
   HIGH: "Cao",
-  OPEN: "Moi mo",
-  UNDER_REVIEW: "Dang xem xet",
-  ACTION_TAKEN: "Da xu ly",
-  DISMISSED: "Da bac bo",
-  IN_PROGRESS: "Dang xu ly",
-  RESOLVED: "Da giai quyet",
-  ESCALATED: "Da escalate",
-  PENDING_ADMIN_REVIEW: "Cho Admin review",
-  CUSTOMER_WITHDRAWN: "Khach rut don",
+  OPEN: "Mới mở",
+  UNDER_REVIEW: "Đang xem xét",
+  ACTION_TAKEN: "Đã xử lý",
+  DISMISSED: "Đã bác bỏ",
+  IN_PROGRESS: "Đang xử lý",
+  RESOLVED: "Đã giải quyết",
+  ESCALATED: "Đã escalate",
+  PENDING_ADMIN_REVIEW: "Chờ Admin review",
+  CUSTOMER_WITHDRAWN: "Khách rút đơn",
 };
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -216,7 +216,7 @@ function BreakdownChart({ title, data }: { title: string; data: Breakdown[] }) {
       <h2 className="text-base font-semibold text-slate-900">{title}</h2>
       <div className="mt-4 h-72">
         {chartData.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-sm text-slate-400">Chua co du lieu</div>
+          <div className="flex h-full items-center justify-center text-sm text-slate-400">Chưa có dữ liệu</div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} layout="vertical" margin={{ left: 24, right: 8 }}>
@@ -230,7 +230,7 @@ function BreakdownChart({ title, data }: { title: string; data: Breakdown[] }) {
                 axisLine={false}
                 tick={{ fontSize: 11, fill: "#64748b" }}
               />
-              <Tooltip formatter={(value) => [formatNumber(Number(value)), "So luong"]} />
+              <Tooltip formatter={(value) => [formatNumber(Number(value)), "Số lượng"]} />
               <Bar dataKey="count" radius={[0, 6, 6, 0]} fill="#0f766e" />
             </BarChart>
           </ResponsiveContainer>

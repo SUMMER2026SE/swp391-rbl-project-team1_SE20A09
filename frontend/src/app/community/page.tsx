@@ -170,14 +170,14 @@ function MatchRequestFeedPage() {
       const conversationId = await createContextualConversation(req.userId, {
         action: "match_referral",
         matchId: selectedManageMatch.matchId,
-        title: selectedManageMatch.title || `KÃ¨o #${selectedManageMatch.matchId}`,
+        title: selectedManageMatch.title || `Kèo #${selectedManageMatch.matchId}`,
         sportName: selectedManageMatch.sportName,
         playDate: selectedManageMatch.playDate,
       });
       setShowManageDialog(false);
       router.push(chatUrl(conversationId));
     } catch {
-      toast.error("KhÃ´ng thá»ƒ má»Ÿ cuá»™c trÃ² chuyá»‡n");
+      toast.error("Không thể mở cuộc trò chuyện");
     } finally {
       setOpeningChat(false);
     }
@@ -1398,7 +1398,7 @@ function MatchRequestFeedPage() {
                               disabled={openingChat}
                               onClick={() => handleHostChatCandidate(req)}
                               className="rounded-full h-8 w-8 hover:bg-slate-100 text-slate-600 cursor-pointer shrink-0"
-                              title="Nháº¯n tin liÃªn há»‡"
+                              title="Nhắn tin liên hệ"
                             >
                               {openingChat ? (
                                 <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />

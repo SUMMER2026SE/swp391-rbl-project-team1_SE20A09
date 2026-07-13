@@ -99,6 +99,8 @@ export default function AdminReportsPage() {
   const [loading, setLoading] = useState(true);
   const [resolvingId, setResolvingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   const loadReports = async () => {
     setLoading(true);
@@ -108,11 +110,12 @@ export default function AdminReportsPage() {
         params: {
           status: status === "ALL" ? undefined : status,
           category: category === "ALL" ? undefined : category,
-          page: 0,
+          page,
           size: 20,
         },
       });
       setReports(data.content ?? []);
+      setTotalPages(data.totalPages ?? 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không thể tải danh sách báo cáo.");
     } finally {
@@ -123,7 +126,18 @@ export default function AdminReportsPage() {
   useEffect(() => {
     loadReports();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, category]);
+  }, [status, category, page]);
+
+  // Reset về trang đầu khi đổi filter
+  const handleStatusChange = (value: ReportStatus | "ALL") => {
+    setStatus(value);
+    setPage(0);
+  };
+
+  const handleCategoryChange = (value: ReportCategory | "ALL") => {
+    setCategory(value);
+    setPage(0);
+  };
 
   const resolveReport = async (reportId: number, nextStatus: "UNDER_REVIEW" | "ACTION_TAKEN" | "DISMISSED") => {
     setResolvingId(reportId);
@@ -149,7 +163,7 @@ export default function AdminReportsPage() {
             <button
               key={option.value}
               type="button"
-              onClick={() => setStatus(option.value)}
+              onClick={() => handleStatusChange(option.value)}
               className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
                 status === option.value ? "bg-emerald-600 text-white" : "text-slate-600 hover:bg-slate-100"
               }`}
@@ -159,7 +173,7 @@ export default function AdminReportsPage() {
           ))}
         </div>
 
-        <Select value={category} onValueChange={(value) => setCategory(value as ReportCategory | "ALL")}>
+        <Select value={category} onValueChange={(value) => handleCategoryChange(value as ReportCategory | "ALL")}>
           <SelectTrigger className="w-56">
             <SelectValue />
           </SelectTrigger>
@@ -285,6 +299,30 @@ export default function AdminReportsPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0 || loading}
+            className="rounded-md border border-slate-200 bg-white px-4 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            ← Trang trước
+          </button>
+          <span className="text-sm font-medium text-slate-500">
+            Trang {page + 1} / {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1 || loading}
+            className="rounded-md border border-slate-200 bg-white px-4 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Trang sau →
+          </button>
         </div>
       )}
     </div>

@@ -80,8 +80,8 @@ export function ReportUserDialog({
     try {
       const uploaded = await Promise.all(toUpload.map((file) => uploadDocument(file)));
       setEvidenceUrls((current) => [...current, ...uploaded.map((result) => result.url)]);
-    } catch (error: any) {
-      toast.error(error.message || "Không thể tải ảnh lên.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không thể tải ảnh lên.");
     } finally {
       setUploading(false);
     }
@@ -118,8 +118,8 @@ export function ReportUserDialog({
       setEvidenceUrls([]);
       setCategory("HARASSMENT");
       onOpenChange(false);
-    } catch (error: any) {
-      toast.error(error.message || "Không thể gửi báo cáo.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không thể gửi báo cáo.");
     } finally {
       setSubmitting(false);
     }
