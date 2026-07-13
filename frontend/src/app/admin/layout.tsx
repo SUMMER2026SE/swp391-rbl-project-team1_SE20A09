@@ -7,7 +7,6 @@ import { AdminSidebar } from "@/components/layout/AdminSidebar";
 import { UserAccountMenu } from "@/components/layout/Header";
 import { Loader2, Menu, Calendar as CalendarIcon, ChevronDown } from "lucide-react";
 import { AdminNotificationBell } from "@/components/notifications/AdminNotificationBell";
-import { ChatBadge } from "@/components/chat/ChatBadge";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { DateRange, DateFilterContext } from "./date-filter-context";
@@ -134,7 +133,6 @@ export default function AdminLayout({
               )}
 
               <AdminNotificationBell />
-              <ChatBadge userId={(session?.user as { userId?: number })?.userId} />
 
               <div className="h-8 w-px bg-slate-200 hidden md:block"></div>
 
