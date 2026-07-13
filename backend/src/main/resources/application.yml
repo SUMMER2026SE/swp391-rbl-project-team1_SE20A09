@@ -92,6 +92,11 @@ management:
       show-details: when_authorized
 
 # ── App Config (JWT, OTP, Mail, Google) ─────────────────
+moderation:
+  report:
+    # Manual review flag threshold for verified reports in the same category.
+    verified-review-threshold: ${MODERATION_REPORT_VERIFIED_REVIEW_THRESHOLD:3}
+
 app:
   jwt:
     secret: ${JWT_SECRET:dev_secret_key_please_change_in_production_min_256_bits}

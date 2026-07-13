@@ -26,6 +26,7 @@ import com.sportvenue.service.NotificationService;
 import com.sportvenue.service.ReportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -45,7 +46,7 @@ import java.util.Set;
 public class ReportServiceImpl implements ReportService {
 
     private static final int DAILY_REPORT_LIMIT = 5;
-    private static final int VERIFIED_REPORT_REVIEW_THRESHOLD = 3;
+    private static final int DEFAULT_VERIFIED_REPORT_REVIEW_THRESHOLD = 3;
 
     private final ReportRepository reportRepository;
     private final UserRepository userRepository;
@@ -54,6 +55,9 @@ public class ReportServiceImpl implements ReportService {
     private final JoinRequestRepository joinRequestRepository;
     private final StadiumRepository stadiumRepository;
     private final NotificationService notificationService;
+
+    @Value("${moderation.report.verified-review-threshold:3}")
+    private int verifiedReportReviewThreshold = DEFAULT_VERIFIED_REPORT_REVIEW_THRESHOLD;
 
     @Override
     @Transactional
@@ -185,7 +189,7 @@ public class ReportServiceImpl implements ReportService {
                     "REPORT-" + report.getReportId());
         }
 
-        if (verifiedCount == VERIFIED_REPORT_REVIEW_THRESHOLD) {
+        if (verifiedCount == verifiedReportReviewThreshold) {
             notifyAdminsAboutVerifiedReportThreshold(report, verifiedCount);
         }
     }

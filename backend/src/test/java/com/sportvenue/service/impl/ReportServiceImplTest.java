@@ -25,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -94,6 +95,35 @@ class ReportServiceImplTest {
         assertEquals(20, response.getReporter().getUserId());
         assertEquals(10, response.getReportee().getUserId());
         assertEquals(List.of("https://example.com/a.png"), response.getEvidenceUrls());
+    }
+
+    @Test
+    void createReport_customerReportsOwnerBehaviorThroughBooking_success() {
+        User customer = user(10, "customer@example.com", "Customer");
+        User ownerUser = user(20, "owner@example.com", "Owner");
+        Booking booking = booking(customer, ownerUser);
+
+        when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
+        when(userRepository.findById(20)).thenReturn(Optional.of(ownerUser));
+        when(reportRepository.countByReporterUserIdAndCreatedAtBetween(any(), any(), any())).thenReturn(0L);
+        when(bookingRepository.findById(1)).thenReturn(Optional.of(booking));
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> {
+            Report report = invocation.getArgument(0);
+            report.setReportId(101);
+            return report;
+        });
+
+        ReportResponse response = reportService.createReport(CreateReportRequest.builder()
+                .reporteeId(20)
+                .bookingId(1)
+                .category(ReportCategory.HARASSMENT)
+                .description("Owner harassed customer")
+                .build(), "customer@example.com");
+
+        assertEquals(101, response.getReportId());
+        assertEquals(ReportCategory.HARASSMENT, response.getCategory());
+        assertEquals(10, response.getReporter().getUserId());
+        assertEquals(20, response.getReportee().getUserId());
     }
 
     @Test
@@ -308,6 +338,32 @@ class ReportServiceImplTest {
         reportService.updateReportStatus(99, request, "admin@example.com");
 
         verify(userRepository, never()).findAllAdmins();
+    }
+
+    @Test
+    void updateReportStatus_ConfiguredFourthVerifiedReport_FlagsAdminsForManualReview() {
+        ReflectionTestUtils.setField(reportService, "verifiedReportReviewThreshold", 4);
+        User reporter = user(20, "owner@example.com", "Owner");
+        User reportee = user(10, "customer@example.com", "Customer");
+        User admin = user(1, "admin@example.com", "Admin");
+        Report report = report(99, reporter, reportee, ReportStatus.OPEN, ReportCategory.HARASSMENT);
+        ResolveReportRequest request = resolveRequest(ReportStatus.ACTION_TAKEN);
+
+        when(reportRepository.findWithDetailsByReportId(99)).thenReturn(Optional.of(report));
+        when(userRepository.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+        when(reportRepository.save(any(Report.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(reportRepository.countByReporteeUserIdAndCategoryAndStatus(
+                10, ReportCategory.HARASSMENT, ReportStatus.ACTION_TAKEN)).thenReturn(4L);
+        when(userRepository.findAllAdmins()).thenReturn(List.of(admin));
+
+        reportService.updateReportStatus(99, request, "admin@example.com");
+
+        verify(notificationService).createNotification(
+                eq(1),
+                eq("User cần review khẩn"),
+                any(),
+                eq(NotificationType.REPORT),
+                eq("USER-10-REPORT-HARASSMENT"));
     }
 
     @Test
