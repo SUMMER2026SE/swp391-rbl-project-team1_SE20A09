@@ -142,8 +142,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
 
   const handleMessageOwner = async () => {
     if (!session) {
-      toast.info('Vui lòng đăng nhập để nhắn tin')
-      router.push(`/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
+      triggerLoginModal(window.location.pathname)
       return
     }
     if (!venue.owner.userId) {

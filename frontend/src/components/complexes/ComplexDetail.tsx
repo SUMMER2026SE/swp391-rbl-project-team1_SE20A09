@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouteGuard } from '@/components/shared/RouteGuard'
 import {
   IconBallFootball,
   IconClock,
@@ -68,7 +70,9 @@ export default function ComplexDetail({
 }: ComplexDetailProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  
+  const { data: session } = useSession()
+  const { triggerLoginModal } = useRouteGuard()
+
   // Tự động chuyển sang tab 'courts' (Sân lẻ) nếu có sportTypeId trên URL hoặc có param tab=courts
   const sportTypeIdParam = searchParams.get('sportTypeId')
   const tabParam = searchParams.get('tab')
@@ -91,8 +95,12 @@ export default function ComplexDetail({
   const [chatStarting, setChatStarting] = useState(false)
 
   const handleMessageOwner = async () => {
+    if (!session) {
+      triggerLoginModal(window.location.pathname)
+      return
+    }
     if (!complex.ownerUserId) {
-      toast.error('Vui lòng đăng nhập hoặc thử lại sau')
+      toast.error('Không tìm thấy tài khoản chủ sân')
       return
     }
     try {

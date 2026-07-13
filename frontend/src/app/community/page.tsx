@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import type { Session } from "next-auth";
+import { useRouteGuard } from "@/components/shared/RouteGuard";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
@@ -102,8 +103,18 @@ const getMatchStatusBadgeClass = (m: MatchResponse) => {
 
 function MatchRequestFeedPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const { data: session } = useSession();
+  const { triggerLoginModal } = useRouteGuard();
   const { isOpen, options, confirm, close, execute, isLoading: confirming } = useConfirm();
+
+  const requireLogin = () => {
+    if (!session?.user) {
+      triggerLoginModal(pathname);
+      return true;
+    }
+    return false;
+  };
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
@@ -482,7 +493,10 @@ function MatchRequestFeedPage() {
             </p>
           </div>
           <Button
-            onClick={() => setShowCreateDialog(true)}
+            onClick={() => {
+              if (requireLogin()) return;
+              setShowCreateDialog(true);
+            }}
             className="shadow-md shadow-primary/20 gap-2 h-11 px-5 font-bold"
           >
             <Plus className="h-5 w-5" />
@@ -620,6 +634,7 @@ function MatchRequestFeedPage() {
                                     : request.maxPlayers)
                                 }
                                 onClick={() => {
+                                  if (requireLogin()) return;
                                   setSelectedRequest(request);
                                   setShowJoinDialog(true);
                                 }}
