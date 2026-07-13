@@ -68,6 +68,14 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
         complaint.setEscalatedAt(LocalDateTime.now());
         complaint.setEscalationReason(reason);
         
+        List<ComplaintResponse.ResponseItem> items = deserializeResponses(complaint.getResponse());
+        items.add(ComplaintResponse.ResponseItem.builder()
+                .from("Hệ thống")
+                .message("Khiếu nại đã được chuyển lên Ban quản trị. Lý do: " + reason)
+                .time(LocalDateTime.now().format(FORMATTER))
+                .build());
+        complaint.setResponse(serializeResponses(items));
+        
         complaintRepository.save(complaint);
         
         // Notify all admins
@@ -94,6 +102,14 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
         complaint.setStatus(ComplaintStatus.AWAITING_CUSTOMER_RESPONSE);
         complaint.setResolvedAt(now);
         complaint.setCustomerResponseDeadline(now.plusHours(CUSTOMER_OBJECTION_HOURS));
+        
+        List<ComplaintResponse.ResponseItem> items = deserializeResponses(complaint.getResponse());
+        items.add(ComplaintResponse.ResponseItem.builder()
+                .from("Chủ sân")
+                .message("Đã đề xuất giải pháp: " + resolution)
+                .time(LocalDateTime.now().format(FORMATTER))
+                .build());
+        complaint.setResponse(serializeResponses(items));
         
         complaintRepository.save(complaint);
         
