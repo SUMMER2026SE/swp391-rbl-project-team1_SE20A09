@@ -137,16 +137,20 @@ async function fetchAnalytics(params: {
   from: string;
   to: string;
   role: string;
-  category: string;
-  status: string;
+  reportCategory: string;
+  complaintPriority: string;
+  reportStatus: string;
+  complaintStatus: string;
 }) {
   const { data } = await api.get<ModerationAnalyticsResponse>("/admin/moderation-analytics", {
     params: {
       from: params.from,
       to: params.to,
       role: params.role === "ALL" ? undefined : params.role,
-      category: params.category === "ALL" ? undefined : params.category,
-      status: params.status === "ALL" ? undefined : params.status,
+      reportCategory: params.reportCategory === "ALL" ? undefined : params.reportCategory,
+      complaintPriority: params.complaintPriority === "ALL" ? undefined : params.complaintPriority,
+      reportStatus: params.reportStatus === "ALL" ? undefined : params.reportStatus,
+      complaintStatus: params.complaintStatus === "ALL" ? undefined : params.complaintStatus,
       topLimit: 10,
     },
   });
@@ -240,10 +244,15 @@ export default function AdminModerationAnalyticsPage() {
   const [from, setFrom] = useState(daysAgoIso(29));
   const [to, setTo] = useState(todayIso());
   const [role, setRole] = useState("ALL");
-  const [category, setCategory] = useState("ALL");
-  const [status, setStatus] = useState("ALL");
+  const [reportCategory, setReportCategory] = useState("ALL");
+  const [complaintPriority, setComplaintPriority] = useState("ALL");
+  const [reportStatus, setReportStatus] = useState("ALL");
+  const [complaintStatus, setComplaintStatus] = useState("ALL");
 
-  const queryParams = useMemo(() => ({ from, to, role, category, status }), [from, to, role, category, status]);
+  const queryParams = useMemo(
+    () => ({ from, to, role, reportCategory, complaintPriority, reportStatus, complaintStatus }),
+    [from, to, role, reportCategory, complaintPriority, reportStatus, complaintStatus]
+  );
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["admin-moderation-analytics", queryParams],
@@ -254,10 +263,10 @@ export default function AdminModerationAnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="grid gap-4 md:grid-cols-5">
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+        <div className="grid gap-4 md:grid-cols-3">
           <label className="space-y-1.5 text-sm font-medium text-slate-600">
-            Tu ngay
+            Từ ngày
             <input
               type="date"
               value={from}
@@ -266,7 +275,7 @@ export default function AdminModerationAnalyticsPage() {
             />
           </label>
           <label className="space-y-1.5 text-sm font-medium text-slate-600">
-            Den ngay
+            Đến ngày
             <input
               type="date"
               value={to}
@@ -275,63 +284,78 @@ export default function AdminModerationAnalyticsPage() {
             />
           </label>
           <label className="space-y-1.5 text-sm font-medium text-slate-600">
-            Vai tro
+            Vai trò người bị báo cáo/khiếu nại
             <select
               value={role}
               onChange={(event) => setRole(event.target.value)}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500"
             >
-              <option value="ALL">Tat ca</option>
-              <option value="Customer">Khach hang</option>
-              <option value="Owner">Chu san</option>
+              <option value="ALL">Tất cả</option>
+              <option value="Customer">Khách hàng</option>
+              <option value="Owner">Chủ sân</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-4 border-t border-slate-100 pt-4">
+          <label className="space-y-1.5 text-sm font-medium text-slate-600">
+            Loại Report
+            <select
+              value={reportCategory}
+              onChange={(event) => setReportCategory(event.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500"
+            >
+              <option value="ALL">Tất cả</option>
+              {REPORT_CATEGORIES.map((item) => (
+                <option key={item} value={item}>
+                  {labelOf(item)}
+                </option>
+              ))}
             </select>
           </label>
           <label className="space-y-1.5 text-sm font-medium text-slate-600">
-            Category
+            Mức độ Complaint
             <select
-              value={category}
-              onChange={(event) => setCategory(event.target.value)}
+              value={complaintPriority}
+              onChange={(event) => setComplaintPriority(event.target.value)}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500"
             >
-              <option value="ALL">Tat ca</option>
-              <optgroup label="Report">
-                {REPORT_CATEGORIES.map((item) => (
-                  <option key={item} value={item}>
-                    {labelOf(item)}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Complaint">
-                {COMPLAINT_PRIORITIES.map((item) => (
-                  <option key={item} value={item}>
-                    {labelOf(item)}
-                  </option>
-                ))}
-              </optgroup>
+              <option value="ALL">Tất cả</option>
+              {COMPLAINT_PRIORITIES.map((item) => (
+                <option key={item} value={item}>
+                  {labelOf(item)}
+                </option>
+              ))}
             </select>
           </label>
           <label className="space-y-1.5 text-sm font-medium text-slate-600">
-            Status
+            Trạng thái Report
             <select
-              value={status}
-              onChange={(event) => setStatus(event.target.value)}
+              value={reportStatus}
+              onChange={(event) => setReportStatus(event.target.value)}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500"
             >
-              <option value="ALL">Tat ca</option>
-              <optgroup label="Report">
-                {REPORT_STATUSES.map((item) => (
-                  <option key={item} value={item}>
-                    {labelOf(item)}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Complaint">
-                {COMPLAINT_STATUSES.map((item) => (
-                  <option key={item} value={item}>
-                    {labelOf(item)}
-                  </option>
-                ))}
-              </optgroup>
+              <option value="ALL">Tất cả</option>
+              {REPORT_STATUSES.map((item) => (
+                <option key={item} value={item}>
+                  {labelOf(item)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1.5 text-sm font-medium text-slate-600">
+            Trạng thái Complaint
+            <select
+              value={complaintStatus}
+              onChange={(event) => setComplaintStatus(event.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500"
+            >
+              <option value="ALL">Tất cả</option>
+              {COMPLAINT_STATUSES.map((item) => (
+                <option key={item} value={item}>
+                  {labelOf(item)}
+                </option>
+              ))}
             </select>
           </label>
         </div>
