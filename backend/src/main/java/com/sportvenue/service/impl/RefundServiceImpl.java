@@ -469,6 +469,7 @@ public class RefundServiceImpl implements RefundService {
         return bookings.map(b -> {
             String customerName = b.getUser().getFirstName() + " " + b.getUser().getLastName();
             OwnerBookingResponse.CustomerInfo customerInfo = OwnerBookingResponse.CustomerInfo.builder()
+                    .userId(b.getUser().getUserId())
                     .name(customerName)
                     .phone(b.getUser().getPhoneNumber())
                     .email(b.getUser().getEmail())
@@ -493,6 +494,7 @@ public class RefundServiceImpl implements RefundService {
                     .id(b.getBookingId())
                     .displayId("BK" + String.format("%06d", b.getBookingId()))
                     .customer(customerInfo)
+                    .stadiumId(b.getStadium().getStadiumId())
                     .venue(b.getStadium().getStadiumName())
                     .complexName(StadiumUtils.resolveComplexName(b.getStadium()))
                     .date(b.getReservationDate().toString())

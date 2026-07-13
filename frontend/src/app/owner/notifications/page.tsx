@@ -107,7 +107,7 @@ export default function OwnerNotificationsPage() {
       case NotificationType.PAYMENT: return `/owner/revenue`
       case NotificationType.REVIEW: return `/owner/venues`
       case NotificationType.COMPLAINT: return `/owner/dashboard`
-      case NotificationType.REPORT: return `/owner/notifications`
+      case NotificationType.REPORT: return `/owner/reports`
       case NotificationType.ACCOUNT_LOCK:
       case NotificationType.APPEAL:
         return `/appeals`

@@ -15,6 +15,7 @@ import {
   Menu,
   Calendar as CalendarIcon,
   HelpCircle,
+  ShieldAlert,
 } from "lucide-react";
 import { OwnerNotificationBell } from "@/components/notifications/OwnerNotificationBell";
 import { ChatBadge } from "@/components/chat/ChatBadge";
@@ -59,6 +60,7 @@ export default function OwnerLayout({
     { href: "/owner/revenue", label: "Doanh thu", icon: Wallet },
     { href: "/owner/refund-exceptions", label: "Ngoại lệ hoàn tiền", icon: HelpCircle },
     { href: "/owner/complaints", label: "Khiếu nại", icon: AlertTriangle },
+    { href: "/owner/reports", label: "Báo cáo của tôi", icon: ShieldAlert },
     { href: "/owner/notifications", label: "Thông báo", icon: Bell },
   ];
 
@@ -69,6 +71,7 @@ export default function OwnerLayout({
     if (path.startsWith("/owner/revenue")) return { title: "Doanh thu", subtitle: "Thống kê doanh thu" };
     if (path.startsWith("/owner/refund-exceptions")) return { title: "Ngoại lệ hoàn tiền", subtitle: "Duyệt yêu cầu hoàn tiền bất khả kháng" };
     if (path.startsWith("/owner/complaints")) return { title: "Khiếu nại", subtitle: "Quản lý khiếu nại khách hàng" };
+    if (path.startsWith("/owner/reports")) return { title: "Báo cáo của tôi", subtitle: "Các báo cáo hành vi bạn đã gửi" };
     if (path.startsWith("/owner/notifications")) return { title: "Thông báo", subtitle: "Thông báo hệ thống" };
     return { title: "Chủ sân", subtitle: "Hệ thống SportsBook" };
   };

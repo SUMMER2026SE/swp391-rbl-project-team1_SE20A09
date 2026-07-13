@@ -85,7 +85,7 @@ function getHref(type: OwnerNotifType): string {
   if (type === "PAYMENT") return "/owner/revenue";
   if (type === "REVIEW") return "/owner/reviews";
   if (type === "COMPLAINT") return "/owner/complaints";
-  if (type === "REPORT") return "/owner/notifications";
+  if (type === "REPORT") return "/owner/reports";
   if (type === "ACCOUNT_LOCK" || type === "APPEAL") return "/appeals";
   return "/owner/notifications";
 }

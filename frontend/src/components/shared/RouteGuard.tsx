@@ -26,6 +26,7 @@ const PROTECTED_PREFIXES = [
   "/payments",
   "/complaints",
   "/appeals",
+  "/reports",
   "/ai-assistant",
 ];
 
