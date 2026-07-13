@@ -7,17 +7,14 @@ import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.AccountStatus;
 import com.sportvenue.entity.enums.ApprovedStatus;
-import com.sportvenue.entity.enums.NotificationType;
 import com.sportvenue.entity.enums.StadiumStatus;
 import com.sportvenue.exception.AppException;
 import com.sportvenue.exception.ErrorCode;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.StadiumRepository;
-import com.sportvenue.service.AccountStatusHistoryService;
-import com.sportvenue.service.AccountStatusService;
+import com.sportvenue.service.AdminAccountLockService;
 import com.sportvenue.service.AdminOwnerService;
 import com.sportvenue.service.EmailService;
-import com.sportvenue.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -37,9 +34,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
     private final OwnerRepository ownerRepository;
     private final StadiumRepository stadiumRepository;
     private final EmailService emailService;
-    private final AccountStatusHistoryService accountStatusHistoryService;
-    private final AccountStatusService accountStatusService;
-    private final NotificationService notificationService;
+    private final AdminAccountLockService adminAccountLockService;
 
     @Override
     public PageResponse<AdminOwnerResponse> getOwners(String search, String accountStatusStr, String approvedStatusStr,
@@ -50,8 +45,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
 
         Sort.Direction direction = sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
 
-        // Handle sorting column mapping
-        String sortColumn = "createdAt"; // default
+        String sortColumn = "createdAt";
         if ("fullName".equals(sortBy)) {
             sortColumn = "user.firstName";
         } else if ("email".equals(sortBy)) {
@@ -112,22 +106,8 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
         }
 
         User user = owner.getUser();
-        AccountStatus previousStatus = user.getAccountStatus();
-        AccountStatus newStatus = accountStatusService.applyAdminLockState(user, isEnabled);
-        user.setLockReason(isEnabled ? null : reason);
-        accountStatusHistoryService.recordStatusChange(user, currentAdminId, previousStatus, newStatus, reason);
-        if (!isEnabled) {
-            notificationService.createNotification(
-                    user.getUserId(),
-                    "Tài khoản đã bị khóa",
-                    "Tài khoản của bạn đã bị Admin khóa. Lý do: "
-                            + (reason == null || reason.isBlank() ? "Không có ghi chú." : reason),
-                    NotificationType.ACCOUNT_LOCK,
-                    "USER-" + user.getUserId());
-        }
+        adminAccountLockService.applyLockState(user, isEnabled, currentAdminId, reason);
 
-        // Lock: chỉ set AVAILABLE → MAINTENANCE (CLOSED giữ nguyên)
-        // Unlock: chỉ set MAINTENANCE → AVAILABLE (CLOSED giữ nguyên)
         List<Stadium> stadiums = stadiumRepository.findByOwnerOwnerId(ownerId);
         List<Stadium> toUpdate;
         if (!isEnabled) {
