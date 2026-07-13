@@ -167,7 +167,7 @@ public class AdminUserServiceImplTest {
         BadRequestException exception = assertThrows(BadRequestException.class, () ->
                 adminUserService.lockUnlockCustomer(1, false, 1));
 
-        assertEquals("Ban khong the tu khoa tai khoan cua chinh minh.", exception.getMessage());
+        assertEquals("Bạn không thể tự khóa tài khoản của chính mình.", exception.getMessage());
     }
 
     @Test
@@ -191,7 +191,7 @@ public class AdminUserServiceImplTest {
         ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () ->
                 adminUserService.lockUnlockCustomer(2, false, 1));
 
-        assertEquals("Nguoi dung khong phai la khach hang (Customer).", exception.getMessage());
+        assertEquals("Người dùng không phải là khách hàng (Customer).", exception.getMessage());
     }
 
     @Test

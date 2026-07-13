@@ -69,14 +69,14 @@ public class AdminUserServiceImpl implements AdminUserService {
         log.info("Admin {} requesting to lock/unlock customer id={}, enabled={}", currentAdminId, id, enabled);
 
         if (id.equals(currentAdminId)) {
-            throw new BadRequestException("Ban khong the tu khoa tai khoan cua chinh minh.");
+            throw new BadRequestException("Bạn không thể tự khóa tài khoản của chính mình.");
         }
 
         User customer = userRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
         if (!ROLE_CUSTOMER.equalsIgnoreCase(customer.getRole().getRoleName())) {
-            throw new ResourceNotFoundException("Nguoi dung khong phai la khach hang (Customer).");
+            throw new ResourceNotFoundException("Người dùng không phải là khách hàng (Customer).");
         }
 
         AccountStatus newStatus = adminAccountLockService.applyLockState(customer, enabled, currentAdminId, reason);
