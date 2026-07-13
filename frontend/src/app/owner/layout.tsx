@@ -2,7 +2,7 @@
 
 import { UserAccountMenu } from "@/components/layout/Header";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   Home,
@@ -20,7 +20,7 @@ import { OwnerNotificationBell } from "@/components/notifications/OwnerNotificat
 import { ChatBadge } from "@/components/chat/ChatBadge";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function OwnerLayout({
   children,
@@ -28,8 +28,29 @@ export default function OwnerLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const router = useRouter();
+  const { data: session, status } = useSession();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Owner UI (dashboard/menu đầy đủ) chỉ dành cho Owner ĐÃ được Admin duyệt —
+  // trước đây trang này chỉ check có session, không check role/approvedStatus
+  // nên Owner PENDING (hoặc bất kỳ role nào khác cố truy cập /owner/*) vẫn
+  // thấy y hệt giao diện Owner thật. Redirect về /profile (tab mặc định "info"
+  // đã có sẵn banner trạng thái hồ sơ) — trải nghiệm giống 1 user thông
+  // thường cho tới khi được duyệt, đúng đề xuất trong
+  // docs/auth_account_flow_findings.md #2.
+  const isApprovedOwner =
+    session?.user?.roleName === "Owner" && session.user.ownerApprovedStatus === "APPROVED";
+
+  useEffect(() => {
+    if (status === "authenticated" && !isApprovedOwner) {
+      router.replace("/profile");
+    }
+  }, [status, isApprovedOwner, router]);
+
+  if (status === "loading" || (status === "authenticated" && !isApprovedOwner)) {
+    return null;
+  }
 
   const menuItems = [
     { href: "/owner/dashboard", label: "Dashboard", icon: Home },
@@ -59,7 +80,7 @@ export default function OwnerLayout({
     : "Chủ Sân";
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900 selection:bg-emerald-200">
+    <div className="h-screen overflow-hidden bg-slate-50 flex font-sans text-slate-900 selection:bg-emerald-200">
 
       {/* Sidebar - Desktop */}
       <aside className={`

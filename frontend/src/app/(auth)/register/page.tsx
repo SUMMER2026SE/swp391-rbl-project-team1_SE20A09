@@ -109,8 +109,6 @@ function RegisterPage() {
       });
 
       toast.success("Đăng ký khách hàng thành công! Vui lòng kiểm tra email để nhận mã OTP.");
-      sessionStorage.setItem("pending_login_email", values.email);
-      sessionStorage.setItem("pending_login_password", values.password);
       router.push(`/verify-otp?email=${encodeURIComponent(values.email)}`);
     } catch (error: any) {
       toast.error(error.message || "Đăng ký thất bại");
@@ -136,8 +134,6 @@ function RegisterPage() {
       });
 
       toast.success("Đăng ký tài khoản đối tác thành công! Vui lòng xác thực email để hoàn tất đăng ký.");
-      sessionStorage.setItem("pending_login_email", values.email);
-      sessionStorage.setItem("pending_login_password", values.password);
       sessionStorage.setItem("is_owner_registration", "true"); // Flag để verify-otp phân biệt flow Owner vs Customer
       router.push(`/verify-otp?email=${encodeURIComponent(values.email)}`);
     } catch (error: any) {

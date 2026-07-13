@@ -7,7 +7,6 @@ import { AdminSidebar } from "@/components/layout/AdminSidebar";
 import { UserAccountMenu } from "@/components/layout/Header";
 import { Loader2, Menu, Calendar as CalendarIcon, ChevronDown } from "lucide-react";
 import { AdminNotificationBell } from "@/components/notifications/AdminNotificationBell";
-import { ChatBadge } from "@/components/chat/ChatBadge";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
 import { DateRange, DateFilterContext } from "./date-filter-context";
@@ -81,7 +80,7 @@ export default function AdminLayout({
 
   return (
     <DateFilterContext.Provider value={{ dateRange, isFilterOpen, setIsFilterOpen, applyDateRange }}>
-      <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900 selection:bg-emerald-200">
+      <div className="h-screen overflow-hidden bg-slate-50 flex font-sans text-slate-900 selection:bg-emerald-200">
         <AdminSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -134,7 +133,6 @@ export default function AdminLayout({
               )}
 
               <AdminNotificationBell />
-              <ChatBadge userId={(session?.user as { userId?: number })?.userId} />
 
               <div className="h-8 w-px bg-slate-200 hidden md:block"></div>
 

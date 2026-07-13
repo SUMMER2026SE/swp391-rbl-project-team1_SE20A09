@@ -13,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { get, post, patch } from "@/lib/api";
 import { BookingHistoryList } from "@/components/bookings/BookingHistoryList";
 import { ReviewHistoryList } from "@/components/reviews/ReviewHistoryList";
@@ -27,7 +26,6 @@ import { toast } from "sonner";
 
 import {
   Camera,
-  Trophy,
   Star,
   Calendar,
   Settings,
@@ -66,14 +64,6 @@ interface UserProfileResponse {
   accountStatus: string;
   createdAt: string;
 }
-
-const rankMap: Record<string, { label: string; color: string; bg: string; next: string; target: number }> = {
-  Bronze: { label: "Hạng Đồng", color: "text-orange-700 border-orange-200", bg: "bg-orange-50", next: "Bạc", target: 200 },
-  Silver: { label: "Hạng Bạc", color: "text-slate-600 border-slate-200", bg: "bg-slate-50", next: "Vàng", target: 500 },
-  Gold: { label: "Hạng Vàng", color: "text-yellow-700 border-yellow-200", bg: "bg-yellow-50", next: "Bạch Kim", target: 1000 },
-  Platinum: { label: "Hạng Bạch Kim", color: "text-emerald-700 border-emerald-200", bg: "bg-emerald-50", next: "Kim Cương", target: 2000 },
-  Diamond: { label: "Hạng Kim Cương", color: "text-blue-700 border-blue-200", bg: "bg-blue-50", next: "Vô Song", target: 5000 },
-};
 
 interface OwnerDetailResponse {
   ownerId: number;
@@ -721,17 +711,12 @@ function UserProfilePage() {
   }
 
   // ── CUSTOMER / OWNER PROFILE (unchanged) ────────────────────────────────
-  const currentRankInfo = rankMap[profile.userRank] || {
-    label: profile.userRank,
-    color: "text-primary",
-    bg: "bg-primary/10",
-    next: "Cao hơn",
-    target: profile.userPoint * 1.5,
-  };
-
-  const points = profile.userPoint;
-  const targetPoints = currentRankInfo.target;
-  const progressPercent = Math.min((points / targetPoints) * 100, 100);
+  // Owner đã APPROVED không có card nào ở cột phải (mục "Hạng & điểm tích lũy"
+  // đã bỏ, "Trở thành đối tác" chỉ hiện cho Customer/Owner chưa duyệt) — canh
+  // giữa layout 1 cột thay vì để trống 1/3 bên phải.
+  const showUpgradeCard =
+    profile.roleName === "Customer" ||
+    (profile.roleName === "Owner" && !!ownerProfile && ownerProfile.approvedStatus !== "APPROVED");
 
   return (
     <div className="min-h-screen bg-slate-50/50 flex flex-col">
@@ -780,15 +765,6 @@ function UserProfilePage() {
                   <Calendar className="h-4 w-4 text-slate-400" />
                   Thành viên từ tháng {formattedJoinDate}
                 </p>
-                <div className="flex items-center gap-2 pt-2">
-                  <Badge className={`${currentRankInfo.bg} ${currentRankInfo.color} border px-3 py-1 font-semibold flex items-center gap-1`}>
-                    <Trophy className="h-3.5 w-3.5" />
-                    {currentRankInfo.label}
-                  </Badge>
-                  <span className="text-sm font-bold text-teal-600 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded">
-                    {profile.userPoint.toLocaleString()} điểm
-                  </span>
-                </div>
               </div>
 
               <Button asChild className="shadow-sm">
@@ -804,9 +780,9 @@ function UserProfilePage() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="bg-white p-1 rounded-xl shadow-sm border border-slate-100 w-full sm:w-auto overflow-x-auto flex whitespace-nowrap">
             <TabsTrigger value="info">Thông tin cá nhân</TabsTrigger>
-            <TabsTrigger value="bookings">
-              {profile.roleName?.toUpperCase() === 'OWNER' ? 'Lịch sử khách đặt' : 'Lịch sử đặt sân'}
-            </TabsTrigger>
+            {profile.roleName !== 'Owner' && (
+              <TabsTrigger value="bookings">Lịch sử đặt sân</TabsTrigger>
+            )}
             <TabsTrigger value="reviews">
               {profile.roleName?.toUpperCase() === 'OWNER' ? 'Đánh giá từ khách hàng' : 'Đánh giá của tôi'}
             </TabsTrigger>
@@ -818,8 +794,8 @@ function UserProfilePage() {
           </TabsList>
 
           <TabsContent value="info" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 space-y-6">
+            <div className={showUpgradeCard ? "grid grid-cols-1 lg:grid-cols-3 gap-8" : "flex justify-center"}>
+              <div className={showUpgradeCard ? "lg:col-span-2 space-y-6" : "w-full max-w-2xl space-y-6"}>
                 <Card className="border-none shadow-sm bg-white">
                   <CardHeader className="pb-4">
                     <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -863,37 +839,9 @@ function UserProfilePage() {
                 </Card>
               </div>
 
-              <div className="space-y-6">
-                <Card className="border-none shadow-sm bg-white">
-                  <CardHeader className="pb-2">
-                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                      <Trophy className="h-5 w-5 text-amber-500" />
-                      Hạng & Điểm tích lũy
-                    </h3>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="text-center py-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <div className="text-5xl font-extrabold text-primary mb-1">
-                        {profile.userPoint.toLocaleString()}
-                      </div>
-                      <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-                        Điểm tích lũy hiện có
-                      </p>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600 font-medium">Hành trình lên {currentRankInfo.next}</span>
-                        <span className="font-semibold text-slate-700">
-                          {points.toLocaleString()} / {targetPoints.toLocaleString()}
-                        </span>
-                      </div>
-                      <Progress value={progressPercent} className="h-2.5 bg-slate-100" />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Upgrade to Owner section — hiển thị cho Customer, hoặc Owner chưa được duyệt (PENDING/REJECTED) */}
-                {(profile.roleName === "Customer" || (profile.roleName === "Owner" && ownerProfile && ownerProfile.approvedStatus !== "APPROVED")) && (
+              {/* Upgrade to Owner section — hiển thị cho Customer, hoặc Owner chưa được duyệt (PENDING/REJECTED) */}
+              {showUpgradeCard && (
+                <div className="space-y-6">
                   <Card className="border-none shadow-sm bg-white overflow-hidden">
                     <CardHeader className="pb-3 border-b border-slate-50 bg-gradient-to-r from-teal-50/50 to-cyan-50/50">
                       <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -1076,14 +1024,16 @@ function UserProfilePage() {
                       )}
                     </CardContent>
                   </Card>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </TabsContent>
 
-          <TabsContent value="bookings" className="pt-4">
-            <BookingHistoryList viewMode="CUSTOMER_VIEW" />
-          </TabsContent>
+          {profile.roleName !== 'Owner' && (
+            <TabsContent value="bookings" className="pt-4">
+              <BookingHistoryList viewMode="CUSTOMER_VIEW" />
+            </TabsContent>
+          )}
 
           <TabsContent value="reviews" className="pt-4">
             {profile.roleName?.toUpperCase() === 'OWNER' ? <OwnerReviewHistoryList /> : <ReviewHistoryList />}
