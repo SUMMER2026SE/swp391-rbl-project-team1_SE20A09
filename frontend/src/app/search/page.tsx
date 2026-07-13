@@ -86,9 +86,13 @@ function SearchPageContent() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isLocating, setIsLocating] = useState(false)
 
-  // Pagination states
-  const [totalPages, setTotalPages] = useState(0)
+  // totalElements phản ánh tổng số kết quả THẬT từ backend (query vẫn dùng
+  // size=100 để bản đồ có đủ điểm). listPage/LIST_PAGE_SIZE là phân trang
+  // RIÊNG, cắt cục bộ ở FE trên tập complexes đã tải, chỉ ảnh hưởng hiển thị
+  // của cột danh sách — bản đồ vẫn nhận đủ complexes không bị cắt.
   const [totalElements, setTotalElements] = useState(0)
+  const [listPage, setListPage] = useState(0)
+  const LIST_PAGE_SIZE = 10
 
   // Map Hover State
   const [hoveredComplexId, setHoveredComplexId] = useState<number | null>(null)
@@ -183,8 +187,8 @@ function SearchPageContent() {
       try {
         const res = await searchComplexes(cleanFilters as ComplexSearchParams)
         setComplexes(res.content)
-        setTotalPages(res.totalPages)
         setTotalElements(res.totalElements)
+        setListPage(0)
       } catch (error) {
         console.error(error)
       } finally {
@@ -355,7 +359,7 @@ function SearchPageContent() {
             ) : (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {complexes.map((complex) => (
+                  {complexes.slice(listPage * LIST_PAGE_SIZE, (listPage + 1) * LIST_PAGE_SIZE).map((complex) => (
                     <div
                       key={complex.complexId}
                       onMouseEnter={() => setHoveredComplexId(complex.complexId)}
@@ -367,56 +371,56 @@ function SearchPageContent() {
                   ))}
                 </div>
 
-                {/* Pagination Controls */}
-                {totalPages > 1 && (
-                  <div className="mt-8 flex justify-center pb-6">
-                    <Pagination>
-                      <PaginationContent>
-                        <PaginationItem>
-                          <PaginationPrevious
-                            href="#"
-                            onClick={(e) => {
-                              e.preventDefault()
-                              if (filters.page && filters.page > 0) {
-                                handleFilterChange('page', filters.page - 1)
-                              }
-                            }}
-                            className={filters.page === 0 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                          />
-                        </PaginationItem>
-                        
-                        {Array.from({ length: totalPages }, (_, idx) => (
-                          <PaginationItem key={idx}>
-                            <PaginationLink
+                {/* Pagination Controls — phân trang cục bộ trên complexes đã tải (xem listPage ở trên) */}
+                {(() => {
+                  const listTotalPages = Math.ceil(complexes.length / LIST_PAGE_SIZE)
+                  if (listTotalPages <= 1) return null
+                  return (
+                    <div className="mt-8 flex justify-center pb-6">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
                               href="#"
                               onClick={(e) => {
                                 e.preventDefault()
-                                handleFilterChange('page', idx)
+                                if (listPage > 0) setListPage(listPage - 1)
                               }}
-                              isActive={filters.page === idx}
-                              className="cursor-pointer"
-                            >
-                              {idx + 1}
-                            </PaginationLink>
+                              className={listPage === 0 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                            />
                           </PaginationItem>
-                        ))}
 
-                        <PaginationItem>
-                          <PaginationNext
-                            href="#"
-                            onClick={(e) => {
-                              e.preventDefault()
-                              if (filters.page !== undefined && filters.page < totalPages - 1) {
-                                handleFilterChange('page', filters.page + 1)
-                              }
-                            }}
-                            className={filters.page === totalPages - 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                          />
-                        </PaginationItem>
-                      </PaginationContent>
-                    </Pagination>
-                  </div>
-                )}
+                          {Array.from({ length: listTotalPages }, (_, idx) => (
+                            <PaginationItem key={idx}>
+                              <PaginationLink
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  setListPage(idx)
+                                }}
+                                isActive={listPage === idx}
+                                className="cursor-pointer"
+                              >
+                                {idx + 1}
+                              </PaginationLink>
+                            </PaginationItem>
+                          ))}
+
+                          <PaginationItem>
+                            <PaginationNext
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                if (listPage < listTotalPages - 1) setListPage(listPage + 1)
+                              }}
+                              className={listPage === listTotalPages - 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )
+                })()}
               </>
             )}
           </div>
@@ -429,6 +433,7 @@ function SearchPageContent() {
               userLat={filters.userLat}
               userLng={filters.userLng}
               radiusInKm={filters.radiusInKm}
+              province={filters.province}
             />
           </div>
 
