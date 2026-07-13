@@ -80,7 +80,7 @@ export default function AdminLayout({
 
   return (
     <DateFilterContext.Provider value={{ dateRange, isFilterOpen, setIsFilterOpen, applyDateRange }}>
-      <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900 selection:bg-emerald-200">
+      <div className="h-screen overflow-hidden bg-slate-50 flex font-sans text-slate-900 selection:bg-emerald-200">
         <AdminSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">

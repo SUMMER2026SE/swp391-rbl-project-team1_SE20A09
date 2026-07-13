@@ -80,7 +80,7 @@ export default function OwnerLayout({
     : "Chủ Sân";
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900 selection:bg-emerald-200">
+    <div className="h-screen overflow-hidden bg-slate-50 flex font-sans text-slate-900 selection:bg-emerald-200">
 
       {/* Sidebar - Desktop */}
       <aside className={`
