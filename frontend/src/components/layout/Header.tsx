@@ -24,6 +24,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { OwnerNotificationBell } from "../notifications/OwnerNotificationBell";
+import { CustomerNotificationBell } from "../notifications/CustomerNotificationBell";
 import { ChatBadge } from "../chat/ChatBadge";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 import {
@@ -431,6 +432,7 @@ export function Header() {
                   <ChatBadge userId={(user as any)?.userId} />
                   {/* Notification Bell */}
                   {isOwnerArea && user.roleName === "Owner" && <OwnerNotificationBell />}
+                  {!isOwnerArea && user.roleName === "Customer" && <CustomerNotificationBell />}
                   {/* User Avatar */}
                   <UserAccountMenu user={user} />
                 </div>
