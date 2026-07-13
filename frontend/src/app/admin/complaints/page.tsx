@@ -541,9 +541,9 @@ function AdminComplaintsPage() {
 
                 {/* Resolution status */}
                 {selectedComplaint.status === "resolved" && (
-                  <div className="flex justify-center my-6">
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-4 text-center max-w-[80%] shadow-sm">
-                      <CheckCircle2 className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
+                  <div className="flex justify-center my-4">
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center max-w-[85%] shadow-sm w-full">
+                      <CheckCircle2 className="h-6 w-6 text-emerald-600 mx-auto mb-1.5" />
                       <h4 className="text-sm font-semibold text-emerald-700 mb-1">Khiếu nại này đã đóng & giải quyết</h4>
                       {selectedComplaint.resolution && (
                         <p className="text-xs text-emerald-600 italic mb-2 leading-relaxed">

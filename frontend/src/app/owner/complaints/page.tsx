@@ -270,7 +270,7 @@ function OwnerComplaintsPage() {
 
                  {/* Resolution Statement */}
                 {selectedComplaint.status === "resolved" && selectedComplaint.resolution && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-2">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-2 max-w-[85%] mx-auto w-full">
                     <h4 className="flex items-center gap-2 text-green-800 font-bold text-sm">
                       <CheckCircle className="h-5 w-5 text-green-700" />
                       Đã thống nhất giải quyết thành công

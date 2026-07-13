@@ -565,7 +565,7 @@ function ComplaintsPage() {
 
               {/* Resolution (Static compact banner if resolved) */}
               {activeComplaint.status === "resolved" && activeComplaint.resolution && (
-                <div className="flex-shrink-0 bg-green-50 border border-green-200 dark:bg-green-950/20 dark:border-green-900/50 rounded-lg p-3 flex gap-2.5 items-start">
+                <div className="flex-shrink-0 bg-green-50 border border-green-200 dark:bg-green-950/20 dark:border-green-900/50 rounded-lg p-3 flex gap-2.5 items-start max-w-[85%] mr-auto">
                   <CheckCircle2 className="h-5 w-5 text-green-700 dark:text-green-500 shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <p className="text-xs font-bold text-green-800 dark:text-green-400">Đã giải quyết thành công</p>
