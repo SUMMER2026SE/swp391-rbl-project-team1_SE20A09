@@ -33,6 +33,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import com.sportvenue.dto.response.ComplaintChatEventDTO;
+import com.sportvenue.service.CustomerNotificationService;
 import com.sportvenue.service.NotificationService;
 import com.sportvenue.service.EmailService;
 import com.sportvenue.util.AfterCommitExecutor;
@@ -49,6 +50,7 @@ public class ComplaintServiceImpl implements ComplaintService {
     private final UserRepository userRepository;
     private final OwnerRepository ownerRepository;
     private final NotificationService notificationService;
+    private final CustomerNotificationService customerNotificationService;
     private final ObjectMapper objectMapper;
     private final SimpMessagingTemplate messagingTemplate;
     private final com.sportvenue.service.AdminDashboardService adminDashboardService;
@@ -113,6 +115,12 @@ public class ComplaintServiceImpl implements ComplaintService {
 
         Complaint saved = complaintRepository.save(complaint);
         
+        try {
+            customerNotificationService.notifyComplaintAcknowledged(user.getUserId(), saved);
+        } catch (Exception ex) {
+            log.warn("Failed to emit complaint acknowledged notification for complaint {}", saved.getComplaintId(), ex);
+        }
+
         // Notify owner
         notificationService.createNotification(
                 booking.getStadium().getOwner().getUser().getUserId(),
@@ -208,7 +216,7 @@ public class ComplaintServiceImpl implements ComplaintService {
         }
 
         Complaint saved = complaintRepository.save(complaint);
-        sendReplyNotifications(complaint, saved, isAdmin, isCustomer, isOwner);
+        sendReplyNotifications(complaint, saved, isAdmin, isCustomer, isOwner, request.getMessage().trim());
 
         messagingTemplate.convertAndSend(
                 "/topic/complaint/" + saved.getComplaintId(),
@@ -225,7 +233,8 @@ public class ComplaintServiceImpl implements ComplaintService {
     }
 
     private void sendReplyNotifications(Complaint complaint, Complaint saved,
-                                        boolean isAdmin, boolean isCustomer, boolean isOwner) {
+                                        boolean isAdmin, boolean isCustomer, boolean isOwner,
+                                        String replyMessage) {
         String ref = String.valueOf(saved.getComplaintId());
         Integer customerId = complaint.getUser().getUserId();
         Integer ownerId = complaint.getBooking().getStadium().getOwner().getUser().getUserId();
@@ -245,6 +254,11 @@ public class ComplaintServiceImpl implements ComplaintService {
             notificationService.createNotification(customerId,
                     "Phản hồi khiếu nại mới", "Chủ sân vừa phản hồi trong khiếu nại #" + id,
                     NotificationType.COMPLAINT, ref);
+            try {
+                customerNotificationService.notifyComplaintOwnerReplied(customerId, complaint, replyMessage);
+            } catch (Exception ex) {
+                log.warn("Failed to emit complaint owner replied notification for complaint {}", complaint.getComplaintId(), ex);
+            }
         }
     }
 
@@ -402,21 +416,11 @@ public class ComplaintServiceImpl implements ComplaintService {
 
         Complaint saved = complaintRepository.save(complaint);
 
-        notificationService.createNotification(
-                complaint.getUser().getUserId(),
-                "Khiếu nại đã được Admin giải quyết",
-                "Admin đã đóng và giải quyết khiếu nại #" + complaintId,
-                NotificationType.COMPLAINT,
-                String.valueOf(saved.getComplaintId())
-        );
-
-        notificationService.createNotification(
-                complaint.getBooking().getStadium().getOwner().getUser().getUserId(),
-                "Khiếu nại đã được Admin giải quyết",
-                "Admin đã đóng và giải quyết khiếu nại #" + complaintId,
-                NotificationType.COMPLAINT,
-                String.valueOf(saved.getComplaintId())
-        );
+        try {
+            customerNotificationService.notifyComplaintResolved(complaint.getUser().getUserId(), complaint, request.getResolution().trim());
+        } catch (Exception ex) {
+            log.warn("Failed to emit complaint resolved notification for complaint {}", complaint.getComplaintId(), ex);
+        }
 
         messagingTemplate.convertAndSend(
                 "/topic/complaint/" + saved.getComplaintId(),
@@ -431,19 +435,6 @@ public class ComplaintServiceImpl implements ComplaintService {
 
         // Xóa cache dashboard — số liệu khiếu nại mở thay đổi (OPEN → RESOLVED)
         adminDashboardService.evictDashboardCache();
-
-        afterCommitExecutor.execute(() -> {
-            try {
-                emailService.sendComplaintResolvedEmail(
-                        complaint.getUser().getEmail(),
-                        complaint.getUser().getFirstName() + " " + complaint.getUser().getLastName(),
-                        complaint.getComplaintId(),
-                        request.getResolution()
-                );
-            } catch (Exception e) {
-                log.error("Failed to send complaint resolved email by admin", e);
-            }
-        });
 
         return mapToResponse(saved);
     }

@@ -31,6 +31,7 @@ import com.sportvenue.dto.response.JoinRequestResponse;
 import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.MatchRequestService;
 import com.sportvenue.service.ChatService;
+import com.sportvenue.service.CustomerNotificationService;
 import com.sportvenue.util.StadiumUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -67,6 +68,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
     private final StadiumComplexRepository stadiumComplexRepository;
     private final TimeSlotRepository timeSlotRepository;
     private final MaintenanceScheduleService maintenanceScheduleService;
+    private final CustomerNotificationService customerNotificationService;
 
     @Override
     @Transactional
@@ -376,27 +378,27 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         log.info("User ID {} requesting to join Match ID: {} with message: '{}'", userId, matchId, message);
 
         MatchRequest match = matchRequestRepository.findById(matchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Match request not found with ID: " + matchId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy kèo ghép."));
 
         if (match.getMatchStatus() != MatchStatus.OPEN) {
-            throw new BadRequestException("Match request is not open for joining");
+            throw new BadRequestException("Kèo ghép này hiện không còn nhận thêm người tham gia.");
         }
 
         LocalDate nowDate = LocalDate.now();
         LocalTime nowTime = LocalTime.now();
         if (match.getPlayDate().isBefore(nowDate) || 
             (match.getPlayDate().isEqual(nowDate) && match.getStartTime().isBefore(nowTime))) {
-            throw new BadRequestException("This match request has already expired");
+            throw new BadRequestException("Kèo ghép này đã hết hạn đăng ký.");
         }
 
         if (match.getUser().getUserId().equals(userId)) {
-            throw new BadRequestException("You cannot join your own match request");
+            throw new BadRequestException("Bạn không thể tham gia kèo do chính mình tạo.");
         }
 
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản."));
         if (user.getAccountStatus() != AccountStatus.ACTIVE) {
-            throw new BadRequestException("Your account is not active");
+            throw new BadRequestException("Tài khoản của bạn hiện không hoạt động.");
         }
 
         boolean alreadyRequested = joinRequestRepository.existsByMatchRequestMatchIdAndUserUserIdAndRequestStatusIn(
@@ -405,14 +407,14 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                 Arrays.asList(JoinRequestStatus.PENDING, JoinRequestStatus.APPROVED)
         );
         if (alreadyRequested) {
-            throw new BadRequestException("You have already sent a pending or approved join request for this match");
+            throw new BadRequestException("Bạn đã gửi yêu cầu tham gia kèo này rồi, vui lòng chờ xét duyệt.");
         }
 
         validateNoScheduleConflicts(userId, match);
 
         if (match.getMatchingType() == com.sportvenue.entity.enums.MatchingType.TEAM_VS_TEAM) {
             if (message == null || message.trim().isEmpty()) {
-                throw new BadRequestException("Team name (message) is required to join a team match");
+                throw new BadRequestException("Vui lòng nhập tên đội để đăng ký kèo đối đầu.");
             }
         }
 
@@ -426,19 +428,25 @@ public class MatchRequestServiceImpl implements MatchRequestService {
 
         joinRequestRepository.save(joinRequest);
         log.info("Successfully created join request for User ID: {} on Match ID: {}", userId, matchId);
+
+        try {
+            customerNotificationService.notifyMatchRequestReceived(match.getUser().getUserId(), joinRequest);
+        } catch (Exception ex) {
+            log.warn("Failed to emit match request received notification for match {}", matchId, ex);
+        }
     }
 
     private void validateNoScheduleConflicts(Integer userId, MatchRequest match) {
         boolean hasOverlappingMatch = matchRequestRepository.existsOverlappingMatchRequest(
                 userId, match.getPlayDate(), match.getStartTime(), match.getEndTime());
         if (hasOverlappingMatch) {
-            throw new BadRequestException("You already have an active or joined match request overlapping with this time range");
+            throw new BadRequestException("Bạn đã có kèo ghép khác trùng khung giờ này, không thể đăng ký thêm.");
         }
 
         boolean hasApprovedOverlap = joinRequestRepository.existsApprovedOverlappingJoinRequest(
                 userId, match.getPlayDate(), match.getStartTime(), match.getEndTime());
         if (hasApprovedOverlap) {
-            throw new BadRequestException("You are already approved in another match overlapping with this time range");
+            throw new BadRequestException("Bạn đã được chấp nhận tham gia kèo khác trong khung giờ này.");
         }
 
         LocalDateTime startOfDay = match.getPlayDate().atStartOfDay();
@@ -446,7 +454,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         boolean hasOverlappingBooking = bookingRepository.existsOverlappingBooking(
                 userId, startOfDay, endOfDay, match.getStartTime(), match.getEndTime());
         if (hasOverlappingBooking) {
-            throw new BadRequestException("You have an active booking overlapping with this match request time range");
+            throw new BadRequestException("Bạn đã có lịch đặt sân trùng với khung giờ của kèo này.");
         }
     }
 
@@ -529,43 +537,49 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         log.info("Host User ID {} approving Join ID: {} for Match ID: {}", hostUserId, joinId, matchId);
 
         MatchRequest match = matchRequestRepository.findById(matchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Match request not found with ID: " + matchId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy kèo ghép."));
 
         if (!match.getUser().getUserId().equals(hostUserId)) {
-            throw new BadRequestException("Only the host of this match can approve join requests");
+            throw new BadRequestException("Chỉ chủ kèo mới có thể duyệt yêu cầu tham gia.");
         }
 
         if (match.getMatchStatus() != MatchStatus.OPEN) {
-            throw new BadRequestException("Match request is not open");
+            throw new BadRequestException("Kèo ghép này không còn nhận thêm người.");
         }
 
         JoinRequest joinRequest = joinRequestRepository.findById(joinId)
-                .orElseThrow(() -> new ResourceNotFoundException("Join request not found with ID: " + joinId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy yêu cầu tham gia."));
 
         if (!joinRequest.getMatchRequest().getMatchId().equals(matchId)) {
-            throw new BadRequestException("Join request does not belong to this match");
+            throw new BadRequestException("Yêu cầu tham gia không thuộc kèo này.");
         }
 
         if (joinRequest.getRequestStatus() != JoinRequestStatus.PENDING) {
-            throw new BadRequestException("Join request is not in PENDING status");
+            throw new BadRequestException("Yêu cầu này đã được xử lý rồi.");
         }
 
         if (match.getCurrentPlayers() >= match.getMaxPlayers()) {
-            throw new BadRequestException("Match is already full");
+            throw new BadRequestException("Kèo đã đủ người, không thể chấp nhận thêm.");
         }
 
         joinRequest.setRequestStatus(JoinRequestStatus.APPROVED);
         joinRequestRepository.saveAndFlush(joinRequest);
 
+        try {
+            customerNotificationService.notifyMatchRequestApproved(joinRequest.getUser().getUserId(), joinRequest);
+        } catch (Exception ex) {
+            log.warn("Failed to emit match request approved notification for join request {}", joinRequest.getJoinId(), ex);
+        }
+
         // Atomic increment để tránh race condition khi approve đồng thời
         int updated = matchRequestRepository.incrementCurrentPlayers(matchId);
         if (updated == 0) {
-            throw new BadRequestException("Match is already full");
+            throw new BadRequestException("Kèo đã đủ người, không thể chấp nhận thêm.");
         }
 
         // Reload để lấy currentPlayers mới nhất sau atomic update
         MatchRequest updatedMatch = matchRequestRepository.findById(matchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Match request not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy kèo ghép."));
 
         if (updatedMatch.getCurrentPlayers().equals(updatedMatch.getMaxPlayers())) {
             matchRequestRepository.updateStatusAndReason(matchId, MatchStatus.FULL, updatedMatch.getCancelReason());
@@ -587,29 +601,35 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         log.info("Host User ID {} rejecting Join ID: {} for Match ID: {}", hostUserId, joinId, matchId);
 
         MatchRequest match = matchRequestRepository.findById(matchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Match request not found with ID: " + matchId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy kèo ghép."));
 
         if (!match.getUser().getUserId().equals(hostUserId)) {
-            throw new BadRequestException("Only the host of this match can reject join requests");
+            throw new BadRequestException("Chỉ chủ kèo mới có thể từ chối yêu cầu tham gia.");
         }
 
         if (match.getMatchStatus() != MatchStatus.OPEN) {
-            throw new BadRequestException("Match request is not open");
+            throw new BadRequestException("Kèo ghép này không còn nhận thêm người.");
         }
 
         JoinRequest joinRequest = joinRequestRepository.findById(joinId)
-                .orElseThrow(() -> new ResourceNotFoundException("Join request not found with ID: " + joinId));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy yêu cầu tham gia."));
 
         if (!joinRequest.getMatchRequest().getMatchId().equals(matchId)) {
-            throw new BadRequestException("Join request does not belong to this match");
+            throw new BadRequestException("Yêu cầu tham gia không thuộc kèo này.");
         }
 
         if (joinRequest.getRequestStatus() != JoinRequestStatus.PENDING) {
-            throw new BadRequestException("Join request is not in PENDING status");
+            throw new BadRequestException("Yêu cầu này đã được xử lý rồi.");
         }
 
         joinRequest.setRequestStatus(JoinRequestStatus.REJECTED);
         joinRequestRepository.save(joinRequest);
+
+        try {
+            customerNotificationService.notifyMatchRequestRejected(joinRequest.getUser().getUserId(), joinRequest);
+        } catch (Exception ex) {
+            log.warn("Failed to emit match request rejected notification for join request {}", joinRequest.getJoinId(), ex);
+        }
     }
 
     @Override
@@ -685,6 +705,12 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         // 4. Cập nhật trạng thái kèo sang CANCELLED và lý do hủy
         String finalReason = (reason == null || reason.trim().isEmpty()) ? "Chủ nhà không cung cấp lý do cụ thể" : reason.trim();
         matchRequestRepository.updateStatusAndReason(matchId, MatchStatus.CANCELLED, finalReason);
+
+        try {
+            customerNotificationService.notifyMatchCancelled(match.getUser().getUserId(), match);
+        } catch (Exception ex) {
+            log.warn("Failed to emit match cancelled notification for match {}", matchId, ex);
+        }
 
         // 5. Bulk update các JoinRequest liên quan sang CANCELLED
         int affectedRows = joinRequestRepository.bulkUpdateStatus(

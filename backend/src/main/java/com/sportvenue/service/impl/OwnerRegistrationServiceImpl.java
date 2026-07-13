@@ -19,6 +19,7 @@ import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.RoleRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.service.CustomerNotificationService;
 import com.sportvenue.service.OtpService;
 import com.sportvenue.service.NotificationService;
 import com.sportvenue.service.OwnerRegistrationService;
@@ -43,6 +44,7 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
     private final PasswordEncoder passwordEncoder;
     private final OtpService otpService;
     private final NotificationService notificationService;
+    private final CustomerNotificationService customerNotificationService;
     private final com.sportvenue.service.AdminDashboardService adminDashboardService;
     private final EmailService emailService;
     private final AfterCommitExecutor afterCommitExecutor;
@@ -240,6 +242,11 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                     NotificationType.SYSTEM,
                     owner.getOwnerId().toString()
             );
+            try {
+                customerNotificationService.notifyUpgradeApproved(user.getUserId(), owner);
+            } catch (Exception ex) {
+                log.warn("Failed to emit upgrade approved notification for user {}", user.getUserId(), ex);
+            }
             
             afterCommitExecutor.execute(() -> 
                 emailService.sendOwnerRegistrationSuccessEmail(user.getEmail(), user.getFullName(), owner.getBusinessName())
@@ -262,6 +269,11 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
                     NotificationType.SYSTEM,
                     owner.getOwnerId().toString()
             );
+            try {
+                customerNotificationService.notifyUpgradeRejected(user.getUserId(), request.getRejectionReason().trim());
+            } catch (Exception ex) {
+                log.warn("Failed to emit upgrade rejected notification for user {}", user.getUserId(), ex);
+            }
         }
 
         Owner savedOwner = ownerRepository.save(owner);

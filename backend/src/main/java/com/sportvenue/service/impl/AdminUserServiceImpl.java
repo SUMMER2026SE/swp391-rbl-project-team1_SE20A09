@@ -9,6 +9,7 @@ import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.AccountStatusHistoryService;
 import com.sportvenue.service.AccountStatusService;
 import com.sportvenue.service.AdminUserService;
+import com.sportvenue.service.CustomerNotificationService;
 import com.sportvenue.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +31,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     private final AccountStatusHistoryService accountStatusHistoryService;
     private final AccountStatusService accountStatusService;
     private final NotificationService notificationService;
+    private final CustomerNotificationService customerNotificationService;
 
     private static final String ROLE_CUSTOMER = "Customer";
 
@@ -102,6 +104,17 @@ public class AdminUserServiceImpl implements AdminUserService {
                             + " Bạn có thể gửi kháng cáo trong hệ thống.",
                     NotificationType.ACCOUNT_LOCK,
                     "USER-" + customer.getUserId());
+            try {
+                customerNotificationService.notifyAccountLocked(customer.getUserId(), reason);
+            } catch (Exception ex) {
+                log.warn("Failed to emit account locked notification for customer {}", customer.getUserId(), ex);
+            }
+        } else if (newStatus == AccountStatus.ACTIVE && previousStatus == AccountStatus.BLOCKED) {
+            try {
+                customerNotificationService.notifyAccountUnlocked(customer.getUserId());
+            } catch (Exception ex) {
+                log.warn("Failed to emit account unlocked notification for customer {}", customer.getUserId(), ex);
+            }
         }
         
         log.info("Successfully updated account status to {} for customer id={}", newStatus, id);

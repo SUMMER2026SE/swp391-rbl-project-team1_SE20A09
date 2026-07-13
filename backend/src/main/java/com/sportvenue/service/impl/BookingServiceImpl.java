@@ -43,6 +43,7 @@ import com.sportvenue.service.AdminDashboardService;
 import com.sportvenue.service.BookingService;
 import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.PaymentService;
+import com.sportvenue.service.CustomerNotificationService;
 import com.sportvenue.service.EmailService;
 import com.sportvenue.service.NotificationService;
 import com.sportvenue.util.AfterCommitExecutor;
@@ -121,6 +122,7 @@ public class BookingServiceImpl implements BookingService {
     private final TransactionTemplate transactionTemplate;
     private final EmailService emailService;
     private final NotificationService notificationService;
+    private final CustomerNotificationService customerNotificationService;
     private final AfterCommitExecutor afterCommitExecutor;
     private final AdminDashboardService adminDashboardService;
 
@@ -190,6 +192,12 @@ public class BookingServiceImpl implements BookingService {
         log.info("✅ UC-CUS-01: Customer {} đặt sân {} slot {} ngày {} — bookingId={}, totalPrice={}, serviceFee={}",
                 customer.getEmail(), stadium.getStadiumId(), slot.getSlotId(),
                 request.getReservationDate(), saved.getBookingId(), totalPrice, serviceFee);
+
+        try {
+            customerNotificationService.notifyBookingConfirmed(customer.getUserId(), saved);
+        } catch (Exception ex) {
+            log.warn("Failed to emit booking confirmed notification for booking {}", saved.getBookingId(), ex);
+        }
 
         return toBookingDetailResponse(saved, stadium, slot);
     }
@@ -594,47 +602,10 @@ public class BookingServiceImpl implements BookingService {
     private void sendCancellationEmailAndNotification(Booking booking, String reason, Integer currentUserId) {
         String cancelledBy = booking.getUser().getUserId().equals(currentUserId) ? "Khách hàng" : "Chủ sân";
         try {
-            notificationService.publishNotificationEvent(
-                    booking.getUser().getUserId(),
-                    "Đơn đặt sân bị hủy",
-                    "Đơn đặt sân #" + booking.getBookingId() + " tại " + booking.getStadium().getStadiumName() + " đã bị hủy bởi " + cancelledBy + ".",
-                    com.sportvenue.entity.enums.NotificationType.BOOKING,
-                    String.valueOf(booking.getBookingId())
-            );
+            customerNotificationService.notifyBookingCancelled(booking.getUser().getUserId(), booking, reason);
         } catch (Exception e) {
             log.error("Failed to publish cancellation notification for booking {}", booking.getBookingId(), e);
         }
-        afterCommitExecutor.execute(() -> {
-            try {
-                emailService.sendBookingCancellationEmail(
-                        booking.getUser().getEmail(),
-                        booking.getUser().getFirstName() + " " + booking.getUser().getLastName(),
-                        booking.getStadium().getStadiumName(),
-                        booking.getBookingId(),
-                        reason,
-                        cancelledBy
-                );
-            } catch (Exception e) {
-                log.error("Failed to send cancellation email for booking {}", booking.getBookingId(), e);
-            }
-            if ("Khách hàng".equals(cancelledBy)) {
-                try {
-                    String ownerName = booking.getStadium().getOwner().getUser().getFirstName() + " " + booking.getStadium().getOwner().getUser().getLastName();
-                    String ownerEmail = booking.getStadium().getOwner().getUser().getEmail();
-                    emailService.sendOwnerBookingCancelledEmail(
-                            ownerEmail,
-                            ownerName,
-                            booking.getBookingId(),
-                            booking.getStadium().getStadiumName(),
-                            booking.getReservationDate(),
-                            booking.getSlot().getStartTime(),
-                            reason
-                    );
-                } catch (Exception e) {
-                    log.error("Failed to send owner cancellation email for booking {}", booking.getBookingId(), e);
-                }
-            }
-        });
     }
 
     @Override

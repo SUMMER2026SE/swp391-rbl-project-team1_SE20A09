@@ -15,6 +15,7 @@ import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.ReviewRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.ReviewService;
+import com.sportvenue.service.CustomerNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -34,6 +35,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewRepository reviewRepository;
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
+    private final CustomerNotificationService customerNotificationService;
 
     @Override
     @Transactional
@@ -113,6 +115,13 @@ public class ReviewServiceImpl implements ReviewService {
 
         review.setOwnerResponse(replyMessage);
         review = reviewRepository.save(review);
+
+        try {
+            customerNotificationService.notifyReviewOwnerResponded(review.getUser().getUserId(), review, replyMessage);
+        } catch (Exception ex) {
+            log.warn("Failed to emit review owner responded notification for review {}", reviewId, ex);
+        }
+
         return mapToResponse(review);
     }
 
