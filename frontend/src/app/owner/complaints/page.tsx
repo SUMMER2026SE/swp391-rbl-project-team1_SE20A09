@@ -261,20 +261,53 @@ function OwnerComplaintsPage() {
                 {selectedComplaint.responses && selectedComplaint.responses.length > 0 && (
                   <div className="space-y-4">
                     <h4 className="text-xs font-bold text-muted-foreground uppercase">Lịch sử phản hồi:</h4>
-                    {selectedComplaint.responses.map((res: ComplaintResponse, idx: number) => (
-                      <div
-                        key={idx}
-                        className={`flex flex-col max-w-[85%] rounded-lg p-3 ${
-                          res.from === "Chủ sân"
-                            ? "bg-primary text-primary-foreground ml-auto"
-                            : "bg-card border mr-auto bg-white"
-                        }`}
-                      >
-                        <span className="text-[10px] font-bold opacity-85 mb-1">{res.from}</span>
-                        <p className="text-sm font-medium leading-relaxed">{res.message}</p>
-                        <span className="text-[9px] opacity-75 self-end mt-1">{res.time}</span>
-                      </div>
-                    ))}
+                    {selectedComplaint.responses.map((res: ComplaintResponse, idx: number) => {
+                      const isProposal = res.message.startsWith("Đã đề xuất giải pháp:");
+                      const isObjection = res.message.startsWith("Khách hàng phản đối:");
+
+                      if (isProposal) {
+                        return (
+                          <div key={idx} className="flex justify-center my-2 w-full">
+                            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm max-w-[85%] shadow-sm w-full">
+                              <div className="flex items-center text-orange-700 font-bold gap-1 mb-1">
+                                <AlertCircle className="h-4 w-4" /> Đã đề xuất giải pháp
+                              </div>
+                              <p className="text-orange-800 whitespace-pre-wrap">{res.message.replace("Đã đề xuất giải pháp: ", "")}</p>
+                              <div className="text-[10px] text-orange-600/80 mt-1.5 font-mono text-right">{res.time}</div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      if (isObjection) {
+                        return (
+                          <div key={idx} className="flex justify-center my-2 w-full">
+                            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm max-w-[85%] shadow-sm w-full">
+                              <div className="flex items-center text-purple-700 font-bold gap-1 mb-1">
+                                <AlertCircle className="h-4 w-4" /> Khách hàng phản đối
+                              </div>
+                              <p className="text-purple-800 whitespace-pre-wrap">{res.message.replace("Khách hàng phản đối: ", "")}</p>
+                              <div className="text-[10px] text-purple-600/80 mt-1.5 font-mono text-right">{res.time}</div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`flex flex-col max-w-[85%] rounded-lg p-3 ${
+                            res.from === "Chủ sân"
+                              ? "bg-primary text-primary-foreground ml-auto"
+                              : "bg-card border mr-auto bg-white"
+                          }`}
+                        >
+                          <span className="text-[10px] font-bold opacity-85 mb-1">{res.from}</span>
+                          <p className="text-sm font-medium leading-relaxed">{res.message}</p>
+                          <span className="text-[9px] opacity-75 self-end mt-1">{res.time}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 

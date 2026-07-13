@@ -91,7 +91,7 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khiếu nại ID: " + complaintId));
         
         LocalDateTime now = LocalDateTime.now();
-        complaint.setStatus(ComplaintStatus.PENDING_ADMIN_REVIEW);
+        complaint.setStatus(ComplaintStatus.AWAITING_CUSTOMER_RESPONSE);
         complaint.setResolvedAt(now);
         complaint.setCustomerResponseDeadline(now.plusHours(CUSTOMER_OBJECTION_HOURS));
         
@@ -128,7 +128,7 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
             throw new ForbiddenException("Bạn không có quyền thao tác trên khiếu nại này");
         }
         
-        if (complaint.getStatus() != ComplaintStatus.PENDING_ADMIN_REVIEW) {
+        if (complaint.getStatus() != ComplaintStatus.AWAITING_CUSTOMER_RESPONSE) {
             throw new BadRequestException("Chỉ có thể phản đối trong thời gian chờ xem xét");
         }
         
@@ -219,7 +219,7 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
     public void processCustomerResponseDeadlines() {
         List<Complaint> pendingComplaints = complaintRepository
                 .findByStatusAndCustomerResponseDeadlineBefore(
-                    ComplaintStatus.PENDING_ADMIN_REVIEW, 
+                    ComplaintStatus.AWAITING_CUSTOMER_RESPONSE, 
                     LocalDateTime.now());
         
         for (Complaint complaint : pendingComplaints) {

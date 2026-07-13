@@ -212,7 +212,7 @@ function AdminComplaintsPage() {
         return { label: "Đang xử lý", color: "bg-blue-500 text-white" };
       case "escalated":
         return { label: "Đã chuyển Admin", color: "bg-purple-500 text-white" };
-      case "pending_admin_review":
+      case "awaiting_customer_response":
         return { label: "Chờ xem xét", color: "bg-orange-500 text-white" };
       case "customer_withdrawn":
         return { label: "Khách rút", color: "bg-slate-500 text-white" };
@@ -303,7 +303,7 @@ function AdminComplaintsPage() {
               <SelectItem value="open">Mới nhận</SelectItem>
               <SelectItem value="in_progress">Đang xử lý</SelectItem>
               <SelectItem value="escalated">Đã chuyển Admin</SelectItem>
-              <SelectItem value="pending_admin_review">Chờ xem xét</SelectItem>
+              <SelectItem value="awaiting_customer_response">Chờ xem xét</SelectItem>
               <SelectItem value="resolved">Đã giải quyết</SelectItem>
               <SelectItem value="customer_withdrawn">Khách rút</SelectItem>
             </SelectContent>
@@ -421,7 +421,7 @@ function AdminComplaintsPage() {
                 </div>
                 {selectedComplaint.status !== "resolved" && selectedComplaint.status !== "customer_withdrawn" && (
                   <div className="flex flex-wrap gap-2">
-                    {["pending_admin_review", "escalated"].includes(selectedComplaint.status) && (
+                    {["awaiting_customer_response", "escalated"].includes(selectedComplaint.status) && (
                       <>
                         <Button
                           size="sm"
@@ -505,6 +505,37 @@ function AdminComplaintsPage() {
 
                 {/* Chat replies */}
                 {selectedComplaint.responses.map((resp, idx) => {
+                  const isProposal = resp.message.startsWith("Đã đề xuất giải pháp:");
+                  const isObjection = resp.message.startsWith("Khách hàng phản đối:");
+
+                  if (isProposal) {
+                    return (
+                      <div key={idx} className="flex justify-center my-2 w-full">
+                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm max-w-[85%] shadow-sm w-full">
+                          <div className="flex items-center text-orange-700 font-bold gap-1 mb-1">
+                            <AlertCircle className="h-4 w-4" /> Đã đề xuất giải pháp
+                          </div>
+                          <p className="text-orange-800 whitespace-pre-wrap">{resp.message.replace("Đã đề xuất giải pháp: ", "")}</p>
+                          <div className="text-[10px] text-orange-600/80 mt-1.5 font-mono text-right">{resp.time}</div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (isObjection) {
+                    return (
+                      <div key={idx} className="flex justify-center my-2 w-full">
+                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm max-w-[85%] shadow-sm w-full">
+                          <div className="flex items-center text-purple-700 font-bold gap-1 mb-1">
+                            <AlertCircle className="h-4 w-4" /> Khách hàng phản đối
+                          </div>
+                          <p className="text-purple-800 whitespace-pre-wrap">{resp.message.replace("Khách hàng phản đối: ", "")}</p>
+                          <div className="text-[10px] text-purple-600/80 mt-1.5 font-mono text-right">{resp.time}</div>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   const isAdminMsg = resp.from === "Admin";
                   const isOwnerMsg = resp.from === "Chủ sân";
                   const ownerLabel = `Chủ sân: ${selectedComplaint.ownerName ?? 'N/A'}`;

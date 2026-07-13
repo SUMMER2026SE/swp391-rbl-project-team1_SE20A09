@@ -113,7 +113,7 @@ class ComplaintEscalationServiceImplTest {
 
         escalationService.startOwnerResolution(100, "Hoàn tiền", "owner@example.com");
 
-        assertEquals(ComplaintStatus.PENDING_ADMIN_REVIEW, complaint.getStatus());
+        assertEquals(ComplaintStatus.AWAITING_CUSTOMER_RESPONSE, complaint.getStatus());
         assertNotNull(complaint.getResolvedAt());
         assertNotNull(complaint.getCustomerResponseDeadline());
         
@@ -125,7 +125,7 @@ class ComplaintEscalationServiceImplTest {
 
     @Test
     void customerObjectToResolution_Success() {
-        complaint.setStatus(ComplaintStatus.PENDING_ADMIN_REVIEW);
+        complaint.setStatus(ComplaintStatus.AWAITING_CUSTOMER_RESPONSE);
         complaint.setCustomerResponseDeadline(LocalDateTime.now().plusHours(24));
         when(complaintRepository.findById(100)).thenReturn(Optional.of(complaint));
 
