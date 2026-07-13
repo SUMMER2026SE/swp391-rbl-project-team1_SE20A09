@@ -65,6 +65,7 @@ export default function AdminLayout({
     if (path.startsWith("/admin/complex-approvals")) return { title: "Duyệt Tổ hợp", subtitle: "Phê duyệt Tổ hợp sân" };
     if (path.startsWith("/admin/sport-categories")) return { title: "Danh mục", subtitle: "Quản lý danh mục môn thể thao" };
     if (path.startsWith("/admin/complaints")) return { title: "Khiếu nại", subtitle: "Xử lý khiếu nại hệ thống" };
+    if (path.startsWith("/admin/moderation-analytics")) return { title: "Thống kê vi phạm", subtitle: "Theo dõi Report và Complaint trong hệ thống" };
     return { title: "Quản trị", subtitle: "Hệ thống SportsBook" };
   };
 

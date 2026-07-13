@@ -8,6 +8,7 @@ import {
   MapPin,
   LayoutList,
   AlertCircle,
+  BarChart3,
   TrendingUp,
   CalendarRange,
   X,
@@ -29,6 +30,7 @@ export function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
     { id: 'complexes', href: '/admin/complex-approvals', label: 'Tổ hợp', icon: MapPin },
     { id: 'categories', href: '/admin/sport-categories', label: 'Danh mục', icon: LayoutList },
     { id: 'complaints', href: '/admin/complaints', label: 'Khiếu nại', icon: AlertCircle },
+    { id: 'moderation-analytics', href: '/admin/moderation-analytics', label: 'Thống kê vi phạm', icon: BarChart3 },
     { id: 'refund-exceptions', href: '/admin/refund-exceptions', label: 'Ngoại lệ hoàn tiền', icon: HelpCircle },
   ];
 
