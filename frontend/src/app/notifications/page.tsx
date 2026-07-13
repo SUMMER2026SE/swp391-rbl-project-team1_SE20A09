@@ -1,149 +1,101 @@
-﻿'use client'
+"use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Bell, CheckCheck, Loader2 } from "lucide-react";
 import {
-  Bell,
-  CheckCheck,
-  Calendar,
-  DollarSign,
-  MessageSquare,
-  AlertCircle,
-  Trash2,
-} from "lucide-react";
+  useCustomerNotifications,
+  useCustomerUnreadCount,
+  useMarkAsRead,
+  useMarkAllAsRead,
+} from "@/hooks/use-customer-notifications";
+import { CustomerNotificationItem } from "@/components/notifications/CustomerNotificationItem";
+import { NotificationType } from "@/types/notification";
+
+function getNotificationRoute(type: NotificationType, resourceId?: string): string {
+  switch (type) {
+    case NotificationType.BOOKING_CONFIRMED:
+    case NotificationType.BOOKING_CANCELLED:
+    case NotificationType.PAYMENT_RECEIVED:
+    case NotificationType.PAYMENT_FAILED:
+    case NotificationType.REFUND_PROCESSED:
+    case NotificationType.REFUND_EXCEPTION_DECISION:
+      return resourceId ? `/booking/${resourceId}` : "/bookings";
+
+    case NotificationType.COMPLAINT_ACKNOWLEDGED:
+    case NotificationType.COMPLAINT_OWNER_REPLIED:
+    case NotificationType.COMPLAINT_RESOLVED:
+    case NotificationType.COMPLAINT_ESCALATED:
+      return resourceId ? `/complaints/${resourceId}` : "/complaints";
+
+    case NotificationType.REVIEW_REMINDER:
+    case NotificationType.REVIEW_OWNER_RESPONDED:
+      return "/bookings";
+
+    case NotificationType.MATCH_REQUEST_RECEIVED:
+    case NotificationType.MATCH_REQUEST_APPROVED:
+    case NotificationType.MATCH_REQUEST_REJECTED:
+    case NotificationType.MATCH_CANCELLED:
+      return resourceId ? `/community?matchId=${resourceId}` : "/community";
+
+    case NotificationType.UPGRADE_APPROVED:
+      return "/owner";
+    case NotificationType.UPGRADE_REJECTED:
+      return "/profile";
+
+    case NotificationType.ACCOUNT_LOCKED:
+    case NotificationType.ACCOUNT_UNLOCKED:
+      return "/profile";
+
+    default:
+      return "";
+  }
+}
 
 function NotificationsPage() {
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      type: "booking",
-      icon: <Calendar className="h-5 w-5" />,
-      title: "Đặt sân thành công",
-      message: "Đơn đặt sân BK001234 đã được xác nhận. Hẹn gặp bạn vào 22/05/2024 lúc 18:00.",
-      time: "5 phút trước",
-      read: false,
-    },
-    {
-      id: 2,
-      type: "payment",
-      icon: <DollarSign className="h-5 w-5" />,
-      title: "Thanh toán thành công",
-      message: "Đã thanh toán 570,000đ cho đơn BK001234 qua VNPay.",
-      time: "10 phút trước",
-      read: false,
-    },
-    {
-      id: 3,
-      type: "message",
-      icon: <MessageSquare className="h-5 w-5" />,
-      title: "Tin nhắn mới",
-      message: "Nguyễn Văn A đã gửi tin nhắn cho bạn.",
-      time: "30 phút trước",
-      read: false,
-    },
-    {
-      id: 4,
-      type: "reminder",
-      icon: <Bell className="h-5 w-5" />,
-      title: "Nhắc nhở đá sân",
-      message: "Còn 2 giờ nữa là đến giờ đá sân tại Sân bóng Thành Công.",
-      time: "1 giờ trước",
-      read: true,
-    },
-    {
-      id: 5,
-      type: "system",
-      icon: <AlertCircle className="h-5 w-5" />,
-      title: "Chính sách hoàn tiền cập nhật",
-      message: "Chúng tôi đã cập nhật chính sách hoàn tiền. Xem chi tiết tại đây.",
-      time: "2 giờ trước",
-      read: true,
-    },
-  ]);
+  const router = useRouter();
+  const [tab, setTab] = useState<"all" | "unread">("all");
+  const [page, setPage] = useState(0);
 
-  const markAsRead = (id: number) => {
-    setNotifications(
-      notifications.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
-  };
-
-  const markAllAsRead = () => {
-    setNotifications(notifications.map((n) => ({ ...n, read: true })));
-  };
-
-  const deleteNotification = (id: number) => {
-    setNotifications(notifications.filter((n) => n.id !== id));
-  };
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
-
-  const NotificationItem = ({ notification }: { notification: typeof notifications[0] }) => (
-    <Card
-      className={`mb-3 ${
-        notification.read ? "bg-background" : "bg-primary/5 border-primary/20"
-      }`}
-    >
-      <CardContent className="p-4">
-        <div className="flex gap-4">
-          <div
-            className={`${
-              notification.read ? "text-muted-foreground" : "text-primary"
-            } mt-1`}
-          >
-            {notification.icon}
-          </div>
-
-          <div className="flex-1">
-            <div className="flex items-start justify-between mb-1">
-              <h4 className="text-sm">{notification.title}</h4>
-              <span className="text-xs text-muted-foreground">
-                {notification.time}
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground mb-3">
-              {notification.message}
-            </p>
-
-            <div className="flex gap-2">
-              {!notification.read && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => markAsRead(notification.id)}
-                >
-                  <CheckCheck className="h-4 w-4 mr-1" />
-                  Đánh dấu đã đọc
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => deleteNotification(notification.id)}
-              >
-                <Trash2 className="h-4 w-4 mr-1" />
-                Xóa
-              </Button>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+  const { data: notificationsData, isLoading } = useCustomerNotifications(
+    page,
+    20,
+    tab === "unread" ? true : undefined
   );
+  const { data: unreadCount = 0 } = useCustomerUnreadCount();
+
+  const markAsRead = useMarkAsRead();
+  const markAllAsRead = useMarkAllAsRead();
+
+  const handleMarkAllAsRead = () => {
+    markAllAsRead.mutate();
+  };
+
+  const handleNotificationClick = (id: number, resourceId?: string) => {
+    const allNotifications = notificationsData?.content ?? [];
+    const notification = allNotifications.find((n) => n.notificationId === id);
+    markAsRead.mutate([id]);
+    if (notification) {
+      const route = getNotificationRoute(notification.notificationType, resourceId);
+      if (route) router.push(route);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen flex flex-col bg-background">
       <Header />
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="flex-1 container mx-auto px-4 py-8">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-3xl mb-2">Thông báo</h1>
+              <h1 className="text-3xl font-bold mb-2">Thông báo</h1>
               {unreadCount > 0 && (
                 <p className="text-muted-foreground">
                   Bạn có {unreadCount} thông báo chưa đọc
@@ -151,73 +103,116 @@ function NotificationsPage() {
               )}
             </div>
             {unreadCount > 0 && (
-              <Button variant="outline" onClick={markAllAsRead}>
+              <Button variant="outline" onClick={handleMarkAllAsRead} disabled={markAllAsRead.isPending}>
                 <CheckCheck className="h-4 w-4 mr-2" />
                 Đánh dấu tất cả đã đọc
               </Button>
             )}
           </div>
 
-          <Tabs defaultValue="all">
-            <TabsList className="mb-6">
-              <TabsTrigger value="all">
-                Tất cả
-                {unreadCount > 0 && (
-                  <Badge className="ml-2 bg-primary text-xs">
-                    {unreadCount}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="unread">Chưa đọc</TabsTrigger>
-              <TabsTrigger value="booking">Đặt sân</TabsTrigger>
-              <TabsTrigger value="message">Tin nhắn</TabsTrigger>
-              <TabsTrigger value="system">Hệ thống</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="all">
-              {notifications.map((notification) => (
-                <NotificationItem key={notification.id} notification={notification} />
-              ))}
-            </TabsContent>
-
-            <TabsContent value="unread">
-              {notifications
-                .filter((n) => !n.read)
-                .map((notification) => (
-                  <NotificationItem key={notification.id} notification={notification} />
-                ))}
-              {notifications.filter((n) => !n.read).length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Bell className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>Không có thông báo chưa đọc</p>
+          <Card className="shadow-sm">
+            <CardContent className="p-0">
+              <Tabs
+                defaultValue="all"
+                value={tab}
+                onValueChange={(val) => {
+                  setTab(val as "all" | "unread");
+                  setPage(0);
+                }}
+              >
+                <div className="border-b px-4 py-2">
+                  <TabsList className="bg-transparent">
+                    <TabsTrigger
+                      value="all"
+                      className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4"
+                    >
+                      Tất cả
+                      {unreadCount > 0 && (
+                        <Badge className="ml-2 bg-primary/10 text-primary hover:bg-primary/20">
+                          {unreadCount}
+                        </Badge>
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="unread"
+                      className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4"
+                    >
+                      Chưa đọc
+                    </TabsTrigger>
+                  </TabsList>
                 </div>
-              )}
-            </TabsContent>
 
-            <TabsContent value="booking">
-              {notifications
-                .filter((n) => n.type === "booking" || n.type === "payment" || n.type === "reminder")
-                .map((notification) => (
-                  <NotificationItem key={notification.id} notification={notification} />
-                ))}
-            </TabsContent>
+                <TabsContent value="all" className="m-0 border-none p-0 outline-none">
+                  {isLoading ? (
+                    <div className="flex justify-center p-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : notificationsData?.content.length ? (
+                    <div className="flex flex-col">
+                      {notificationsData.content.map((notification) => (
+                        <CustomerNotificationItem
+                          key={notification.notificationId}
+                          notification={notification}
+                          onClick={handleNotificationClick}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-16 text-muted-foreground">
+                      <Bell className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
+                      <p>Không có thông báo nào</p>
+                    </div>
+                  )}
+                </TabsContent>
 
-            <TabsContent value="message">
-              {notifications
-                .filter((n) => n.type === "message")
-                .map((notification) => (
-                  <NotificationItem key={notification.id} notification={notification} />
-                ))}
-            </TabsContent>
+                <TabsContent value="unread" className="m-0 border-none p-0 outline-none">
+                  {isLoading ? (
+                    <div className="flex justify-center p-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : notificationsData?.content.length ? (
+                    <div className="flex flex-col">
+                      {notificationsData.content.map((notification) => (
+                        <CustomerNotificationItem
+                          key={notification.notificationId}
+                          notification={notification}
+                          onClick={handleNotificationClick}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-16 text-muted-foreground">
+                      <CheckCheck className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
+                      <p>Bạn đã đọc tất cả thông báo</p>
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
 
-            <TabsContent value="system">
-              {notifications
-                .filter((n) => n.type === "system")
-                .map((notification) => (
-                  <NotificationItem key={notification.id} notification={notification} />
-                ))}
-            </TabsContent>
-          </Tabs>
+          {/* Pagination */}
+          {notificationsData && notificationsData.totalPages > 1 && (
+            <div className="flex justify-center items-center mt-6 gap-3">
+              <Button
+                variant="outline"
+                disabled={page === 0}
+                onClick={() => setPage(page - 1)}
+              >
+                Trang trước
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Trang {page + 1} / {notificationsData.totalPages}
+              </span>
+              <Button
+                variant="outline"
+                disabled={page >= notificationsData.totalPages - 1}
+                onClick={() => setPage(page + 1)}
+              >
+                Trang sau
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
