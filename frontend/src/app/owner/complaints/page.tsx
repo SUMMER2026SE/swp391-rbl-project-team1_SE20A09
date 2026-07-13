@@ -46,6 +46,7 @@ type Complaint = {
   resolvedDate?: string;
   resolution?: string;
   bookingId?: number;
+  escalationReason?: string;
 };
 
 function OwnerComplaintsPage() {
@@ -246,6 +247,15 @@ function OwnerComplaintsPage() {
                   </div>
                   <p className="text-sm font-medium">{selectedComplaint.description}</p>
                 </div>
+
+                {selectedComplaint.escalationReason && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 space-y-2 shadow-sm">
+                    <div className="flex items-center text-xs text-purple-700 font-bold gap-1">
+                      <AlertCircle className="h-3.5 w-3.5" /> Lý do chuyển Admin
+                    </div>
+                    <p className="text-sm font-medium text-purple-800">{selectedComplaint.escalationReason}</p>
+                  </div>
+                )}
 
                 {/* Chat replies */}
                 {selectedComplaint.responses && selectedComplaint.responses.length > 0 && (

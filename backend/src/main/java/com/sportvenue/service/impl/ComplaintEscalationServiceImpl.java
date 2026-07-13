@@ -18,7 +18,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sportvenue.dto.response.ComplaintResponse;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -32,6 +36,9 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
     private final NotificationService notificationService;
     private final EmailService emailService;
     private final AfterCommitExecutor afterCommitExecutor;
+    private final ObjectMapper objectMapper;
+    
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     
     // SLA: Owner must respond within 24 hours
     private static final int OWNER_RESPONSE_SLA_HOURS = 24;
@@ -128,6 +135,15 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
         if (LocalDateTime.now().isAfter(complaint.getCustomerResponseDeadline())) {
             throw new BadRequestException("Đã hết thời hạn phản đối (48h)");
         }
+        
+        List<ComplaintResponse.ResponseItem> items = deserializeResponses(complaint.getResponse());
+        items.add(ComplaintResponse.ResponseItem.builder()
+                .from("Khách hàng")
+                .message("Khách hàng phản đối: " + objectionReason)
+                .time(LocalDateTime.now().format(FORMATTER))
+                .build());
+        complaint.setResponse(serializeResponses(items));
+        complaintRepository.save(complaint);
         
         // Auto-escalate to admin
         escalateToAdmin(complaintId, "Khách hàng phản đối: " + objectionReason, customerEmail);
@@ -261,4 +277,24 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
         }
     }
     
+    private List<ComplaintResponse.ResponseItem> deserializeResponses(String json) {
+        if (json == null || json.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<ComplaintResponse.ResponseItem>>() { });
+        } catch (Exception e) {
+            log.warn("Failed to deserialize complaint response JSON: {}", json, e);
+            return new ArrayList<>();
+        }
+    }
+
+    private String serializeResponses(List<ComplaintResponse.ResponseItem> list) {
+        try {
+            return objectMapper.writeValueAsString(list);
+        } catch (Exception e) {
+            log.error("Failed to serialize complaint response list to JSON", e);
+            return "[]";
+        }
+    }
 }

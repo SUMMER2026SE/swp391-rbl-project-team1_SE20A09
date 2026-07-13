@@ -52,6 +52,7 @@ type Complaint = {
   customerName: string;
   customerEmail: string;
   responses: ResponseItem[];
+  escalationReason?: string;
 };
 
 function AdminComplaintsPage() {
@@ -490,6 +491,17 @@ function AdminComplaintsPage() {
                     <p className="text-foreground leading-relaxed">{selectedComplaint.description}</p>
                   </div>
                 </div>
+
+                {selectedComplaint.escalationReason && (
+                  <div className="flex justify-center my-2">
+                    <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 max-w-[85%] shadow-sm w-full">
+                      <div className="flex items-center text-xs text-purple-700 font-bold gap-1 mb-1">
+                        <AlertCircle className="h-3.5 w-3.5" /> Lý do chuyển Admin (từ hệ thống/khách hàng)
+                      </div>
+                      <p className="text-sm font-medium text-purple-800">{selectedComplaint.escalationReason}</p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Chat replies */}
                 {selectedComplaint.responses.map((resp, idx) => {
