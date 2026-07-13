@@ -98,7 +98,8 @@ public class AdminUserServiceImpl implements AdminUserService {
                     customer.getUserId(),
                     "Tài khoản đã bị khóa",
                     "Tài khoản của bạn đã bị Admin khóa. Lý do: "
-                            + (reason == null || reason.isBlank() ? "Không có ghi chú." : reason),
+                            + (reason == null || reason.isBlank() ? "Không có ghi chú." : reason)
+                            + " Bạn có thể gửi kháng cáo trong hệ thống.",
                     NotificationType.ACCOUNT_LOCK,
                     "USER-" + customer.getUserId());
         }
