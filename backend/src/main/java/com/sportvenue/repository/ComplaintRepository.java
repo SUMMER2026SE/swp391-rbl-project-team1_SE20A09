@@ -134,6 +134,7 @@ public interface ComplaintRepository extends JpaRepository<Complaint, Integer> {
                      c.booking.stadium.owner.user.lastName,
                      c.booking.stadium.owner.user.email,
                      c.booking.stadium.owner.user.role.roleName
+            ORDER BY COUNT(c) DESC
             """)
     List<Object[]> findTopComplainedUsersForModeration(
             @Param("start") LocalDateTime start,

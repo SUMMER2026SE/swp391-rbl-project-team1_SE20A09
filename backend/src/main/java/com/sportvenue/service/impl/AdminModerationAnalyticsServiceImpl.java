@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -32,6 +33,7 @@ public class AdminModerationAnalyticsServiceImpl implements AdminModerationAnaly
 
     private static final int DEFAULT_TOP_LIMIT = 10;
     private static final int MAX_TOP_LIMIT = 50;
+    private static final long MAX_TREND_DAYS = 366;
     private static final String SOURCE_REPORT = "REPORT";
     private static final String SOURCE_COMPLAINT = "COMPLAINT";
     private static final String ROLE_CUSTOMER = "Customer";
@@ -53,6 +55,9 @@ public class AdminModerationAnalyticsServiceImpl implements AdminModerationAnaly
         LocalDate startDate = from != null ? from : endDate.minusDays(29);
         if (startDate.isAfter(endDate)) {
             throw new BadRequestException("from must be before or equal to to.");
+        }
+        if (ChronoUnit.DAYS.between(startDate, endDate) + 1 > MAX_TREND_DAYS) {
+            throw new BadRequestException("Date range must not exceed 366 days.");
         }
 
         String normalizedRole = normalizeRole(role);

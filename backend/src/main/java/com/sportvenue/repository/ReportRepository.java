@@ -119,6 +119,7 @@ public interface ReportRepository extends JpaRepository<Report, Integer> {
             AND (:category IS NULL OR r.category = :category)
             GROUP BY r.reportee.userId, r.reportee.firstName, r.reportee.lastName,
                      r.reportee.email, r.reportee.role.roleName
+            ORDER BY COUNT(r) DESC
             """)
     List<Object[]> findTopReportedUsersForModeration(
             @Param("start") LocalDateTime start,
