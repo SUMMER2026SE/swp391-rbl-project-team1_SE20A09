@@ -223,6 +223,8 @@ public class AdminUserServiceImplTest {
         
         assertEquals(AccountStatus.BLOCKED, customerUser.getAccountStatus());
         org.mockito.Mockito.verify(userRepository).save(customerUser);
+        verify(accountStatusHistoryService).recordStatusChange(
+                customerUser, 1, AccountStatus.ACTIVE, AccountStatus.BLOCKED, null);
     }
 
     @Test

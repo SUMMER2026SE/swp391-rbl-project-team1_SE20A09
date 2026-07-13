@@ -143,6 +143,8 @@ class AppealServiceImplTest {
         assertEquals(AccountStatus.ACTIVE, lockedUser.getAccountStatus());
         assertNull(lockedUser.getLockReason());
         verify(userRepository).save(lockedUser);
+        verify(accountStatusHistoryService).recordStatusChange(
+                lockedUser, 1, AccountStatus.BLOCKED, AccountStatus.ACTIVE, "Accepted");
         verify(notificationService).createNotification(
                 eq(10),
                 eq("Kháng cáo đã được chấp nhận"),

@@ -9,7 +9,7 @@ import type { ApiResponse } from "@/types/common";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type NotificationType = "OWNER_APPROVAL" | "STADIUM_APPROVAL" | "COMPLAINT" | string;
+type NotificationType = "OWNER_APPROVAL" | "STADIUM_APPROVAL" | "COMPLAINT" | "REPORT" | string;
 
 interface AdminNotification {
   id: string;
@@ -75,6 +75,7 @@ function getHref(type: NotificationType): string {
   if (type === "OWNER_APPROVAL") return "/admin/users?tab=owners&ownerTab=approvals";
   if (type === "STADIUM_APPROVAL") return "/admin/stadium-approvals";
   if (type === "APPEAL") return "/admin/appeals";
+  if (type === "REPORT") return "/admin/moderation-analytics";
   if (type === "BOOKING") return "/admin/bookings";
   return "/admin/complaints";
 }
@@ -90,6 +91,8 @@ function TypeIcon({ type }: { type: NotificationType }) {
     return <Building2 className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />;
   if (type === "STADIUM_APPROVAL")
     return <MapPin className="h-4 w-4 text-purple-500 shrink-0 mt-0.5" />;
+  if (type === "REPORT")
+    return <AlertOctagon className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
   return <AlertOctagon className="h-4 w-4 text-rose-500 shrink-0 mt-0.5" />;
 }
 

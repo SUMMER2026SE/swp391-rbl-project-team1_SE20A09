@@ -91,6 +91,7 @@ export default function OwnerNotificationsPage() {
       case NotificationType.PAYMENT: return <CreditCard className="h-5 w-5 text-green-500" />
       case NotificationType.REVIEW: return <Star className="h-5 w-5 text-yellow-500" />
       case NotificationType.COMPLAINT: return <MessageSquare className="h-5 w-5 text-red-500" />
+      case NotificationType.REPORT: return <AlertTriangle className="h-5 w-5 text-amber-500" />
       case NotificationType.ACCOUNT_LOCK:
       case NotificationType.APPEAL:
         return <AlertTriangle className="h-5 w-5 text-red-500" />
@@ -106,6 +107,7 @@ export default function OwnerNotificationsPage() {
       case NotificationType.PAYMENT: return `/owner/revenue`
       case NotificationType.REVIEW: return `/owner/venues`
       case NotificationType.COMPLAINT: return `/owner/dashboard`
+      case NotificationType.REPORT: return `/owner/notifications`
       case NotificationType.ACCOUNT_LOCK:
       case NotificationType.APPEAL:
         return `/appeals`

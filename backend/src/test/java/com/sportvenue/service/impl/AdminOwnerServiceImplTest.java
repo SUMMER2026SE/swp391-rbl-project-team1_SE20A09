@@ -131,12 +131,14 @@ class AdminOwnerServiceImplTest {
         when(ownerRepository.findById(ownerId)).thenReturn(Optional.of(owner));
         when(stadiumRepository.findByOwnerOwnerId(ownerId)).thenReturn(List.of(stadium));
 
-        adminOwnerService.lockUnlockOwner(ownerId, false, "Vi phạm quy định");
+        adminOwnerService.lockUnlockOwner(ownerId, false, "Vi phạm quy định", 9);
 
         assertEquals(AccountStatus.BLOCKED, user.getAccountStatus());
         assertEquals("Vi phạm quy định", user.getLockReason());
         assertEquals(StadiumStatus.MAINTENANCE, stadium.getStadiumStatus());
         verify(stadiumRepository).saveAll(anyList());
+        verify(accountStatusHistoryService).recordStatusChange(
+                user, 9, AccountStatus.ACTIVE, AccountStatus.BLOCKED, "Vi phạm quy định");
     }
 
     @Test

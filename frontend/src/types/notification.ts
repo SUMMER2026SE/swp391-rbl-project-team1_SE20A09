@@ -11,6 +11,7 @@ export enum NotificationType {
   STADIUM_APPROVAL = 'STADIUM_APPROVAL',
   ACCOUNT_LOCK = 'ACCOUNT_LOCK',
   APPEAL = 'APPEAL',
+  REPORT = 'REPORT',
 }
 
 export interface NotificationResponse {
