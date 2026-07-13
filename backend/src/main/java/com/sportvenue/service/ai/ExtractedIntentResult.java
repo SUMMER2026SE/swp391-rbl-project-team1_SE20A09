@@ -23,6 +23,7 @@ import lombok.NoArgsConstructor;
 public class ExtractedIntentResult {
 
     private String intent = "unknown";
+    private Double confidence = 1.0;
     private String message = "";
     private JsonNode params;
 

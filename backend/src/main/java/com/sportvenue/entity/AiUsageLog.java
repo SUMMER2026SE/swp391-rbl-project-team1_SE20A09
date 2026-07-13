@@ -65,6 +65,33 @@ public class AiUsageLog {
     @Column(name = "action_result", columnDefinition = "TEXT")
     private String actionResult;
 
+    @Column(name = "prompt_version", length = 20)
+    private String promptVersion;
+
+    @Column(name = "confidence")
+    private Double confidence;
+
+    @Column(name = "rule_override")
+    private Boolean ruleOverride;
+
+    @Column(name = "validation_result", length = 50)
+    private String validationResult;
+
+    @Column(name = "error_reason")
+    private String errorReason;
+
+    @Column(name = "processing_time_ai_ms")
+    private Long processingTimeAiMs;
+
+    @Column(name = "processing_time_handler_ms")
+    private Long processingTimeHandlerMs;
+
+    @Column(name = "redis_hit")
+    private Boolean redisHit;
+
+    @Column(name = "handler_name", length = 100)
+    private String handlerName;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

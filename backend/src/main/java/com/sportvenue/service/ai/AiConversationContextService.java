@@ -48,6 +48,15 @@ public class AiConversationContextService {
         private List<Integer> lastShownSlotIds;
         private Integer currentStadiumId;
         private PendingAction pendingAction;
+        
+        // Expanded context
+        private String currentIntent;
+        private String currentSport;
+        private String currentDistrict;
+        private String currentDate;
+        private String currentTime;
+        private java.util.Map<String, Object> bookingDraft;
+        private java.util.Map<String, Object> joinMatchDraft;
     }
 
     public void saveLastShownStadiums(String conversationKey, List<Integer> stadiumIds) {
@@ -152,6 +161,31 @@ public class AiConversationContextService {
         }
         ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
         ctx.setPendingAction(null);
+        save(conversationKey, ctx);
+    }
+
+    // Expanded context methods
+    public void saveCurrentFilters(String conversationKey, String sport, String district, String date, String time) {
+        if (conversationKey == null) {
+            return;
+        }
+        ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
+        if (sport != null) ctx.setCurrentSport(sport);
+        if (district != null) ctx.setCurrentDistrict(district);
+        if (date != null) ctx.setCurrentDate(date);
+        if (time != null) ctx.setCurrentTime(time);
+        save(conversationKey, ctx);
+    }
+
+    public Optional<ConversationContext> getContext(String conversationKey) {
+        if (conversationKey == null) return Optional.empty();
+        return load(conversationKey);
+    }
+    
+    public void saveBookingDraft(String conversationKey, java.util.Map<String, Object> draft) {
+        if (conversationKey == null) return;
+        ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
+        ctx.setBookingDraft(draft);
         save(conversationKey, ctx);
     }
 

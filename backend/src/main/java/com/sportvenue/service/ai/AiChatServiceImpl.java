@@ -10,6 +10,11 @@ import com.sportvenue.service.ai.handler.MatchRequestHandler;
 import com.sportvenue.service.ai.handler.PolicyHandler;
 import com.sportvenue.service.ai.handler.SlotAvailabilityHandler;
 import com.sportvenue.service.ai.handler.StadiumSearchHandler;
+import com.sportvenue.service.ai.handler.MyBookingsHandler;
+import com.sportvenue.service.ai.handler.BookingStatusHandler;
+import com.sportvenue.service.ai.handler.CancelBookingHandler;
+import com.sportvenue.service.ai.handler.GetPriceHandler;
+import com.sportvenue.service.ai.handler.RecommendTimeHandler;
 import com.sportvenue.entity.AiUsageLog;
 import com.sportvenue.repository.AiUsageLogRepository;
 import lombok.RequiredArgsConstructor;
@@ -44,7 +49,14 @@ public class AiChatServiceImpl implements AiChatService {
     private final PolicyHandler policyHandler;
     private final BookingHandler bookingHandler;
     private final JoinMatchHandler joinMatchHandler;
+    private final MyBookingsHandler myBookingsHandler;
+    private final BookingStatusHandler bookingStatusHandler;
+    private final CancelBookingHandler cancelBookingHandler;
+    private final GetPriceHandler getPriceHandler;
+    private final RecommendTimeHandler recommendTimeHandler;
     private final AiUsageLogRepository aiUsageLogRepository;
+    private final ParamNormalizer paramNormalizer;
+    private final IntentValidator intentValidator;
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @Value("${app.ai.model:llama-3.3-70b-versatile}")
@@ -60,6 +72,7 @@ public class AiChatServiceImpl implements AiChatService {
     // — README.md trong thư mục đó giải thích lý do từng đoạn tồn tại. Sửa câu chữ prompt thì
     // sửa file .md, không sửa ở đây.
     private static final String CUSTOMER_SYSTEM_PROMPT = PromptLoader.load("prompts/customer/system-prompt.md");
+    private static final String FEW_SHOT_EXAMPLES = PromptLoader.load("prompts/customer/few-shot-examples.md");
     private static final String FAQ_PROMPT = PromptLoader.load("prompts/customer/faq.md");
     private static final String GUEST_SYSTEM_PROMPT_SUFFIX = PromptLoader.load("prompts/customer/guest-suffix.md");
     private static final String LOGGED_IN_SYSTEM_PROMPT_SUFFIX = PromptLoader.load("prompts/customer/logged-in-suffix.md");
@@ -90,18 +103,55 @@ public class AiChatServiceImpl implements AiChatService {
             return AiChatTurnResponse.messageOnly(errorMessage, "unknown");
         }
 
+        boolean ruleOverride = false;
+        String validationStatus = "PASS";
+        String errorReason = null;
+        long handlerStartTime;
+        long processingTimeHandlerMs = 0;
+        
         try {
             intentResult = objectMapper.readValue(result.text(), ExtractedIntentResult.class);
-            log.info("Intent nhận diện: '{}' -> '{}'", request.getMessage(), intentResult.getIntent());
+            log.info("Intent nhận diện: '{}' -> '{}', confidence: {}", request.getMessage(), intentResult.getIntent(), intentResult.getConfidence());
 
-            applyRuleBasedOverrides(intentResult, request.getMessage());
+            // Normalize params
+            intentResult = paramNormalizer.normalize(intentResult);
+            
+            // Confidence check
+            if (intentResult.getConfidence() < 0.5) {
+                log.info("Low confidence ({} < 0.5), overriding to need_more_info", intentResult.getConfidence());
+                intentResult.setIntent("need_more_info");
+                intentResult.setMessage("Mình chưa rõ ý bạn lắm, bạn có thể nói cụ thể hơn được không?");
+                ruleOverride = true;
+                validationStatus = "LOW_CONFIDENCE";
+            }
+
+            if (!ruleOverride) {
+                boolean overrideResult = applyRuleBasedOverrides(intentResult, request.getMessage());
+                if (overrideResult) {
+                    ruleOverride = true;
+                    validationStatus = "RULE_OVERRIDE";
+                }
+            }
+            
+            // Validate
+            IntentValidator.ValidationResult validationResult = intentValidator.validate(intentResult);
+            validationStatus = validationResult.validationStatus();
+            errorReason = validationResult.errorReason();
+            if (!validationResult.valid()) {
+                intentResult = validationResult.overriddenResult();
+                ruleOverride = true;
+            }
 
         } catch (Exception e) {
             log.warn("Không parse được JSON intent từ Groq, dùng fallback unknown", e);
             intentResult = ExtractedIntentResult.unknown();
+            validationStatus = "PARSE_ERROR";
+            errorReason = e.getMessage();
         }
 
+        handlerStartTime = System.currentTimeMillis();
         AiChatTurnResponse response = dispatch(intentResult, conversationKey, userId);
+        processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
 
         // Lưu AiUsageLog (lưu sau khi dispatch để lấy được intent cuối cùng có thể đã bị handler thay đổi do lỗi)
         try {
@@ -116,6 +166,14 @@ public class AiChatServiceImpl implements AiChatService {
                     .rawLlmResponse(result.text())
                     .parsedIntent(intentResult.getIntent())
                     .actionResult(objectMapper.writeValueAsString(response))
+                    .promptVersion("1.0") // Thể hiện version prompt sau khi refactor
+                    .confidence(intentResult.getConfidence())
+                    .ruleOverride(ruleOverride)
+                    .validationResult(validationStatus)
+                    .errorReason(errorReason)
+                    .processingTimeAiMs(latencyMs)
+                    .processingTimeHandlerMs(processingTimeHandlerMs)
+                    // TODO: cập nhật redisHit từ context (sẽ implement trong phase 4)
                     .build();
             aiUsageLogRepository.save(usageLog);
         } catch (Exception e) {
@@ -135,14 +193,20 @@ public class AiChatServiceImpl implements AiChatService {
             case "get_policy" -> policyHandler.handle(result.getParams(), message);
             case "create_booking" -> bookingHandler.handle(result.getParams(), message, conversationKey, userId);
             case "join_match" -> joinMatchHandler.handle(result.getParams(), message, conversationKey, userId);
+            case "my_bookings" -> myBookingsHandler.handle(result.getParams(), message, userId);
+            case "booking_status" -> bookingStatusHandler.handle(result.getParams(), message, userId);
+            case "cancel_booking" -> cancelBookingHandler.handle(result.getParams(), message, userId);
+            case "get_price" -> getPriceHandler.handle(result.getParams(), message);
+            case "recommend_time" -> recommendTimeHandler.handle(result.getParams(), message);
             case "need_more_info", "out_of_scope" ->
                     AiChatTurnResponse.messageOnly(message.isBlank() ? FALLBACK_MESSAGE : message, intent);
             default -> AiChatTurnResponse.messageOnly(FALLBACK_MESSAGE, "unknown");
         };
     }
 
-    private void applyRuleBasedOverrides(ExtractedIntentResult intentResult, String message) {
+    private boolean applyRuleBasedOverrides(ExtractedIntentResult intentResult, String message) {
         String msgLower = message.toLowerCase(Locale.ROOT);
+        boolean overridden = false;
         
         if ("search_stadiums".equals(intentResult.getIntent()) || "get_slots".equals(intentResult.getIntent())) {
             boolean hasBookingAction = msgLower.contains("đặt") || msgLower.contains("book") || msgLower.contains("giữ chỗ");
@@ -151,6 +215,7 @@ public class AiChatServiceImpl implements AiChatService {
             if (hasBookingAction && hasTime) {
                 log.warn("Rule-based check: Ghi đè intent từ {} thành create_booking do phát hiện keyword đặt sân + thời gian.", intentResult.getIntent());
                 intentResult.setIntent("create_booking");
+                overridden = true;
 
                 com.fasterxml.jackson.databind.node.ObjectNode newParams = objectMapper.createObjectNode();
                 if (intentResult.getParams() != null && intentResult.getParams().isObject()) {
@@ -168,6 +233,7 @@ public class AiChatServiceImpl implements AiChatService {
             if (hasJoinAction && hasTarget) {
                 log.warn("Rule-based check: Ghi đè intent từ {} thành join_match do phát hiện keyword tham gia + mục tiêu.", intentResult.getIntent());
                 intentResult.setIntent("join_match");
+                overridden = true;
                 
                 com.fasterxml.jackson.databind.node.ObjectNode newParams = objectMapper.createObjectNode();
                 if (msgLower.contains("đầu") || msgLower.contains("1")) {
@@ -180,6 +246,7 @@ public class AiChatServiceImpl implements AiChatService {
                 intentResult.setParams(newParams);
             }
         }
+        return overridden;
     }
 
     private List<GroqClient.ChatMessage> toGroqHistory(List<AiChatTurnRequest.ChatMessage> history) {
@@ -197,7 +264,7 @@ public class AiChatServiceImpl implements AiChatService {
         String roleSuffix = userId != null ? LOGGED_IN_SYSTEM_PROMPT_SUFFIX : GUEST_SYSTEM_PROMPT_SUFFIX;
         // Nối rõ ràng bằng " " thay vì dựa vào khoảng trắng đầu/cuối ẩn trong từng file .md
         // (PromptLoader.load() đã strip() từng đoạn).
-        return String.join(" ", CUSTOMER_SYSTEM_PROMPT, FAQ_PROMPT, buildCurrentTimeContext(), roleSuffix);
+        return String.join("\n\n", CUSTOMER_SYSTEM_PROMPT, FEW_SHOT_EXAMPLES, FAQ_PROMPT, buildCurrentTimeContext(), roleSuffix);
     }
 
     /**

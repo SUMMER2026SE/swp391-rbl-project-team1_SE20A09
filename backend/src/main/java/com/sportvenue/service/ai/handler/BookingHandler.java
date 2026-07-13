@@ -175,6 +175,15 @@ public class BookingHandler {
         // Hoàn thành booking -> clear pending action
         conversationContextService.clearPendingAction(conversationKey);
 
+        // Lưu draft vào context
+        java.util.Map<String, Object> draftMap = new java.util.HashMap<>();
+        draftMap.put("stadiumId", draft.getStadiumId());
+        draftMap.put("stadiumName", draft.getStadiumName());
+        draftMap.put("date", draft.getDate());
+        draftMap.put("startTime", draft.getStartTime());
+        draftMap.put("price", draft.getPrice());
+        conversationContextService.saveBookingDraft(conversationKey, draftMap);
+
         return AiChatTurnResponse.builder()
                 .message("Thông tin đặt sân đã sẵn sàng. Vui lòng kiểm tra lại và bấm nút bên dưới để tiến hành thanh toán.")
                 .intent("confirm_booking") // Intent mới để UI hiển thị thẻ xác nhận

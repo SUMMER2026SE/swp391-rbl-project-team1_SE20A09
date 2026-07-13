@@ -67,17 +67,36 @@ public class StadiumSearchHandler {
                     .build();
         }
 
-        // Guardrail cứng bằng code — không chỉ dựa vào system prompt: LLM đôi khi bỏ qua chỉ
-        // dẫn "phải hỏi lại khi câu hỏi quá chung chung" (quan sát thực tế: dispatch
-        // search_stadiums dù không có sportName/district/keyword nào, dẫn tới search rỗng bộ
-        // lọc, trả kết quả ngẫu nhiên khắp cả nước). Chặn cứng ở đây đảm bảo hành vi đúng dù
-        // LLM có tuân thủ prompt hay không.
-        if (!args.hasNonNull("sportName") && !args.hasNonNull("district") && !args.hasNonNull("keyword")) {
+        // --- MERGE FROM CONTEXT ---
+        String sportName = args.hasNonNull("sportName") ? args.get("sportName").asText() : null;
+        String district = args.hasNonNull("district") ? args.get("district").asText() : null;
+        String targetDateStr = args.hasNonNull("targetDate") ? args.get("targetDate").asText() : null;
+        String startTimeStr = args.hasNonNull("startTime") ? args.get("startTime").asText() : null;
+        String endTimeStr = args.hasNonNull("endTime") ? args.get("endTime").asText() : null;
+
+        java.util.Optional<AiConversationContextService.ConversationContext> ctxOpt = conversationContextService.getContext(conversationKey);
+        if (ctxOpt.isPresent()) {
+            AiConversationContextService.ConversationContext ctx = ctxOpt.get();
+            if (sportName == null && ctx.getCurrentSport() != null) {
+                sportName = ctx.getCurrentSport();
+                log.info("Merged sportName from context: {}", sportName);
+            }
+            if (district == null && ctx.getCurrentDistrict() != null) {
+                district = ctx.getCurrentDistrict();
+                log.info("Merged district from context: {}", district);
+            }
+        }
+
+        // Guardrail cứng bằng code (sau khi merge context)
+        if (sportName == null && district == null && !args.hasNonNull("keyword")) {
             return AiChatTurnResponse.builder()
                     .message("Bạn muốn tìm sân ở khu vực nào và chơi môn thể thao gì? Cho mình biết cụ thể hơn để tìm chính xác nhé.")
                     .intent("need_more_info")
                     .build();
         }
+
+        // Lưu context mới
+        conversationContextService.saveCurrentFilters(conversationKey, sportName, district, targetDateStr, startTimeStr);
 
         StadiumSearchRequest.StadiumSearchRequestBuilder builder = StadiumSearchRequest.builder();
 
