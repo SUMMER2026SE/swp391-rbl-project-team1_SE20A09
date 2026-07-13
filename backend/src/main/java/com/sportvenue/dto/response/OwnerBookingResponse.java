@@ -15,6 +15,7 @@ public class OwnerBookingResponse {
     private Integer id;
     private String displayId;
     private CustomerInfo customer;
+    private Integer stadiumId;
     private String venue;
     private String complexName;
     private String date;
@@ -32,6 +33,7 @@ public class OwnerBookingResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class CustomerInfo {
+        private Integer userId;
         private String name;
         private String phone;
         private String email;

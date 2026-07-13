@@ -3,7 +3,6 @@ package com.sportvenue.service.impl;
 import com.sportvenue.dto.response.AdminModerationAnalyticsResponse;
 import com.sportvenue.entity.enums.ComplaintPriority;
 import com.sportvenue.entity.enums.ComplaintStatus;
-import com.sportvenue.entity.enums.ReportCategory;
 import com.sportvenue.entity.enums.ReportStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.repository.ComplaintRepository;
@@ -26,7 +25,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -51,13 +49,15 @@ class AdminModerationAnalyticsServiceImplTest {
     }
 
     @Test
-    void getAnalytics_StatusOpen_AppliesReportAndComplaintStatusFilters() {
+    void getAnalytics_AppliesReportAndComplaintStatusFiltersIndependently() {
         analyticsService.getAnalytics(
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 2),
                 null,
                 null,
-                "OPEN",
+                null,
+                ReportStatus.OPEN,
+                ComplaintStatus.OPEN,
                 10);
 
         verify(reportRepository).countModerationReports(
@@ -75,16 +75,27 @@ class AdminModerationAnalyticsServiceImplTest {
     }
 
     @Test
-    void getAnalytics_CategoryHigh_OnlyQueriesComplaintPriority() {
+    void getAnalytics_ComplaintPriorityFilter_DoesNotHideReportSignals() {
+        // Regression test: complaintPriority and reportCategory used to share 1 string param —
+        // picking a Complaint-only value (e.g. HIGH) silently zeroed out Report entirely because
+        // it couldn't be parsed as a ReportCategory. Now they're independent params, so a
+        // complaint-only filter must not skip the report queries at all.
         analyticsService.getAnalytics(
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 2),
                 null,
-                "HIGH",
+                null,
+                ComplaintPriority.HIGH,
+                null,
                 null,
                 10);
 
-        verifyNoInteractions(reportRepository);
+        verify(reportRepository).countModerationReports(
+                any(LocalDateTime.class),
+                any(LocalDateTime.class),
+                isNull(),
+                isNull(),
+                isNull());
         verify(complaintRepository).countModerationComplaints(
                 any(LocalDateTime.class),
                 any(LocalDateTime.class),
@@ -111,6 +122,8 @@ class AdminModerationAnalyticsServiceImplTest {
                 null,
                 null,
                 null,
+                null,
+                null,
                 10);
 
         assertEquals(2, response.getTopUsers().size());
@@ -128,6 +141,8 @@ class AdminModerationAnalyticsServiceImplTest {
                 analyticsService.getAnalytics(
                         LocalDate.of(2025, 1, 1),
                         LocalDate.of(2026, 1, 2),
+                        null,
+                        null,
                         null,
                         null,
                         null,
@@ -150,6 +165,8 @@ class AdminModerationAnalyticsServiceImplTest {
         AdminModerationAnalyticsResponse response = analyticsService.getAnalytics(
                 LocalDate.of(2026, 7, 1),
                 LocalDate.of(2026, 7, 3),
+                null,
+                null,
                 null,
                 null,
                 null,
