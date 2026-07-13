@@ -89,6 +89,12 @@ public class SecurityConfig {
                 .authenticationProvider(authenticationProvider())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
+                        // MatchRequestController.getActiveMatches() has no @PreAuthorize (public by
+                        // design — guests can browse the community match list), but that alone
+                        // doesn't exempt it from the base .anyRequest().authenticated() below.
+                        // Exact path only (no wildcard) — /my-created, /my-joined, /{id}/participants
+                        // etc. under the same base path must stay authenticated.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/matchmaking").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/avatars/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/stadiums/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/documents/**").permitAll()
