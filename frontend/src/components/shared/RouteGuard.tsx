@@ -27,7 +27,6 @@ const PROTECTED_PREFIXES = [
   "/complaints",
   "/appeals",
   "/ai-assistant",
-  "/community",
 ];
 
 function isProtectedRoute(pathname: string): boolean {

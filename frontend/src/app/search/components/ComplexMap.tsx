@@ -52,6 +52,13 @@ type SearchCircle = {
   radiusMeters: number
 }
 
+// Toạ độ trung tâm gần đúng của Việt Nam + zoom đủ thấy toàn bộ đất nước —
+// dùng khi chưa chọn tỉnh/thành (thay vì zoom cố định 12 theo điểm trung bình
+// toạ độ nationwide, dễ gây hiểu lầm "chỉ có vài sân" khi điểm trung bình rơi
+// vào 1 khu vực hẹp trong khi kết quả trải khắp cả nước).
+const VIETNAM_CENTER: [number, number] = [16.0, 106.0]
+const VIETNAM_ZOOM = 5
+
 function getOffsetForCluster(index: number, size: number): L.PointExpression {
   if (size <= 1) return [0, 0]
   const angle = (Math.PI * 2 * index) / size - Math.PI / 2
@@ -95,8 +102,12 @@ function OffsetMarker({
   )
 }
 
-// Component to recenter map when complexes or nearby search radius change
-function MapViewportHandler({ center, searchCircle }: { center: [number, number], searchCircle: SearchCircle | null }) {
+// Component to recenter map when complexes or nearby search radius change.
+// isNationwide forces the wide Vietnam-wide zoom every time (so clearing the
+// province filter always shows full-country context); otherwise preserves
+// whatever zoom the user currently has (unchanged from before — filter
+// changes shouldn't undo a manual zoom).
+function MapViewportHandler({ center, isNationwide, searchCircle }: { center: [number, number], isNationwide: boolean, searchCircle: SearchCircle | null }) {
   const map = useMap()
   useEffect(() => {
     if (!map) return
@@ -106,9 +117,9 @@ function MapViewportHandler({ center, searchCircle }: { center: [number, number]
       tempCircle.remove()
       map.fitBounds(circleBounds, { padding: [32, 32], animate: false })
     } else {
-      map.setView(center, map.getZoom(), { animate: false })
+      map.setView(center, isNationwide ? VIETNAM_ZOOM : map.getZoom(), { animate: false })
     }
-  }, [center, map, searchCircle])
+  }, [center, isNationwide, map, searchCircle])
   return null
 }
 
@@ -129,9 +140,11 @@ interface ComplexMapProps {
   userLat?: number
   userLng?: number
   radiusInKm?: number
+  province?: string
 }
 
-export default function ComplexMap({ complexes, hoveredComplexId, userLat, userLng, radiusInKm }: ComplexMapProps) {
+export default function ComplexMap({ complexes, hoveredComplexId, userLat, userLng, radiusInKm, province }: ComplexMapProps) {
+  const isNationwide = !province
   const searchParams = useSearchParams()
   const sportTypeId = searchParams.get('sportTypeId')
   const detailHref = (complexId: number) =>
@@ -184,7 +197,11 @@ export default function ComplexMap({ complexes, hoveredComplexId, userLat, userL
 
   // Memoized on `complexes` (not on hover state) so hovering/unhovering a card
   // doesn't re-trigger MapRecenter and snap the map back to the average center.
+  // Khi chưa chọn tỉnh/thành (isNationwide), luôn dùng tâm Việt Nam thay vì
+  // điểm trung bình toạ độ nationwide — tránh zoom vào 1 khu vực hẹp trong khi
+  // kết quả trải khắp cả nước (xem VIETNAM_CENTER/VIETNAM_ZOOM ở trên).
   const mapCenter: [number, number] = useMemo(() => {
+    if (isNationwide) return VIETNAM_CENTER
     return validComplexes.length > 0
       ? [
           validComplexes.reduce((sum, c) => sum + (c.latitude || 0), 0) / validComplexes.length,
@@ -192,7 +209,7 @@ export default function ComplexMap({ complexes, hoveredComplexId, userLat, userL
         ]
       : [10.7769, 106.7009]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [complexes])
+  }, [complexes, isNationwide])
 
   const searchCircle: SearchCircle | null = useMemo(() => {
     if (
@@ -211,9 +228,14 @@ export default function ComplexMap({ complexes, hoveredComplexId, userLat, userL
 
   return (
     <div className="w-full h-full relative bg-muted rounded-2xl overflow-hidden z-10 border border-gray-100 shadow-inner">
+      {isNationwide && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm text-[11px] font-medium text-gray-600 dark:text-gray-300 px-3 py-1.5 rounded-full shadow-md border border-gray-100 dark:border-border pointer-events-none">
+          Đang hiện toàn quốc — chọn tỉnh/thành để xem chi tiết khu vực
+        </div>
+      )}
       <MapContainer
         center={mapCenter}
-        zoom={12}
+        zoom={isNationwide ? VIETNAM_ZOOM : 12}
         scrollWheelZoom={true}
         style={{ height: '100%', width: '100%' }}
       >
@@ -221,7 +243,7 @@ export default function ComplexMap({ complexes, hoveredComplexId, userLat, userL
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <MapViewportHandler center={mapCenter} searchCircle={searchCircle} />
+        <MapViewportHandler center={mapCenter} isNationwide={isNationwide} searchCircle={searchCircle} />
         <MapFlyToHandler center={hoveredCenter} />
         {searchCircle && (
           <Circle

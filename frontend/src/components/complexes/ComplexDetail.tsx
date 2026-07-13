@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouteGuard } from '@/components/shared/RouteGuard'
 import {
   IconBallFootball,
   IconClock,
@@ -17,7 +19,6 @@ import {
   IconPackage,
   IconMessageCircle,
   IconMessageOff,
-  IconPhone,
   IconCar,
   IconUser,
   IconDroplet,
@@ -68,7 +69,9 @@ export default function ComplexDetail({
 }: ComplexDetailProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  
+  const { data: session } = useSession()
+  const { triggerLoginModal } = useRouteGuard()
+
   // Tự động chuyển sang tab 'courts' (Sân lẻ) nếu có sportTypeId trên URL hoặc có param tab=courts
   const sportTypeIdParam = searchParams.get('sportTypeId')
   const tabParam = searchParams.get('tab')
@@ -91,8 +94,12 @@ export default function ComplexDetail({
   const [chatStarting, setChatStarting] = useState(false)
 
   const handleMessageOwner = async () => {
+    if (!session) {
+      triggerLoginModal(window.location.pathname)
+      return
+    }
     if (!complex.ownerUserId) {
-      toast.error('Vui lòng đăng nhập hoặc thử lại sau')
+      toast.error('Không tìm thấy tài khoản chủ sân')
       return
     }
     try {
@@ -285,24 +292,9 @@ export default function ComplexDetail({
         </div>
         <div className="leading-tight min-w-0">
           <span className="block text-[13px] font-medium text-gray-755 truncate">{complex.ownerName || 'N/A'}</span>
-          {complex.ownerPhone && (
-            <div className="flex items-center gap-1 mt-0.5 text-gray-400">
-              <IconPhone className="w-3.5 h-3.5 text-[#1a8a4a] shrink-0" />
-              <span className="text-[12px] font-normal">{complex.ownerPhone}</span>
-            </div>
-          )}
         </div>
       </div>
       <div className="flex gap-2">
-        {complex.ownerPhone && (
-          <a
-            href={`tel:${complex.ownerPhone}`}
-            className="flex-1 flex items-center justify-center gap-1.5 border-[0.5px] border-gray-200 rounded-[20px] py-[5px] text-[12px] font-medium text-gray-600 hover:bg-gray-100 cursor-pointer transition-colors"
-          >
-            <IconPhone className="w-[13px] h-[13px] text-[#1a8a4a]" />
-            <span>Gọi ngay</span>
-          </a>
-        )}
         <button
           onClick={handleMessageOwner}
           disabled={chatStarting}

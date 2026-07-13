@@ -180,14 +180,6 @@ export default function ComplexHeader({ complex }: ComplexHeaderProps) {
                 <div className="mt-3 pt-3 border-t border-gray-100">
                   <p className="text-xs text-gray-400">Chủ sân</p>
                   <p className="text-sm font-semibold text-gray-700 mt-0.5">{complex.ownerName}</p>
-                  {complex.ownerPhone && (
-                    <a
-                      href={`tel:${complex.ownerPhone}`}
-                      className="text-xs text-emerald-600 hover:underline"
-                    >
-                      {complex.ownerPhone}
-                    </a>
-                  )}
                 </div>
               )}
             </div>

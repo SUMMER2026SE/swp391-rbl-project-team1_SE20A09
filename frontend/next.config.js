@@ -1,6 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',       // Tối ưu cho Docker deployment
+  // react-leaflet@4.2.1's MapContainer initializes the Leaflet map inside a ref
+  // callback with no guard against React Strict Mode's double-invoke, so it
+  // deterministically throws "Map container is already initialized" on every
+  // mount in dev (App Router enables Strict Mode by default when this option
+  // isn't set). Dev-only flag — no effect on production builds.
+  reactStrictMode: false,
   images: {
     remotePatterns: [
       {

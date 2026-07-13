@@ -20,7 +20,6 @@ import {
   IconPackage,
   IconMessageCircle,
   IconMessageOff,
-  IconPhone,
   IconCar,
   IconUser,
   IconDroplet,
@@ -142,8 +141,7 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
 
   const handleMessageOwner = async () => {
     if (!session) {
-      toast.info('Vui lòng đăng nhập để nhắn tin')
-      router.push(`/login?callbackUrl=${encodeURIComponent(window.location.pathname)}`)
+      triggerLoginModal(window.location.pathname)
       return
     }
     if (!venue.owner.userId) {
@@ -308,21 +306,10 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
         </div>
         <div className="leading-tight min-w-0">
           <span className="block text-[13px] font-medium text-gray-750 truncate">{venue.owner.name}</span>
-          <div className="flex items-center gap-1 mt-0.5 text-gray-400">
-            <IconPhone className="w-3.5 h-3.5 text-[#1a8a4a] shrink-0" />
-            <span className="text-[12px] font-normal">{venue.owner.phone}</span>
-          </div>
         </div>
       </div>
       <div className="flex gap-2">
-        <a 
-          href={`tel:${venue.owner.phone}`}
-          className="flex-1 flex items-center justify-center gap-1.5 border-[0.5px] border-gray-200 rounded-[20px] py-[5px] text-[12px] font-medium text-gray-600 hover:bg-gray-100 cursor-pointer transition-colors"
-        >
-          <IconPhone className="w-[13px] h-[13px] text-[#1a8a4a]" />
-          <span>Gọi ngay</span>
-        </a>
-        <button 
+        <button
           onClick={handleMessageOwner}
           disabled={chatStarting}
           className="flex-1 flex items-center justify-center gap-1.5 border-[0.5px] border-gray-200 rounded-[20px] py-[5px] text-[12px] font-medium text-gray-600 hover:bg-gray-100 cursor-pointer transition-colors"
