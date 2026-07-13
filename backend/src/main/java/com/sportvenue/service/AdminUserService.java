@@ -31,5 +31,9 @@ public interface AdminUserService {
      * @param enabled true = ACTIVE, false = BLOCKED
      * @param currentAdminId ID của admin đang thao tác
      */
-    void lockUnlockCustomer(Integer id, Boolean enabled, Integer currentAdminId);
+    default void lockUnlockCustomer(Integer id, Boolean enabled, Integer currentAdminId) {
+        lockUnlockCustomer(id, enabled, currentAdminId, null);
+    }
+
+    void lockUnlockCustomer(Integer id, Boolean enabled, Integer currentAdminId, String reason);
 }

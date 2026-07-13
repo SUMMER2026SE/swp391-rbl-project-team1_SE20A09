@@ -155,9 +155,10 @@ public class AdminOwnerController {
     @Operation(summary = "Khóa hoặc mở khóa tài khoản chủ sân", description = "Admin có quyền khóa hoặc mở khóa tài khoản của chủ sân.")
     public ResponseEntity<ApiResponse<Void>> lockUnlockOwner(
             @Parameter(description = "ID của chủ sân", example = "1") @PathVariable Integer ownerId,
-            @Valid @RequestBody LockOwnerRequest request) {
+            @Valid @RequestBody LockOwnerRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.sportvenue.security.UserPrincipal currentUser) {
         
-        adminOwnerService.lockUnlockOwner(ownerId, request.getEnabled(), request.getReason());
+        adminOwnerService.lockUnlockOwner(ownerId, request.getEnabled(), request.getReason(), currentUser.getUserId());
         return ResponseEntity.ok(ApiResponse.<Void>builder()
                 .code(200)
                 .message(Boolean.TRUE.equals(request.getEnabled()) ? "Mở khóa tài khoản chủ sân thành công" : "Khóa tài khoản chủ sân thành công")

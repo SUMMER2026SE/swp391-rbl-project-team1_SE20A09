@@ -10,5 +10,6 @@ public enum NotificationType {
     OWNER_APPROVAL,
     STADIUM_APPROVAL,
     ACCOUNT_LOCK,
-    APPEAL
+    APPEAL,
+    REPORT
 }

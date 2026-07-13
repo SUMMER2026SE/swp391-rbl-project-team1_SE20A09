@@ -15,6 +15,7 @@ import com.sportvenue.repository.AppealRepository;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.security.UserPrincipal;
+import com.sportvenue.service.AccountStatusHistoryService;
 import com.sportvenue.service.AdminOwnerService;
 import com.sportvenue.service.NotificationService;
 import org.junit.jupiter.api.Test;
@@ -45,6 +46,9 @@ class AppealServiceImplTest {
 
     @Mock
     private OwnerRepository ownerRepository;
+
+    @Mock
+    private AccountStatusHistoryService accountStatusHistoryService;
 
     @Mock
     private AdminOwnerService adminOwnerService;
@@ -139,6 +143,8 @@ class AppealServiceImplTest {
         assertEquals(AccountStatus.ACTIVE, lockedUser.getAccountStatus());
         assertNull(lockedUser.getLockReason());
         verify(userRepository).save(lockedUser);
+        verify(accountStatusHistoryService).recordStatusChange(
+                lockedUser, 1, AccountStatus.BLOCKED, AccountStatus.ACTIVE, "Accepted");
         verify(notificationService).createNotification(
                 eq(10),
                 eq("Kháng cáo đã được chấp nhận"),
@@ -176,7 +182,7 @@ class AppealServiceImplTest {
         AppealResponse response = appealService.reviewAppeal(100, request, new UserPrincipal(admin));
 
         assertEquals(AppealStatus.APPROVED, response.getStatus());
-        verify(adminOwnerService).lockUnlockOwner(77, true, null);
+        verify(adminOwnerService).lockUnlockOwner(77, true, "Accepted", 1);
         verify(notificationService).createNotification(
                 eq(20),
                 any(),

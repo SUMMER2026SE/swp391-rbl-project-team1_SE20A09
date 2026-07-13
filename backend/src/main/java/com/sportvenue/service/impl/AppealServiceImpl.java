@@ -15,6 +15,7 @@ import com.sportvenue.repository.AppealRepository;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.security.UserPrincipal;
+import com.sportvenue.service.AccountStatusHistoryService;
 import com.sportvenue.service.AdminOwnerService;
 import com.sportvenue.service.AppealService;
 import com.sportvenue.service.NotificationService;
@@ -35,6 +36,7 @@ public class AppealServiceImpl implements AppealService {
     private final AppealRepository appealRepository;
     private final UserRepository userRepository;
     private final OwnerRepository ownerRepository;
+    private final AccountStatusHistoryService accountStatusHistoryService;
     private final AdminOwnerService adminOwnerService;
     private final NotificationService notificationService;
 
@@ -98,7 +100,7 @@ public class AppealServiceImpl implements AppealService {
         appeal.setAdminNote(trimToNull(request.getAdminNote()));
 
         if (request.getStatus() == AppealStatus.APPROVED) {
-            unlockAppealedUser(appeal.getUser());
+            unlockAppealedUser(appeal.getUser(), admin.getUserId(), request.getAdminNote());
         }
 
         Appeal saved = appealRepository.save(appeal);
@@ -114,14 +116,17 @@ public class AppealServiceImpl implements AppealService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng."));
     }
 
-    private void unlockAppealedUser(User lockedUser) {
+    private void unlockAppealedUser(User lockedUser, Integer adminId, String reason) {
         ownerRepository.findByUserUserId(lockedUser.getUserId())
                 .map(Owner::getOwnerId)
                 .ifPresentOrElse(
-                        ownerId -> adminOwnerService.lockUnlockOwner(ownerId, true, null),
+                        ownerId -> adminOwnerService.lockUnlockOwner(ownerId, true, reason, adminId),
                         () -> {
+                            AccountStatus previousStatus = lockedUser.getAccountStatus();
                             lockedUser.setAccountStatus(AccountStatus.ACTIVE);
                             lockedUser.setLockReason(null);
+                            accountStatusHistoryService.recordStatusChange(
+                                    lockedUser, adminId, previousStatus, AccountStatus.ACTIVE, reason);
                             userRepository.save(lockedUser);
                         });
     }

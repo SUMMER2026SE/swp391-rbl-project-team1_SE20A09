@@ -49,6 +49,11 @@ public interface ReportRepository extends JpaRepository<Report, Integer> {
             LocalDateTime startOfDay,
             LocalDateTime endOfDay);
 
+    long countByReporteeUserIdAndCategoryAndStatus(
+            Integer reporteeId,
+            ReportCategory category,
+            ReportStatus status);
+
     @Query("""
             SELECT COUNT(r) FROM Report r
             WHERE r.createdAt BETWEEN :start AND :end
