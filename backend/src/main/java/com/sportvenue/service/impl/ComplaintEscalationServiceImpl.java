@@ -48,34 +48,46 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
     @Override
     @Transactional
     public void escalateToAdmin(Integer complaintId, String reason, String requestedByEmail) {
+        escalateToAdmin(complaintId, reason, requestedByEmail, true);
+    }
+
+    /**
+     * @param appendChatMessage false khi caller đã tự thêm 1 message cụ thể hơn vào thread
+     *                          ngay trước khi gọi hàm này (vd customerObjectToResolution) —
+     *                          tránh ghi trùng 2 message cho cùng 1 sự kiện escalate.
+     */
+    @Transactional
+    public void escalateToAdmin(Integer complaintId, String reason, String requestedByEmail, boolean appendChatMessage) {
         Complaint complaint = complaintRepository.findById(complaintId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khiếu nại ID: " + complaintId));
-        
-        if (!"SYSTEM".equals(requestedByEmail) && 
+
+        if (!"SYSTEM".equals(requestedByEmail) &&
             !complaint.getUser().getEmail().equals(requestedByEmail) &&
             !userRepository.findByEmail(requestedByEmail)
                 .map(u -> u.getRole() != null && "Admin".equals(u.getRole().getRoleName()))
                 .orElse(false)) {
             throw new ForbiddenException("Bạn không có quyền chuyển khiếu nại này");
         }
-        
-        if (complaint.getStatus() == ComplaintStatus.RESOLVED || 
+
+        if (complaint.getStatus() == ComplaintStatus.RESOLVED ||
             complaint.getStatus() == ComplaintStatus.ESCALATED) {
             throw new BadRequestException("Không thể escalate khiếu nại đã giải quyết hoặc đã escalate");
         }
-        
+
         complaint.setStatus(ComplaintStatus.ESCALATED);
         complaint.setEscalatedAt(LocalDateTime.now());
         complaint.setEscalationReason(reason);
-        
-        List<ComplaintResponse.ResponseItem> items = deserializeResponses(complaint.getResponse());
-        items.add(ComplaintResponse.ResponseItem.builder()
-                .from("Hệ thống")
-                .message("Khiếu nại đã được chuyển lên Ban quản trị. Lý do: " + reason)
-                .time(LocalDateTime.now().format(FORMATTER))
-                .build());
-        complaint.setResponse(serializeResponses(items));
-        
+
+        if (appendChatMessage) {
+            List<ComplaintResponse.ResponseItem> items = deserializeResponses(complaint.getResponse());
+            items.add(ComplaintResponse.ResponseItem.builder()
+                    .from("Hệ thống")
+                    .message("Khiếu nại đã được chuyển lên Ban quản trị. Lý do: " + reason)
+                    .time(LocalDateTime.now().format(FORMATTER))
+                    .build());
+            complaint.setResponse(serializeResponses(items));
+        }
+
         complaintRepository.save(complaint);
         
         // Notify all admins
@@ -160,9 +172,10 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
                 .build());
         complaint.setResponse(serializeResponses(items));
         complaintRepository.save(complaint);
-        
-        // Auto-escalate to admin
-        escalateToAdmin(complaintId, "Khách hàng phản đối: " + objectionReason, customerEmail);
+
+        // Auto-escalate to admin — message riêng đã thêm ở trên, không cần escalateToAdmin
+        // ghi thêm 1 message chung chung nữa cho cùng sự kiện này (appendChatMessage=false).
+        escalateToAdmin(complaintId, "Khách hàng phản đối: " + objectionReason, customerEmail, false);
     }
     
     @Override

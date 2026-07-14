@@ -14,11 +14,13 @@ import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.EmailService;
 import com.sportvenue.service.NotificationService;
 import com.sportvenue.util.AfterCommitExecutor;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
@@ -48,6 +50,11 @@ class ComplaintEscalationServiceImplTest {
 
     @Mock
     private AfterCommitExecutor afterCommitExecutor;
+
+    // @Spy (không @Mock) — cần ObjectMapper hoạt động thật để (de)serialize
+    // JSON thread trong các test, không phải trả về null như mock trần.
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     private ComplaintEscalationServiceImpl escalationService;
@@ -132,6 +139,11 @@ class ComplaintEscalationServiceImplTest {
         escalationService.customerObjectToResolution(100, "Không đồng ý", "customer@example.com");
 
         assertEquals(ComplaintStatus.ESCALATED, complaint.getStatus());
+        // Chỉ 1 message được ghi vào thread cho sự kiện này — escalateToAdmin
+        // không được tự thêm 1 message chung chung thứ 2 đè lên message cụ thể
+        // đã ghi ở customerObjectToResolution (xem escalateToAdmin overload).
+        int occurrences = complaint.getResponse().split("Không đồng ý", -1).length - 1;
+        assertEquals(1, occurrences, "Lý do phản đối không được xuất hiện trùng lặp trong thread: " + complaint.getResponse());
     }
 
     @Test
