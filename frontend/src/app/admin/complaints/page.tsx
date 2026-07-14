@@ -27,6 +27,7 @@ import { get, post } from "@/lib/api";
 import { toast } from "sonner";
 import { useComplaintWebSocket, type ComplaintChatEvent } from "@/hooks/useComplaintWebSocket";
 import type { PageResponse } from "@/types/common";
+import { ComplaintSystemBanner, getComplaintSystemMessageType } from "@/components/complaints/ComplaintSystemBanner";
 
 type ResponseItem = {
   from: string;
@@ -496,7 +497,7 @@ function AdminComplaintsPage() {
                   <div className="flex justify-center my-2">
                     <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 max-w-[85%] shadow-sm w-full">
                       <div className="flex items-center text-xs text-purple-700 font-bold gap-1 mb-1">
-                        <AlertCircle className="h-3.5 w-3.5" /> Lý do chuyển Admin (từ hệ thống/khách hàng)
+                        <AlertCircle className="h-3.5 w-3.5" /> Lý do chuyển Admin
                       </div>
                       <p className="text-sm font-medium text-purple-800">{selectedComplaint.escalationReason}</p>
                     </div>
@@ -505,35 +506,8 @@ function AdminComplaintsPage() {
 
                 {/* Chat replies */}
                 {selectedComplaint.responses.map((resp, idx) => {
-                  const isProposal = resp.message.startsWith("Đã đề xuất giải pháp:");
-                  const isObjection = resp.message.startsWith("Khách hàng phản đối:");
-
-                  if (isProposal) {
-                    return (
-                      <div key={idx} className="flex justify-center my-2 w-full">
-                        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm max-w-[85%] shadow-sm w-full">
-                          <div className="flex items-center text-orange-700 font-bold gap-1 mb-1">
-                            <AlertCircle className="h-4 w-4" /> Đã đề xuất giải pháp
-                          </div>
-                          <p className="text-orange-800 whitespace-pre-wrap">{resp.message.replace("Đã đề xuất giải pháp: ", "")}</p>
-                          <div className="text-[10px] text-orange-600/80 mt-1.5 font-mono text-right">{resp.time}</div>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  if (isObjection) {
-                    return (
-                      <div key={idx} className="flex justify-center my-2 w-full">
-                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm max-w-[85%] shadow-sm w-full">
-                          <div className="flex items-center text-purple-700 font-bold gap-1 mb-1">
-                            <AlertCircle className="h-4 w-4" /> Khách hàng phản đối
-                          </div>
-                          <p className="text-purple-800 whitespace-pre-wrap">{resp.message.replace("Khách hàng phản đối: ", "")}</p>
-                          <div className="text-[10px] text-purple-600/80 mt-1.5 font-mono text-right">{resp.time}</div>
-                        </div>
-                      </div>
-                    );
+                  if (getComplaintSystemMessageType(resp.message)) {
+                    return <ComplaintSystemBanner key={idx} message={resp.message} time={resp.time} />;
                   }
 
                   const isAdminMsg = resp.from === "Admin";

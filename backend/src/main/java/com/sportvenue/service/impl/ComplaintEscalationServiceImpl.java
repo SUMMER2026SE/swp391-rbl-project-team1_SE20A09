@@ -48,16 +48,22 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
     @Override
     @Transactional
     public void escalateToAdmin(Integer complaintId, String reason, String requestedByEmail) {
-        escalateToAdmin(complaintId, reason, requestedByEmail, true);
+        doEscalateToAdmin(complaintId, reason, requestedByEmail, true);
     }
 
     /**
+     * Private (không phải overload public) — không thuộc {@link ComplaintEscalationService}
+     * nên không thể bị gọi qua interface proxy, chỉ self-invocation trong class này. Không
+     * gắn {@code @Transactional} riêng: luôn được gọi từ trong 1 method public đã
+     * {@code @Transactional} sẵn (escalateToAdmin hoặc customerObjectToResolution), Spring AOP
+     * proxy không advise self-invocation nên annotation ở đây sẽ không có tác dụng gì — gắn vào
+     * dễ gây hiểu nhầm là có transaction boundary riêng.
+     *
      * @param appendChatMessage false khi caller đã tự thêm 1 message cụ thể hơn vào thread
      *                          ngay trước khi gọi hàm này (vd customerObjectToResolution) —
      *                          tránh ghi trùng 2 message cho cùng 1 sự kiện escalate.
      */
-    @Transactional
-    public void escalateToAdmin(Integer complaintId, String reason, String requestedByEmail, boolean appendChatMessage) {
+    private void doEscalateToAdmin(Integer complaintId, String reason, String requestedByEmail, boolean appendChatMessage) {
         Complaint complaint = complaintRepository.findById(complaintId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khiếu nại ID: " + complaintId));
 
@@ -175,7 +181,7 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
 
         // Auto-escalate to admin — message riêng đã thêm ở trên, không cần escalateToAdmin
         // ghi thêm 1 message chung chung nữa cho cùng sự kiện này (appendChatMessage=false).
-        escalateToAdmin(complaintId, "Khách hàng phản đối: " + objectionReason, customerEmail, false);
+        doEscalateToAdmin(complaintId, "Khách hàng phản đối: " + objectionReason, customerEmail, false);
     }
     
     @Override

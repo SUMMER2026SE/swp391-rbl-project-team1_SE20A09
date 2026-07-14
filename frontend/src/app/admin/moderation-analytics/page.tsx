@@ -112,7 +112,7 @@ const LABELS: Record<string, string> = {
   IN_PROGRESS: "Dang xu ly",
   RESOLVED: "Da giai quyet",
   ESCALATED: "Da escalate",
-  AWAITING_CUSTOMER_RESPONSE: "Cho Admin review",
+  AWAITING_CUSTOMER_RESPONSE: "Cho khach phan hoi",
   CUSTOMER_WITHDRAWN: "Khach rut don",
 };
 

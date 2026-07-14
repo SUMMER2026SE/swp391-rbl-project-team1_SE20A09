@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { fetchMyBookings, type BookingHistoryItem } from "@/lib/bookings-api";
 import { useComplaintWebSocket, type ComplaintChatEvent } from "@/hooks/useComplaintWebSocket";
 import { useSearchParams } from "next/navigation";
+import { ComplaintSystemBanner, getComplaintSystemMessageType } from "@/components/complaints/ComplaintSystemBanner";
 
 type ComplaintResponse = {
   from: string;
@@ -540,34 +541,14 @@ function ComplaintsPage() {
                   <h4 className="font-bold text-xs text-muted-foreground uppercase flex-shrink-0">Hộp thư trao đổi:</h4>
                   <div className="flex-1 overflow-y-auto pr-1 space-y-3 min-h-0">
                     {activeComplaint.responses.map((response, idx: number) => {
-                      const isProposal = response.message.startsWith("Đã đề xuất giải pháp:");
-                      const isObjection = response.message.startsWith("Khách hàng phản đối:");
-
-                      if (isProposal) {
+                      if (getComplaintSystemMessageType(response.message)) {
                         return (
-                          <div key={idx} className="flex justify-center my-2 w-full">
-                            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm max-w-[85%] shadow-sm w-full">
-                              <div className="flex items-center text-orange-700 font-bold gap-1 mb-1">
-                                <AlertCircle className="h-4 w-4" /> Chủ sân đề xuất giải pháp
-                              </div>
-                              <p className="text-orange-800 whitespace-pre-wrap">{response.message.replace("Đã đề xuất giải pháp: ", "")}</p>
-                              <div className="text-[10px] text-orange-600/80 mt-1.5 font-mono text-right">{response.time}</div>
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      if (isObjection) {
-                        return (
-                          <div key={idx} className="flex justify-center my-2 w-full">
-                            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm max-w-[85%] shadow-sm w-full">
-                              <div className="flex items-center text-purple-700 font-bold gap-1 mb-1">
-                                <AlertCircle className="h-4 w-4" /> Khách hàng phản đối
-                              </div>
-                              <p className="text-purple-800 whitespace-pre-wrap">{response.message.replace("Khách hàng phản đối: ", "")}</p>
-                              <div className="text-[10px] text-purple-600/80 mt-1.5 font-mono text-right">{response.time}</div>
-                            </div>
-                          </div>
+                          <ComplaintSystemBanner
+                            key={idx}
+                            message={response.message}
+                            time={response.time}
+                            proposalLabel="Chủ sân đề xuất giải pháp"
+                          />
                         );
                       }
 
