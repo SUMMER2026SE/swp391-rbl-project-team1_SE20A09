@@ -27,6 +27,7 @@ import { get, post } from "@/lib/api";
 import { toast } from "sonner";
 import { useComplaintWebSocket, type ComplaintChatEvent } from "@/hooks/useComplaintWebSocket";
 import type { PageResponse } from "@/types/common";
+import { ComplaintSystemBanner, getComplaintSystemMessageType } from "@/components/complaints/ComplaintSystemBanner";
 
 type ResponseItem = {
   from: string;
@@ -52,6 +53,7 @@ type Complaint = {
   customerName: string;
   customerEmail: string;
   responses: ResponseItem[];
+  escalationReason?: string;
 };
 
 function AdminComplaintsPage() {
@@ -211,7 +213,7 @@ function AdminComplaintsPage() {
         return { label: "Đang xử lý", color: "bg-blue-500 text-white" };
       case "escalated":
         return { label: "Đã chuyển Admin", color: "bg-purple-500 text-white" };
-      case "pending_admin_review":
+      case "awaiting_customer_response":
         return { label: "Chờ xem xét", color: "bg-orange-500 text-white" };
       case "customer_withdrawn":
         return { label: "Khách rút", color: "bg-slate-500 text-white" };
@@ -302,7 +304,7 @@ function AdminComplaintsPage() {
               <SelectItem value="open">Mới nhận</SelectItem>
               <SelectItem value="in_progress">Đang xử lý</SelectItem>
               <SelectItem value="escalated">Đã chuyển Admin</SelectItem>
-              <SelectItem value="pending_admin_review">Chờ xem xét</SelectItem>
+              <SelectItem value="awaiting_customer_response">Chờ xem xét</SelectItem>
               <SelectItem value="resolved">Đã giải quyết</SelectItem>
               <SelectItem value="customer_withdrawn">Khách rút</SelectItem>
             </SelectContent>
@@ -420,7 +422,7 @@ function AdminComplaintsPage() {
                 </div>
                 {selectedComplaint.status !== "resolved" && selectedComplaint.status !== "customer_withdrawn" && (
                   <div className="flex flex-wrap gap-2">
-                    {["pending_admin_review", "escalated"].includes(selectedComplaint.status) && (
+                    {["awaiting_customer_response", "escalated"].includes(selectedComplaint.status) && (
                       <>
                         <Button
                           size="sm"
@@ -491,8 +493,23 @@ function AdminComplaintsPage() {
                   </div>
                 </div>
 
+                {selectedComplaint.escalationReason && (
+                  <div className="flex justify-center my-2">
+                    <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 max-w-[85%] shadow-sm w-full">
+                      <div className="flex items-center text-xs text-purple-700 font-bold gap-1 mb-1">
+                        <AlertCircle className="h-3.5 w-3.5" /> Lý do chuyển Admin
+                      </div>
+                      <p className="text-sm font-medium text-purple-800">{selectedComplaint.escalationReason}</p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Chat replies */}
                 {selectedComplaint.responses.map((resp, idx) => {
+                  if (getComplaintSystemMessageType(resp.message)) {
+                    return <ComplaintSystemBanner key={idx} message={resp.message} time={resp.time} />;
+                  }
+
                   const isAdminMsg = resp.from === "Admin";
                   const isOwnerMsg = resp.from === "Chủ sân";
                   const ownerLabel = `Chủ sân: ${selectedComplaint.ownerName ?? 'N/A'}`;
@@ -541,9 +558,9 @@ function AdminComplaintsPage() {
 
                 {/* Resolution status */}
                 {selectedComplaint.status === "resolved" && (
-                  <div className="flex justify-center my-6">
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-4 text-center max-w-[80%] shadow-sm">
-                      <CheckCircle2 className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
+                  <div className="flex justify-center my-4">
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center max-w-[85%] shadow-sm w-full">
+                      <CheckCircle2 className="h-6 w-6 text-emerald-600 mx-auto mb-1.5" />
                       <h4 className="text-sm font-semibold text-emerald-700 mb-1">Khiếu nại này đã đóng & giải quyết</h4>
                       {selectedComplaint.resolution && (
                         <p className="text-xs text-emerald-600 italic mb-2 leading-relaxed">

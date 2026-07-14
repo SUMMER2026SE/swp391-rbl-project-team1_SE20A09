@@ -143,7 +143,7 @@ public class AdminModerationAnalyticsServiceImpl implements AdminModerationAnaly
                         ComplaintStatus.OPEN.name(),
                         ComplaintStatus.IN_PROGRESS.name(),
                         ComplaintStatus.ESCALATED.name(),
-                        ComplaintStatus.PENDING_ADMIN_REVIEW.name()))
+                        ComplaintStatus.AWAITING_CUSTOMER_RESPONSE.name()))
                 .resolved(sumStatuses(
                         statusBreakdown,
                         ComplaintStatus.RESOLVED.name(),

@@ -26,6 +26,7 @@ import {
 import { get, post } from "@/lib/api";
 import { toast } from "sonner";
 import { useComplaintWebSocket, type ComplaintChatEvent } from "@/hooks/useComplaintWebSocket";
+import { ComplaintSystemBanner, getComplaintSystemMessageType } from "@/components/complaints/ComplaintSystemBanner";
 
 type ComplaintResponse = {
   from: string;
@@ -46,6 +47,7 @@ type Complaint = {
   resolvedDate?: string;
   resolution?: string;
   bookingId?: number;
+  escalationReason?: string;
 };
 
 function OwnerComplaintsPage() {
@@ -126,7 +128,7 @@ function OwnerComplaintsPage() {
       in_progress: { label: "Đang xử lý", className: "bg-blue-50 text-blue-700 border-blue-200" },
       resolved: { label: "Đã giải quyết", className: "bg-green-50 text-green-700 border-green-200" },
       escalated: { label: "Đã chuyển Admin", className: "bg-purple-50 text-purple-700 border-purple-200" },
-      pending_admin_review: { label: "Chờ khách phản hồi", className: "bg-orange-50 text-orange-700 border-orange-200" },
+      awaiting_customer_response: { label: "Chờ khách phản hồi", className: "bg-orange-50 text-orange-700 border-orange-200" },
       customer_withdrawn: { label: "Khách rút", className: "bg-slate-50 text-slate-700 border-slate-200" },
     };
     const item = config[s as keyof typeof config] || { label: status, className: "bg-gray-50 text-gray-700 border-gray-200" };
@@ -247,30 +249,45 @@ function OwnerComplaintsPage() {
                   <p className="text-sm font-medium">{selectedComplaint.description}</p>
                 </div>
 
+                {selectedComplaint.escalationReason && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 space-y-2 shadow-sm">
+                    <div className="flex items-center text-xs text-purple-700 font-bold gap-1">
+                      <AlertCircle className="h-3.5 w-3.5" /> Lý do chuyển Admin
+                    </div>
+                    <p className="text-sm font-medium text-purple-800">{selectedComplaint.escalationReason}</p>
+                  </div>
+                )}
+
                 {/* Chat replies */}
                 {selectedComplaint.responses && selectedComplaint.responses.length > 0 && (
                   <div className="space-y-4">
                     <h4 className="text-xs font-bold text-muted-foreground uppercase">Lịch sử phản hồi:</h4>
-                    {selectedComplaint.responses.map((res: ComplaintResponse, idx: number) => (
-                      <div
-                        key={idx}
-                        className={`flex flex-col max-w-[85%] rounded-lg p-3 ${
-                          res.from === "Chủ sân"
-                            ? "bg-primary text-primary-foreground ml-auto"
-                            : "bg-card border mr-auto bg-white"
-                        }`}
-                      >
-                        <span className="text-[10px] font-bold opacity-85 mb-1">{res.from}</span>
-                        <p className="text-sm font-medium leading-relaxed">{res.message}</p>
-                        <span className="text-[9px] opacity-75 self-end mt-1">{res.time}</span>
-                      </div>
-                    ))}
+                    {selectedComplaint.responses.map((res: ComplaintResponse, idx: number) => {
+                      if (getComplaintSystemMessageType(res.message)) {
+                        return <ComplaintSystemBanner key={idx} message={res.message} time={res.time} />;
+                      }
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`flex flex-col max-w-[85%] rounded-lg p-3 ${
+                            res.from === "Chủ sân"
+                              ? "bg-primary text-primary-foreground ml-auto"
+                              : "bg-card border mr-auto bg-white"
+                          }`}
+                        >
+                          <span className="text-[10px] font-bold opacity-85 mb-1">{res.from}</span>
+                          <p className="text-sm font-medium leading-relaxed">{res.message}</p>
+                          <span className="text-[9px] opacity-75 self-end mt-1">{res.time}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
                  {/* Resolution Statement */}
                 {selectedComplaint.status === "resolved" && selectedComplaint.resolution && (
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-2">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-2 max-w-[85%] mx-auto w-full">
                     <h4 className="flex items-center gap-2 text-green-800 font-bold text-sm">
                       <CheckCircle className="h-5 w-5 text-green-700" />
                       Đã thống nhất giải quyết thành công
@@ -289,7 +306,7 @@ function OwnerComplaintsPage() {
                   </div>
                 )}
 
-                {selectedComplaint.status === "pending_admin_review" && (
+                {selectedComplaint.status === "awaiting_customer_response" && (
                   <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 space-y-2">
                     <h4 className="flex items-center gap-2 text-orange-800 font-bold text-sm">
                       <Clock className="h-5 w-5 text-orange-700" />

@@ -86,7 +86,7 @@ const COMPLAINT_STATUSES = [
   "IN_PROGRESS",
   "RESOLVED",
   "ESCALATED",
-  "PENDING_ADMIN_REVIEW",
+  "AWAITING_CUSTOMER_RESPONSE",
   "CUSTOMER_WITHDRAWN",
 ];
 
@@ -112,7 +112,7 @@ const LABELS: Record<string, string> = {
   IN_PROGRESS: "Đang xử lý",
   RESOLVED: "Đã giải quyết",
   ESCALATED: "Đã escalate",
-  PENDING_ADMIN_REVIEW: "Chờ Admin review",
+  AWAITING_CUSTOMER_RESPONSE: "Chờ khách phản hồi",
   CUSTOMER_WITHDRAWN: "Khách rút đơn",
 };
 

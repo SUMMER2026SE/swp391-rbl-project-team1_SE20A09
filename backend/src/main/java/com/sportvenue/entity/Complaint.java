@@ -75,7 +75,7 @@ public class Complaint implements Serializable {
 
     /** Trạng thái xử lý khiếu nại. */
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "status", nullable = false, length = 50)
     @Builder.Default
     private ComplaintStatus status = ComplaintStatus.OPEN;
 

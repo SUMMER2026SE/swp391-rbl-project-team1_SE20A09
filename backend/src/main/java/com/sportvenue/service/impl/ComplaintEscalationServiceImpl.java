@@ -18,7 +18,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sportvenue.dto.response.ComplaintResponse;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -32,6 +36,9 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
     private final NotificationService notificationService;
     private final EmailService emailService;
     private final AfterCommitExecutor afterCommitExecutor;
+    private final ObjectMapper objectMapper;
+    
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     
     // SLA: Owner must respond within 24 hours
     private static final int OWNER_RESPONSE_SLA_HOURS = 24;
@@ -41,26 +48,52 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
     @Override
     @Transactional
     public void escalateToAdmin(Integer complaintId, String reason, String requestedByEmail) {
+        doEscalateToAdmin(complaintId, reason, requestedByEmail, true);
+    }
+
+    /**
+     * Private (không phải overload public) — không thuộc {@link ComplaintEscalationService}
+     * nên không thể bị gọi qua interface proxy, chỉ self-invocation trong class này. Không
+     * gắn {@code @Transactional} riêng: luôn được gọi từ trong 1 method public đã
+     * {@code @Transactional} sẵn (escalateToAdmin hoặc customerObjectToResolution), Spring AOP
+     * proxy không advise self-invocation nên annotation ở đây sẽ không có tác dụng gì — gắn vào
+     * dễ gây hiểu nhầm là có transaction boundary riêng.
+     *
+     * @param appendChatMessage false khi caller đã tự thêm 1 message cụ thể hơn vào thread
+     *                          ngay trước khi gọi hàm này (vd customerObjectToResolution) —
+     *                          tránh ghi trùng 2 message cho cùng 1 sự kiện escalate.
+     */
+    private void doEscalateToAdmin(Integer complaintId, String reason, String requestedByEmail, boolean appendChatMessage) {
         Complaint complaint = complaintRepository.findById(complaintId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khiếu nại ID: " + complaintId));
-        
-        if (!"SYSTEM".equals(requestedByEmail) && 
+
+        if (!"SYSTEM".equals(requestedByEmail) &&
             !complaint.getUser().getEmail().equals(requestedByEmail) &&
             !userRepository.findByEmail(requestedByEmail)
                 .map(u -> u.getRole() != null && "Admin".equals(u.getRole().getRoleName()))
                 .orElse(false)) {
             throw new ForbiddenException("Bạn không có quyền chuyển khiếu nại này");
         }
-        
-        if (complaint.getStatus() == ComplaintStatus.RESOLVED || 
+
+        if (complaint.getStatus() == ComplaintStatus.RESOLVED ||
             complaint.getStatus() == ComplaintStatus.ESCALATED) {
             throw new BadRequestException("Không thể escalate khiếu nại đã giải quyết hoặc đã escalate");
         }
-        
+
         complaint.setStatus(ComplaintStatus.ESCALATED);
         complaint.setEscalatedAt(LocalDateTime.now());
         complaint.setEscalationReason(reason);
-        
+
+        if (appendChatMessage) {
+            List<ComplaintResponse.ResponseItem> items = deserializeResponses(complaint.getResponse());
+            items.add(ComplaintResponse.ResponseItem.builder()
+                    .from("Hệ thống")
+                    .message("Khiếu nại đã được chuyển lên Ban quản trị. Lý do: " + reason)
+                    .time(LocalDateTime.now().format(FORMATTER))
+                    .build());
+            complaint.setResponse(serializeResponses(items));
+        }
+
         complaintRepository.save(complaint);
         
         // Notify all admins
@@ -84,9 +117,17 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khiếu nại ID: " + complaintId));
         
         LocalDateTime now = LocalDateTime.now();
-        complaint.setStatus(ComplaintStatus.PENDING_ADMIN_REVIEW);
+        complaint.setStatus(ComplaintStatus.AWAITING_CUSTOMER_RESPONSE);
         complaint.setResolvedAt(now);
         complaint.setCustomerResponseDeadline(now.plusHours(CUSTOMER_OBJECTION_HOURS));
+        
+        List<ComplaintResponse.ResponseItem> items = deserializeResponses(complaint.getResponse());
+        items.add(ComplaintResponse.ResponseItem.builder()
+                .from("Chủ sân")
+                .message("Đã đề xuất giải pháp: " + resolution)
+                .time(LocalDateTime.now().format(FORMATTER))
+                .build());
+        complaint.setResponse(serializeResponses(items));
         
         complaintRepository.save(complaint);
         
@@ -121,7 +162,7 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
             throw new ForbiddenException("Bạn không có quyền thao tác trên khiếu nại này");
         }
         
-        if (complaint.getStatus() != ComplaintStatus.PENDING_ADMIN_REVIEW) {
+        if (complaint.getStatus() != ComplaintStatus.AWAITING_CUSTOMER_RESPONSE) {
             throw new BadRequestException("Chỉ có thể phản đối trong thời gian chờ xem xét");
         }
         
@@ -129,8 +170,18 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
             throw new BadRequestException("Đã hết thời hạn phản đối (48h)");
         }
         
-        // Auto-escalate to admin
-        escalateToAdmin(complaintId, "Khách hàng phản đối: " + objectionReason, customerEmail);
+        List<ComplaintResponse.ResponseItem> items = deserializeResponses(complaint.getResponse());
+        items.add(ComplaintResponse.ResponseItem.builder()
+                .from("Khách hàng")
+                .message("Khách hàng phản đối: " + objectionReason)
+                .time(LocalDateTime.now().format(FORMATTER))
+                .build());
+        complaint.setResponse(serializeResponses(items));
+        complaintRepository.save(complaint);
+
+        // Auto-escalate to admin — message riêng đã thêm ở trên, không cần escalateToAdmin
+        // ghi thêm 1 message chung chung nữa cho cùng sự kiện này (appendChatMessage=false).
+        doEscalateToAdmin(complaintId, "Khách hàng phản đối: " + objectionReason, customerEmail, false);
     }
     
     @Override
@@ -203,7 +254,7 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
     public void processCustomerResponseDeadlines() {
         List<Complaint> pendingComplaints = complaintRepository
                 .findByStatusAndCustomerResponseDeadlineBefore(
-                    ComplaintStatus.PENDING_ADMIN_REVIEW, 
+                    ComplaintStatus.AWAITING_CUSTOMER_RESPONSE, 
                     LocalDateTime.now());
         
         for (Complaint complaint : pendingComplaints) {
@@ -261,4 +312,24 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
         }
     }
     
+    private List<ComplaintResponse.ResponseItem> deserializeResponses(String json) {
+        if (json == null || json.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<ComplaintResponse.ResponseItem>>() { });
+        } catch (Exception e) {
+            log.warn("Failed to deserialize complaint response JSON: {}", json, e);
+            return new ArrayList<>();
+        }
+    }
+
+    private String serializeResponses(List<ComplaintResponse.ResponseItem> list) {
+        try {
+            return objectMapper.writeValueAsString(list);
+        } catch (Exception e) {
+            log.error("Failed to serialize complaint response list to JSON", e);
+            return "[]";
+        }
+    }
 }
