@@ -88,7 +88,7 @@ const config = {
         '2xl':'1.5rem',
       },
       fontFamily: {
-        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
       },
       boxShadow: {
         'glow-green': '0 0 20px rgba(34, 197, 94, 0.3)',

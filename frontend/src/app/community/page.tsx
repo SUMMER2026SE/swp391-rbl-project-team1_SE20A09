@@ -44,6 +44,7 @@ import {
   ShieldAlert,
   ChevronRight,
   MessageSquare,
+  AlertTriangle,
 } from "lucide-react";
 import {
   getActiveMatches,
@@ -67,6 +68,7 @@ import { useConfirm } from "@/hooks/useConfirm";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { chatUrl, createContextualConversation } from "@/lib/contextual-chat";
 import { getMatchConversation } from "@/lib/chat-api";
+import { ReportUserDialog } from "@/components/reports/ReportUserDialog";
 
 // Helper functions for MatchStatus display
 const isMatchEnded = (playDate: string, endTime: string) => {
@@ -127,6 +129,14 @@ function MatchRequestFeedPage() {
   const [selectedJoinedRequest, setSelectedJoinedRequest] = useState<JoinRequestResponse | null>(null);
   const [openingChat, setOpeningChat] = useState(false);
 
+  // Báo cáo hành vi trong context kèo đấu (Host ↔ Người tham gia).
+  const [reportTarget, setReportTarget] = useState<{
+    reporteeId: number;
+    matchRequestId?: number;
+    joinRequestId?: number;
+    contextLabel: string;
+  } | null>(null);
+
   const openJoinedRequestChat = async (group: boolean) => {
     if (!selectedJoinedRequest) return;
     try {
@@ -162,14 +172,14 @@ function MatchRequestFeedPage() {
       const conversationId = await createContextualConversation(req.userId, {
         action: "match_referral",
         matchId: selectedManageMatch.matchId,
-        title: selectedManageMatch.title || `KÃ¨o #${selectedManageMatch.matchId}`,
+        title: selectedManageMatch.title || `Kèo #${selectedManageMatch.matchId}`,
         sportName: selectedManageMatch.sportName,
         playDate: selectedManageMatch.playDate,
       });
       setShowManageDialog(false);
       router.push(chatUrl(conversationId));
     } catch {
-      toast.error("KhÃ´ng thá»ƒ má»Ÿ cuá»™c trÃ² chuyá»‡n");
+      toast.error("Không thể mở cuộc trò chuyện");
     } finally {
       setOpeningChat(false);
     }
@@ -1401,7 +1411,7 @@ function MatchRequestFeedPage() {
                               disabled={openingChat}
                               onClick={() => handleHostChatCandidate(req)}
                               className="rounded-full h-8 w-8 hover:bg-slate-100 text-slate-600 cursor-pointer shrink-0"
-                              title="Nháº¯n tin liÃªn há»‡"
+                              title="Nhắn tin liên hệ"
                             >
                               {openingChat ? (
                                 <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
@@ -1424,6 +1434,25 @@ function MatchRequestFeedPage() {
 
                         {/* Action Buttons: Pushed to bottom right with border separator */}
                         <div className="flex justify-end items-center gap-3 border-t border-slate-100 pt-3">
+                          {req.userId && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="border-amber-200 text-amber-700 hover:bg-amber-50 font-bold text-xs h-9 px-3 gap-1.5 rounded-lg mr-auto"
+                              onClick={() =>
+                                setReportTarget({
+                                  reporteeId: req.userId,
+                                  matchRequestId: req.matchId,
+                                  joinRequestId: req.joinId,
+                                  contextLabel: `Báo cáo hành vi của ${req.fullName} liên quan đến kèo "${selectedManageMatch.title}".`,
+                                })
+                              }
+                            >
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                              Báo cáo
+                            </Button>
+                          )}
                           {req.requestStatus === "PENDING" ? (
                             <>
                               <Button
@@ -1648,6 +1677,25 @@ function MatchRequestFeedPage() {
                 </Button>
               )}
 
+              {selectedJoinedRequest.hostUserId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-amber-200 text-amber-700 hover:bg-amber-50 gap-2"
+                  onClick={() =>
+                    setReportTarget({
+                      reporteeId: selectedJoinedRequest.hostUserId!,
+                      matchRequestId: selectedJoinedRequest.matchId,
+                      joinRequestId: selectedJoinedRequest.joinId,
+                      contextLabel: `Báo cáo hành vi của Host ${selectedJoinedRequest.hostName || ""} liên quan đến kèo "${selectedJoinedRequest.matchTitle || `#${selectedJoinedRequest.matchId}`}".`,
+                    })
+                  }
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  Báo cáo Host
+                </Button>
+              )}
+
               <div className="border-t pt-4 mt-2 flex justify-end">
                 <Button
                   type="button"
@@ -1731,6 +1779,17 @@ function MatchRequestFeedPage() {
         cancelText={options?.cancelText}
         variant={options?.variant}
         isLoading={confirming}
+      />
+
+      <ReportUserDialog
+        open={reportTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setReportTarget(null);
+        }}
+        reporteeId={reportTarget?.reporteeId}
+        matchRequestId={reportTarget?.matchRequestId}
+        joinRequestId={reportTarget?.joinRequestId}
+        contextLabel={reportTarget?.contextLabel}
       />
 
       <Footer />

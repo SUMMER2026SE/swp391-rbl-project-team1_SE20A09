@@ -308,7 +308,7 @@ public class ComplaintServiceImpl implements ComplaintService {
                         .from("Chủ sân")
                         .message("Đã đề xuất giải pháp: " + request.getResolution().trim() + "\n(Khách hàng có 48h để phản hồi)")
                         .time(LocalDateTime.now().format(FORMATTER))
-                        .newStatus("pending_admin_review")
+                        .newStatus("awaiting_customer_response")
                         .build()
         );
 
@@ -380,7 +380,7 @@ public class ComplaintServiceImpl implements ComplaintService {
     public Page<ComplaintResponse> getEscalatedComplaints(Pageable pageable) {
         log.info("Admin fetching escalated complaints");
         return complaintRepository.findByStatusInOrderByEscalatedAtDesc(
-                List.of(ComplaintStatus.ESCALATED, ComplaintStatus.PENDING_ADMIN_REVIEW),
+                List.of(ComplaintStatus.ESCALATED, ComplaintStatus.AWAITING_CUSTOMER_RESPONSE),
                 pageable
         ).map(this::mapToResponse);
     }
@@ -554,7 +554,7 @@ public class ComplaintServiceImpl implements ComplaintService {
                 .openCount(complaintRepository.countByStatus(ComplaintStatus.OPEN))
                 .progressCount(complaintRepository.countByStatus(ComplaintStatus.IN_PROGRESS))
                 .escalatedCount(complaintRepository.countByStatus(ComplaintStatus.ESCALATED) + 
-                              complaintRepository.countByStatus(ComplaintStatus.PENDING_ADMIN_REVIEW))
+                              complaintRepository.countByStatus(ComplaintStatus.AWAITING_CUSTOMER_RESPONSE))
                 .resolvedCount(complaintRepository.countByStatus(ComplaintStatus.RESOLVED))
                 .build();
     }

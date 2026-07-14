@@ -501,7 +501,7 @@ class ComplaintServiceImplTest {
                 .complaintId(500)
                 .booking(booking)
                 .user(customer)
-                .status(ComplaintStatus.PENDING_ADMIN_REVIEW)
+                .status(ComplaintStatus.AWAITING_CUSTOMER_RESPONSE)
                 .createdAt(LocalDateTime.now())
                 .build();
         when(complaintRepository.findById(500)).thenReturn(Optional.of(complaint), Optional.of(pendingReview));
@@ -510,7 +510,7 @@ class ComplaintServiceImplTest {
         ComplaintResponse response = complaintService.resolveComplaint(500, request, "owner@example.com");
 
         assertNotNull(response);
-        assertEquals("pending_admin_review", response.getStatus());
+        assertEquals("awaiting_customer_response", response.getStatus());
         assertEquals("Chủ sân", response.getResponses().get(0).getFrom());
         assertTrue(response.getResponses().get(0).getMessage().contains("Đã hoàn tiền cho khách"));
 

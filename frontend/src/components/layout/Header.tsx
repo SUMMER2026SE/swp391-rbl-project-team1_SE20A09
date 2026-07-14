@@ -110,7 +110,7 @@ export function UserAccountMenu({ user }: { user: NonNullable<Session["user"]> }
             </Link>
           </DropdownMenuItem>
         )}
-        {user.roleName === "Owner" && (
+        {user.roleName === "Owner" && user.ownerApprovedStatus === "APPROVED" && (
           <DropdownMenuItem asChild>
             <Link href="/owner/dashboard" className="cursor-pointer">
               <BarChart2 className="mr-2 h-4 w-4" />
@@ -126,7 +126,7 @@ export function UserAccountMenu({ user }: { user: NonNullable<Session["user"]> }
           </Link>
         </DropdownMenuItem>
 
-        {user.roleName !== "Admin" && (
+        {user.roleName === "Customer" && (
           <DropdownMenuItem asChild>
             <Link href="/profile?tab=bookings" className="cursor-pointer">
               <Clock className="mr-2 h-4 w-4" />

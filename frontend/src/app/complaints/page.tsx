@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { fetchMyBookings, type BookingHistoryItem } from "@/lib/bookings-api";
 import { useComplaintWebSocket, type ComplaintChatEvent } from "@/hooks/useComplaintWebSocket";
 import { useSearchParams } from "next/navigation";
+import { ComplaintSystemBanner, getComplaintSystemMessageType } from "@/components/complaints/ComplaintSystemBanner";
 
 type ComplaintResponse = {
   from: string;
@@ -261,7 +262,7 @@ function ComplaintsPage() {
       in_progress: { label: "Đang xử lý", className: "bg-blue-50 text-blue-700 border-blue-200" },
       resolved: { label: "Đã giải quyết", className: "bg-green-50 text-green-700 border-green-200" },
       escalated: { label: "Đã chuyển Admin", className: "bg-purple-50 text-purple-700 border-purple-200" },
-      pending_admin_review: { label: "Chờ phản hồi", className: "bg-orange-50 text-orange-700 border-orange-200" },
+      awaiting_customer_response: { label: "Chờ phản hồi", className: "bg-orange-50 text-orange-700 border-orange-200" },
       customer_withdrawn: { label: "Đã rút", className: "bg-slate-50 text-slate-700 border-slate-200" },
     };
     const item = config[s as keyof typeof config] || { label: status, className: "bg-gray-50 text-gray-700 border-gray-200" };
@@ -310,7 +311,7 @@ function ComplaintsPage() {
                 <SelectItem value="in_progress">Đang xử lý</SelectItem>
                 <SelectItem value="resolved">Đã giải quyết</SelectItem>
                 <SelectItem value="escalated">Đã chuyển Admin</SelectItem>
-                <SelectItem value="pending_admin_review">Chờ phản hồi</SelectItem>
+                <SelectItem value="awaiting_customer_response">Chờ phản hồi</SelectItem>
                 <SelectItem value="customer_withdrawn">Đã rút</SelectItem>
               </SelectContent>
             </Select>
@@ -540,6 +541,17 @@ function ComplaintsPage() {
                   <h4 className="font-bold text-xs text-muted-foreground uppercase flex-shrink-0">Hộp thư trao đổi:</h4>
                   <div className="flex-1 overflow-y-auto pr-1 space-y-3 min-h-0">
                     {activeComplaint.responses.map((response, idx: number) => {
+                      if (getComplaintSystemMessageType(response.message)) {
+                        return (
+                          <ComplaintSystemBanner
+                            key={idx}
+                            message={response.message}
+                            time={response.time}
+                            proposalLabel="Chủ sân đề xuất giải pháp"
+                          />
+                        );
+                      }
+
                       const isAdmin = response.from === "Admin";
                       const isMe = !isAdmin && response.from === "Khách hàng";
                       return (
@@ -565,7 +577,7 @@ function ComplaintsPage() {
 
               {/* Resolution (Static compact banner if resolved) */}
               {activeComplaint.status === "resolved" && activeComplaint.resolution && (
-                <div className="flex-shrink-0 bg-green-50 border border-green-200 dark:bg-green-950/20 dark:border-green-900/50 rounded-lg p-3 flex gap-2.5 items-start">
+                <div className="flex-shrink-0 bg-green-50 border border-green-200 dark:bg-green-950/20 dark:border-green-900/50 rounded-lg p-3 flex gap-2.5 items-start max-w-[85%] mr-auto">
                   <CheckCircle2 className="h-5 w-5 text-green-700 dark:text-green-500 shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <p className="text-xs font-bold text-green-800 dark:text-green-400">Đã giải quyết thành công</p>
@@ -577,8 +589,8 @@ function ComplaintsPage() {
                 </div>
               )}
 
-              {/* Pending admin review banner */}
-              {activeComplaint.status === "pending_admin_review" && (
+              {/* Awaiting customer response banner */}
+              {activeComplaint.status === "awaiting_customer_response" && (
                 <div className="flex-shrink-0 bg-orange-50 border border-orange-200 rounded-lg p-3 space-y-2">
                   <p className="text-xs font-bold text-orange-800">Chủ sân đã đề xuất giải pháp</p>
                   <p className="text-xs text-orange-700">
