@@ -13,18 +13,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { 
-  CheckCircle, 
-  XCircle, 
-  ChevronDown, 
-  ChevronUp, 
-  RotateCcw, 
-  Clock, 
-  DollarSign, 
-  Info, 
-  User, 
+import {
+  CheckCircle,
+  XCircle,
+  ChevronDown,
+  ChevronUp,
+  RotateCcw,
+  Clock,
+  DollarSign,
+  Info,
+  User,
   Calendar,
   AlertCircle,
+  AlertTriangle,
   HelpCircle,
   ChevronLeft,
   ChevronRight,
@@ -42,15 +43,18 @@ import { toast } from "sonner";
 import { get, post, put } from "@/lib/api";
 import { cancelBooking } from "@/lib/bookings-api";
 import type { PageResponse } from "@/types/common";
+import { ReportUserDialog } from "@/components/reports/ReportUserDialog";
 
 interface BookingItem {
   id: number;
   displayId: string;
   customer: {
+    userId?: number;
     name: string;
     phone: string;
     email: string;
   };
+  stadiumId?: number;
   venue: string;
   /** Tên khu phức hợp chứa sân — null nếu sân độc lập. Cùng 1 Owner có thể có nhiều complex dùng trùng tên sân con (vd "Sân 1"). */
   complexName?: string | null;
@@ -96,6 +100,9 @@ function BookingManagementPage() {
   // Xác nhận đã thu tiền mặt tại sân (AWAITING_CASH_PAYMENT → PAID).
   const [confirmCashBooking, setConfirmCashBooking] = useState<BookingItem | null>(null);
   const [isConfirmCashSubmitting, setIsConfirmCashSubmitting] = useState(false);
+
+  // Báo cáo hành vi khách hàng (Owner → Customer).
+  const [reportBooking, setReportBooking] = useState<BookingItem | null>(null);
 
   const [activeTab, setActiveTab] = useState("all");
   const [page, setPage] = useState(0);
@@ -407,6 +414,16 @@ function BookingManagementPage() {
                   Hủy đơn
                 </Button>
               )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400"
+                disabled={!booking.customer.userId}
+                onClick={() => setReportBooking(booking)}
+              >
+                <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
+                Báo cáo
+              </Button>
               <Button
                 size="sm"
                 variant="ghost"
@@ -1161,6 +1178,21 @@ function BookingManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ReportUserDialog
+        open={reportBooking !== null}
+        onOpenChange={(open) => {
+          if (!open) setReportBooking(null);
+        }}
+        reporteeId={reportBooking?.customer.userId}
+        bookingId={reportBooking?.id}
+        stadiumId={reportBooking?.stadiumId}
+        contextLabel={
+          reportBooking
+            ? `Báo cáo hành vi khách hàng ${reportBooking.customer.name} liên quan đến đơn đặt sân ${reportBooking.displayId}.`
+            : undefined
+        }
+      />
     </>
   );
 }

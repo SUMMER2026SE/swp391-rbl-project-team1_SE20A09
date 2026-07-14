@@ -39,11 +39,10 @@ function VerifyOTPForm() {
 
     setIsLoading(true);
     try {
-      await api.post("/auth/verify-otp", { email, otpCode: otp });
+      const response = await api.post("/auth/verify-otp", { email, otpCode: otp });
+      const accessToken: string | undefined = response.data?.accessToken;
       setIsSuccess(true);
 
-      const savedPassword = sessionStorage.getItem("pending_login_password");
-      const savedEmail = sessionStorage.getItem("pending_login_email");
       const isOwnerRegistration = sessionStorage.getItem("is_owner_registration") === "true";
 
       if (isOwnerRegistration) {
@@ -52,22 +51,19 @@ function VerifyOTPForm() {
         toast.success("Xác thực thành công! Đang đăng nhập...");
       }
 
-      if (savedPassword && savedEmail) {
-        const result = await signIn("credentials", {
+      if (accessToken) {
+        const result = await signIn("otp-verified", {
           redirect: false,
-          email: savedEmail,
-          password: savedPassword,
+          accessToken,
         });
 
-        sessionStorage.removeItem("pending_login_email");
-        sessionStorage.removeItem("pending_login_password");
         sessionStorage.removeItem("is_owner_registration");
 
         if (result?.error) {
           router.push("/login");
         } else if (isOwnerRegistration) {
           // Owner vừa xác thực email → đến profile để xem trạng thái chờ duyệt
-          router.push("/profile?tab=owner&status=pending");
+          router.push("/profile");
           router.refresh();
         } else {
           router.push("/");

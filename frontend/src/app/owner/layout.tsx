@@ -2,7 +2,7 @@
 
 import { UserAccountMenu } from "@/components/layout/Header";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   Home,
@@ -15,12 +15,13 @@ import {
   Menu,
   Calendar as CalendarIcon,
   HelpCircle,
+  ShieldAlert,
 } from "lucide-react";
 import { OwnerNotificationBell } from "@/components/notifications/OwnerNotificationBell";
 import { ChatBadge } from "@/components/chat/ChatBadge";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function OwnerLayout({
   children,
@@ -28,8 +29,29 @@ export default function OwnerLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const router = useRouter();
+  const { data: session, status } = useSession();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Owner UI (dashboard/menu đầy đủ) chỉ dành cho Owner ĐÃ được Admin duyệt —
+  // trước đây trang này chỉ check có session, không check role/approvedStatus
+  // nên Owner PENDING (hoặc bất kỳ role nào khác cố truy cập /owner/*) vẫn
+  // thấy y hệt giao diện Owner thật. Redirect về /profile (tab mặc định "info"
+  // đã có sẵn banner trạng thái hồ sơ) — trải nghiệm giống 1 user thông
+  // thường cho tới khi được duyệt, đúng đề xuất trong
+  // docs/auth_account_flow_findings.md #2.
+  const isApprovedOwner =
+    session?.user?.roleName === "Owner" && session.user.ownerApprovedStatus === "APPROVED";
+
+  useEffect(() => {
+    if (status === "authenticated" && !isApprovedOwner) {
+      router.replace("/profile");
+    }
+  }, [status, isApprovedOwner, router]);
+
+  if (status === "loading" || (status === "authenticated" && !isApprovedOwner)) {
+    return null;
+  }
 
   const menuItems = [
     { href: "/owner/dashboard", label: "Dashboard", icon: Home },
@@ -38,6 +60,7 @@ export default function OwnerLayout({
     { href: "/owner/revenue", label: "Doanh thu", icon: Wallet },
     { href: "/owner/refund-exceptions", label: "Ngoại lệ hoàn tiền", icon: HelpCircle },
     { href: "/owner/complaints", label: "Khiếu nại", icon: AlertTriangle },
+    { href: "/owner/reports", label: "Báo cáo của tôi", icon: ShieldAlert },
     { href: "/owner/notifications", label: "Thông báo", icon: Bell },
   ];
 
@@ -48,6 +71,7 @@ export default function OwnerLayout({
     if (path.startsWith("/owner/revenue")) return { title: "Doanh thu", subtitle: "Thống kê doanh thu" };
     if (path.startsWith("/owner/refund-exceptions")) return { title: "Ngoại lệ hoàn tiền", subtitle: "Duyệt yêu cầu hoàn tiền bất khả kháng" };
     if (path.startsWith("/owner/complaints")) return { title: "Khiếu nại", subtitle: "Quản lý khiếu nại khách hàng" };
+    if (path.startsWith("/owner/reports")) return { title: "Báo cáo của tôi", subtitle: "Các báo cáo hành vi bạn đã gửi" };
     if (path.startsWith("/owner/notifications")) return { title: "Thông báo", subtitle: "Thông báo hệ thống" };
     return { title: "Chủ sân", subtitle: "Hệ thống SportsBook" };
   };
@@ -59,7 +83,7 @@ export default function OwnerLayout({
     : "Chủ Sân";
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900 selection:bg-emerald-200">
+    <div className="h-screen overflow-hidden bg-slate-50 flex font-sans text-slate-900 selection:bg-emerald-200">
 
       {/* Sidebar - Desktop */}
       <aside className={`

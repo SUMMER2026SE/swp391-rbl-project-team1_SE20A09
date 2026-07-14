@@ -24,7 +24,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -48,8 +47,10 @@ public class AdminModerationAnalyticsServiceImpl implements AdminModerationAnaly
             LocalDate from,
             LocalDate to,
             String role,
-            String category,
-            String status,
+            ReportCategory reportCategory,
+            ComplaintPriority complaintPriority,
+            ReportStatus reportStatus,
+            ComplaintStatus complaintStatus,
             int topLimit) {
         LocalDate endDate = to != null ? to : LocalDate.now();
         LocalDate startDate = from != null ? from : endDate.minusDays(29);
@@ -61,15 +62,14 @@ public class AdminModerationAnalyticsServiceImpl implements AdminModerationAnaly
         }
 
         String normalizedRole = normalizeRole(role);
-        FilterPair<ReportCategory, ComplaintPriority> categoryFilter = parseCategory(category);
-        FilterPair<ReportStatus, ComplaintStatus> statusFilter = parseStatus(status);
         int limit = clampLimit(topLimit);
 
         LocalDateTime start = startDate.atStartOfDay();
         LocalDateTime end = endDate.atTime(LocalTime.MAX);
 
-        SourceMetrics reportMetrics = loadReportMetrics(start, end, normalizedRole, categoryFilter, statusFilter);
-        SourceMetrics complaintMetrics = loadComplaintMetrics(start, end, normalizedRole, categoryFilter, statusFilter);
+        SourceMetrics reportMetrics = loadReportMetrics(start, end, normalizedRole, reportCategory, reportStatus);
+        SourceMetrics complaintMetrics =
+                loadComplaintMetrics(start, end, normalizedRole, complaintPriority, complaintStatus);
 
         long totalSignals = reportMetrics.total + complaintMetrics.total;
         long openSignals = reportMetrics.open + complaintMetrics.open;
@@ -96,14 +96,8 @@ public class AdminModerationAnalyticsServiceImpl implements AdminModerationAnaly
             LocalDateTime start,
             LocalDateTime end,
             String role,
-            FilterPair<ReportCategory, ComplaintPriority> categoryFilter,
-            FilterPair<ReportStatus, ComplaintStatus> statusFilter) {
-        if (!categoryFilter.includeReports || !statusFilter.includeReports) {
-            return SourceMetrics.empty();
-        }
-
-        ReportCategory category = categoryFilter.reportValue;
-        ReportStatus status = statusFilter.reportValue;
+            ReportCategory category,
+            ReportStatus status) {
         long total = reportRepository.countModerationReports(start, end, role, status, category);
         List<AdminModerationAnalyticsResponse.Breakdown> statusBreakdown = toBreakdowns(
                 SOURCE_REPORT,
@@ -132,14 +126,8 @@ public class AdminModerationAnalyticsServiceImpl implements AdminModerationAnaly
             LocalDateTime start,
             LocalDateTime end,
             String role,
-            FilterPair<ReportCategory, ComplaintPriority> categoryFilter,
-            FilterPair<ReportStatus, ComplaintStatus> statusFilter) {
-        if (!categoryFilter.includeComplaints || !statusFilter.includeComplaints) {
-            return SourceMetrics.empty();
-        }
-
-        ComplaintPriority priority = categoryFilter.complaintValue;
-        ComplaintStatus status = statusFilter.complaintValue;
+            ComplaintPriority priority,
+            ComplaintStatus status) {
         long total = complaintRepository.countModerationComplaints(start, end, role, status, priority);
         List<AdminModerationAnalyticsResponse.Breakdown> statusBreakdown = toBreakdowns(
                 SOURCE_COMPLAINT,
@@ -183,50 +171,6 @@ public class AdminModerationAnalyticsServiceImpl implements AdminModerationAnaly
             return ROLE_OWNER;
         }
         throw new BadRequestException("role must be Customer or Owner.");
-    }
-
-    private FilterPair<ReportCategory, ComplaintPriority> parseCategory(String rawCategory) {
-        if (rawCategory == null || rawCategory.isBlank() || "ALL".equalsIgnoreCase(rawCategory)) {
-            return FilterPair.includeAll();
-        }
-        String value = rawCategory.trim().toUpperCase(Locale.ROOT);
-        ReportCategory reportCategory = tryParseEnum(ReportCategory.class, value);
-        ComplaintPriority complaintPriority = tryParseEnum(ComplaintPriority.class, value);
-        if (reportCategory == null && complaintPriority == null) {
-            throw new BadRequestException("Unknown moderation category.");
-        }
-        return FilterPair.<ReportCategory, ComplaintPriority>builder()
-                .reportValue(reportCategory)
-                .complaintValue(complaintPriority)
-                .includeReports(reportCategory != null)
-                .includeComplaints(complaintPriority != null)
-                .build();
-    }
-
-    private FilterPair<ReportStatus, ComplaintStatus> parseStatus(String rawStatus) {
-        if (rawStatus == null || rawStatus.isBlank() || "ALL".equalsIgnoreCase(rawStatus)) {
-            return FilterPair.includeAll();
-        }
-        String value = rawStatus.trim().toUpperCase(Locale.ROOT);
-        ReportStatus reportStatus = tryParseEnum(ReportStatus.class, value);
-        ComplaintStatus complaintStatus = tryParseEnum(ComplaintStatus.class, value);
-        if (reportStatus == null && complaintStatus == null) {
-            throw new BadRequestException("Unknown moderation status.");
-        }
-        return FilterPair.<ReportStatus, ComplaintStatus>builder()
-                .reportValue(reportStatus)
-                .complaintValue(complaintStatus)
-                .includeReports(reportStatus != null)
-                .includeComplaints(complaintStatus != null)
-                .build();
-    }
-
-    private <T extends Enum<T>> T tryParseEnum(Class<T> enumType, String value) {
-        try {
-            return Enum.valueOf(enumType, value);
-        } catch (IllegalArgumentException ex) {
-            return null;
-        }
     }
 
     private int clampLimit(int requestedLimit) {
@@ -381,18 +325,6 @@ public class AdminModerationAnalyticsServiceImpl implements AdminModerationAnaly
     }
 
     @lombok.Builder
-    private record FilterPair<L, R>(
-            L reportValue,
-            R complaintValue,
-            boolean includeReports,
-            boolean includeComplaints) {
-
-        private static <L, R> FilterPair<L, R> includeAll() {
-            return new FilterPair<>(null, null, true, true);
-        }
-    }
-
-    @lombok.Builder
     private record SourceMetrics(
             long total,
             long open,
@@ -402,9 +334,5 @@ public class AdminModerationAnalyticsServiceImpl implements AdminModerationAnaly
             List<AdminModerationAnalyticsResponse.Breakdown> statusBreakdown,
             Map<LocalDate, Long> trend,
             List<Duration> durations) {
-
-        private static SourceMetrics empty() {
-            return new SourceMetrics(0, 0, 0, List.of(), List.of(), List.of(), Map.of(), List.of());
-        }
     }
 }
