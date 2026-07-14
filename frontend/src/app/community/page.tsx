@@ -113,7 +113,6 @@ function MatchRequestFeedPage() {
   const { data: session } = useSession();
   const { triggerLoginModal } = useRouteGuard();
   const { isOpen, options, confirm, close, execute, isLoading: confirming } = useConfirm();
-  const searchParams = useSearchParams();
   const [hasProcessedParam, setHasProcessedParam] = useState(false);
 
   const requireLogin = () => {
