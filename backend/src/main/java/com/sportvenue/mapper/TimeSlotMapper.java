@@ -9,6 +9,7 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface TimeSlotMapper {
     @Mapping(target = "stadiumId", source = "stadium.stadiumId")
+    @Mapping(target = "available", ignore = true)
     TimeSlotResponse toResponse(TimeSlot timeSlot);
 
     @Mapping(target = "slotId", ignore = true)
