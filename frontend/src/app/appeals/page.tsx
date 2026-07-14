@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Header } from "@/components/layout/Header";
+import { Footer } from "@/components/landing/Footer";
 
 type AppealStatus = "PENDING" | "APPROVED" | "REJECTED";
 
@@ -99,107 +101,115 @@ export default function AppealPage() {
 
   if (!isBlocked) {
     return (
-      <main className="min-h-screen bg-slate-50 px-4 py-10">
-        <div className="mx-auto max-w-3xl">
-          <Card>
-            <CardContent className="flex items-center gap-4 p-6">
-              <CheckCircle2 className="h-9 w-9 text-emerald-600" />
-              <div className="flex-1">
-                <h1 className="text-xl font-semibold text-slate-900">Tài khoản đang hoạt động</h1>
-                <p className="text-sm text-slate-600">Bạn không cần gửi kháng cáo mở khóa.</p>
-              </div>
-              <Button onClick={() => router.push("/")}>Về trang chủ</Button>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+      <div className="min-h-screen bg-background flex flex-col">
+        <Header />
+        <main className="flex-1 bg-slate-50 px-4 py-10">
+          <div className="mx-auto max-w-3xl">
+            <Card>
+              <CardContent className="flex items-center gap-4 p-6">
+                <CheckCircle2 className="h-9 w-9 text-emerald-600" />
+                <div className="flex-1">
+                  <h1 className="text-xl font-semibold text-slate-900">Tài khoản đang hoạt động</h1>
+                  <p className="text-sm text-slate-600">Bạn không cần gửi kháng cáo mở khóa.</p>
+                </div>
+                <Button onClick={() => router.push("/")}>Về trang chủ</Button>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+        <Footer />
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-10">
-      <div className="mx-auto max-w-4xl space-y-6">
-        <section className="rounded-lg border border-rose-200 bg-white p-6">
-          <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-rose-100">
-              <ShieldAlert className="h-6 w-6 text-rose-600" />
+    <div className="min-h-screen bg-background flex flex-col">
+      <Header />
+      <main className="flex-1 bg-slate-50 px-4 py-10">
+        <div className="mx-auto max-w-4xl space-y-6">
+          <section className="rounded-lg border border-rose-200 bg-white p-6">
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-rose-100">
+                <ShieldAlert className="h-6 w-6 text-rose-600" />
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-2xl font-semibold text-slate-950">Tài khoản của bạn đang bị khóa</h1>
+                <p className="text-sm text-slate-600">
+                  Lý do: {user?.lockReason || "Admin chưa ghi chú lý do cụ thể."}
+                </p>
+              </div>
             </div>
-            <div className="space-y-2">
-              <h1 className="text-2xl font-semibold text-slate-950">Tài khoản của bạn đang bị khóa</h1>
-              <p className="text-sm text-slate-600">
-                Lý do: {user?.lockReason || "Admin chưa ghi chú lý do cụ thể."}
-              </p>
-            </div>
-          </div>
-        </section>
+          </section>
 
-        {appeal && (
+          {appeal && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-4">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Clock className="h-5 w-5 text-slate-500" />
+                  Kháng cáo gần nhất
+                </CardTitle>
+                {statusBadge(appeal.status)}
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <p className="text-slate-700">{appeal.appealText}</p>
+                {appeal.adminNote && (
+                  <div className="rounded-md bg-slate-100 p-3 text-slate-700">
+                    Ghi chú Admin: {appeal.adminNote}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-4">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Clock className="h-5 w-5 text-slate-500" />
-                Kháng cáo gần nhất
-              </CardTitle>
-              {statusBadge(appeal.status)}
+            <CardHeader>
+              <CardTitle>Gửi kháng cáo</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <p className="text-slate-700">{appeal.appealText}</p>
-              {appeal.adminNote && (
-                <div className="rounded-md bg-slate-100 p-3 text-slate-700">
-                  Ghi chú Admin: {appeal.adminNote}
+            <CardContent>
+              <form onSubmit={submitAppeal} className="space-y-5">
+                {message && <div className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">{message}</div>}
+                {error && <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
+                {pendingAppeal && (
+                  <div className="flex items-start gap-2 rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    Bạn đã có một kháng cáo đang chờ xử lý.
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="appealText">Nội dung kháng cáo</Label>
+                  <Textarea
+                    id="appealText"
+                    value={appealText}
+                    onChange={(event) => setAppealText(event.target.value)}
+                    disabled={pendingAppeal || submitting}
+                    rows={6}
+                    maxLength={2000}
+                  />
                 </div>
-              )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="evidenceUrls">Bằng chứng</Label>
+                  <Textarea
+                    id="evidenceUrls"
+                    value={evidenceText}
+                    onChange={(event) => setEvidenceText(event.target.value)}
+                    disabled={pendingAppeal || submitting}
+                    rows={4}
+                    placeholder="Mỗi dòng một URL, tối đa 5 URL"
+                  />
+                </div>
+
+                <Button type="submit" disabled={pendingAppeal || submitting}>
+                  {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Gửi kháng cáo
+                </Button>
+              </form>
             </CardContent>
           </Card>
-        )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Gửi kháng cáo</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={submitAppeal} className="space-y-5">
-              {message && <div className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">{message}</div>}
-              {error && <div className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
-              {pendingAppeal && (
-                <div className="flex items-start gap-2 rounded-md bg-amber-50 p-3 text-sm text-amber-800">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  Bạn đã có một kháng cáo đang chờ xử lý.
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="appealText">Nội dung kháng cáo</Label>
-                <Textarea
-                  id="appealText"
-                  value={appealText}
-                  onChange={(event) => setAppealText(event.target.value)}
-                  disabled={pendingAppeal || submitting}
-                  rows={6}
-                  maxLength={2000}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="evidenceUrls">Bằng chứng</Label>
-                <Textarea
-                  id="evidenceUrls"
-                  value={evidenceText}
-                  onChange={(event) => setEvidenceText(event.target.value)}
-                  disabled={pendingAppeal || submitting}
-                  rows={4}
-                  placeholder="Mỗi dòng một URL, tối đa 5 URL"
-                />
-              </div>
-
-              <Button type="submit" disabled={pendingAppeal || submitting}>
-                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Gửi kháng cáo
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    </main>
+        </div>
+      </main>
+      <Footer />
+    </div>
   );
 }

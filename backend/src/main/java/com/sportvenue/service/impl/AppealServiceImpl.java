@@ -15,7 +15,7 @@ import com.sportvenue.repository.AppealRepository;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.security.UserPrincipal;
-import com.sportvenue.service.AccountStatusHistoryService;
+import com.sportvenue.service.AdminAccountLockService;
 import com.sportvenue.service.AdminOwnerService;
 import com.sportvenue.service.AppealService;
 import com.sportvenue.service.NotificationService;
@@ -36,7 +36,7 @@ public class AppealServiceImpl implements AppealService {
     private final AppealRepository appealRepository;
     private final UserRepository userRepository;
     private final OwnerRepository ownerRepository;
-    private final AccountStatusHistoryService accountStatusHistoryService;
+    private final AdminAccountLockService adminAccountLockService;
     private final AdminOwnerService adminOwnerService;
     private final NotificationService notificationService;
 
@@ -121,14 +121,7 @@ public class AppealServiceImpl implements AppealService {
                 .map(Owner::getOwnerId)
                 .ifPresentOrElse(
                         ownerId -> adminOwnerService.lockUnlockOwner(ownerId, true, reason, adminId),
-                        () -> {
-                            AccountStatus previousStatus = lockedUser.getAccountStatus();
-                            lockedUser.setAccountStatus(AccountStatus.ACTIVE);
-                            lockedUser.setLockReason(null);
-                            accountStatusHistoryService.recordStatusChange(
-                                    lockedUser, adminId, previousStatus, AccountStatus.ACTIVE, reason);
-                            userRepository.save(lockedUser);
-                        });
+                        () -> adminAccountLockService.applyLockState(lockedUser, true, adminId, reason));
     }
 
     private List<String> normalizeEvidenceUrls(List<String> evidenceUrls) {

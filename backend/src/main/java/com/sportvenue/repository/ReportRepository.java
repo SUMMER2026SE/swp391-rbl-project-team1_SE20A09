@@ -120,7 +120,7 @@ public interface ReportRepository extends JpaRepository<Report, Integer> {
             FROM Report r
             WHERE r.createdAt BETWEEN :start AND :end
             AND (:role IS NULL OR r.reportee.role.roleName = :role)
-            AND (:status IS NULL OR r.status = :status)
+            AND (:status IS NULL AND r.status = com.sportvenue.entity.enums.ReportStatus.ACTION_TAKEN OR :status IS NOT NULL AND r.status = :status)
             AND (:category IS NULL OR r.category = :category)
             GROUP BY r.reportee.userId, r.reportee.firstName, r.reportee.lastName,
                      r.reportee.email, r.reportee.role.roleName

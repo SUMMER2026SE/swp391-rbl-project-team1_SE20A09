@@ -88,6 +88,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         return path.equals("/api/v1/auth/me")
                 || path.equals("/api/v1/appeals")
-                || path.startsWith("/api/v1/appeals/");
+                || path.startsWith("/api/v1/appeals/")
+                || path.equals("/api/v1/notifications/unread-count");
     }
 }

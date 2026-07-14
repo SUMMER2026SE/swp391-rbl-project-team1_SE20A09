@@ -4,6 +4,8 @@ import { SessionProvider, useSession } from "next-auth/react";
 import React, { useEffect, useRef } from "react";
 import { get } from "@/lib/api";
 import { ApiResponse } from "@/types/notification";
+import { Client } from "@stomp/stompjs";
+import SockJS from "sockjs-client";
 
 function TokenSync() {
   const { data: session, status } = useSession();
@@ -61,6 +63,52 @@ function NotificationDrivenSessionRefresh() {
   return null;
 }
 
+// Lắng nghe sự thay đổi trạng thái tài khoản thời gian thực qua WebSocket
+function AccountStatusWebSocketListener() {
+  const { data: session, status, update: updateSession } = useSession();
+  const userId = session?.user?.userId;
+
+  useEffect(() => {
+    if (status !== "authenticated" || !userId) return;
+
+    const rawBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+    const backendBase = rawBase
+      .replace(/\/api\/v1\/?$/, "")
+      .replace(/^wss?:\/\//, "http://");
+    const sockJsUrl = `${backendBase}/ws`;
+
+    const token = localStorage.getItem("access_token");
+
+    const client = new Client({
+      webSocketFactory: () => new SockJS(sockJsUrl),
+      connectHeaders: token ? { Authorization: `Bearer ${token}` } : {},
+      reconnectDelay: 5000,
+      heartbeatIncoming: 10000,
+      heartbeatOutgoing: 10000,
+      onConnect: () => {
+        client.subscribe(`/topic/user/${userId}/account-status`, (msg) => {
+          try {
+            const data = JSON.parse(msg.body);
+            if (data && data.status) {
+              updateSession();
+            }
+          } catch (e) {
+            console.error("Failed to parse account status WS message:", e);
+          }
+        });
+      },
+    });
+
+    client.activate();
+
+    return () => {
+      client.deactivate();
+    };
+  }, [status, userId, updateSession]);
+
+  return null;
+}
+
 export default function NextAuthProvider({ children }: { children: React.ReactNode }) {
   return (
     // refetchInterval (giây) khiến client định kỳ gọi lại /api/auth/session,
@@ -71,6 +119,7 @@ export default function NextAuthProvider({ children }: { children: React.ReactNo
     <SessionProvider refetchInterval={5 * 60}>
       <TokenSync />
       <NotificationDrivenSessionRefresh />
+      <AccountStatusWebSocketListener />
       {children}
     </SessionProvider>
   );
