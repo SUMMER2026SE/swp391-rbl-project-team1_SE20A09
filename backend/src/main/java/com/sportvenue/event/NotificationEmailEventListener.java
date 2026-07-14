@@ -126,7 +126,7 @@ public class NotificationEmailEventListener {
                     break;
                 case "MATCH_CANCELLED":
                     if (entity instanceof MatchRequest request) {
-                        emailService.sendMatchCancelledEmail(toEmail, "Người chơi", request.getUser().getFullName(), request.getStartTime().toString());
+                        emailService.sendMatchCancelledEmail(toEmail, customerName, request.getTitle(), request.getStartTime().toString());
                     }
                     break;
                 case "UPGRADE_APPROVED":

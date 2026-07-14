@@ -706,18 +706,28 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         String finalReason = (reason == null || reason.trim().isEmpty()) ? "Chủ nhà không cung cấp lý do cụ thể" : reason.trim();
         matchRequestRepository.updateStatusAndReason(matchId, MatchStatus.CANCELLED, finalReason);
 
-        try {
-            customerNotificationService.notifyMatchCancelled(match.getUser().getUserId(), match);
-        } catch (Exception ex) {
-            log.warn("Failed to emit match cancelled notification for match {}", matchId, ex);
-        }
-
         // 5. Bulk update các JoinRequest liên quan sang CANCELLED
         int affectedRows = joinRequestRepository.bulkUpdateStatus(
                 matchId,
                 JoinRequestStatus.CANCELLED,
                 Arrays.asList(JoinRequestStatus.PENDING, JoinRequestStatus.APPROVED)
         );
+
+        // 6. Gửi thông báo hủy kèo cho TẤT CẢ người tham gia (APPROVED/PENDING) — KHÔNG gửi cho host
+        // (host là người vừa thực hiện hành động hủy, không cần nhận thông báo về hành động của
+        // chính mình). Những người tham gia mới là đối tượng bị ảnh hưởng và cần biết lịch của
+        // họ vừa mất.
+        try {
+            List<JoinRequest> joinRequests = joinRequestRepository.findAllByMatchRequestMatchId(matchId);
+            for (JoinRequest jr : joinRequests) {
+                if (jr.getRequestStatus() == JoinRequestStatus.APPROVED
+                        || jr.getRequestStatus() == JoinRequestStatus.PENDING) {
+                    customerNotificationService.notifyMatchCancelled(jr.getUser().getUserId(), match);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to emit match cancelled notification for match {}", matchId, ex);
+        }
 
         log.info("Successfully cancelled Match ID: {}. Affected {} join requests.", matchId, affectedRows);
     }

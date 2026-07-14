@@ -193,11 +193,12 @@ public class BookingServiceImpl implements BookingService {
                 customer.getEmail(), stadium.getStadiumId(), slot.getSlotId(),
                 request.getReservationDate(), saved.getBookingId(), totalPrice, serviceFee);
 
-        try {
-            customerNotificationService.notifyBookingConfirmed(customer.getUserId(), saved);
-        } catch (Exception ex) {
-            log.warn("Failed to emit booking confirmed notification for booking {}", saved.getBookingId(), ex);
-        }
+        // Booking mới ở trạng thái PENDING_PAYMENT (giữ chỗ 5 phút chờ thanh toán theo
+        // PAYMENT_HOLD_MINUTES) — KHÔNG gửi "đã xác nhận" ở bước này. Nếu khách không thanh
+        // toán, đơn tự expire/huỷ — họ sẽ nhận thông báo "đã xác nhận" sai sự thật trước đó.
+        // Notification "đã xác nhận" được gửi đúng chỗ trong PaymentServiceImpl sau callback
+        // VNPay/CASH thành công (qua notifyPaymentReceived) — đảm bảo chỉ thông báo khi
+        // booking thật sự đã được xác nhận thanh toán.
 
         return toBookingDetailResponse(saved, stadium, slot);
     }
