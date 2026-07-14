@@ -19,9 +19,14 @@ import com.sportvenue.service.BookingService;
 import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.PublicStadiumService;
 import com.sportvenue.service.ai.handler.BookingHandler;
+import com.sportvenue.service.ai.handler.BookingStatusHandler;
+import com.sportvenue.service.ai.handler.CancelBookingHandler;
+import com.sportvenue.service.ai.handler.GetPriceHandler;
 import com.sportvenue.service.ai.handler.JoinMatchHandler;
 import com.sportvenue.service.ai.handler.MatchRequestHandler;
+import com.sportvenue.service.ai.handler.MyBookingsHandler;
 import com.sportvenue.service.ai.handler.PolicyHandler;
+import com.sportvenue.service.ai.handler.RecommendTimeHandler;
 import com.sportvenue.service.ai.handler.SlotAvailabilityHandler;
 import com.sportvenue.service.ai.handler.StadiumSearchHandler;
 import com.sportvenue.util.location.VietnamLocationResolver;
@@ -71,6 +76,20 @@ class AiChatE2ETest {
     private AiUsageLogRepository aiUsageLogRepository;
     @Mock
     private StringRedisTemplate redisTemplate;
+    @Mock
+    private MyBookingsHandler myBookingsHandler;
+    @Mock
+    private BookingStatusHandler bookingStatusHandler;
+    @Mock
+    private CancelBookingHandler cancelBookingHandler;
+    @Mock
+    private GetPriceHandler getPriceHandler;
+    @Mock
+    private RecommendTimeHandler recommendTimeHandler;
+    @Mock
+    private com.sportvenue.service.ai.ParamNormalizer paramNormalizer;
+    @Mock
+    private com.sportvenue.service.ai.IntentValidator intentValidator;
 
     private AiChatServiceImpl aiChatService;
     private AiConversationContextService conversationContextService;
@@ -79,6 +98,12 @@ class AiChatE2ETest {
     void setUp() {
         ValueOperations<String, String> valueOps = mock(ValueOperations.class);
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOps);
+
+        when(paramNormalizer.normalize(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(intentValidator.validate(any())).thenAnswer(invocation -> {
+            com.sportvenue.service.ai.ExtractedIntentResult result = invocation.getArgument(0);
+            return new IntentValidator.ValidationResult(true, result, "PASS", null);
+        });
 
         conversationContextService = new AiConversationContextService(redisTemplate, new ObjectMapper());
 
@@ -99,7 +124,9 @@ class AiChatE2ETest {
         JoinMatchHandler joinMatchHandler = mock(JoinMatchHandler.class);
 
         aiChatService = new AiChatServiceImpl(groqClient, stadiumSearchHandler, slotAvailabilityHandler,
-                matchRequestHandler, policyHandler, bookingHandler, joinMatchHandler, aiUsageLogRepository);
+                matchRequestHandler, policyHandler, bookingHandler, joinMatchHandler, myBookingsHandler,
+                bookingStatusHandler, cancelBookingHandler, getPriceHandler, recommendTimeHandler,
+                aiUsageLogRepository, paramNormalizer, intentValidator);
     }
 
     private AiChatTurnRequest request(String message) {

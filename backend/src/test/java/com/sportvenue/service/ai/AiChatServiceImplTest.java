@@ -3,9 +3,14 @@ package com.sportvenue.service.ai;
 import com.sportvenue.dto.request.AiChatTurnRequest;
 import com.sportvenue.dto.response.AiChatTurnResponse;
 import com.sportvenue.service.ai.handler.BookingHandler;
+import com.sportvenue.service.ai.handler.BookingStatusHandler;
+import com.sportvenue.service.ai.handler.CancelBookingHandler;
+import com.sportvenue.service.ai.handler.GetPriceHandler;
 import com.sportvenue.service.ai.handler.JoinMatchHandler;
 import com.sportvenue.service.ai.handler.MatchRequestHandler;
+import com.sportvenue.service.ai.handler.MyBookingsHandler;
 import com.sportvenue.service.ai.handler.PolicyHandler;
+import com.sportvenue.service.ai.handler.RecommendTimeHandler;
 import com.sportvenue.service.ai.handler.SlotAvailabilityHandler;
 import com.sportvenue.service.ai.handler.StadiumSearchHandler;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,6 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -26,6 +33,7 @@ import static org.mockito.Mockito.when;
  * toàn không được phép làm crash request (docs/ai_chatbot_rebuild_plan.md mục 6.1).
  */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class AiChatServiceImplTest {
 
     @Mock
@@ -43,14 +51,36 @@ class AiChatServiceImplTest {
     @Mock
     private JoinMatchHandler joinMatchHandler;
     @Mock
+    private MyBookingsHandler myBookingsHandler;
+    @Mock
+    private BookingStatusHandler bookingStatusHandler;
+    @Mock
+    private CancelBookingHandler cancelBookingHandler;
+    @Mock
+    private GetPriceHandler getPriceHandler;
+    @Mock
+    private RecommendTimeHandler recommendTimeHandler;
+    @Mock
+    private ParamNormalizer paramNormalizer;
+    @Mock
+    private IntentValidator intentValidator;
+    @Mock
     private com.sportvenue.repository.AiUsageLogRepository aiUsageLogRepository;
 
     private AiChatServiceImpl service;
 
     @BeforeEach
     void setUp() {
+        when(paramNormalizer.normalize(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(intentValidator.validate(any())).thenAnswer(invocation -> {
+            com.sportvenue.service.ai.ExtractedIntentResult result = invocation.getArgument(0);
+            return new IntentValidator.ValidationResult(true, result, "PASS", null);
+        });
+
         service = new AiChatServiceImpl(groqClient, stadiumSearchHandler, slotAvailabilityHandler,
-                matchRequestHandler, policyHandler, bookingHandler, joinMatchHandler, aiUsageLogRepository);
+                matchRequestHandler, policyHandler, bookingHandler, joinMatchHandler, myBookingsHandler,
+                bookingStatusHandler, cancelBookingHandler, getPriceHandler, recommendTimeHandler,
+                aiUsageLogRepository, paramNormalizer, intentValidator);
     }
 
     private AiChatTurnRequest request(String message) {
@@ -90,7 +120,7 @@ class AiChatServiceImplTest {
         AiChatTurnResponse response = service.handleChat(request("tìm sân"), null, "s:test");
 
         assertThat(response.getIntent()).isEqualTo("unknown");
-        assertThat(response.getMessage()).contains("CSKH");
+        assertThat(response.getMessage()).contains("quá tải");
     }
 
     @Test
