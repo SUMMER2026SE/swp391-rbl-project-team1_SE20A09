@@ -1865,12 +1865,6 @@ function MatchRequestFeedPage() {
 function MatchRequestFeedPageWrapper() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-slate-50/50 flex items-center justify-center">Đang tải cộng đồng...</div>}>
-import { Suspense } from "react";
-
-export default function CommunityPage() {
-  return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
-
       <MatchRequestFeedPage />
     </Suspense>
   );
