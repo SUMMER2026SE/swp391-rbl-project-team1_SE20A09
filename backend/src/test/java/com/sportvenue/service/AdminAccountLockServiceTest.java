@@ -35,6 +35,9 @@ class AdminAccountLockServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
+
     @InjectMocks
     private AdminAccountLockService adminAccountLockService;
 

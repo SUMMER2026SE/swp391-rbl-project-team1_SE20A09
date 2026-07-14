@@ -15,7 +15,7 @@ import com.sportvenue.repository.AppealRepository;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.security.UserPrincipal;
-import com.sportvenue.service.AccountStatusHistoryService;
+import com.sportvenue.service.AdminAccountLockService;
 import com.sportvenue.service.AdminOwnerService;
 import com.sportvenue.service.NotificationService;
 import org.junit.jupiter.api.Test;
@@ -48,7 +48,7 @@ class AppealServiceImplTest {
     private OwnerRepository ownerRepository;
 
     @Mock
-    private AccountStatusHistoryService accountStatusHistoryService;
+    private AdminAccountLockService adminAccountLockService;
 
     @Mock
     private AdminOwnerService adminOwnerService;
@@ -135,16 +135,13 @@ class AppealServiceImplTest {
         when(userRepository.findById(1)).thenReturn(Optional.of(admin));
         when(appealRepository.findById(99)).thenReturn(Optional.of(appeal));
         when(ownerRepository.findByUserUserId(10)).thenReturn(Optional.empty());
+        when(adminAccountLockService.applyLockState(lockedUser, true, 1, "Accepted")).thenReturn(AccountStatus.ACTIVE);
         when(appealRepository.save(any(Appeal.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         AppealResponse response = appealService.reviewAppeal(99, request, new UserPrincipal(admin));
 
         assertEquals(AppealStatus.APPROVED, response.getStatus());
-        assertEquals(AccountStatus.ACTIVE, lockedUser.getAccountStatus());
-        assertNull(lockedUser.getLockReason());
-        verify(userRepository).save(lockedUser);
-        verify(accountStatusHistoryService).recordStatusChange(
-                lockedUser, 1, AccountStatus.BLOCKED, AccountStatus.ACTIVE, "Accepted");
+        verify(adminAccountLockService).applyLockState(lockedUser, true, 1, "Accepted");
         verify(notificationService).createNotification(
                 eq(10),
                 eq("Kháng cáo đã được chấp nhận"),
