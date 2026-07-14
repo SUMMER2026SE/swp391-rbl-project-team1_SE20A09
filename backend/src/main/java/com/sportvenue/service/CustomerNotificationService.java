@@ -35,6 +35,7 @@ public interface CustomerNotificationService {
     void notifyComplaintAcknowledged(Integer customerId, Complaint complaint);
     void notifyComplaintOwnerReplied(Integer customerId, Complaint complaint, String replyText);
     void notifyComplaintResolved(Integer customerId, Complaint complaint, String resolution);
+    void notifyComplaintEscalated(Integer customerId, Complaint complaint);
     void notifyReviewReminder(Integer customerId, Booking booking);
     void notifyReviewOwnerResponded(Integer customerId, Review review, String ownerResponse);
     void notifyMatchRequestReceived(Integer customerId, JoinRequest request);

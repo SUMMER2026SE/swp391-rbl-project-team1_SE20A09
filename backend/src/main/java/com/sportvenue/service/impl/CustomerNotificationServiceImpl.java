@@ -227,6 +227,16 @@ public class CustomerNotificationServiceImpl implements CustomerNotificationServ
 
     @Override
     @Transactional
+    public void notifyComplaintEscalated(Integer customerId, Complaint complaint) {
+        saveAndPublish(customerId, NotificationType.COMPLAINT_ESCALATED,
+                "Khiếu nại được chuyển lên Admin",
+                "Khiếu nại #" + complaint.getComplaintId() + " của bạn được chuyển lên ban quản trị để xử lý tiếp",
+                String.valueOf(complaint.getComplaintId()),
+                complaint);
+    }
+
+    @Override
+    @Transactional
     public void notifyReviewReminder(Integer customerId, Booking booking) {
         saveAndPublish(customerId, NotificationType.REVIEW_REMINDER,
                 "Bạn có chuyến đi vừa qua",

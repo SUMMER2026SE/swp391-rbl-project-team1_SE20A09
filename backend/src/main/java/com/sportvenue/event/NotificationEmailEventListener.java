@@ -1,5 +1,12 @@
 package com.sportvenue.event;
 
+import java.math.BigDecimal;
+
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
+
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.Complaint;
 import com.sportvenue.entity.JoinRequest;
@@ -11,14 +18,9 @@ import com.sportvenue.entity.User;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.EmailService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.stereotype.Component;
-
-import java.math.BigDecimal;
-import java.time.LocalDate;
 
 @Component
 @RequiredArgsConstructor
@@ -28,7 +30,7 @@ public class NotificationEmailEventListener {
     private final EmailService emailService;
     private final UserRepository userRepository;
 
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Async
     public void handleNotificationEmail(NotificationEmailEvent event) {
         try {
