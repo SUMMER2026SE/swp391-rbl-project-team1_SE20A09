@@ -30,7 +30,7 @@ CREATE UNIQUE INDEX ux_appeals_one_pending_per_user
     ON appeals(user_id)
     WHERE status = 'PENDING';
 
-ALTER TABLE notifications DROP CONSTRAINT notifications_notification_type_check;
+ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_notification_type_check;
 
 ALTER TABLE notifications ADD CONSTRAINT notifications_notification_type_check
     CHECK (notification_type IN (

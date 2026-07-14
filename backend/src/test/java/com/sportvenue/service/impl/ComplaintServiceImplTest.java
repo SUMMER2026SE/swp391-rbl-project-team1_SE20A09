@@ -74,6 +74,7 @@ class ComplaintServiceImplTest {
     @Mock private com.sportvenue.service.EmailService emailService;
     @Mock private com.sportvenue.util.AfterCommitExecutor afterCommitExecutor;
     @Mock private ComplaintEscalationService escalationService;
+    @Mock private com.sportvenue.service.CustomerNotificationService customerNotificationService;
 
     @InjectMocks
     private ComplaintServiceImpl complaintService;

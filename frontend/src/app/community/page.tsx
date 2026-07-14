@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import type { Session } from "next-auth";
 import { useRouteGuard } from "@/components/shared/RouteGuard";
 import { Header } from "@/components/layout/Header";
@@ -106,6 +106,8 @@ const getMatchStatusBadgeClass = (m: MatchResponse) => {
 function MatchRequestFeedPage() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const notifyMatchId = searchParams.get("matchId");
   const { data: session } = useSession();
   const { triggerLoginModal } = useRouteGuard();
   const { isOpen, options, confirm, close, execute, isLoading: confirming } = useConfirm();
@@ -291,6 +293,17 @@ function MatchRequestFeedPage() {
     fetchFeed();
     fetchDropdowns();
   }, []);
+
+  // Auto-open manage dialog when navigated from notification with matchId param
+  useEffect(() => {
+    if (!notifyMatchId || loadingFeed || matchRequests.length === 0) return;
+    const matchId = Number(notifyMatchId);
+    const match = matchRequests.find((m) => m.matchId === matchId);
+    if (match) {
+      setSelectedManageMatch(match);
+      setShowManageDialog(true);
+    }
+  }, [notifyMatchId, loadingFeed, matchRequests]);
 
   useEffect(() => {
     if (session?.user) {
@@ -1784,4 +1797,12 @@ function MatchRequestFeedPage() {
   );
 }
 
-export default MatchRequestFeedPage;
+import { Suspense } from "react";
+
+export default function CommunityPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
+      <MatchRequestFeedPage />
+    </Suspense>
+  );
+}

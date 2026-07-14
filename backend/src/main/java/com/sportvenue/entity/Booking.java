@@ -136,4 +136,12 @@ public class Booking implements Serializable {
      */
     @Column(name = "reminder_sent_at")
     private LocalDateTime reminderSentAt;
+
+    /**
+     * Thời điểm đã gửi nhắc đánh giá cho khách (sau 1-2 ngày kể từ ngày chơi).
+     * NULL = chưa gửi, NOT NULL = đã gửi — chống duplicate.
+     * Dùng bởi {@code ReviewReminderScheduler}.
+     */
+    @Column(name = "review_reminder_sent_at")
+    private LocalDateTime reviewReminderSentAt;
 }
