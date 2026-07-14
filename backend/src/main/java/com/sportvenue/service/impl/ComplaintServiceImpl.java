@@ -82,26 +82,14 @@ public class ComplaintServiceImpl implements ComplaintService {
     @Override
     public ComplaintResponse createComplaint(CreateComplaintRequest request, String customerEmail) {
         log.info("Customer {} is creating complaint for bookingId: {}", customerEmail, request.getBookingId());
-        
+
         User user = userRepository.findByEmail(customerEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng: " + customerEmail));
 
         Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân ID: " + request.getBookingId()));
 
-        if (!booking.getUser().getUserId().equals(user.getUserId())) {
-            throw new BadRequestException("Bạn không có quyền khiếu nại đơn đặt sân này!");
-        }
-
-        // Allow complaints for COMPLETED (normal case) and CANCELLED (owner fault cases)
-        if (booking.getBookingStatus() != BookingStatus.COMPLETED && 
-            booking.getBookingStatus() != BookingStatus.CANCELLED) {
-            throw new BadRequestException("Bạn chỉ có thể khiếu nại đơn đặt sân đã hoàn thành hoặc bị hủy!");
-        }
-
-        if (complaintRepository.existsByBookingBookingIdAndStatusNot(request.getBookingId(), ComplaintStatus.RESOLVED)) {
-            throw new BadRequestException("Đơn đặt sân này đang có khiếu nại chưa được giải quyết!");
-        }
+        validateComplaintCreation(request, user, booking);
 
         Complaint complaint = Complaint.builder()
                 .booking(booking)
@@ -114,14 +102,34 @@ public class ComplaintServiceImpl implements ComplaintService {
                 .build();
 
         Complaint saved = complaintRepository.save(complaint);
-        
+
+        notifyComplaintCreated(saved, user, booking);
+        adminDashboardService.evictDashboardCache();
+
+        return mapToResponse(saved);
+    }
+
+    private void validateComplaintCreation(CreateComplaintRequest request, User user, Booking booking) {
+        if (!booking.getUser().getUserId().equals(user.getUserId())) {
+            throw new BadRequestException("Bạn không có quyền khiếu nại đơn đặt sân này!");
+        }
+        // Allow complaints for COMPLETED (normal case) and CANCELLED (owner fault cases)
+        if (booking.getBookingStatus() != BookingStatus.COMPLETED
+                && booking.getBookingStatus() != BookingStatus.CANCELLED) {
+            throw new BadRequestException("Bạn chỉ có thể khiếu nại đơn đặt sân đã hoàn thành hoặc bị hủy!");
+        }
+        if (complaintRepository.existsByBookingBookingIdAndStatusNot(request.getBookingId(), ComplaintStatus.RESOLVED)) {
+            throw new BadRequestException("Đơn đặt sân này đang có khiếu nại chưa được giải quyết!");
+        }
+    }
+
+    private void notifyComplaintCreated(Complaint saved, User user, Booking booking) {
         try {
             customerNotificationService.notifyComplaintAcknowledged(user.getUserId(), saved);
         } catch (Exception ex) {
             log.warn("Failed to emit complaint acknowledged notification for complaint {}", saved.getComplaintId(), ex);
         }
 
-        // Notify owner
         notificationService.createNotification(
                 booking.getStadium().getOwner().getUser().getUserId(),
                 "Khiếu nại mới",
@@ -130,7 +138,6 @@ public class ComplaintServiceImpl implements ComplaintService {
                 String.valueOf(saved.getComplaintId())
         );
 
-        // Notify all admins
         String adminResourceId = "COMPLAINT-" + saved.getComplaintId();
         userRepository.findAllAdmins().forEach(admin ->
             notificationService.createNotification(
@@ -142,14 +149,12 @@ public class ComplaintServiceImpl implements ComplaintService {
             )
         );
 
-        // Xóa cache dashboard — số liệu khiếu nại mở thay đổi
-        adminDashboardService.evictDashboardCache();
-
         afterCommitExecutor.execute(() -> {
             try {
+                User ownerUser = booking.getStadium().getOwner().getUser();
                 emailService.sendComplaintCreatedEmail(
-                        booking.getStadium().getOwner().getUser().getEmail(),
-                        booking.getStadium().getOwner().getUser().getFirstName() + " " + booking.getStadium().getOwner().getUser().getLastName(),
+                        ownerUser.getEmail(),
+                        ownerUser.getFirstName() + " " + ownerUser.getLastName(),
                         booking.getStadium().getStadiumName(),
                         saved.getComplaintId(),
                         user.getFirstName() + " " + user.getLastName(),
@@ -159,8 +164,6 @@ public class ComplaintServiceImpl implements ComplaintService {
                 log.error("Failed to send complaint created email", e);
             }
         });
-
-        return mapToResponse(saved);
     }
 
     @Transactional

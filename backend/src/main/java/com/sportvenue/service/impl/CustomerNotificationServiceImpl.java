@@ -40,7 +40,7 @@ public class CustomerNotificationServiceImpl implements CustomerNotificationServ
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
 
-    private final List<NotificationType> CUSTOMER_TYPES = Arrays.asList(
+    private final List<NotificationType> customerTypes = Arrays.asList(
             NotificationType.BOOKING_CONFIRMED,
             NotificationType.BOOKING_CANCELLED,
             NotificationType.PAYMENT_RECEIVED,
@@ -70,7 +70,7 @@ public class CustomerNotificationServiceImpl implements CustomerNotificationServ
         if (Boolean.TRUE.equals(unreadOnly)) {
             page = notificationRepository.findByUserUserIdAndIsRead(userId, false, pageable);
         } else {
-            page = notificationRepository.findCustomerNotifications(userId, CUSTOMER_TYPES, pageable);
+            page = notificationRepository.findCustomerNotifications(userId, customerTypes, pageable);
         }
         List<NotificationResponse> content = page.getContent().stream()
                 .map(this::mapToResponse)
@@ -81,13 +81,13 @@ public class CustomerNotificationServiceImpl implements CustomerNotificationServ
     @Override
     @Transactional(readOnly = true)
     public long countUnread(Integer userId) {
-        return notificationRepository.countCustomerUnread(userId, CUSTOMER_TYPES);
+        return notificationRepository.countCustomerUnread(userId, customerTypes);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<NotificationResponse> getRecentNotifications(Integer userId, int limit) {
-        List<Notification> list = notificationRepository.findCustomerNotificationsByType(userId, CUSTOMER_TYPES);
+        List<Notification> list = notificationRepository.findCustomerNotificationsByType(userId, customerTypes);
         return list.stream()
                 .limit(limit)
                 .map(this::mapToResponse)
@@ -103,7 +103,7 @@ public class CustomerNotificationServiceImpl implements CustomerNotificationServ
     @Override
     @Transactional
     public void markAllAsRead(Integer userId) {
-        notificationRepository.markAllAdminNotificationsAsRead(userId, CUSTOMER_TYPES);
+        notificationRepository.markAllAdminNotificationsAsRead(userId, customerTypes);
     }
 
     private NotificationResponse mapToResponse(Notification notification) {
