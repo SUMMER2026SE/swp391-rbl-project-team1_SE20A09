@@ -419,6 +419,26 @@ public class ComplaintServiceImpl implements ComplaintService {
 
         Complaint saved = complaintRepository.save(complaint);
 
+        Integer customerId = complaint.getUser().getUserId();
+        Integer ownerId = complaint.getBooking().getStadium().getOwner().getUser().getUserId();
+        String ref = String.valueOf(saved.getComplaintId());
+
+        notificationService.createNotification(
+                customerId,
+                "Khiếu nại đã được Admin giải quyết",
+                "Khiếu nại #" + ref + " đã được Admin giải quyết.",
+                NotificationType.COMPLAINT,
+                ref
+        );
+
+        notificationService.createNotification(
+                ownerId,
+                "Khiếu nại đã được Admin giải quyết",
+                "Khiếu nại #" + ref + " đã được Admin giải quyết.",
+                NotificationType.COMPLAINT,
+                ref
+        );
+
         try {
             customerNotificationService.notifyComplaintResolved(complaint.getUser().getUserId(), complaint, request.getResolution().trim());
         } catch (Exception ex) {
