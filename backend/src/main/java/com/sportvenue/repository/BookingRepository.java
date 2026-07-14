@@ -565,6 +565,26 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
             @Param("stadiumId") Integer stadiumId);
 
     /**
+     * Lấy booking COMPLETED trong khoảng ngày chơi [startDate, endDate]
+     * chưa được review và chưa gửi nhắc đánh giá.
+     * Dùng bởi {@code ReviewReminderScheduler} để gửi REVIEW_REMINDER.
+     */
+    @EntityGraph(attributePaths = {"user", "stadium", "slot"})
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
+            AND b.reviewReminderSentAt IS NULL
+            AND b.reservationDate BETWEEN :startDate AND :endDate
+            AND NOT EXISTS (
+                SELECT r FROM com.sportvenue.entity.Review r
+                WHERE r.booking.bookingId = b.bookingId
+            )
+            """)
+    List<Booking> findCompletedUnreviewedUnremindedBookings(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
+
+    /**
      * Lấy các booking CONFIRMED có reservation_date <= hôm nay.
      * Lọc thô theo ngày — scheduler sẽ lọc chính xác theo endTime ở Java.
      *

@@ -9,8 +9,10 @@ import com.sportvenue.entity.enums.AccountStatus;
 import com.sportvenue.entity.enums.ApprovedStatus;
 import com.sportvenue.entity.enums.StadiumStatus;
 import com.sportvenue.exception.AppException;
+import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.StadiumRepository;
+import com.sportvenue.service.AdminAccountLockService;
 import com.sportvenue.service.EmailService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -47,6 +50,9 @@ class AdminOwnerServiceImplTest {
     @Mock
     private EmailService emailService;
 
+    @Mock
+    private AdminAccountLockService adminAccountLockService;
+
     @InjectMocks
     private AdminOwnerServiceImpl adminOwnerService;
 
@@ -55,7 +61,7 @@ class AdminOwnerServiceImplTest {
         String search = "test";
         String accountStatusStr = "ACTIVE";
         String approvedStatusStr = "APPROVED";
-        int page = 1;
+        int page = 0;
         int size = 10;
         String sortBy = "businessName";
         String sortDir = "asc";
@@ -65,34 +71,30 @@ class AdminOwnerServiceImplTest {
         AdminOwnerResponse responseDto = new AdminOwnerResponse();
         Page<AdminOwnerResponse> ownerPage = new PageImpl<>(List.of(responseDto), pageable, 1);
 
-        when(ownerRepository.findOwnersForAdmin(eq(search), eq(AccountStatus.ACTIVE), eq(ApprovedStatus.APPROVED), eq(pageable)))
-                .thenReturn(ownerPage);
+        when(ownerRepository.findOwnersForAdmin(eq(search), eq(AccountStatus.ACTIVE), eq(ApprovedStatus.APPROVED),
+                eq(pageable))).thenReturn(ownerPage);
 
-        PageResponse<AdminOwnerResponse> result = adminOwnerService.getOwners(search, accountStatusStr, approvedStatusStr, page, size, sortBy, sortDir);
+        PageResponse<AdminOwnerResponse> result =
+                adminOwnerService.getOwners(search, accountStatusStr, approvedStatusStr, page, size, sortBy, sortDir);
 
         assertNotNull(result);
         assertEquals(1, result.getTotalElements());
-        verify(ownerRepository).findOwnersForAdmin(eq(search), eq(AccountStatus.ACTIVE), eq(ApprovedStatus.APPROVED), eq(pageable));
+        verify(ownerRepository).findOwnersForAdmin(eq(search), eq(AccountStatus.ACTIVE), eq(ApprovedStatus.APPROVED),
+                eq(pageable));
     }
 
     @Test
     void getOwners_InvalidStatus_HandledGracefully() {
-        String search = null;
-        String accountStatusStr = "INVALID_STATUS";
-        String approvedStatusStr = "INVALID_STATUS";
-        int page = 1;
+        int page = 0;
         int size = 10;
-        String sortBy = "createdAt";
-        String sortDir = "desc";
-
         Pageable pageable = PageRequest.of(0, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-
         Page<AdminOwnerResponse> ownerPage = new PageImpl<>(List.of(), pageable, 0);
 
         when(ownerRepository.findOwnersForAdmin(isNull(), isNull(), isNull(), eq(pageable)))
                 .thenReturn(ownerPage);
 
-        PageResponse<AdminOwnerResponse> result = adminOwnerService.getOwners(search, accountStatusStr, approvedStatusStr, page, size, sortBy, sortDir);
+        PageResponse<AdminOwnerResponse> result =
+                adminOwnerService.getOwners(null, "INVALID_STATUS", "INVALID_STATUS", page, size, "createdAt", "desc");
 
         assertNotNull(result);
         assertEquals(0, result.getTotalElements());
@@ -102,51 +104,81 @@ class AdminOwnerServiceImplTest {
     @Test
     void lockUnlockOwner_Lock_Success() {
         Integer ownerId = 1;
-
-        User user = new User();
-        user.setEmail("owner@example.com");
-
-        Owner owner = new Owner();
-        owner.setApprovedStatus(ApprovedStatus.APPROVED);
-        owner.setUser(user);
-        owner.setBusinessName("Test Business");
-
+        User user = newOwnerUser(AccountStatus.ACTIVE);
+        Owner owner = approvedOwner(user);
         Stadium stadium = new Stadium();
 
         when(ownerRepository.findById(ownerId)).thenReturn(Optional.of(owner));
+        when(adminAccountLockService.applyLockState(user, false, 9, "Violation"))
+                .thenAnswer(invocation -> {
+                    user.setAccountStatus(AccountStatus.BLOCKED);
+                    user.setLockReason("Violation");
+                    return AccountStatus.BLOCKED;
+                });
         when(stadiumRepository.findByOwnerOwnerId(ownerId)).thenReturn(List.of(stadium));
 
-        adminOwnerService.lockUnlockOwner(ownerId, false, "Vi phạm quy định");
+        adminOwnerService.lockUnlockOwner(ownerId, false, "Violation", 9);
 
         assertEquals(AccountStatus.BLOCKED, user.getAccountStatus());
-        assertEquals("Vi phạm quy định", user.getLockReason());
+        assertEquals("Violation", user.getLockReason());
         assertEquals(StadiumStatus.MAINTENANCE, stadium.getStadiumStatus());
+        verify(adminAccountLockService).applyLockState(user, false, 9, "Violation");
         verify(stadiumRepository).saveAll(anyList());
     }
 
     @Test
     void lockUnlockOwner_Unlock_Success() {
         Integer ownerId = 1;
-
-        User user = new User();
-        user.setEmail("owner@example.com");
-        user.setAccountStatus(AccountStatus.BLOCKED);
-
-        Owner owner = new Owner();
-        owner.setApprovedStatus(ApprovedStatus.APPROVED);
-        owner.setUser(user);
-        owner.setBusinessName("Test Business");
-
+        User user = newOwnerUser(AccountStatus.BLOCKED);
+        Owner owner = approvedOwner(user);
         Stadium stadium = new Stadium();
         stadium.setStadiumStatus(StadiumStatus.MAINTENANCE);
 
         when(ownerRepository.findById(ownerId)).thenReturn(Optional.of(owner));
+        when(adminAccountLockService.applyLockState(user, true, null, null))
+                .thenAnswer(invocation -> {
+                    user.setAccountStatus(AccountStatus.ACTIVE);
+                    user.setLockReason(null);
+                    return AccountStatus.ACTIVE;
+                });
         when(stadiumRepository.findByOwnerOwnerId(ownerId)).thenReturn(List.of(stadium));
 
         adminOwnerService.lockUnlockOwner(ownerId, true, null);
 
         assertEquals(AccountStatus.ACTIVE, user.getAccountStatus());
         assertEquals(StadiumStatus.AVAILABLE, stadium.getStadiumStatus());
+        verify(adminAccountLockService).applyLockState(user, true, null, null);
+        verify(stadiumRepository).saveAll(anyList());
+    }
+
+    @Test
+    void lockUnlockOwner_Unlock_DoesNotReactivateAdminSuspendedStadium() {
+        Integer ownerId = 1;
+        User user = newOwnerUser(AccountStatus.BLOCKED);
+        Owner owner = approvedOwner(user);
+
+        Stadium ownerLockedStadium = new Stadium();
+        ownerLockedStadium.setStadiumStatus(StadiumStatus.MAINTENANCE);
+
+        Stadium adminSuspendedStadium = new Stadium();
+        adminSuspendedStadium.setStadiumStatus(StadiumStatus.MAINTENANCE);
+        adminSuspendedStadium.setAdminSuspended(true);
+
+        when(ownerRepository.findById(ownerId)).thenReturn(Optional.of(owner));
+        when(adminAccountLockService.applyLockState(user, true, null, null))
+                .thenAnswer(invocation -> {
+                    user.setAccountStatus(AccountStatus.ACTIVE);
+                    return AccountStatus.ACTIVE;
+                });
+        when(stadiumRepository.findByOwnerOwnerId(ownerId))
+                .thenReturn(List.of(ownerLockedStadium, adminSuspendedStadium));
+
+        adminOwnerService.lockUnlockOwner(ownerId, true, null);
+
+        assertEquals(AccountStatus.ACTIVE, user.getAccountStatus());
+        assertEquals(StadiumStatus.AVAILABLE, ownerLockedStadium.getStadiumStatus());
+        assertEquals(StadiumStatus.MAINTENANCE, adminSuspendedStadium.getStadiumStatus());
+        assertEquals(Boolean.TRUE, adminSuspendedStadium.getAdminSuspended());
         verify(stadiumRepository).saveAll(anyList());
     }
 
@@ -160,12 +192,45 @@ class AdminOwnerServiceImplTest {
     @Test
     void lockUnlockOwner_OwnerNotApproved_ThrowsException() {
         Integer ownerId = 1;
-
         Owner owner = new Owner();
         owner.setApprovedStatus(ApprovedStatus.PENDING);
 
         when(ownerRepository.findById(ownerId)).thenReturn(Optional.of(owner));
 
         assertThrows(AppException.class, () -> adminOwnerService.lockUnlockOwner(ownerId, false, null));
+    }
+
+    @Test
+    void lockUnlockOwner_PendingAccount_ThrowsExceptionAndDoesNotCascadeStadiums() {
+        Integer ownerId = 1;
+        User user = newOwnerUser(AccountStatus.PENDING);
+        Owner owner = approvedOwner(user);
+
+        when(ownerRepository.findById(ownerId)).thenReturn(Optional.of(owner));
+        when(adminAccountLockService.applyLockState(user, true, null, null))
+                .thenThrow(new BadRequestException("Pending accounts cannot be locked or unlocked."));
+
+        BadRequestException exception = assertThrows(BadRequestException.class, () ->
+                adminOwnerService.lockUnlockOwner(ownerId, true, null));
+
+        assertEquals("Pending accounts cannot be locked or unlocked.", exception.getMessage());
+        assertEquals(AccountStatus.PENDING, user.getAccountStatus());
+        verify(stadiumRepository, never()).findByOwnerOwnerId(ownerId);
+        verify(stadiumRepository, never()).saveAll(anyList());
+    }
+
+    private User newOwnerUser(AccountStatus status) {
+        User user = new User();
+        user.setEmail("owner@example.com");
+        user.setAccountStatus(status);
+        return user;
+    }
+
+    private Owner approvedOwner(User user) {
+        Owner owner = new Owner();
+        owner.setApprovedStatus(ApprovedStatus.APPROVED);
+        owner.setUser(user);
+        owner.setBusinessName("Test Business");
+        return owner;
     }
 }

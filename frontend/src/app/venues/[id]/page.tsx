@@ -1,13 +1,8 @@
 /**
- * /venues/[id] — backward compatibility redirect (Server Component).
- *
- * 1. Calls getCourtWithComplex() to check if this stadium belongs to a complex.
- *    If yes → HTTP 307 redirect to /complexes/{complexId}?courtId={id}.
- * 2. Falls back to rendering the legacy VenueDetail for unmigrated stadiums.
+ * /venues/[id] — Render VenueDetail for courts (Server Component).
  */
-import { redirect, notFound } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { getVenueDetail } from '@/lib/api/venue'
-import { getCourtWithComplex } from '@/lib/api/complex'
 import VenueDetail from '@/components/venues/VenueDetail'
 import { Header } from '@/components/layout/Header'
 

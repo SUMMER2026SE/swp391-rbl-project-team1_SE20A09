@@ -27,6 +27,7 @@ public class MatchResponse {
     private String hostName;
     private Integer hostUserId;
     private String stadiumName;
+    private String complexName;
     private String stadiumAddress;
     private String sportName;
     private String title;

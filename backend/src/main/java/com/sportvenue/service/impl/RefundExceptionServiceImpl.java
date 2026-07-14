@@ -22,6 +22,7 @@ import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.RefundExceptionRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.service.CustomerNotificationService;
 import com.sportvenue.service.NotificationService;
 import com.sportvenue.service.PaymentService;
 import com.sportvenue.service.RefundExceptionService;
@@ -56,6 +57,7 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
     private final PaymentRepository paymentRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final CustomerNotificationService customerNotificationService;
     private final PaymentService paymentService;
     private final TransactionTemplate transactionTemplate;
 
@@ -169,6 +171,11 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
             // Notify customer
             notifyCustomer(request, "Yêu cầu ngoại lệ được chấp nhận",
                     "Owner đã chấp nhận hoàn " + req.getRefundPercent() + "% cho đơn #" + request.getBooking().getBookingId() + ".");
+            try {
+                customerNotificationService.notifyRefundExceptionDecision(request.getCustomer().getUserId(), request, true);
+            } catch (Exception ex) {
+                log.warn("Failed to emit refund exception decision notification for request {}", request.getRequestId(), ex);
+            }
 
             // Phase 1 → Phase 2 (tuần tự, cùng method — không afterCommit, không REQUIRES_NEW)
             Payment pendingRefund = createPendingRefundRecord(saved);
@@ -180,6 +187,11 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
 
             notifyCustomer(request, "Yêu cầu ngoại lệ bị từ chối bởi Owner",
                     "Owner đã từ chối. Bạn có thể leo thang lên Admin trong 72h kể từ khi tạo yêu cầu.");
+            try {
+                customerNotificationService.notifyRefundExceptionDecision(request.getCustomer().getUserId(), request, false);
+            } catch (Exception ex) {
+                log.warn("Failed to emit refund exception decision notification for request {}", request.getRequestId(), ex);
+            }
         }
 
         return toResponse(request);
@@ -249,6 +261,11 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
 
             notifyCustomer(request, "Yêu cầu ngoại lệ được Admin chấp nhận",
                     "Admin đã chấp nhận hoàn " + req.getRefundPercent() + "% cho đơn #" + request.getBooking().getBookingId() + ".");
+            try {
+                customerNotificationService.notifyRefundExceptionDecision(request.getCustomer().getUserId(), request, true);
+            } catch (Exception ex) {
+                log.warn("Failed to emit refund exception decision notification for request {}", request.getRequestId(), ex);
+            }
 
             // Phase 1 → Phase 2 (tuần tự)
             Payment pendingRefund = createPendingRefundRecord(saved);
@@ -260,6 +277,11 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
 
             notifyCustomer(request, "Yêu cầu ngoại lệ bị Admin từ chối",
                     "Admin đã xem xét và từ chối yêu cầu ngoại lệ cho đơn #" + request.getBooking().getBookingId() + ".");
+            try {
+                customerNotificationService.notifyRefundExceptionDecision(request.getCustomer().getUserId(), request, false);
+            } catch (Exception ex) {
+                log.warn("Failed to emit refund exception decision notification for request {}", request.getRequestId(), ex);
+            }
         }
 
         return toResponse(request);

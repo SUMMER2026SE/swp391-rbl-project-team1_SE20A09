@@ -13,18 +13,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { 
-  CheckCircle, 
-  XCircle, 
-  ChevronDown, 
-  ChevronUp, 
-  RotateCcw, 
-  Clock, 
-  DollarSign, 
-  Info, 
-  User, 
+import {
+  CheckCircle,
+  XCircle,
+  ChevronDown,
+  ChevronUp,
+  RotateCcw,
+  Clock,
+  DollarSign,
+  Info,
+  User,
   Calendar,
   AlertCircle,
+  AlertTriangle,
   HelpCircle,
   ChevronLeft,
   ChevronRight,
@@ -39,19 +40,24 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { get, post } from "@/lib/api";
+import { get, post, put } from "@/lib/api";
 import { cancelBooking } from "@/lib/bookings-api";
 import type { PageResponse } from "@/types/common";
+import { ReportUserDialog } from "@/components/reports/ReportUserDialog";
 
 interface BookingItem {
   id: number;
   displayId: string;
   customer: {
+    userId?: number;
     name: string;
     phone: string;
     email: string;
   };
+  stadiumId?: number;
   venue: string;
+  /** Tên khu phức hợp chứa sân — null nếu sân độc lập. Cùng 1 Owner có thể có nhiều complex dùng trùng tên sân con (vd "Sân 1"). */
+  complexName?: string | null;
   date: string;
   time: string;
   amount: number;
@@ -90,6 +96,13 @@ function BookingManagementPage() {
   const [cancelOnlyBooking, setCancelOnlyBooking] = useState<BookingItem | null>(null);
   const [cancelOnlyReason, setCancelOnlyReason] = useState("");
   const [isCancelOnlySubmitting, setIsCancelOnlySubmitting] = useState(false);
+
+  // Xác nhận đã thu tiền mặt tại sân (AWAITING_CASH_PAYMENT → PAID).
+  const [confirmCashBooking, setConfirmCashBooking] = useState<BookingItem | null>(null);
+  const [isConfirmCashSubmitting, setIsConfirmCashSubmitting] = useState(false);
+
+  // Báo cáo hành vi khách hàng (Owner → Customer).
+  const [reportBooking, setReportBooking] = useState<BookingItem | null>(null);
 
   const [activeTab, setActiveTab] = useState("all");
   const [page, setPage] = useState(0);
@@ -303,9 +316,32 @@ function BookingManagementPage() {
     }
   };
 
+  const handleConfirmCashReceived = async () => {
+    if (!confirmCashBooking) return;
+    try {
+      setIsConfirmCashSubmitting(true);
+      await put(`/owner/bookings/${confirmCashBooking.id}/confirm-cash-payment`, {});
+      setBookingList(prev => prev.map(b =>
+        b.id === confirmCashBooking.id ? { ...b, paymentStatus: "paid" } : b
+      ));
+      toast.success("Đã xác nhận thu tiền mặt thành công");
+      setConfirmCashBooking(null);
+    } catch (error: any) {
+      toast.error(error.message || "Không thể xác nhận thu tiền, vui lòng thử lại");
+    } finally {
+      setIsConfirmCashSubmitting(false);
+    }
+  };
+
   const BookingRow = ({ booking }: { booking: BookingItem }) => {
     const isExpanded = expandedRow === booking.id;
     const canRefund = booking.status.toLowerCase() === "confirmed" && booking.paymentStatus.toLowerCase() === "paid";
+    // KHÔNG gate theo status CONFIRMED/COMPLETED cụ thể — BookingCompletionScheduler có thể chuyển
+    // CONFIRMED→COMPLETED chỉ dựa vào giờ chơi, không xét paymentStatus, nên 1 đơn cash có thể đã
+    // COMPLETED mà vẫn chưa thu tiền. Nhưng PHẢI loại trừ CANCELLED — đơn hủy không còn gì để thu,
+    // backend cũng chặn (BadRequestException) nên nút hiện ra chỉ để báo lỗi vô nghĩa.
+    const canConfirmCash = booking.paymentStatus.toLowerCase() === "awaiting_cash_payment"
+      && booking.status.toLowerCase() !== "cancelled";
     const canCancelUnpaid = booking.status.toLowerCase() === "confirmed"
       && booking.paymentStatus.toLowerCase() === "awaiting_cash_payment";
 
@@ -317,7 +353,12 @@ function BookingManagementPage() {
           </td>
           <td className="p-4 align-middle font-mono text-sm font-semibold text-primary">{booking.displayId}</td>
           <td className="p-4 align-middle font-medium">{booking.customer.name}</td>
-          <td className="p-4 align-middle text-muted-foreground">{booking.venue}</td>
+          <td className="p-4 align-middle text-muted-foreground">
+            <div>{booking.venue}</div>
+            {booking.complexName && (
+              <div className="text-xs text-muted-foreground/70">{booking.complexName}</div>
+            )}
+          </td>
           <td className="p-4 align-middle text-sm">{booking.date}</td>
           <td className="p-4 align-middle text-sm font-medium">{booking.time}</td>
           <td className="p-4 align-middle text-right font-semibold text-slate-900 dark:text-slate-100">
@@ -340,7 +381,7 @@ function BookingManagementPage() {
             </div>
           </td>
           <td className="p-4 align-middle">
-            <div className="flex gap-2 items-center justify-end">
+            <div className="flex flex-wrap gap-2 items-center justify-end max-w-[260px] ml-auto">
               {canRefund && (
                 <Button
                   size="sm"
@@ -350,6 +391,16 @@ function BookingManagementPage() {
                 >
                   <RotateCcw className="h-3.5 w-3.5 mr-1.5 animate-spin-reverse" />
                   Hủy & Hoàn Tiền
+                </Button>
+              )}
+              {canConfirmCash && (
+                <Button
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm transition-all duration-200"
+                  onClick={() => setConfirmCashBooking(booking)}
+                >
+                  <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+                  Xác nhận đã thu tiền
                 </Button>
               )}
               {canCancelUnpaid && (
@@ -363,6 +414,16 @@ function BookingManagementPage() {
                   Hủy đơn
                 </Button>
               )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400"
+                disabled={!booking.customer.userId}
+                onClick={() => setReportBooking(booking)}
+              >
+                <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
+                Báo cáo
+              </Button>
               <Button
                 size="sm"
                 variant="ghost"
@@ -416,6 +477,12 @@ function BookingManagementPage() {
                       <span className="text-muted-foreground">Sân chơi:</span>
                       <span className="font-medium">{booking.venue}</span>
                     </div>
+                    {booking.complexName && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Khu phức hợp:</span>
+                        <span className="font-medium">{booking.complexName}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Khung giờ:</span>
                       <span className="font-medium">{booking.time}</span>
@@ -1067,6 +1134,65 @@ function BookingManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={confirmCashBooking !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmCashBooking(null);
+        }}
+      >
+        <DialogContent className="max-w-md border dark:border-slate-800 shadow-2xl rounded-xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-emerald-600">
+              <CheckCircle className="h-5 w-5" /> Xác nhận đã thu tiền mặt
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs">
+              Bạn có chắc chắn đã thu đủ{" "}
+              <span className="font-semibold text-slate-800 dark:text-slate-200">
+                {confirmCashBooking?.amount.toLocaleString('vi-VN')}đ
+              </span>{" "}
+              tiền mặt tại sân cho đơn{" "}
+              <span className="font-mono font-semibold">{confirmCashBooking?.displayId}</span> chưa?
+              Hành động này sẽ đánh dấu đơn đã thanh toán và không thể hoàn tác qua nút này.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setConfirmCashBooking(null)}
+              disabled={isConfirmCashSubmitting}
+            >
+              Quay lại
+            </Button>
+            <Button
+              type="button"
+              className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={handleConfirmCashReceived}
+              disabled={isConfirmCashSubmitting}
+            >
+              {isConfirmCashSubmitting ? "Đang xử lý..." : "Xác nhận đã thu tiền"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ReportUserDialog
+        open={reportBooking !== null}
+        onOpenChange={(open) => {
+          if (!open) setReportBooking(null);
+        }}
+        reporteeId={reportBooking?.customer.userId}
+        bookingId={reportBooking?.id}
+        stadiumId={reportBooking?.stadiumId}
+        contextLabel={
+          reportBooking
+            ? `Báo cáo hành vi khách hàng ${reportBooking.customer.name} liên quan đến đơn đặt sân ${reportBooking.displayId}.`
+            : undefined
+        }
+      />
     </>
   );
 }

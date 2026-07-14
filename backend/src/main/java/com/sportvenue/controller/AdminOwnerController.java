@@ -55,7 +55,9 @@ public class AdminOwnerController {
             description = "Admin lấy danh sách chủ sân có lọc theo từ khóa tìm kiếm, trạng thái tài khoản, trạng thái duyệt."
     )
     public ResponseEntity<ApiResponse<PageResponse<AdminOwnerResponse>>> getOwners(
-            @RequestParam(defaultValue = "1") int page,
+            @Parameter(description = "Số trang (0-indexed)", example = "0")
+            @jakarta.validation.constraints.Min(value = 0, message = "Số trang (page) không được nhỏ hơn 0")
+            @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String accountStatus,
@@ -153,9 +155,10 @@ public class AdminOwnerController {
     @Operation(summary = "Khóa hoặc mở khóa tài khoản chủ sân", description = "Admin có quyền khóa hoặc mở khóa tài khoản của chủ sân.")
     public ResponseEntity<ApiResponse<Void>> lockUnlockOwner(
             @Parameter(description = "ID của chủ sân", example = "1") @PathVariable Integer ownerId,
-            @Valid @RequestBody LockOwnerRequest request) {
+            @Valid @RequestBody LockOwnerRequest request,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.sportvenue.security.UserPrincipal currentUser) {
         
-        adminOwnerService.lockUnlockOwner(ownerId, request.getEnabled(), request.getReason());
+        adminOwnerService.lockUnlockOwner(ownerId, request.getEnabled(), request.getReason(), currentUser.getUserId());
         return ResponseEntity.ok(ApiResponse.<Void>builder()
                 .code(200)
                 .message(Boolean.TRUE.equals(request.getEnabled()) ? "Mở khóa tài khoản chủ sân thành công" : "Khóa tài khoản chủ sân thành công")

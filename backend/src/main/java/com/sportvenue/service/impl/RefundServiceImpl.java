@@ -28,7 +28,9 @@ import com.sportvenue.service.RefundService;
 import com.sportvenue.service.PaymentService;
 import com.sportvenue.service.EmailService;
 import com.sportvenue.service.NotificationService;
+import com.sportvenue.service.CustomerNotificationService;
 import com.sportvenue.util.AfterCommitExecutor;
+import com.sportvenue.util.StadiumUtils;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -55,6 +57,7 @@ public class RefundServiceImpl implements RefundService {
     private final TransactionTemplate transactionTemplate;
     private final EmailService emailService;
     private final NotificationService notificationService;
+    private final CustomerNotificationService customerNotificationService;
     private final AfterCommitExecutor afterCommitExecutor;
 
     @Override
@@ -74,34 +77,10 @@ public class RefundServiceImpl implements RefundService {
                 .execute(status -> bookingRepository.findById(bookingId).orElse(ctx.booking));
 
         try {
-            notificationService.publishNotificationEvent(
-                    finalBooking.getUser().getUserId(),
-                    "Hoàn tiền thành công",
-                    String.format("Đơn đặt sân #%d đã được hoàn tiền %s VNĐ.", 
-                            finalBooking.getBookingId(), 
-                            java.text.NumberFormat.getInstance(new java.util.Locale("vi", "VN")).format(ctx.calculation.getAmount())),
-                    com.sportvenue.entity.enums.NotificationType.PAYMENT,
-                    String.valueOf(finalBooking.getBookingId())
-            );
+            customerNotificationService.notifyRefundProcessed(finalBooking.getUser().getUserId(), ctx.refundPayment, ctx.calculation.getAmount());
         } catch (Exception e) {
             log.error("Failed to publish refund notification for booking {}", finalBooking.getBookingId(), e);
         }
-
-        afterCommitExecutor.execute(() -> {
-            try {
-                emailService.sendRefundEmail(
-                        finalBooking.getUser().getEmail(),
-                        finalBooking.getUser().getFirstName() + " " + finalBooking.getUser().getLastName(),
-                        finalBooking.getStadium().getStadiumName(),
-                        finalBooking.getBookingId(),
-                        ctx.calculation.getAmount(),
-                        ctx.calculation.getPercentage(),
-                        finalBooking.getTotalPrice()
-                );
-            } catch (Exception e) {
-                log.error("Failed to send refund email for booking {}", finalBooking.getBookingId(), e);
-            }
-        });
 
         return buildRefundResponse(finalBooking, ctx.calculation, request.getReason());
     }
@@ -468,6 +447,7 @@ public class RefundServiceImpl implements RefundService {
         return bookings.map(b -> {
             String customerName = b.getUser().getFirstName() + " " + b.getUser().getLastName();
             OwnerBookingResponse.CustomerInfo customerInfo = OwnerBookingResponse.CustomerInfo.builder()
+                    .userId(b.getUser().getUserId())
                     .name(customerName)
                     .phone(b.getUser().getPhoneNumber())
                     .email(b.getUser().getEmail())
@@ -492,7 +472,9 @@ public class RefundServiceImpl implements RefundService {
                     .id(b.getBookingId())
                     .displayId("BK" + String.format("%06d", b.getBookingId()))
                     .customer(customerInfo)
+                    .stadiumId(b.getStadium().getStadiumId())
                     .venue(b.getStadium().getStadiumName())
+                    .complexName(StadiumUtils.resolveComplexName(b.getStadium()))
                     .date(b.getReservationDate().toString())
                     .time(startTimeStr + " - " + endTimeStr)
                     .amount(bookingAmt)

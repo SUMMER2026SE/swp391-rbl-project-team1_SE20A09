@@ -36,6 +36,9 @@ public class BookingHistoryItemDto {
     @Schema(description = "Tên sân đã đặt", example = "Sân bóng đá Mini XYZ")
     private String venue;
 
+    @Schema(description = "Tên khu phức hợp chứa sân — null nếu sân độc lập", example = "Sân Tennis Vĩnh Tuy")
+    private String complexName;
+
     @Schema(description = "Tên môn thể thao", example = "Bóng đá")
     private String sportType;
 

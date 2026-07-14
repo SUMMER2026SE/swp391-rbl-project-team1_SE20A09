@@ -1,5 +1,6 @@
 package com.sportvenue.security;
 
+import com.sportvenue.entity.enums.AccountStatus;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,6 +17,9 @@ import java.io.IOException;
 
 @Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private static final String LOCKED_ACCOUNT_MESSAGE =
+            "{\"message\": \"Tài khoản của bạn đang bị khóa. Vui lòng gửi kháng cáo.\"}";
 
     private final JwtTokenProvider tokenProvider;
     private final CustomUserDetailsService customUserDetailsService;
@@ -42,7 +46,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     log.warn("Blocked user {} attempted to authenticate", email);
                     response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                     response.setContentType("application/json;charset=UTF-8");
-                    response.getWriter().write("{\"message\": \"Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin.\"}");
+                    response.getWriter().write(LOCKED_ACCOUNT_MESSAGE);
+                    return;
+                }
+
+                if (isBlockedUser(userDetails) && !isBlockedUserAllowedPath(request)) {
+                    log.warn("Blocked user {} attempted restricted path {}", email, request.getRequestURI());
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write(LOCKED_ACCOUNT_MESSAGE);
                     return;
                 }
 
@@ -65,5 +77,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return bearerToken.substring(7);
         }
         return null;
+    }
+
+    private boolean isBlockedUser(UserDetails userDetails) {
+        return userDetails instanceof UserPrincipal userPrincipal
+                && userPrincipal.getUser().getAccountStatus() == AccountStatus.BLOCKED;
+    }
+
+    private boolean isBlockedUserAllowedPath(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path.equals("/api/v1/auth/me")
+                || path.equals("/api/v1/appeals")
+                || path.startsWith("/api/v1/appeals/")
+                || path.equals("/api/v1/notifications/unread-count");
     }
 }

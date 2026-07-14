@@ -22,6 +22,15 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     
     long countByUserUserIdAndIsReadFalse(Integer userId);
 
+    @Query("SELECT n FROM Notification n WHERE n.user.userId = :userId AND n.notificationType IN (:types) ORDER BY n.createdAt DESC")
+    Page<Notification> findCustomerNotifications(@Param("userId") Integer userId, @Param("types") List<NotificationType> types, Pageable pageable);
+
+    @Query("SELECT COUNT(n) FROM Notification n WHERE n.user.userId = :userId AND n.notificationType IN (:types) AND n.isRead = false")
+    long countCustomerUnread(@Param("userId") Integer userId, @Param("types") List<NotificationType> types);
+
+    @Query("SELECT n FROM Notification n WHERE n.user.userId = :userId AND n.notificationType IN (:types) ORDER BY n.createdAt DESC")
+    List<Notification> findCustomerNotificationsByType(@Param("userId") Integer userId, @Param("types") List<NotificationType> types);
+
     @Modifying
     @Query("UPDATE Notification n SET n.isRead = true WHERE n.user.userId = :userId AND n.isRead = false")
     void markAllAsRead(@Param("userId") Integer userId);

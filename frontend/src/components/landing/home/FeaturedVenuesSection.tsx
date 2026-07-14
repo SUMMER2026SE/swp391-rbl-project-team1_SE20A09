@@ -76,6 +76,7 @@ export function FeaturedVenuesSection() {
                   id={venue.stadiumId}
                   image={venue.firstImageUrl ?? ""}
                   name={venue.stadiumName}
+                  complexName={venue.complexName}
                   sportType={venue.sportName}
                   price={venue.pricePerHour}
                   rating={venue.averageRating ?? 5}

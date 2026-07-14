@@ -20,6 +20,7 @@ import com.sportvenue.exception.AppException;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ErrorCode;
 import com.sportvenue.exception.ResourceNotFoundException;
+import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.RoleRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.security.JwtTokenProvider;
@@ -54,6 +55,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtTokenProvider tokenProvider;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final OwnerRepository ownerRepository;
     private final PasswordEncoder passwordEncoder;
     private final OtpService otpService;
     private final StringRedisTemplate redisTemplate;
@@ -206,9 +208,6 @@ public class AuthServiceImpl implements AuthService {
 
             user = userRepository.save(user);
         } else {
-            if (user.getAccountStatus() == AccountStatus.BLOCKED) {
-                throw new BadRequestException("Tài khoản của bạn đã bị khóa.");
-            }
             boolean updated = false;
             if (!user.getIsVerified()) {
                 user.setIsVerified(true);
@@ -325,6 +324,12 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private UserResponse mapToUserResponse(User user) {
+        String ownerApprovedStatus = "Owner".equals(user.getRole().getRoleName())
+                ? ownerRepository.findByUserUserId(user.getUserId())
+                        .map(owner -> owner.getApprovedStatus().name())
+                        .orElse(null)
+                : null;
+
         return UserResponse.builder()
                 .userId(user.getUserId())
                 .email(user.getEmail())
@@ -336,6 +341,8 @@ public class AuthServiceImpl implements AuthService {
                 .userRank(user.getUserRank() != null ? user.getUserRank().name() : null)
                 .userPoint(user.getUserPoint())
                 .accountStatus(user.getAccountStatus() != null ? user.getAccountStatus().name() : null)
+                .lockReason(user.getLockReason())
+                .ownerApprovedStatus(ownerApprovedStatus)
                 .build();
     }
 

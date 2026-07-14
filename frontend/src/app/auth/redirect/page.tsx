@@ -13,7 +13,9 @@ export default function AuthRedirectPage() {
     if (status === "loading") return;
 
     const roleName = session?.user?.roleName;
-    if (roleName === "Admin") {
+    if (session?.user?.accountStatus === "BLOCKED") {
+      router.replace("/appeals");
+    } else if (roleName === "Admin") {
       router.replace("/admin/dashboard");
     } else if (roleName === "Owner") {
       router.replace("/owner/dashboard");

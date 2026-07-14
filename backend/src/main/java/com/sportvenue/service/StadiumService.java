@@ -17,6 +17,10 @@ public interface StadiumService {
 
     void activateStadium(Integer stadiumId, Integer userId);
 
+    void suspendStadiumByAdmin(Integer stadiumId, String reason);
+
+    void unsuspendStadiumByAdmin(Integer stadiumId);
+
     void deleteStadium(Integer stadiumId, Integer userId);
 
     StadiumResponse approveStadium(Integer stadiumId);

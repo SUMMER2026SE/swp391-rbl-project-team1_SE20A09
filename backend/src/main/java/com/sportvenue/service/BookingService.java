@@ -104,6 +104,23 @@ public interface BookingService {
     BookingDetailResponse confirmPayment(UserPrincipal principal, Integer bookingId);
 
     /**
+     * UC-OWN: Owner xác nhận ĐÃ THU tiền mặt tại sân — chuyển {@code paymentStatus}
+     * {@code AWAITING_CASH_PAYMENT} → {@code PAID} và finalize {@code Payment} (CASH) tương ứng
+     * sang {@code SUCCESS}. Không đổi {@code bookingStatus} — hoạt động được ở cả {@code CONFIRMED}
+     * lẫn {@code COMPLETED} (scheduler complete booking không xét paymentStatus).
+     *
+     * <p>Idempotent: nếu đã {@code PAID} thì trả về trạng thái hiện tại thay vì lỗi (phòng
+     * double-click / network retry).</p>
+     *
+     * @throws com.sportvenue.exception.ResourceNotFoundException nếu booking không tồn tại.
+     * @throws com.sportvenue.exception.ForbiddenException nếu principal không phải Owner của sân này.
+     * @throws com.sportvenue.exception.BadRequestException nếu booking đã hủy, hoặc paymentStatus
+     *         không phải {@code AWAITING_CASH_PAYMENT}/{@code PAID}, hoặc không tìm thấy Payment CASH
+     *         đang chờ xác nhận.
+     */
+    BookingDetailResponse confirmCashPaymentReceived(UserPrincipal principal, Integer bookingId);
+
+    /**
     /**
      * UC-CUS-04: Xem chi tiết một đơn đặt sân theo ID.
      * Chỉ chủ booking mới được xem — trả 403 nếu userId không khớp.

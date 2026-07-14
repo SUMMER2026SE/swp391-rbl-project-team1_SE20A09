@@ -12,6 +12,7 @@ import com.sportvenue.exception.AppException;
 import com.sportvenue.exception.ErrorCode;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.StadiumRepository;
+import com.sportvenue.service.AdminAccountLockService;
 import com.sportvenue.service.AdminOwnerService;
 import com.sportvenue.service.EmailService;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
     private final OwnerRepository ownerRepository;
     private final StadiumRepository stadiumRepository;
     private final EmailService emailService;
+    private final AdminAccountLockService adminAccountLockService;
 
     @Override
     public PageResponse<AdminOwnerResponse> getOwners(String search, String accountStatusStr, String approvedStatusStr,
@@ -43,8 +45,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
 
         Sort.Direction direction = sortDir.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
 
-        // Handle sorting column mapping
-        String sortColumn = "createdAt"; // default
+        String sortColumn = "createdAt";
         if ("fullName".equals(sortBy)) {
             sortColumn = "user.firstName";
         } else if ("email".equals(sortBy)) {
@@ -57,7 +58,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
             sortColumn = "createdAt";
         }
 
-        Pageable pageable = PageRequest.of(page - 1, size, Sort.by(direction, sortColumn));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortColumn));
 
         AccountStatus accStatus = null;
         if (accountStatusStr != null && !accountStatusStr.isBlank()) {
@@ -84,7 +85,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
 
         PageResponse<AdminOwnerResponse> response = new PageResponse<>();
         response.setContent(ownerPage.getContent());
-        response.setPageNumber(ownerPage.getNumber() + 1);
+        response.setPageNumber(ownerPage.getNumber());
         response.setPageSize(ownerPage.getSize());
         response.setTotalElements(ownerPage.getTotalElements());
         response.setTotalPages(ownerPage.getTotalPages());
@@ -95,7 +96,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
 
     @Override
     @Transactional
-    public void lockUnlockOwner(Integer ownerId, boolean isEnabled, String reason) {
+    public void lockUnlockOwner(Integer ownerId, boolean isEnabled, String reason, Integer currentAdminId) {
         log.info("Request to {} account for ownerId: {}", isEnabled ? "unlock" : "lock", ownerId);
         Owner owner = ownerRepository.findById(ownerId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
@@ -105,11 +106,8 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
         }
 
         User user = owner.getUser();
-        user.setAccountStatus(isEnabled ? AccountStatus.ACTIVE : AccountStatus.BLOCKED);
-        user.setLockReason(reason);
+        adminAccountLockService.applyLockState(user, isEnabled, currentAdminId, reason);
 
-        // Lock: chỉ set AVAILABLE → MAINTENANCE (CLOSED giữ nguyên)
-        // Unlock: chỉ set MAINTENANCE → AVAILABLE (CLOSED giữ nguyên)
         List<Stadium> stadiums = stadiumRepository.findByOwnerOwnerId(ownerId);
         List<Stadium> toUpdate;
         if (!isEnabled) {
@@ -120,6 +118,7 @@ public class AdminOwnerServiceImpl implements AdminOwnerService {
         } else {
             toUpdate = stadiums.stream()
                     .filter(s -> s.getStadiumStatus() == StadiumStatus.MAINTENANCE)
+                    .filter(s -> !Boolean.TRUE.equals(s.getAdminSuspended()))
                     .peek(s -> s.setStadiumStatus(StadiumStatus.AVAILABLE))
                     .toList();
         }

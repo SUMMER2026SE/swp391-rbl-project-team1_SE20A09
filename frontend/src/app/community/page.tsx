@@ -2,8 +2,10 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+
 import type { Session } from "next-auth";
+import { useRouteGuard } from "@/components/shared/RouteGuard";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
@@ -43,6 +45,7 @@ import {
   ShieldAlert,
   ChevronRight,
   MessageSquare,
+  AlertTriangle,
 } from "lucide-react";
 import {
   getActiveMatches,
@@ -67,6 +70,7 @@ import { useConfirm } from "@/hooks/useConfirm";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { chatUrl, createContextualConversation } from "@/lib/contextual-chat";
 import { getMatchConversation } from "@/lib/chat-api";
+import { ReportUserDialog } from "@/components/reports/ReportUserDialog";
 
 // Helper functions for MatchStatus display
 const isMatchEnded = (playDate: string, endTime: string) => {
@@ -103,10 +107,22 @@ const getMatchStatusBadgeClass = (m: MatchResponse) => {
 
 function MatchRequestFeedPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const notifyMatchId = searchParams.get("matchId");
   const { data: session } = useSession();
+  const { triggerLoginModal } = useRouteGuard();
   const { isOpen, options, confirm, close, execute, isLoading: confirming } = useConfirm();
   const searchParams = useSearchParams();
   const [hasProcessedParam, setHasProcessedParam] = useState(false);
+
+  const requireLogin = () => {
+    if (!session?.user) {
+      triggerLoginModal(pathname);
+      return true;
+    }
+    return false;
+  };
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
@@ -116,6 +132,14 @@ function MatchRequestFeedPage() {
   const [showJoinedDetailDialog, setShowJoinedDetailDialog] = useState(false);
   const [selectedJoinedRequest, setSelectedJoinedRequest] = useState<JoinRequestResponse | null>(null);
   const [openingChat, setOpeningChat] = useState(false);
+
+  // Báo cáo hành vi trong context kèo đấu (Host ↔ Người tham gia).
+  const [reportTarget, setReportTarget] = useState<{
+    reporteeId: number;
+    matchRequestId?: number;
+    joinRequestId?: number;
+    contextLabel: string;
+  } | null>(null);
 
   const openJoinedRequestChat = async (group: boolean) => {
     if (!selectedJoinedRequest) return;
@@ -152,14 +176,14 @@ function MatchRequestFeedPage() {
       const conversationId = await createContextualConversation(req.userId, {
         action: "match_referral",
         matchId: selectedManageMatch.matchId,
-        title: selectedManageMatch.title || `KÃ¨o #${selectedManageMatch.matchId}`,
+        title: selectedManageMatch.title || `Kèo #${selectedManageMatch.matchId}`,
         sportName: selectedManageMatch.sportName,
         playDate: selectedManageMatch.playDate,
       });
       setShowManageDialog(false);
       router.push(chatUrl(conversationId));
     } catch {
-      toast.error("KhÃ´ng thá»ƒ má»Ÿ cuá»™c trÃ² chuyá»‡n");
+      toast.error("Không thể mở cuộc trò chuyện");
     } finally {
       setOpeningChat(false);
     }
@@ -273,6 +297,17 @@ function MatchRequestFeedPage() {
     fetchFeed();
     fetchDropdowns();
   }, []);
+
+  // Auto-open manage dialog when navigated from notification with matchId param
+  useEffect(() => {
+    if (!notifyMatchId || loadingFeed || matchRequests.length === 0) return;
+    const matchId = Number(notifyMatchId);
+    const match = matchRequests.find((m) => m.matchId === matchId);
+    if (match) {
+      setSelectedManageMatch(match);
+      setShowManageDialog(true);
+    }
+  }, [notifyMatchId, loadingFeed, matchRequests]);
 
   useEffect(() => {
     if (session?.user) {
@@ -514,7 +549,8 @@ function MatchRequestFeedPage() {
       req.title.toLowerCase().includes(searchKeyword.toLowerCase()) ||
       (req.description &&
         req.description.toLowerCase().includes(searchKeyword.toLowerCase())) ||
-      req.stadiumName.toLowerCase().includes(searchKeyword.toLowerCase());
+      req.stadiumName.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+      (req.complexName && req.complexName.toLowerCase().includes(searchKeyword.toLowerCase()));
 
     const matchesSport =
       filterSport === "all" ||
@@ -545,7 +581,10 @@ function MatchRequestFeedPage() {
             </p>
           </div>
           <Button
-            onClick={() => setShowCreateDialog(true)}
+            onClick={() => {
+              if (requireLogin()) return;
+              setShowCreateDialog(true);
+            }}
             className="shadow-md shadow-primary/20 gap-2 h-11 px-5 font-bold"
           >
             <Plus className="h-5 w-5" />
@@ -683,6 +722,7 @@ function MatchRequestFeedPage() {
                                     : request.maxPlayers)
                                 }
                                 onClick={() => {
+                                  if (requireLogin()) return;
                                   setSelectedRequest(request);
                                   setShowJoinDialog(true);
                                 }}
@@ -756,10 +796,10 @@ function MatchRequestFeedPage() {
                               </span>
                             </div>
 
-                            <div className="flex items-center text-slate-600 bg-slate-50 px-2.5 py-1 rounded-md max-w-xs md:max-w-sm truncate" title={`${request.stadiumName} (${request.stadiumAddress})`}>
+                            <div className="flex items-center text-slate-600 bg-slate-50 px-2.5 py-1 rounded-md max-w-xs md:max-w-sm truncate" title={`${request.stadiumName}${request.complexName ? ` — ${request.complexName}` : ""} (${request.stadiumAddress})`}>
                               <MapPin className="h-3.5 w-3.5 mr-1.5 text-slate-500" />
                               <span>
-                                {request.stadiumName}
+                                {request.complexName ? `${request.stadiumName} — ${request.complexName}` : request.stadiumName}
                               </span>
                             </div>
                           </div>
@@ -1286,6 +1326,7 @@ function MatchRequestFeedPage() {
                       Sân vận động:{" "}
                       <strong className="text-slate-700">
                         {selectedRequest.stadiumName}
+                        {selectedRequest.complexName && ` (${selectedRequest.complexName})`}
                       </strong>
                     </div>
                     <div>
@@ -1378,7 +1419,7 @@ function MatchRequestFeedPage() {
                   </Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-y-2.5 gap-x-6 text-xs font-semibold text-slate-500 border-t border-slate-200/60 pt-3">
-                  <div>Sân bóng: <span className="text-slate-800 font-bold">{selectedManageMatch.stadiumName}</span></div>
+                  <div>Sân bóng: <span className="text-slate-800 font-bold">{selectedManageMatch.stadiumName}{selectedManageMatch.complexName && ` (${selectedManageMatch.complexName})`}</span></div>
                   <div>Ngày chơi: <span className="text-slate-800 font-bold">{new Date(selectedManageMatch.playDate).toLocaleDateString("vi-VN")}</span></div>
                   <div>Giờ chơi: <span className="text-slate-800 font-bold">{selectedManageMatch.startTime.substring(0, 5)} - {selectedManageMatch.endTime.substring(0, 5)}</span></div>
                   <div>Sĩ số hiện tại: <span className="text-slate-800 font-bold">{selectedManageMatch.currentPlayers}/{selectedManageMatch.matchingType === "TEAM_VS_TEAM" ? "2 đội" : selectedManageMatch.maxPlayers}</span></div>
@@ -1435,7 +1476,7 @@ function MatchRequestFeedPage() {
                               disabled={openingChat}
                               onClick={() => handleHostChatCandidate(req)}
                               className="rounded-full h-8 w-8 hover:bg-slate-100 text-slate-600 cursor-pointer shrink-0"
-                              title="Nháº¯n tin liÃªn há»‡"
+                              title="Nhắn tin liên hệ"
                             >
                               {openingChat ? (
                                 <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
@@ -1458,6 +1499,25 @@ function MatchRequestFeedPage() {
 
                         {/* Action Buttons: Pushed to bottom right with border separator */}
                         <div className="flex justify-end items-center gap-3 border-t border-slate-100 pt-3">
+                          {req.userId && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="border-amber-200 text-amber-700 hover:bg-amber-50 font-bold text-xs h-9 px-3 gap-1.5 rounded-lg mr-auto"
+                              onClick={() =>
+                                setReportTarget({
+                                  reporteeId: req.userId,
+                                  matchRequestId: req.matchId,
+                                  joinRequestId: req.joinId,
+                                  contextLabel: `Báo cáo hành vi của ${req.fullName} liên quan đến kèo "${selectedManageMatch.title}".`,
+                                })
+                              }
+                            >
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                              Báo cáo
+                            </Button>
+                          )}
                           {req.requestStatus === "PENDING" ? (
                             <>
                               <Button
@@ -1571,8 +1631,13 @@ function MatchRequestFeedPage() {
                   {selectedJoinedRequest.stadiumName && (
                     <div className="flex justify-between items-center py-1.5 border-b border-slate-200/50">
                       <span className="text-slate-400">Địa điểm</span>
-                      <strong className="text-slate-800 font-bold max-w-[200px] truncate" title={selectedJoinedRequest.stadiumName}>
-                        {selectedJoinedRequest.stadiumName}
+                      <strong
+                        className="text-slate-800 font-bold max-w-[200px] truncate"
+                        title={`${selectedJoinedRequest.stadiumName}${selectedJoinedRequest.complexName ? ` — ${selectedJoinedRequest.complexName}` : ""}`}
+                      >
+                        {selectedJoinedRequest.complexName
+                          ? `${selectedJoinedRequest.stadiumName} — ${selectedJoinedRequest.complexName}`
+                          : selectedJoinedRequest.stadiumName}
                       </strong>
                     </div>
                   )}
@@ -1677,6 +1742,25 @@ function MatchRequestFeedPage() {
                 </Button>
               )}
 
+              {selectedJoinedRequest.hostUserId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-amber-200 text-amber-700 hover:bg-amber-50 gap-2"
+                  onClick={() =>
+                    setReportTarget({
+                      reporteeId: selectedJoinedRequest.hostUserId!,
+                      matchRequestId: selectedJoinedRequest.matchId,
+                      joinRequestId: selectedJoinedRequest.joinId,
+                      contextLabel: `Báo cáo hành vi của Host ${selectedJoinedRequest.hostName || ""} liên quan đến kèo "${selectedJoinedRequest.matchTitle || `#${selectedJoinedRequest.matchId}`}".`,
+                    })
+                  }
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  Báo cáo Host
+                </Button>
+              )}
+
               <div className="border-t pt-4 mt-2 flex justify-end">
                 <Button
                   type="button"
@@ -1762,6 +1846,17 @@ function MatchRequestFeedPage() {
         isLoading={confirming}
       />
 
+      <ReportUserDialog
+        open={reportTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setReportTarget(null);
+        }}
+        reporteeId={reportTarget?.reporteeId}
+        matchRequestId={reportTarget?.matchRequestId}
+        joinRequestId={reportTarget?.joinRequestId}
+        contextLabel={reportTarget?.contextLabel}
+      />
+
       <Footer />
     </div>
   );
@@ -1770,9 +1865,16 @@ function MatchRequestFeedPage() {
 function MatchRequestFeedPageWrapper() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-slate-50/50 flex items-center justify-center">Đang tải cộng đồng...</div>}>
+import { Suspense } from "react";
+
+export default function CommunityPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
+
       <MatchRequestFeedPage />
     </Suspense>
   );
 }
 
 export default MatchRequestFeedPageWrapper;
+

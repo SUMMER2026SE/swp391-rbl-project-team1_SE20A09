@@ -24,6 +24,9 @@ type OwnerNotifType =
   | "PAYMENT"
   | "REVIEW"
   | "COMPLAINT"
+  | "REPORT"
+  | "ACCOUNT_LOCK"
+  | "APPEAL"
   | "SYSTEM"
   | "PROMOTION"
   | string;
@@ -82,6 +85,8 @@ function getHref(type: OwnerNotifType): string {
   if (type === "PAYMENT") return "/owner/revenue";
   if (type === "REVIEW") return "/owner/reviews";
   if (type === "COMPLAINT") return "/owner/complaints";
+  if (type === "REPORT") return "/owner/reports";
+  if (type === "ACCOUNT_LOCK" || type === "APPEAL") return "/appeals";
   return "/owner/notifications";
 }
 
@@ -100,6 +105,10 @@ function TypeIcon({ type }: { type: OwnerNotifType }) {
     return <Star className="h-4 w-4 text-yellow-500 shrink-0 mt-0.5" />;
   if (type === "COMPLAINT")
     return <MessageSquare className="h-4 w-4 text-rose-500 shrink-0 mt-0.5" />;
+  if (type === "REPORT")
+    return <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
+  if (type === "ACCOUNT_LOCK" || type === "APPEAL")
+    return <AlertTriangle className="h-4 w-4 text-rose-500 shrink-0 mt-0.5" />;
   if (type === "SYSTEM")
     return <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />;
   return <Info className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />;

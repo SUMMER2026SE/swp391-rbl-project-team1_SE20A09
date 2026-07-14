@@ -57,6 +57,9 @@ public class SecurityConfig {
             // như tìm kiếm thường. JwtAuthenticationFilter vẫn set UserPrincipal nếu request có
             // Bearer token hợp lệ, nên user đã đăng nhập vẫn được nhận diện trong controller.
             "/api/v1/ai/chat",
+            // VNPay IPN — gọi server-to-server, cũng không có Bearer token.
+            "/api/v1/payments/vnpay-ipn",
+
             "/actuator/health",
             "/actuator/info",
             "/swagger-ui.html",
@@ -91,6 +94,12 @@ public class SecurityConfig {
                 .authenticationProvider(authenticationProvider())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
+                        // MatchRequestController.getActiveMatches() has no @PreAuthorize (public by
+                        // design — guests can browse the community match list), but that alone
+                        // doesn't exempt it from the base .anyRequest().authenticated() below.
+                        // Exact path only (no wildcard) — /my-created, /my-joined, /{id}/participants
+                        // etc. under the same base path must stay authenticated.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/matchmaking").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/avatars/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/stadiums/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/documents/**").permitAll()

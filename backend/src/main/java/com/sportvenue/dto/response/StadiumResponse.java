@@ -52,6 +52,7 @@ public class StadiumResponse {
     // Hierarchy fields
     private String nodeType;
     private Integer complexId;
+    private String complexName;
     private Integer parentStadiumId;
     
     private List<AmenityResponse> amenities;

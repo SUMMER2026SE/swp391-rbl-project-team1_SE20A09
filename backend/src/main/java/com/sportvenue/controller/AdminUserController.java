@@ -114,7 +114,7 @@ public class AdminUserController {
             @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody com.sportvenue.dto.request.LockCustomerRequest request,
             @org.springframework.security.core.annotation.AuthenticationPrincipal com.sportvenue.security.UserPrincipal currentUser) {
 
-        adminUserService.lockUnlockCustomer(id, request.getEnabled(), currentUser.getUser().getUserId());
+        adminUserService.lockUnlockCustomer(id, request.getEnabled(), currentUser.getUser().getUserId(), request.getReason());
 
         String statusMessage = Boolean.TRUE.equals(request.getEnabled()) ? "mở khóa" : "khóa";
         return ResponseEntity.ok(ApiResponse.<Void>builder()

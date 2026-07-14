@@ -1,39 +1,15 @@
 "use client";
 
-import { useEffect, useState, createContext, useContext } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
 import { AdminSidebar } from "@/components/layout/AdminSidebar";
 import { UserAccountMenu } from "@/components/layout/Header";
 import { Loader2, Menu, Calendar as CalendarIcon, ChevronDown } from "lucide-react";
 import { AdminNotificationBell } from "@/components/notifications/AdminNotificationBell";
-import { ChatBadge } from "@/components/chat/ChatBadge";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-
-// ── Date Filter Context ──────────────────────────────────────────────────────
-export interface DateRange {
-  startDate: string; // yyyy-MM-dd
-  endDate: string;   // yyyy-MM-dd
-}
-
-interface DateFilterContextValue {
-  dateRange: DateRange | null;
-  isFilterOpen: boolean;
-  setIsFilterOpen: (v: boolean) => void;
-  applyDateRange: (range: DateRange) => void;
-}
-
-export const DateFilterContext = createContext<DateFilterContextValue>({
-  dateRange: null,
-  isFilterOpen: false,
-  setIsFilterOpen: () => {},
-  applyDateRange: () => {},
-});
-
-export function useDateFilter() {
-  return useContext(DateFilterContext);
-}
+import { DateRange, DateFilterContext } from "./date-filter-context";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function formatLabel(range: DateRange): string {
@@ -81,11 +57,16 @@ export default function AdminLayout({
 
   const getPageTitle = (path: string) => {
     if (path === "/admin/dashboard") return { title: "Dashboard", subtitle: "Tổng quan hệ thống SportsBook" };
+    if (path.startsWith("/admin/users")) return { title: "Người dùng", subtitle: "Quản lý khách hàng, chủ sân và hồ sơ chủ sân" };
     if (path.startsWith("/admin/customers")) return { title: "Khách hàng", subtitle: "Quản lý thông tin khách hàng" };
+    if (path.startsWith("/admin/owners")) return { title: "Chủ sân", subtitle: "Quản lý tài khoản chủ sân" };
     if (path.startsWith("/admin/owner-approvals")) return { title: "Duyệt chủ sân", subtitle: "Phê duyệt tài khoản chủ sân" };
     if (path.startsWith("/admin/complex-approvals")) return { title: "Duyệt Tổ hợp", subtitle: "Phê duyệt Tổ hợp sân" };
     if (path.startsWith("/admin/sport-categories")) return { title: "Danh mục", subtitle: "Quản lý danh mục môn thể thao" };
     if (path.startsWith("/admin/complaints")) return { title: "Khiếu nại", subtitle: "Xử lý khiếu nại hệ thống" };
+    if (path.startsWith("/admin/reports")) return { title: "Báo cáo hành vi", subtitle: "Xem và xử lý báo cáo hành vi người dùng" };
+    if (path.startsWith("/admin/appeals")) return { title: "Kháng cáo", subtitle: "Xử lý kháng cáo mở khóa tài khoản" };
+    if (path.startsWith("/admin/moderation-analytics")) return { title: "Thống kê vi phạm", subtitle: "Theo dõi Report và Complaint trong hệ thống" };
     return { title: "Quản trị", subtitle: "Hệ thống SportsBook" };
   };
 
@@ -101,7 +82,7 @@ export default function AdminLayout({
 
   return (
     <DateFilterContext.Provider value={{ dateRange, isFilterOpen, setIsFilterOpen, applyDateRange }}>
-      <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900 selection:bg-emerald-200">
+      <div className="h-screen overflow-hidden bg-slate-50 flex font-sans text-slate-900 selection:bg-emerald-200">
         <AdminSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -154,7 +135,6 @@ export default function AdminLayout({
               )}
 
               <AdminNotificationBell />
-              <ChatBadge userId={(session?.user as { userId?: number })?.userId} />
 
               <div className="h-8 w-px bg-slate-200 hidden md:block"></div>
 

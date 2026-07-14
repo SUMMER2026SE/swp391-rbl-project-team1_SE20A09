@@ -249,6 +249,10 @@ public class StadiumServiceImpl implements StadiumService {
 
         // Update stadiumStatus safely if provided
         if (request.getStadiumStatus() != null) {
+            if (Boolean.TRUE.equals(stadium.getAdminSuspended())
+                    && request.getStadiumStatus() == StadiumStatus.AVAILABLE) {
+                throw new BadRequestException("Stadium is suspended by Admin and cannot be activated by Owner.");
+            }
             stadium.setStadiumStatus(request.getStadiumStatus());
         }
 
@@ -454,10 +458,54 @@ public class StadiumServiceImpl implements StadiumService {
         if (resolvedOwner == null || !resolvedOwner.getOwnerId().equals(owner.getOwnerId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
+        if (Boolean.TRUE.equals(stadium.getAdminSuspended())) {
+            throw new BadRequestException("Stadium is suspended by Admin and cannot be activated by Owner.");
+        }
 
         stadium.setStadiumStatus(StadiumStatus.AVAILABLE);
         stadiumRepository.save(stadium);
         log.info("Stadium {} successfully activated by owner {}", stadiumId, userId);
+    }
+
+    @Override
+    @Transactional
+    public void suspendStadiumByAdmin(Integer stadiumId, String reason) {
+        log.info("Admin requesting suspend for stadium {}", stadiumId);
+        Stadium stadium = stadiumRepository.findById(stadiumId)
+                .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
+
+        if (stadium.getStadiumStatus() == StadiumStatus.CLOSED) {
+            throw new BadRequestException("Cannot suspend a closed stadium.");
+        }
+
+        stadium.setStadiumStatus(StadiumStatus.MAINTENANCE);
+        stadium.setAdminSuspended(true);
+        stadium.setAdminSuspendedReason(trimToNull(reason));
+        stadium.setAdminSuspendedAt(LocalDateTime.now());
+        stadiumRepository.save(stadium);
+        log.info("Stadium {} successfully suspended by Admin", stadiumId);
+    }
+
+    @Override
+    @Transactional
+    public void unsuspendStadiumByAdmin(Integer stadiumId) {
+        log.info("Admin requesting unsuspend for stadium {}", stadiumId);
+        Stadium stadium = stadiumRepository.findById(stadiumId)
+                .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + stadiumId));
+
+        if (stadium.getStadiumStatus() == StadiumStatus.CLOSED) {
+            throw new BadRequestException("Cannot unsuspend a closed stadium.");
+        }
+        if (!Boolean.TRUE.equals(stadium.getAdminSuspended())) {
+            throw new BadRequestException("Stadium is not suspended by Admin.");
+        }
+
+        stadium.setAdminSuspended(false);
+        stadium.setAdminSuspendedReason(null);
+        stadium.setAdminSuspendedAt(null);
+        stadium.setStadiumStatus(StadiumStatus.AVAILABLE);
+        stadiumRepository.save(stadium);
+        log.info("Stadium {} successfully unsuspended by Admin", stadiumId);
     }
 
     @Override

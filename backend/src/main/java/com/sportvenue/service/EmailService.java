@@ -660,4 +660,260 @@ public class EmailService {
         }
         return buildEmailLayout("Kết quả duyệt sân", "Xin chào " + ownerName, badge, color, body);
     }
+
+    @Async
+    public void sendPaymentConfirmedEmail(String toEmail, String customerName, Integer bookingId, String stadiumName, BigDecimal amount) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(toEmail);
+            helper.setSubject("Thanh toán thành công — Đơn đặt sân #" + bookingId);
+            String body = "<p>Chúng tôi đã nhận được thanh toán cho đơn đặt sân của bạn.</p>" +
+                          getDetailCardStart() +
+                          detailRow("Mã đặt sân", "#" + bookingId) +
+                          detailRow("Tên sân", stadiumName) +
+                          detailRow("Số tiền", formatCurrency(amount)) +
+                          getDetailCardEnd() +
+                          getButtonHtml("Xem chi tiết đơn");
+            helper.setText(buildEmailLayout("Thanh toán thành công", "Xin chào " + customerName, "Thành công", "#10b981", body), true);
+            mailSender.send(message);
+            log.info("Sent payment confirmed email to {}", toEmail);
+        } catch (MessagingException e) {
+            log.error("Failed to send payment confirmed email to {}", toEmail, e);
+        }
+    }
+
+    @Async
+    public void sendRefundExceptionDecisionEmail(String toEmail, String customerName, Integer bookingId, boolean approved, String reason) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(toEmail);
+            helper.setSubject("Kết quả yêu cầu hoàn tiền ngoại lệ — SportsBook");
+            String badge = approved ? "Được duyệt" : "Bị từ chối";
+            String color = approved ? "#10b981" : "#ef4444";
+            String body = "<p>Yêu cầu hoàn tiền ngoại lệ cho đơn đặt sân <strong>#" + bookingId + "</strong> của bạn đã <strong>" + (approved ? "ĐƯỢC DUYỆT" : "BỊ TỪ CHỐI") + "</strong>.</p>";
+            if (!approved && reason != null && !reason.isBlank()) {
+                body += getDetailCardStart() + detailRow("Lý do từ chối", reason) + getDetailCardEnd();
+            }
+            helper.setText(buildEmailLayout("Hoàn tiền ngoại lệ", "Xin chào " + customerName, badge, color, body), true);
+            mailSender.send(message);
+            log.info("Sent refund exception decision email to {}", toEmail);
+        } catch (MessagingException e) {
+            log.error("Failed to send refund exception decision email to {}", toEmail, e);
+        }
+    }
+
+    @Async
+    public void sendComplaintAcknowledgedEmail(String toEmail, String customerName, Integer complaintId, String issue) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(toEmail);
+            helper.setSubject("Đã tiếp nhận khiếu nại — SportsBook");
+            String body = "<p>Chúng tôi đã tiếp nhận khiếu nại của bạn.</p>" +
+                          getDetailCardStart() +
+                          detailRow("Mã khiếu nại", "#" + complaintId) +
+                          detailRow("Nội dung", issue) +
+                          getDetailCardEnd() +
+                          "<p>Chủ sân và ban quản trị sẽ xem xét và phản hồi trong thời gian sớm nhất.</p>";
+            helper.setText(buildEmailLayout("Tiếp nhận khiếu nại", "Xin chào " + customerName, "Đã tiếp nhận", "#3b82f6", body), true);
+            mailSender.send(message);
+            log.info("Sent complaint acknowledged email to {}", toEmail);
+        } catch (MessagingException e) {
+            log.error("Failed to send complaint acknowledged email to {}", toEmail, e);
+        }
+    }
+
+    @Async
+    public void sendComplaintOwnerRepliedEmail(String toEmail, String customerName, Integer complaintId, String reply) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(toEmail);
+            helper.setSubject("Chủ sân đã phản hồi khiếu nại — SportsBook");
+            String body = "<p>Chủ sân đã phản hồi khiếu nại của bạn.</p>" +
+                          getDetailCardStart() +
+                          detailRow("Mã khiếu nại", "#" + complaintId) +
+                          detailRow("Phản hồi", reply) +
+                          getDetailCardEnd() +
+                          getButtonHtml("Xem chi tiết");
+            helper.setText(buildEmailLayout("Phản hồi khiếu nại", "Xin chào " + customerName, "Có phản hồi", "#f59e0b", body), true);
+            mailSender.send(message);
+            log.info("Sent complaint owner replied email to {}", toEmail);
+        } catch (MessagingException e) {
+            log.error("Failed to send complaint owner replied email to {}", toEmail, e);
+        }
+    }
+
+    @Async
+    public void sendReviewOwnerResponseEmail(String toEmail, String customerName, String stadiumName, Integer bookingId, String response) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(toEmail);
+            helper.setSubject("Chủ sân đã phản hồi đánh giá của bạn — SportsBook");
+            String body = "<p>Chủ sân <strong>" + safe(stadiumName) + "</strong> đã phản hồi đánh giá của bạn cho đơn #" + bookingId + ".</p>" +
+                          getDetailCardStart() +
+                          detailRow("Phản hồi", response) +
+                          getDetailCardEnd();
+            helper.setText(buildEmailLayout("Phản hồi đánh giá", "Xin chào " + customerName, "Có phản hồi", "#f59e0b", body), true);
+            mailSender.send(message);
+            log.info("Sent review owner response email to {}", toEmail);
+        } catch (MessagingException e) {
+            log.error("Failed to send review owner response email to {}", toEmail, e);
+        }
+    }
+
+    @Async
+    public void sendMatchRequestReceivedEmail(String toEmail, String hostName, String applicantName, String matchTime) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(toEmail);
+            helper.setSubject("Yêu cầu tham gia kèo mới — SportsBook");
+            String body = "<p>Có người dùng vừa yêu cầu tham gia kèo ghép của bạn.</p>" +
+                          getDetailCardStart() +
+                          detailRow("Người yêu cầu", applicantName) +
+                          detailRow("Thời gian trận", matchTime) +
+                          getDetailCardEnd() +
+                          getButtonHtml("Xem yêu cầu");
+            helper.setText(buildEmailLayout("Yêu cầu tham gia", "Xin chào " + hostName, "Yêu cầu mới", "#3b82f6", body), true);
+            mailSender.send(message);
+            log.info("Sent match request received email to {}", toEmail);
+        } catch (MessagingException e) {
+            log.error("Failed to send match request received email to {}", toEmail, e);
+        }
+    }
+
+    @Async
+    public void sendMatchRequestApprovedEmail(String toEmail, String applicantName, String hostName, String matchTime) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(toEmail);
+            helper.setSubject("Yêu cầu tham gia kèo được chấp nhận — SportsBook");
+            String body = "<p>Yêu cầu tham gia kèo của bạn đã được chủ kèo chấp nhận.</p>" +
+                          getDetailCardStart() +
+                          detailRow("Chủ kèo", hostName) +
+                          detailRow("Thời gian", matchTime) +
+                          getDetailCardEnd() +
+                          "<p>Chúc bạn có một trận đấu vui vẻ!</p>";
+            helper.setText(buildEmailLayout("Kèo được chấp nhận", "Xin chào " + applicantName, "Đã chấp nhận", "#10b981", body), true);
+            mailSender.send(message);
+            log.info("Sent match request approved email to {}", toEmail);
+        } catch (MessagingException e) {
+            log.error("Failed to send match request approved email to {}", toEmail, e);
+        }
+    }
+
+    @Async
+    public void sendMatchRequestRejectedEmail(String toEmail, String applicantName, String hostName, String matchTime) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(toEmail);
+            helper.setSubject("Yêu cầu tham gia kèo bị từ chối — SportsBook");
+            String body = "<p>Yêu cầu tham gia kèo của bạn đã bị từ chối bởi chủ kèo.</p>" +
+                          getDetailCardStart() +
+                          detailRow("Chủ kèo", hostName) +
+                          detailRow("Thời gian", matchTime) +
+                          getDetailCardEnd() +
+                          "<p>Đừng buồn nhé, vẫn còn rất nhiều kèo khác đang chờ bạn tham gia.</p>";
+            helper.setText(buildEmailLayout("Kèo bị từ chối", "Xin chào " + applicantName, "Bị từ chối", "#ef4444", body), true);
+            mailSender.send(message);
+            log.info("Sent match request rejected email to {}", toEmail);
+        } catch (MessagingException e) {
+            log.error("Failed to send match request rejected email to {}", toEmail, e);
+        }
+    }
+
+    @Async
+    public void sendMatchCancelledEmail(String toEmail, String applicantName, String hostName, String matchTime) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(toEmail);
+            helper.setSubject("Kèo đấu đã bị hủy — SportsBook");
+            String body = "<p>Kèo đấu mà bạn tham gia đã bị hủy bởi chủ kèo.</p>" +
+                          getDetailCardStart() +
+                          detailRow("Chủ kèo", hostName) +
+                          detailRow("Thời gian", matchTime) +
+                          getDetailCardEnd();
+            helper.setText(buildEmailLayout("Kèo bị hủy", "Xin chào " + applicantName, "Bị hủy", "#ef4444", body), true);
+            mailSender.send(message);
+            log.info("Sent match cancelled email to {}", toEmail);
+        } catch (MessagingException e) {
+            log.error("Failed to send match cancelled email to {}", toEmail, e);
+        }
+    }
+
+    @Async
+    public void sendUpgradeRejectedEmail(String toEmail, String customerName, String reason) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(toEmail);
+            helper.setSubject("Yêu cầu nâng cấp đối tác bị từ chối — SportsBook");
+            String body = "<p>Yêu cầu nâng cấp tài khoản của bạn lên Đối tác/Chủ sân đã bị từ chối.</p>" +
+                          getDetailCardStart() +
+                          detailRow("Lý do", reason) +
+                          getDetailCardEnd() +
+                          "<p>Vui lòng cập nhật lại thông tin theo yêu cầu và thử lại sau.</p>";
+            helper.setText(buildEmailLayout("Từ chối nâng cấp", "Xin chào " + customerName, "Bị từ chối", "#ef4444", body), true);
+            mailSender.send(message);
+            log.info("Sent upgrade rejected email to {}", toEmail);
+        } catch (MessagingException e) {
+            log.error("Failed to send upgrade rejected email to {}", toEmail, e);
+        }
+    }
+
+    @Async
+    public void sendAccountLockedEmail(String toEmail, String customerName, String reason) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(toEmail);
+            helper.setSubject("Tài khoản của bạn đã bị khóa — SportsBook");
+            String body = "<p>Tài khoản của bạn trên hệ thống đã bị khóa bởi quản trị viên.</p>" +
+                          getDetailCardStart() +
+                          detailRow("Lý do", reason) +
+                          getDetailCardEnd() +
+                          "<p>Nếu bạn cho rằng đây là sự nhầm lẫn, vui lòng liên hệ bộ phận hỗ trợ để khiếu nại.</p>";
+            helper.setText(buildEmailLayout("Khóa tài khoản", "Xin chào " + customerName, "Bị khóa", "#ef4444", body), true);
+            mailSender.send(message);
+            log.info("Sent account locked email to {}", toEmail);
+        } catch (MessagingException e) {
+            log.error("Failed to send account locked email to {}", toEmail, e);
+        }
+    }
+
+    @Async
+    public void sendAccountUnlockedEmail(String toEmail, String customerName) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(toEmail);
+            helper.setSubject("Tài khoản của bạn đã được mở khóa — SportsBook");
+            String body = "<p>Tài khoản của bạn đã được quản trị viên mở khóa thành công.</p>" +
+                          "<p>Bạn hiện đã có thể đăng nhập và sử dụng hệ thống bình thường. Chúc bạn có những trải nghiệm tuyệt vời!</p>";
+            helper.setText(buildEmailLayout("Mở khóa tài khoản", "Xin chào " + customerName, "Được mở khóa", "#10b981", body), true);
+            mailSender.send(message);
+            log.info("Sent account unlocked email to {}", toEmail);
+        } catch (MessagingException e) {
+            log.error("Failed to send account unlocked email to {}", toEmail, e);
+        }
+    }
 }

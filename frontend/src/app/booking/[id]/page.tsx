@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Clock, Calendar, Star, MessageSquare, AlertCircle, Loader2, Info, HelpCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Calendar, Star, MessageSquare, AlertCircle, AlertTriangle, Loader2, Info, HelpCircle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,7 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/landing/Footer';
 import { chatUrl, createContextualConversation } from '@/lib/contextual-chat';
 import { RefundExceptionDialog } from '@/components/bookings/RefundExceptionDialog';
+import { ReportUserDialog } from '@/components/reports/ReportUserDialog';
 
 const STATUS_CONFIG = {
   confirmed: { label: "Đã xác nhận", className: "bg-green-50 text-green-700 border-green-200" },
@@ -80,6 +81,7 @@ export default function BookingDetailPage() {
   const [error, setError] = useState<string | null>(null);
   
   const [complaintOpen, setComplaintOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [complaintText, setComplaintText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -254,6 +256,9 @@ export default function BookingDetailPage() {
                     <h1 className="text-2xl md:text-3xl font-bold text-white leading-tight">
                       {booking.venueName}
                     </h1>
+                    {booking.complexName && (
+                      <p className="text-sm text-white/80 mt-0.5">{booking.complexName}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md p-1.5 rounded-2xl border border-white/20">
                     {getStatusBadge(booking.status)}
@@ -264,14 +269,24 @@ export default function BookingDetailPage() {
             </div>
             
             <CardContent className="p-6">
-              <div className="flex items-start gap-3">
-                <div className="bg-slate-50 p-2 rounded-xl">
-                  <MapPin className="h-5 w-5 text-primary" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="bg-slate-50 p-2 rounded-xl shrink-0">
+                    <MapPin className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Địa chỉ</p>
+                    <p className="text-slate-700 font-medium leading-relaxed">{booking.address}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Địa chỉ</p>
-                  <p className="text-slate-700 font-medium leading-relaxed">{booking.address}</p>
-                </div>
+                {booking.stadiumId && (
+                  <Button asChild variant="outline" size="sm" className="rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 gap-1.5 shrink-0 self-start sm:self-center">
+                    <Link href={`/venues/${booking.stadiumId}`}>
+                      Xem chi tiết sân
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -566,6 +581,15 @@ export default function BookingDetailPage() {
                     <AlertCircle className="h-4 w-4 mr-2 text-red-400" />
                     Gửi khiếu nại
                   </Button>
+                  <Button
+                    variant="outline"
+                    className="rounded-2xl flex-1 font-bold h-12 bg-transparent text-white border-white/20 hover:bg-white/10"
+                    onClick={() => setReportOpen(true)}
+                    disabled={!booking.ownerUserId}
+                  >
+                    <AlertTriangle className="h-4 w-4 mr-2 text-amber-400" />
+                    Báo cáo hành vi
+                  </Button>
                 </>
               )}
               {booking.status === 'cancelled' && (
@@ -577,6 +601,15 @@ export default function BookingDetailPage() {
                   >
                     <AlertCircle className="h-4 w-4 mr-2 text-red-400" />
                     Gửi khiếu nại
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="rounded-2xl flex-1 font-bold h-12 bg-transparent text-white border-white/20 hover:bg-white/10"
+                    onClick={() => setReportOpen(true)}
+                    disabled={!booking.ownerUserId}
+                  >
+                    <AlertTriangle className="h-4 w-4 mr-2 text-amber-400" />
+                    Báo cáo hành vi
                   </Button>
                   <Button asChild variant="secondary" className="rounded-2xl flex-1 font-bold h-12">
                     <Link href="/search">Đặt sân khác</Link>
@@ -619,6 +652,15 @@ export default function BookingDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ReportUserDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        reporteeId={booking.ownerUserId}
+        bookingId={parseInt(booking.id, 10)}
+        stadiumId={booking.stadiumId}
+        contextLabel={`Báo cáo hành vi liên quan đến đơn đặt sân ${booking.displayId}.`}
+      />
 
       {/* Refund Exception Dialog */}
       <RefundExceptionDialog

@@ -19,6 +19,7 @@ import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.RoleRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.service.CustomerNotificationService;
 import com.sportvenue.service.OtpService;
 import com.sportvenue.service.NotificationService;
 import com.sportvenue.service.OwnerRegistrationService;
@@ -43,6 +44,7 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
     private final PasswordEncoder passwordEncoder;
     private final OtpService otpService;
     private final NotificationService notificationService;
+    private final CustomerNotificationService customerNotificationService;
     private final com.sportvenue.service.AdminDashboardService adminDashboardService;
     private final EmailService emailService;
     private final AfterCommitExecutor afterCommitExecutor;
@@ -206,9 +208,8 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
             throw new BadRequestException("Không thể set trạng thái PENDING từ hành động này");
         }
 
-        User user = owner.getUser();
-
-        String adminEmail = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getName();
+        String adminEmail = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getName();
         User admin = userRepository.findByEmail(adminEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy thông tin Admin"));
 
@@ -216,58 +217,79 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
         owner.setApprovedAt(java.time.LocalDateTime.now());
 
         if (request.getApprovedStatus() == ApprovedStatus.APPROVED) {
-            owner.setApprovedStatus(ApprovedStatus.APPROVED);
-            owner.setRejectionReason(null);
-
-            if ("Customer".equals(user.getRole().getRoleName())) {
-                Role ownerRole = roleRepository.findByRoleName("Owner")
-                        .orElseThrow(() -> new RuntimeException("Không tìm thấy Role Owner trong DB"));
-                user.setRole(ownerRole);
-            }
-
-            if (user.getAccountStatus() == AccountStatus.PENDING) {
-                user.setAccountStatus(AccountStatus.ACTIVE);
-            }
-            user.setIsVerified(true);
-
-            userRepository.save(user);
-            log.info("Owner registration APPROVED for email: {}. Role upgraded to Owner.", user.getEmail());
-
-            notificationService.createNotification(
-                    user.getUserId(),
-                    "Hồ sơ đối tác đã được duyệt",
-                    "Chúc mừng! Hồ sơ đối tác cho doanh nghiệp '" + owner.getBusinessName() + "' đã được Admin phê duyệt thành công. Bạn hiện có quyền của Chủ sân.",
-                    NotificationType.SYSTEM,
-                    owner.getOwnerId().toString()
-            );
-            
-            afterCommitExecutor.execute(() -> 
-                emailService.sendOwnerRegistrationSuccessEmail(user.getEmail(), user.getFullName(), owner.getBusinessName())
-            );
-
+            handleOwnerApproval(owner);
         } else if (request.getApprovedStatus() == ApprovedStatus.REJECTED) {
-            if (request.getRejectionReason() == null || request.getRejectionReason().trim().isEmpty()) {
-                throw new BadRequestException("Lý do từ chối là bắt buộc");
-            }
-
-            owner.setApprovedStatus(ApprovedStatus.REJECTED);
-            owner.setRejectionReason(request.getRejectionReason().trim());
-
-            log.info("Owner registration REJECTED for email: {}. Reason: {}", user.getEmail(), request.getRejectionReason());
-
-            notificationService.createNotification(
-                    user.getUserId(),
-                    "Hồ sơ đối tác bị từ chối",
-                    "Hồ sơ đối tác cho doanh nghiệp '" + owner.getBusinessName() + "' đã bị từ chối. Lý do: " + request.getRejectionReason(),
-                    NotificationType.SYSTEM,
-                    owner.getOwnerId().toString()
-            );
+            handleOwnerRejection(owner, request.getRejectionReason());
         }
 
         Owner savedOwner = ownerRepository.save(owner);
         // Xóa cache dashboard — số liệu chủ sân / duyệt chờ thay đổi
         adminDashboardService.evictDashboardCache();
         return mapToOwnerDetailResponse(savedOwner);
+    }
+
+    private void handleOwnerApproval(Owner owner) {
+        owner.setApprovedStatus(ApprovedStatus.APPROVED);
+        owner.setRejectionReason(null);
+
+        User user = owner.getUser();
+        if ("Customer".equals(user.getRole().getRoleName())) {
+            Role ownerRole = roleRepository.findByRoleName("Owner")
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy Role Owner trong DB"));
+            user.setRole(ownerRole);
+        }
+
+        if (user.getAccountStatus() == AccountStatus.PENDING) {
+            user.setAccountStatus(AccountStatus.ACTIVE);
+        }
+        user.setIsVerified(true);
+
+        userRepository.save(user);
+        log.info("Owner registration APPROVED for email: {}. Role upgraded to Owner.", user.getEmail());
+
+        notificationService.createNotification(
+                user.getUserId(),
+                "Hồ sơ đối tác đã được duyệt",
+                "Chúc mừng! Hồ sơ đối tác cho doanh nghiệp '" + owner.getBusinessName()
+                        + "' đã được Admin phê duyệt thành công. Bạn hiện có quyền của Chủ sân.",
+                NotificationType.SYSTEM,
+                owner.getOwnerId().toString()
+        );
+        try {
+            customerNotificationService.notifyUpgradeApproved(user.getUserId(), owner);
+        } catch (Exception ex) {
+            log.warn("Failed to emit upgrade approved notification for user {}", user.getUserId(), ex);
+        }
+
+        afterCommitExecutor.execute(() ->
+            emailService.sendOwnerRegistrationSuccessEmail(user.getEmail(), user.getFullName(), owner.getBusinessName())
+        );
+    }
+
+    private void handleOwnerRejection(Owner owner, String rejectionReason) {
+        if (rejectionReason == null || rejectionReason.trim().isEmpty()) {
+            throw new BadRequestException("Lý do từ chối là bắt buộc");
+        }
+
+        owner.setApprovedStatus(ApprovedStatus.REJECTED);
+        owner.setRejectionReason(rejectionReason.trim());
+
+        User user = owner.getUser();
+        log.info("Owner registration REJECTED for email: {}. Reason: {}", user.getEmail(), rejectionReason);
+
+        notificationService.createNotification(
+                user.getUserId(),
+                "Hồ sơ đối tác bị từ chối",
+                "Hồ sơ đối tác cho doanh nghiệp '" + owner.getBusinessName()
+                        + "' đã bị từ chối. Lý do: " + rejectionReason,
+                NotificationType.SYSTEM,
+                owner.getOwnerId().toString()
+        );
+        try {
+            customerNotificationService.notifyUpgradeRejected(user.getUserId(), rejectionReason.trim());
+        } catch (Exception ex) {
+            log.warn("Failed to emit upgrade rejected notification for user {}", user.getUserId(), ex);
+        }
     }
 
     private OwnerDetailResponse mapToOwnerDetailResponse(Owner owner) {

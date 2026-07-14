@@ -22,4 +22,9 @@ public class UserResponse {
     private String userRank;
     private Integer userPoint;
     private String accountStatus;
+    private String lockReason;
+    /** Chỉ có giá trị khi roleName = "Owner" — null với Customer/Admin. Dùng để
+     * frontend gate UI Owner (menu/dashboard) theo đúng trạng thái duyệt hồ sơ,
+     * không chỉ dựa vào role (xem docs/auth_account_flow_findings.md #2). */
+    private String ownerApprovedStatus;
 }

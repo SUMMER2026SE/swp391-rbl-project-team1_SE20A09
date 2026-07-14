@@ -19,6 +19,7 @@ import com.sportvenue.repository.ReviewRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.specification.StadiumSpecification;
 import com.sportvenue.service.PublicStadiumService;
+import com.sportvenue.util.StadiumUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -250,6 +251,7 @@ public class PublicStadiumServiceImpl implements PublicStadiumService {
                 .pricePerHour(stadium.getPricePerHour())
                 .stadiumStatus(stadium.getStadiumStatus() != null ? stadium.getStadiumStatus().name() : null)
                 .approvedStatus(approvedStatusVal != null ? approvedStatusVal.name() : null)
+                .complexName(StadiumUtils.resolveComplexName(stadium))
                 .amenities(amenityResponses)
                 .build();
     }

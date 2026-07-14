@@ -201,6 +201,7 @@ public class HomeServiceImpl implements HomeService {
         return new VenueSummaryDto(
                 stadium.getStadiumId(),
                 stadium.getStadiumName(),
+                StadiumUtils.resolveComplexName(stadium),
                 toSportLabel(sportName),
                 toSportKey(sportName),
                 stadium.getPricePerHour(),

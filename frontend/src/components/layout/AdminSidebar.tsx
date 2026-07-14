@@ -5,10 +5,12 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
-  Building2,
   MapPin,
   LayoutList,
   AlertCircle,
+  AlertTriangle,
+  ShieldAlert,
+  BarChart3,
   TrendingUp,
   CalendarRange,
   X,
@@ -26,11 +28,13 @@ export function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
   const MENU_ITEMS = [
     { id: 'dashboard', href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'bookings', href: '/admin/bookings', label: 'Đặt sân', icon: CalendarRange },
-    { id: 'customers', href: '/admin/customers', label: 'Khách hàng', icon: Users },
-    { id: 'owners', href: '/admin/owner-approvals', label: 'Chủ sân', icon: Building2 },
+    { id: 'users', href: '/admin/users', label: 'Người dùng', icon: Users },
     { id: 'complexes', href: '/admin/complex-approvals', label: 'Tổ hợp', icon: MapPin },
     { id: 'categories', href: '/admin/sport-categories', label: 'Danh mục', icon: LayoutList },
     { id: 'complaints', href: '/admin/complaints', label: 'Khiếu nại', icon: AlertCircle },
+    { id: 'reports', href: '/admin/reports', label: 'Báo cáo hành vi', icon: AlertTriangle },
+    { id: 'appeals', href: '/admin/appeals', label: 'Kháng cáo', icon: ShieldAlert },
+    { id: 'moderation-analytics', href: '/admin/moderation-analytics', label: 'Thống kê vi phạm', icon: BarChart3 },
     { id: 'refund-exceptions', href: '/admin/refund-exceptions', label: 'Ngoại lệ hoàn tiền', icon: HelpCircle },
   ];
 
@@ -58,6 +62,11 @@ export function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
             const Icon = item.icon;
             const isActive = item.href === '/admin/dashboard'
               ? pathname === item.href
+              : item.href === '/admin/users'
+                ? pathname.startsWith('/admin/users')
+                  || pathname.startsWith('/admin/customers')
+                  || pathname.startsWith('/admin/owners')
+                  || pathname.startsWith('/admin/owner-approvals')
               : pathname.startsWith(item.href);
 
             return (

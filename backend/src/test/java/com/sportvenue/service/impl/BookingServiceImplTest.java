@@ -30,6 +30,7 @@ import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.repository.TimeSlotExceptionRepository;
 import com.sportvenue.security.UserPrincipal;
+import com.sportvenue.service.AdminDashboardService;
 import com.sportvenue.service.MaintenanceScheduleService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -94,6 +95,7 @@ class BookingServiceImplTest {
     @Mock private com.sportvenue.service.EmailService emailService;
     @Mock private com.sportvenue.service.NotificationService notificationService;
     @Mock private com.sportvenue.util.AfterCommitExecutor afterCommitExecutor;
+    @Mock private AdminDashboardService adminDashboardService;
 
     @InjectMocks private BookingServiceImpl bookingService;
 
@@ -1187,6 +1189,178 @@ class BookingServiceImplTest {
 
         assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
         verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(p -> p.getAmount().compareTo(BigDecimal.ZERO) == 0));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // confirmCashPaymentReceived — Owner xác nhận đã thu tiền mặt tại sân
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("confirmCashPaymentReceived: Owner đúng sân + AWAITING_CASH_PAYMENT → PAID")
+    void confirmCashPaymentReceived_happyPath() {
+        User ownerUser = User.builder()
+                .userId(99).email("owner@example.com")
+                .role(Role.builder().roleName("Owner").build())
+                .build();
+        Owner owner = Owner.builder().ownerId(5).user(ownerUser).build();
+        stadium.setOwner(owner);
+        UserPrincipal ownerPrincipal = new UserPrincipal(ownerUser);
+
+        Booking booking = Booking.builder()
+                .bookingId(200)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("270000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.AWAITING_CASH_PAYMENT)
+                .build();
+
+        Payment cashPayment = Payment.builder()
+                .paymentId(10)
+                .booking(booking)
+                .paymentMethod(com.sportvenue.entity.enums.PaymentMethod.CASH)
+                .amount(new BigDecimal("270000"))
+                .transactionCode("CASH_200")
+                .paymentStatus(TransactionStatus.PENDING)
+                .build();
+
+        when(bookingRepository.findByIdForUpdate(200)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentRepository.findCashPaymentsByBookingIdAndMethodAndStatus(
+                200, com.sportvenue.entity.enums.PaymentMethod.CASH, TransactionStatus.PENDING))
+                .thenReturn(List.of(cashPayment));
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        BookingDetailResponse response = bookingService.confirmCashPaymentReceived(ownerPrincipal, 200);
+
+        assertEquals(PaymentStatus.PAID, booking.getPaymentStatus());
+        assertEquals(TransactionStatus.SUCCESS, cashPayment.getPaymentStatus());
+        assertNotNull(cashPayment.getPaidAt());
+        assertEquals(200, response.getBookingId());
+        verify(adminDashboardService).evictDashboardCache();
+    }
+
+    @Test
+    @DisplayName("confirmCashPaymentReceived: gọi lại trên đơn đã PAID → idempotent, không lỗi, không đổi state")
+    void confirmCashPaymentReceived_alreadyPaid_isIdempotent() {
+        User ownerUser = User.builder()
+                .userId(99).email("owner@example.com")
+                .role(Role.builder().roleName("Owner").build())
+                .build();
+        Owner owner = Owner.builder().ownerId(5).user(ownerUser).build();
+        stadium.setOwner(owner);
+        UserPrincipal ownerPrincipal = new UserPrincipal(ownerUser);
+
+        Booking booking = Booking.builder()
+                .bookingId(201)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("270000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .build();
+
+        when(bookingRepository.findByIdForUpdate(201)).thenReturn(Optional.of(booking));
+
+        BookingDetailResponse response = bookingService.confirmCashPaymentReceived(ownerPrincipal, 201);
+
+        assertEquals(PaymentStatus.PAID, booking.getPaymentStatus());
+        assertEquals(201, response.getBookingId());
+        verify(bookingRepository, never()).save(any());
+        verify(paymentRepository, never()).save(any());
+        verify(adminDashboardService, never()).evictDashboardCache();
+    }
+
+    @Test
+    @DisplayName("confirmCashPaymentReceived: Customer (không phải Owner) gọi → ForbiddenException")
+    void confirmCashPaymentReceived_calledByCustomer_throwsForbidden() {
+        Booking booking = Booking.builder()
+                .bookingId(202)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.AWAITING_CASH_PAYMENT)
+                .build();
+        // stadium chưa gán owner nào -> resolveOwner() trả null -> chắc chắn Forbidden dù ai gọi
+        when(bookingRepository.findByIdForUpdate(202)).thenReturn(Optional.of(booking));
+
+        assertThrows(ForbiddenException.class,
+                () -> bookingService.confirmCashPaymentReceived(principal, 202));
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("confirmCashPaymentReceived: Owner của sân khác gọi → ForbiddenException")
+    void confirmCashPaymentReceived_calledByOtherOwner_throwsForbidden() {
+        User realOwnerUser = User.builder().userId(99).role(Role.builder().roleName("Owner").build()).build();
+        Owner realOwner = Owner.builder().ownerId(5).user(realOwnerUser).build();
+        stadium.setOwner(realOwner);
+
+        User otherOwnerUser = User.builder().userId(77).role(Role.builder().roleName("Owner").build()).build();
+        UserPrincipal otherOwnerPrincipal = new UserPrincipal(otherOwnerUser);
+
+        Booking booking = Booking.builder()
+                .bookingId(203)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.AWAITING_CASH_PAYMENT)
+                .build();
+        when(bookingRepository.findByIdForUpdate(203)).thenReturn(Optional.of(booking));
+
+        assertThrows(ForbiddenException.class,
+                () -> bookingService.confirmCashPaymentReceived(otherOwnerPrincipal, 203));
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("confirmCashPaymentReceived: booking không phải AWAITING_CASH_PAYMENT → BadRequestException")
+    void confirmCashPaymentReceived_wrongPaymentStatus_throwsBadRequest() {
+        User ownerUser = User.builder().userId(99).role(Role.builder().roleName("Owner").build()).build();
+        Owner owner = Owner.builder().ownerId(5).user(ownerUser).build();
+        stadium.setOwner(owner);
+        UserPrincipal ownerPrincipal = new UserPrincipal(ownerUser);
+
+        Booking booking = Booking.builder()
+                .bookingId(204)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.UNPAID)
+                .build();
+        when(bookingRepository.findByIdForUpdate(204)).thenReturn(Optional.of(booking));
+
+        assertThrows(BadRequestException.class,
+                () -> bookingService.confirmCashPaymentReceived(ownerPrincipal, 204));
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("confirmCashPaymentReceived: booking đã CANCELLED → BadRequestException")
+    void confirmCashPaymentReceived_cancelledBooking_throwsBadRequest() {
+        User ownerUser = User.builder().userId(99).role(Role.builder().roleName("Owner").build()).build();
+        Owner owner = Owner.builder().ownerId(5).user(ownerUser).build();
+        stadium.setOwner(owner);
+        UserPrincipal ownerPrincipal = new UserPrincipal(ownerUser);
+
+        Booking booking = Booking.builder()
+                .bookingId(205)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .bookingStatus(BookingStatus.CANCELLED)
+                .paymentStatus(PaymentStatus.AWAITING_CASH_PAYMENT)
+                .build();
+        when(bookingRepository.findByIdForUpdate(205)).thenReturn(Optional.of(booking));
+
+        assertThrows(BadRequestException.class,
+                () -> bookingService.confirmCashPaymentReceived(ownerPrincipal, 205));
+        verify(bookingRepository, never()).save(any());
     }
 
 }

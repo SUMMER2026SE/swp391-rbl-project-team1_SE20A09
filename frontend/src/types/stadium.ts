@@ -53,6 +53,7 @@ export interface StadiumResponse {
   approvedStatus: string;
   nodeType?: 'FACILITY' | 'COURT' | null;
   complexId?: number | null;
+  complexName?: string | null;
   parentStadiumId?: number | null;
   /** True nếu sân đang bị chặn đặt HÔM NAY do bất kỳ cơ chế bảo trì nào (kể cả khung ngày, dù stadiumStatus vẫn AVAILABLE). Chỉ có ở API dành cho Owner. */
   underMaintenanceToday?: boolean | null;

@@ -61,11 +61,14 @@ function LoginPage() {
         setError(null);
         const session = await getSession();
         const roleName = session?.user?.roleName;
+        const accountStatus = session?.user?.accountStatus;
         const params = new URLSearchParams(window.location.search);
-        const rawRedirect = params.get("redirect");
+        const rawRedirect = params.get("redirect") ?? params.get("callbackUrl");
 
         let destination: string;
-        if (roleName === "Admin") {
+        if (accountStatus === "BLOCKED") {
+          destination = "/appeals";
+        } else if (roleName === "Admin") {
           destination = "/admin/dashboard";
         } else if (roleName === "Owner") {
           destination = "/owner/dashboard";

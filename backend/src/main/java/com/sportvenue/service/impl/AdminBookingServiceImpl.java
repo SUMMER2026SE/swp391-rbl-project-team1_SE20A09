@@ -14,6 +14,7 @@ import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.specification.BookingSpecification;
 import com.sportvenue.service.AdminBookingService;
+import com.sportvenue.util.StadiumUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -96,6 +97,7 @@ public class AdminBookingServiceImpl implements AdminBookingService {
         }
 
         String stadiumName = stadium != null ? stadium.getStadiumName() : "N/A";
+        String complexName = stadium != null ? StadiumUtils.resolveComplexName(stadium) : null;
         String ownerName = "N/A";
         if (stadium != null) {
             Owner owner = stadium.resolveOwner();
@@ -119,6 +121,7 @@ public class AdminBookingServiceImpl implements AdminBookingService {
                 .customerName(customerName)
                 .customerEmail(customerEmail)
                 .stadiumName(stadiumName)
+                .complexName(complexName)
                 .ownerName(ownerName)
                 .totalPrice(booking.getTotalPrice())
                 .serviceFee(booking.getServiceFee())

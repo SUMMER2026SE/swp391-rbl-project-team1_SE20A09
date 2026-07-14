@@ -111,6 +111,6 @@ class AdminUserControllerTest {
         // Assert
         assertEquals(HttpStatus.OK, result.getStatusCode());
         assertEquals("Đã khóa tài khoản thành công", result.getBody().getMessage());
-        verify(adminUserService).lockUnlockCustomer(2, false, 1);
+        verify(adminUserService).lockUnlockCustomer(2, false, 1, null);
     }
 }

@@ -11,6 +11,8 @@ export interface VenueCardProps {
   id?: number;
   image: string;
   name: string;
+  /** Tên khu phức hợp chứa sân — undefined/null nếu sân độc lập. */
+  complexName?: string | null;
   sportType: string;
   price: number;
   rating: number;
@@ -27,6 +29,7 @@ export function VenueCard({
   id,
   image,
   name,
+  complexName,
   sportType,
   price,
   rating,
@@ -84,6 +87,9 @@ export function VenueCard({
 
           <CardContent className="p-5">
             <h3 className="text-lg font-semibold leading-snug line-clamp-1">{name}</h3>
+            {complexName && (
+              <p className="text-xs text-muted-foreground line-clamp-1">{complexName}</p>
+            )}
 
             <div className="mt-2 flex items-center text-sm text-muted-foreground">
               <MapPin className="mr-1.5 h-4 w-4 shrink-0 text-primary/70" />

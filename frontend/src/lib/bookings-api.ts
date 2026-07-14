@@ -4,6 +4,8 @@ export type BookingHistoryItem = {
   id: string;
   displayId: string;
   venue: string;
+  /** Tên khu phức hợp chứa sân — undefined/null nếu sân độc lập. */
+  complexName?: string | null;
   sportType: string;
   imageUrl: string;
   date: string;
@@ -75,6 +77,7 @@ type OwnerBookingDto = {
   bookingId: string | number;
   stadium?: {
     stadiumName: string;
+    complexName?: string | null;
     sportType: string;
     address: string;
   };
@@ -100,6 +103,7 @@ export async function fetchOwnerBookings(
     id: String(b.bookingId),
     displayId: `#${b.bookingId}`,
     venue: b.stadium?.stadiumName || "Sân chưa biết",
+    complexName: b.stadium?.complexName ?? null,
     sportType: b.stadium?.sportType || "Khác",
     imageUrl: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=300&auto=format&fit=crop",
     date: b.slot?.startTime ? new Date(b.slot.startTime).toLocaleDateString("vi-VN") : "Chưa có",
@@ -126,6 +130,8 @@ export type BookingDetailItem = {
   id: string;
   displayId: string;
   venueName: string;
+  /** Tên khu phức hợp chứa sân — null nếu sân độc lập. */
+  complexName: string | null;
   sportType: string;
   imageUrl: string;
   playDate: string;
@@ -146,6 +152,7 @@ export type BookingDetailItem = {
   createdAt: string;
   note: string | null;
   ownerUserId?: number;
+  stadiumId?: number;
 };
 
 export async function fetchBookingDetail(id: string | number): Promise<BookingDetailItem> {
@@ -155,6 +162,7 @@ export async function fetchBookingDetail(id: string | number): Promise<BookingDe
     id: String(data.bookingId),
     displayId: data.displayId,
     venueName: data.stadium?.stadiumName || "Sân chưa biết",
+    complexName: data.stadium?.complexName ?? null,
     sportType: data.stadium?.sportType || "Khác",
     imageUrl: data.stadium?.imageUrl || "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=300&auto=format&fit=crop",
     playDate: data.reservationDate || "Chưa rõ",
@@ -171,6 +179,7 @@ export async function fetchBookingDetail(id: string | number): Promise<BookingDe
     createdAt: data.createdAt || "Chưa rõ",
     note: data.note || null,
     ownerUserId: data.stadium?.ownerUserId,
+    stadiumId: data.stadium?.stadiumId,
   };
 }
 

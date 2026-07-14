@@ -26,6 +26,10 @@ const PROTECTED_PREFIXES = [
   "/payments",
   "/complaints",
   "/community",
+  "/appeals",
+  "/reports",
+  "/ai-assistant",
+
 ];
 
 function isProtectedRoute(pathname: string): boolean {
@@ -51,7 +55,7 @@ type RouteGuardProps = {
 };
 
 export function RouteGuard({ children }: RouteGuardProps) {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -67,8 +71,15 @@ export function RouteGuard({ children }: RouteGuardProps) {
     } else if (status === "authenticated") {
       // Tự động đóng nếu đăng nhập thành công
       setShowLoginDialog(false);
+      if (session?.user?.accountStatus === "BLOCKED") {
+        if (!pathname.startsWith("/appeals")) {
+          router.push("/appeals");
+        }
+      } else if (session?.user?.accountStatus === "ACTIVE" && pathname.startsWith("/appeals")) {
+        router.push("/");
+      }
     }
-  }, [status, pathname]);
+  }, [status, pathname, session, router]);
 
   const triggerLoginModal = (callbackUrl: string) => {
     setBlockedPath(callbackUrl);

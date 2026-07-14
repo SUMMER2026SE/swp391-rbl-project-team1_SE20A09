@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -426,6 +427,33 @@ class StadiumServiceImplTest {
         assertEquals(StadiumStatus.MAINTENANCE, captor.getValue().getStadiumStatus());
     }
 
+    @Test
+    void updateStadiumRejectsActivatingAdminSuspendedStadium() {
+        UpdateStadiumRequest request = validUpdateRequest();
+        request.setStadiumStatus(StadiumStatus.AVAILABLE);
+        Owner owner = approvedOwner();
+        SportType sportType = SportType.builder().sportTypeId(2).sportName("Basketball").build();
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .owner(owner)
+                .sportType(sportType)
+                .stadiumName("Old Name")
+                .stadiumStatus(StadiumStatus.MAINTENANCE)
+                .adminSuspended(true)
+                .build();
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+        when(sportTypeRepository.findById(2)).thenReturn(Optional.of(sportType));
+
+        BadRequestException ex = assertThrows(
+                BadRequestException.class,
+                () -> stadiumService.updateStadium(10, request, 1));
+
+        assertEquals("Stadium is suspended by Admin and cannot be activated by Owner.", ex.getMessage());
+        verify(stadiumRepository, never()).save(any(Stadium.class));
+    }
+
     private static UpdateStadiumRequest validUpdateRequest() {
         return UpdateStadiumRequest.builder()
                 .stadiumName(" Updated Stadium ")
@@ -491,6 +519,119 @@ class StadiumServiceImplTest {
 
         verify(stadiumRepository).save(stadium);
         assertEquals(StadiumStatus.AVAILABLE, stadium.getStadiumStatus());
+    }
+
+    @Test
+    void activateStadiumRejectsAdminSuspendedStadium() {
+        Owner owner = approvedOwner();
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .owner(owner)
+                .stadiumStatus(StadiumStatus.MAINTENANCE)
+                .adminSuspended(true)
+                .build();
+
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+
+        BadRequestException ex = assertThrows(
+                BadRequestException.class,
+                () -> stadiumService.activateStadium(10, 1));
+
+        assertEquals("Stadium is suspended by Admin and cannot be activated by Owner.", ex.getMessage());
+        verify(stadiumRepository, never()).save(any(Stadium.class));
+    }
+
+    @Test
+    void suspendStadiumByAdminSuccessfullyChangesOnlyTargetStadium() {
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .stadiumStatus(StadiumStatus.AVAILABLE)
+                .build();
+
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+
+        stadiumService.suspendStadiumByAdmin(10, "Fake listing report");
+
+        verify(stadiumRepository).save(stadium);
+        assertEquals(StadiumStatus.MAINTENANCE, stadium.getStadiumStatus());
+        assertEquals(Boolean.TRUE, stadium.getAdminSuspended());
+        assertEquals("Fake listing report", stadium.getAdminSuspendedReason());
+        assertNotNull(stadium.getAdminSuspendedAt());
+    }
+
+    @Test
+    void suspendStadiumByAdminRejectsClosedStadium() {
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .stadiumStatus(StadiumStatus.CLOSED)
+                .build();
+
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+
+        BadRequestException ex = assertThrows(
+                BadRequestException.class,
+                () -> stadiumService.suspendStadiumByAdmin(10, "Report"));
+
+        assertEquals("Cannot suspend a closed stadium.", ex.getMessage());
+        verify(stadiumRepository, never()).save(any(Stadium.class));
+    }
+
+    @Test
+    void unsuspendStadiumByAdminClearsAdminSuspensionAndReactivatesStadium() {
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .stadiumStatus(StadiumStatus.MAINTENANCE)
+                .adminSuspended(true)
+                .adminSuspendedReason("Fake listing report")
+                .adminSuspendedAt(java.time.LocalDateTime.now())
+                .build();
+
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+
+        stadiumService.unsuspendStadiumByAdmin(10);
+
+        verify(stadiumRepository).save(stadium);
+        assertEquals(StadiumStatus.AVAILABLE, stadium.getStadiumStatus());
+        assertEquals(Boolean.FALSE, stadium.getAdminSuspended());
+        org.junit.jupiter.api.Assertions.assertNull(stadium.getAdminSuspendedReason());
+        org.junit.jupiter.api.Assertions.assertNull(stadium.getAdminSuspendedAt());
+    }
+
+    @Test
+    void unsuspendStadiumByAdminRejectsNonAdminSuspendedStadium() {
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .stadiumStatus(StadiumStatus.MAINTENANCE)
+                .adminSuspended(false)
+                .build();
+
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+
+        BadRequestException ex = assertThrows(
+                BadRequestException.class,
+                () -> stadiumService.unsuspendStadiumByAdmin(10));
+
+        assertEquals("Stadium is not suspended by Admin.", ex.getMessage());
+        verify(stadiumRepository, never()).save(any(Stadium.class));
+    }
+
+    @Test
+    void unsuspendStadiumByAdminRejectsClosedStadium() {
+        Stadium stadium = Stadium.builder()
+                .stadiumId(10)
+                .stadiumStatus(StadiumStatus.CLOSED)
+                .adminSuspended(true)
+                .build();
+
+        when(stadiumRepository.findById(10)).thenReturn(Optional.of(stadium));
+
+        BadRequestException ex = assertThrows(
+                BadRequestException.class,
+                () -> stadiumService.unsuspendStadiumByAdmin(10));
+
+        assertEquals("Cannot unsuspend a closed stadium.", ex.getMessage());
+        verify(stadiumRepository, never()).save(any(Stadium.class));
     }
 
     @Test

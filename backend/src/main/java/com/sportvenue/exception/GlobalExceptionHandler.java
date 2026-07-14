@@ -56,7 +56,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex) {
         log.warn("Data integrity violation: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ErrorResponse.of(HttpStatus.CONFLICT.value(), "Dữ liệu đã tồn tại hoặc vi phạm ràng buộc hệ thống."));
+                .body(ErrorResponse.of(HttpStatus.CONFLICT.value(), "Yêu cầu này không thể thực hiện vì thông tin đã tồn tại. Vui lòng kiểm tra lại."));
     }
 
     @ExceptionHandler(DuplicateResourceException.class)

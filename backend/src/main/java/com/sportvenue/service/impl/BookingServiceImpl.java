@@ -12,6 +12,7 @@ import com.sportvenue.dto.response.WeeklySlotResponse;
 import com.sportvenue.entity.Accessory;
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.BookingAccessory;
+import com.sportvenue.entity.Owner;
 import com.sportvenue.entity.SportType;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.StadiumImage;
@@ -38,9 +39,11 @@ import com.sportvenue.repository.UserRepository;
 import com.sportvenue.repository.TimeSlotExceptionRepository;
 import com.sportvenue.entity.TimeSlotException;
 import com.sportvenue.security.UserPrincipal;
+import com.sportvenue.service.AdminDashboardService;
 import com.sportvenue.service.BookingService;
 import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.PaymentService;
+import com.sportvenue.service.CustomerNotificationService;
 import com.sportvenue.service.EmailService;
 import com.sportvenue.service.NotificationService;
 import com.sportvenue.util.AfterCommitExecutor;
@@ -119,7 +122,9 @@ public class BookingServiceImpl implements BookingService {
     private final TransactionTemplate transactionTemplate;
     private final EmailService emailService;
     private final NotificationService notificationService;
+    private final CustomerNotificationService customerNotificationService;
     private final AfterCommitExecutor afterCommitExecutor;
+    private final AdminDashboardService adminDashboardService;
 
     @Override
     @Transactional
@@ -187,6 +192,13 @@ public class BookingServiceImpl implements BookingService {
         log.info("✅ UC-CUS-01: Customer {} đặt sân {} slot {} ngày {} — bookingId={}, totalPrice={}, serviceFee={}",
                 customer.getEmail(), stadium.getStadiumId(), slot.getSlotId(),
                 request.getReservationDate(), saved.getBookingId(), totalPrice, serviceFee);
+
+        // Booking mới ở trạng thái PENDING_PAYMENT (giữ chỗ 5 phút chờ thanh toán theo
+        // PAYMENT_HOLD_MINUTES) — KHÔNG gửi "đã xác nhận" ở bước này. Nếu khách không thanh
+        // toán, đơn tự expire/huỷ — họ sẽ nhận thông báo "đã xác nhận" sai sự thật trước đó.
+        // Notification "đã xác nhận" được gửi đúng chỗ trong PaymentServiceImpl sau callback
+        // VNPay/CASH thành công (qua notifyPaymentReceived) — đảm bảo chỉ thông báo khi
+        // booking thật sự đã được xác nhận thanh toán.
 
         return toBookingDetailResponse(saved, stadium, slot);
     }
@@ -343,6 +355,73 @@ public class BookingServiceImpl implements BookingService {
 
         log.info("💳 UC-CUS-01: Booking #{} xác nhận trả tiền mặt — CONFIRMED, chờ thu tiền tại sân, expiredAt cleared",
                 saved.getBookingId());
+
+        return toBookingDetailResponse(saved, saved.getStadium(), saved.getSlot());
+    }
+
+    @Override
+    @Transactional
+    public BookingDetailResponse confirmCashPaymentReceived(UserPrincipal principal, Integer bookingId) {
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy booking với ID " + bookingId));
+
+        Integer currentUserId = principal.getUser().getUserId();
+        Owner resolvedOwner = booking.getStadium() != null ? booking.getStadium().resolveOwner() : null;
+        if (resolvedOwner == null || resolvedOwner.getUser() == null
+                || !resolvedOwner.getUser().getUserId().equals(currentUserId)) {
+            throw new ForbiddenException("Bạn không có quyền xác nhận thanh toán cho đơn đặt sân này");
+        }
+
+        // Idempotent — double-click hoặc network retry, trả trạng thái hiện tại thay vì lỗi.
+        if (booking.getPaymentStatus() == PaymentStatus.PAID) {
+            return toBookingDetailResponse(booking, booking.getStadium(), booking.getSlot());
+        }
+
+        if (booking.getBookingStatus() == BookingStatus.CANCELLED) {
+            throw new BadRequestException("Booking #" + bookingId + " đã bị hủy — không thể xác nhận thu tiền");
+        }
+
+        if (booking.getPaymentStatus() != PaymentStatus.AWAITING_CASH_PAYMENT) {
+            throw new BadRequestException(
+                    "Booking #" + bookingId + " không ở trạng thái chờ thu tiền mặt. Hiện tại: "
+                            + booking.getPaymentStatus());
+        }
+
+        Payment cashPayment = paymentRepository
+                .findCashPaymentsByBookingIdAndMethodAndStatus(
+                        bookingId, PaymentMethod.CASH, TransactionStatus.PENDING)
+                .stream().findFirst()
+                .orElseThrow(() -> {
+                    log.warn("Booking #{} ở AWAITING_CASH_PAYMENT nhưng không có Payment CASH/PENDING tương ứng",
+                            bookingId);
+                    return new BadRequestException(
+                            "Không tìm thấy giao dịch tiền mặt đang chờ xác nhận cho đơn này");
+                });
+        cashPayment.setPaymentStatus(TransactionStatus.SUCCESS);
+        cashPayment.setPaidAt(LocalDateTime.now());
+        paymentRepository.save(cashPayment);
+
+        booking.setPaymentStatus(PaymentStatus.PAID);
+        Booking saved = bookingRepository.save(booking);
+
+        try {
+            notificationService.publishNotificationEvent(
+                    saved.getUser().getUserId(),
+                    "Đã xác nhận thu tiền mặt",
+                    "Chủ sân đã xác nhận thu tiền mặt cho đơn đặt sân #" + saved.getBookingId()
+                            + " tại " + saved.getStadium().getStadiumName() + ".",
+                    com.sportvenue.entity.enums.NotificationType.PAYMENT,
+                    String.valueOf(saved.getBookingId()));
+        } catch (Exception e) {
+            log.error("Failed to publish cash-payment-confirmed notification for booking {}", saved.getBookingId(), e);
+        }
+
+        // Doanh thu Owner/revenue report tự tính đúng (sum theo TransactionStatus.SUCCESS) — chỉ
+        // cần xóa cache dashboard admin vì gross revenue/confirmed-payment count thay đổi.
+        adminDashboardService.evictDashboardCache();
+
+        log.info("💵 Owner {} xác nhận đã thu tiền mặt cho booking #{}", currentUserId, saved.getBookingId());
 
         return toBookingDetailResponse(saved, saved.getStadium(), saved.getSlot());
     }
@@ -524,47 +603,10 @@ public class BookingServiceImpl implements BookingService {
     private void sendCancellationEmailAndNotification(Booking booking, String reason, Integer currentUserId) {
         String cancelledBy = booking.getUser().getUserId().equals(currentUserId) ? "Khách hàng" : "Chủ sân";
         try {
-            notificationService.publishNotificationEvent(
-                    booking.getUser().getUserId(),
-                    "Đơn đặt sân bị hủy",
-                    "Đơn đặt sân #" + booking.getBookingId() + " tại " + booking.getStadium().getStadiumName() + " đã bị hủy bởi " + cancelledBy + ".",
-                    com.sportvenue.entity.enums.NotificationType.BOOKING,
-                    String.valueOf(booking.getBookingId())
-            );
+            customerNotificationService.notifyBookingCancelled(booking.getUser().getUserId(), booking, reason);
         } catch (Exception e) {
             log.error("Failed to publish cancellation notification for booking {}", booking.getBookingId(), e);
         }
-        afterCommitExecutor.execute(() -> {
-            try {
-                emailService.sendBookingCancellationEmail(
-                        booking.getUser().getEmail(),
-                        booking.getUser().getFirstName() + " " + booking.getUser().getLastName(),
-                        booking.getStadium().getStadiumName(),
-                        booking.getBookingId(),
-                        reason,
-                        cancelledBy
-                );
-            } catch (Exception e) {
-                log.error("Failed to send cancellation email for booking {}", booking.getBookingId(), e);
-            }
-            if ("Khách hàng".equals(cancelledBy)) {
-                try {
-                    String ownerName = booking.getStadium().getOwner().getUser().getFirstName() + " " + booking.getStadium().getOwner().getUser().getLastName();
-                    String ownerEmail = booking.getStadium().getOwner().getUser().getEmail();
-                    emailService.sendOwnerBookingCancelledEmail(
-                            ownerEmail,
-                            ownerName,
-                            booking.getBookingId(),
-                            booking.getStadium().getStadiumName(),
-                            booking.getReservationDate(),
-                            booking.getSlot().getStartTime(),
-                            reason
-                    );
-                } catch (Exception e) {
-                    log.error("Failed to send owner cancellation email for booking {}", booking.getBookingId(), e);
-                }
-            }
-        });
     }
 
     @Override
@@ -863,6 +905,7 @@ public class BookingServiceImpl implements BookingService {
                 .id(String.valueOf(booking.getBookingId()))
                 .displayId("BK" + String.format("%06d", booking.getBookingId()))
                 .venue(stadium != null ? stadium.getStadiumName() : "Sân chưa biết")
+                .complexName(stadium != null ? StadiumUtils.resolveComplexName(stadium) : null)
                 .sportType(sportType != null ? sportType.getSportName() : "Khác")
                 .imageUrl(imageUrl != null ? imageUrl : "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=300&auto=format&fit=crop")
                 .date(dateStr)
@@ -964,6 +1007,7 @@ public class BookingServiceImpl implements BookingService {
                         .ownerUserId(stadium.resolveOwner() != null && stadium.resolveOwner().getUser() != null
                                 ? stadium.resolveOwner().getUser().getUserId() : null)
                         .stadiumName(stadium.getStadiumName())
+                        .complexName(StadiumUtils.resolveComplexName(stadium))
                         .address(StadiumUtils.resolveAddress(stadium))
                         .sportType(sportType)
                         .imageUrl(imageUrl)

@@ -20,6 +20,7 @@ export interface MatchResponse {
   hostName: string;
   hostUserId: number;
   stadiumName: string;
+  complexName?: string | null;
   stadiumAddress: string;
   sportName: string;
   title: string;
@@ -94,6 +95,7 @@ export interface JoinRequestResponse {
   createdAt: string;
   matchTitle?: string;
   stadiumName?: string;
+  complexName?: string | null;
   sportName?: string;
   playDate?: string;
   startTime?: string;

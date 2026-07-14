@@ -79,4 +79,12 @@ public class Payment implements Serializable {
     /** Đường dẫn bằng chứng nếu lỗi do chủ sân. */
     @Column(name = "proof_url", length = 500)
     private String proofUrl;
+
+    /** Mã giao dịch thật của VNPay (vnp_TransactionNo) — khác transactionCode (vnp_TxnRef tự sinh). */
+    @Column(name = "gateway_transaction_no", length = 50)
+    private String gatewayTransactionNo;
+
+    /** vnp_PayDate raw string (yyyyMMddHHmmss) do VNPay trả về — giữ nguyên để dùng lại khi ký request refund/QueryDR. */
+    @Column(name = "gateway_pay_date", length = 14)
+    private String gatewayPayDate;
 }
