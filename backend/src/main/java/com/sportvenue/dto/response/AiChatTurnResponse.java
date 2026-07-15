@@ -30,6 +30,8 @@ public class AiChatTurnResponse {
 
     private List<MatchResponse> matches;
 
+    private List<BookingResponse> bookings; // Bug #5: Thêm field để trả dữ liệu booking thật
+
     private String policyText;
 
     /** ID của booking vừa tạo (intent: create_booking) - sẽ bị deprecate khi bỏ auto-book */

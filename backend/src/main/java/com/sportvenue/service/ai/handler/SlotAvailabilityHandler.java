@@ -44,7 +44,20 @@ public class SlotAvailabilityHandler {
 
     public AiChatTurnResponse handle(JsonNode args, String llmMessage, String conversationKey) {
         if (args == null || args.isNull() || args.isMissingNode()) {
-            return errorResponse("Chưa xác định được sân bạn muốn xem — hãy tìm sân trước (vd hỏi \"tìm sân bóng đá ở Thủ Đức\") rồi hỏi lại giờ trống.");
+            // Bug #4: Thử lấy stadium từ context trước khi yêu cầu user tìm lại
+            if (conversationKey != null) {
+                Integer contextStadiumId = conversationContextService.getCurrentStadiumId(conversationKey).orElse(null);
+                if (contextStadiumId != null) {
+                    // Tái tạo args với stadiumId từ context
+                    com.fasterxml.jackson.databind.node.ObjectNode newArgs = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+                    newArgs.put("stadiumId", contextStadiumId);
+                    args = newArgs;
+                    log.info("Bug #4: Lấy stadiumId {} từ context cho get_slots", contextStadiumId);
+                }
+            }
+            if (args == null || args.isNull()) {
+                return errorResponse("Chưa xác định được sân bạn muốn xem — hãy tìm sân trước (vd hỏi \"tìm sân bóng đá ở Thủ Đức\") rồi hỏi lại giờ trống.");
+            }
         }
 
         Integer stadiumId = resolveStadiumId(args, conversationKey);
@@ -81,8 +94,12 @@ public class SlotAvailabilityHandler {
                 log.warn("Invalid date format for get_slots: {}", args.get("date").asText());
             }
         }
+
+        // Định dạng ngày dd/MM/yyyy cho user-friendly
+        String formattedDate = requestedDate.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+
         if (requestedDate.isBefore(today)) {
-            return errorResponse("Ngày " + requestedDate + " đã qua, không thể xem giờ trống cho ngày trong quá khứ.");
+            return errorResponse("Ngày " + formattedDate + " đã qua, không thể xem giờ trống cho ngày trong quá khứ.");
         }
 
         // Sân có lịch bảo trì (MaintenanceSchedule) trùm ngày này — kể cả khi stadiumStatus vẫn
@@ -90,7 +107,7 @@ public class SlotAvailabilityHandler {
         Stadium court = stadiumRepository.findCourtsForAiToolByIds(List.of(stadiumId)).stream()
                 .findFirst().orElse(stadiumOpt.get());
         if (maintenanceScheduleService.isStadiumUnderMaintenance(court, requestedDate)) {
-            return errorResponse("Sân này có lịch bảo trì vào ngày " + requestedDate + ", không thể đặt. Bạn có thể chọn ngày khác hoặc sân khác.");
+            return errorResponse("Sân này có lịch bảo trì vào ngày " + formattedDate + ", không thể đặt. Bạn có thể chọn ngày khác hoặc sân khác.");
         }
 
         // Availability THẬT theo ngày: getSlotsByDate đối chiếu booking (PENDING/CONFIRMED),
@@ -105,7 +122,7 @@ public class SlotAvailabilityHandler {
 
         if (slots.isEmpty()) {
             return AiChatTurnResponse.builder()
-                    .message("Không có khung giờ nào cho sân này vào ngày " + requestedDate + ".")
+                    .message("Không có khung giờ nào cho sân này vào ngày " + formattedDate + ".")
                     .intent("get_slots")
                     .slots(List.of())
                     .build();

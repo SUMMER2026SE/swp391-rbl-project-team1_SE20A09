@@ -38,12 +38,40 @@ export interface DraftJoinMatchResponse {
   userMessage: string;
 }
 
+export interface BookingSlotInfo {
+  slotId: number;
+  startTime: string; // ISO LocalDateTime (yyyy-MM-ddTHH:mm:ss)
+  endTime: string;
+}
+
+export interface BookingStadiumInfo {
+  stadiumId: number;
+  stadiumName: string;
+  complexName?: string | null;
+  address?: string | null;
+  sportType?: string | null;
+}
+
+export interface BookingAiResponse {
+  bookingId: number;
+  stadium?: BookingStadiumInfo | null;
+  slot?: BookingSlotInfo | null;
+  totalPrice?: number | null;
+  bookingStatus?: string | null;
+  paymentStatus?: string | null;
+  note?: string | null;
+  bookingDate?: string | null;
+  reservationDate?: string | null; // populated via slot.startTime date portion
+}
+
 export interface AiChatTurnResponse {
   message: string;
   intent: string;
   stadiums: StadiumResponse[] | null;
   slots: TimeSlotResponse[] | null;
   matches: MatchResponse[] | null;
+  /** Danh sách booking của user (intent: my_bookings, booking_status, cancel_booking) */
+  bookings?: BookingAiResponse[] | null;
   policyText: string | null;
   /** ID của booking vừa tạo (intent: create_booking) - deprecated */
   bookingId?: number | null;

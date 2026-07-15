@@ -163,11 +163,18 @@ public class BookingHandler {
     }
 
     private AiChatTurnResponse createConfirmBookingResponse(Stadium stadium, LocalDate requestedDate, TimeSlotResponse targetSlot, String conversationKey) {
+        // Lấy tên facility (cha) để phân biệt khi có nhiều "Sân 1" trùng tên
+        String facilityName = (stadium.getParentStadium() != null) ? stadium.getParentStadium().getStadiumName() : null;
+
+        // Định dạng ngày dd/MM/yyyy cho user-friendly
+        String formattedDate = requestedDate.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+
         // Tạo Draft Booking thay vì gọi createBooking
         DraftBookingResponse draft = DraftBookingResponse.builder()
                 .stadiumId(stadium.getStadiumId())
                 .stadiumName(stadium.getStadiumName())
-                .date(requestedDate.toString())
+                .facilityName(facilityName) // Thêm tên cơ sở để hiển thị đầy đủ
+                .date(formattedDate) // Định dạng dd/MM/yyyy
                 .startTime(targetSlot.getStartTime().toString())
                 .price(targetSlot.getPricePerSlot())
                 .build();
@@ -179,6 +186,7 @@ public class BookingHandler {
         java.util.Map<String, Object> draftMap = new java.util.HashMap<>();
         draftMap.put("stadiumId", draft.getStadiumId());
         draftMap.put("stadiumName", draft.getStadiumName());
+        draftMap.put("facilityName", draft.getFacilityName());
         draftMap.put("date", draft.getDate());
         draftMap.put("startTime", draft.getStartTime());
         draftMap.put("price", draft.getPrice());

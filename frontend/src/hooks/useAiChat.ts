@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { sendChatMessage } from "@/lib/ai-chat-api";
-import { ChatMessage, TimeSlotResponse } from "@/types/aiChat";
+import { ChatMessage, TimeSlotResponse, BookingAiResponse } from "@/types/aiChat";
 import { StadiumResponse } from "@/types/stadium";
 import { MatchResponse } from "@/types/match";
 
@@ -12,6 +12,8 @@ export interface MessageItem {
   stadiums?: StadiumResponse[] | null;
   slots?: TimeSlotResponse[] | null;
   matches?: MatchResponse[] | null;
+  /** Danh sách booking của user (intent: my_bookings, booking_status, cancel_booking) */
+  bookings?: BookingAiResponse[] | null;
   policyText?: string | null;
   bookingId?: number | null; // ID booking vừa tạo (intent: create_booking) - deprecated
   draftBooking?: any | null; // Thông tin booking nháp để user confirm
@@ -102,6 +104,7 @@ export function useAiChat() {
         stadiums: result.stadiums,
         slots: result.slots,
         matches: result.matches,
+        bookings: result.bookings,
         policyText: result.policyText,
         bookingId: result.bookingId,
         draftBooking: result.draftBooking,

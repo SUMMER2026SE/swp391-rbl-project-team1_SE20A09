@@ -70,6 +70,7 @@ public class StadiumSearchHandler {
         // --- MERGE FROM CONTEXT ---
         String sportName = args.hasNonNull("sportName") ? args.get("sportName").asText() : null;
         String district = args.hasNonNull("district") ? args.get("district").asText() : null;
+        String province = args.hasNonNull("province") ? args.get("province").asText() : null; // Bug #3: lấy từ args
         String targetDateStr = args.hasNonNull("targetDate") ? args.get("targetDate").asText() : null;
         String startTimeStr = args.hasNonNull("startTime") ? args.get("startTime").asText() : null;
         String endTimeStr = args.hasNonNull("endTime") ? args.get("endTime").asText() : null;
@@ -81,22 +82,27 @@ public class StadiumSearchHandler {
                 sportName = ctx.getCurrentSport();
                 log.info("Merged sportName from context: {}", sportName);
             }
+            // Bug #3: Ưu tiên district/province từ user nhắc MỚI, chỉ fallback sang context khi không có
             if (district == null && ctx.getCurrentDistrict() != null) {
                 district = ctx.getCurrentDistrict();
                 log.info("Merged district from context: {}", district);
             }
+            if (province == null && ctx.getCurrentProvince() != null) {
+                province = ctx.getCurrentProvince();
+                log.info("Merged province from context: {}", province);
+            }
         }
 
         // Guardrail cứng bằng code (sau khi merge context)
-        if (sportName == null && district == null && !args.hasNonNull("keyword")) {
+        if (sportName == null && district == null && province == null && !args.hasNonNull("keyword")) {
             return AiChatTurnResponse.builder()
                     .message("Bạn muốn tìm sân ở khu vực nào và chơi môn thể thao gì? Cho mình biết cụ thể hơn để tìm chính xác nhé.")
                     .intent("need_more_info")
                     .build();
         }
 
-        // Lưu context mới
-        conversationContextService.saveCurrentFilters(conversationKey, sportName, district, targetDateStr, startTimeStr);
+        // Lưu context mới (bao gồm cả province - Bug #3)
+        conversationContextService.saveCurrentFilters(conversationKey, sportName, district, province, targetDateStr, startTimeStr);
 
         StadiumSearchRequest.StadiumSearchRequestBuilder builder = StadiumSearchRequest.builder();
 
@@ -109,7 +115,7 @@ public class StadiumSearchHandler {
             return AiChatTurnResponse.messageOnly(sportError, "search_stadiums");
         }
 
-        applyDistrictFilter(builder, args);
+        applyDistrictFilter(builder, args, province);
         applyPriceFilters(builder, args);
         applyDateTimeFilters(builder, args);
         applySort(builder, args);
@@ -315,20 +321,31 @@ public class StadiumSearchHandler {
     /**
      * Dùng deriveFromAddress thay vì resolveDistrict đơn thuần vì model đôi khi truyền cả tên
      * thành phố lẫn quận trong cùng 1 chuỗi (vd "Quận 1, Hồ Chí Minh").
+     * Bug #3: Ưu tiên province từ context (Đà Nẵng) thay vì mặc định TP.HCM.
      */
-    private void applyDistrictFilter(StadiumSearchRequest.StadiumSearchRequestBuilder builder, JsonNode args) {
-        if (!args.hasNonNull("district")) {
+    private void applyDistrictFilter(StadiumSearchRequest.StadiumSearchRequestBuilder builder, JsonNode args, String provinceFromContext) {
+        // Bug #3: Nếu không có district nhưng có province từ context, dùng province đó
+        if (!args.hasNonNull("district") && !args.hasNonNull("province")) {
+            if (provinceFromContext != null) {
+                builder.province(provinceFromContext);
+            }
             return;
         }
-        String rawDistrict = args.get("district").asText();
-        VietnamLocationResolver.LocationMatch match = locationResolver.deriveFromAddress(rawDistrict);
+
+        String rawDistrict = args.hasNonNull("district") ? args.get("district").asText() : null;
+        String rawProvince = args.hasNonNull("province") ? args.get("province").asText() : provinceFromContext;
+
+        VietnamLocationResolver.LocationMatch match = locationResolver.deriveFromAddress(rawDistrict != null ? rawDistrict : rawProvince);
         if (match.province() != null) {
             builder.province(match.province());
+        } else if (rawProvince != null) {
+            // Dùng province từ context nếu derive không tìm được
+            builder.province(rawProvince);
         }
         if (match.district() != null) {
             builder.district(match.district());
         }
-        if (match.province() == null && match.district() == null) {
+        if (match.province() == null && match.district() == null && rawDistrict != null) {
             builder.address(rawDistrict);
         }
     }

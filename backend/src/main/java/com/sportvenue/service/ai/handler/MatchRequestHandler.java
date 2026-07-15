@@ -63,6 +63,7 @@ public class MatchRequestHandler {
         int page = args.hasNonNull("page") ? args.get("page").asInt() : 0;
         int size = args.hasNonNull("size") ? Math.min(args.get("size").asInt(), MAX_SIZE) : DEFAULT_SIZE;
 
+        // Bug #3: Lấy location từ context province nếu không có location trong args
         String location = null;
         if (args.hasNonNull("location")) {
             String rawLocation = args.get("location").asText();
@@ -74,6 +75,15 @@ public class MatchRequestHandler {
             } else {
                 location = rawLocation;
             }
+        } else if (conversationKey != null) {
+            // Bug #3: Fallback sang context province khi không có location
+            location = conversationContextService.getContext(conversationKey)
+                    .filter(ctx -> ctx.getCurrentProvince() != null)
+                    .map(ctx -> {
+                        log.info("Merged province from context for match search: {}", ctx.getCurrentProvince());
+                        return ctx.getCurrentProvince();
+                    })
+                    .orElse(null);
         }
 
         Integer sportTypeId = null;
@@ -95,9 +105,22 @@ public class MatchRequestHandler {
         Pageable pageable = PageRequest.of(page, size);
         Page<MatchResponse> matches = matchRequestService.getActiveMatches(pageable, location, sportTypeId);
 
+        // Bug #7: Hiển thị rõ tiêu chí đã lọc khi không tìm thấy kèo
         if (matches.isEmpty()) {
+            StringBuilder noMatchMessage = new StringBuilder("Chưa tìm thấy kèo ghép nào");
+            if (location != null) {
+                noMatchMessage.append(" ở ").append(location);
+            }
+            if (sportTypeId != null) {
+                // Lấy tên sport từ repository
+                String sportName = sportTypeRepository.findById(sportTypeId)
+                        .map(SportType::getSportName)
+                        .orElse("môn này");
+                noMatchMessage.append(" cho ").append(sportName);
+            }
+            noMatchMessage.append(". Bạn có thể thử đổi khu vực hoặc môn thể thao.");
             return AiChatTurnResponse.builder()
-                    .message("Chưa tìm thấy kèo ghép nào phù hợp. Bạn có thể thử đổi khu vực hoặc môn thể thao.")
+                    .message(noMatchMessage.toString())
                     .intent("find_match")
                     .matches(List.of())
                     .build();

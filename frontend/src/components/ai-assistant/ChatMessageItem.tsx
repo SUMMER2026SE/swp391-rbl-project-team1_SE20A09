@@ -3,10 +3,11 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CalendarCheck, Users } from "lucide-react";
+import { CalendarCheck, Users, Clock, MapPin, BadgeCheck, XCircle, Hourglass } from "lucide-react";
 import Link from "next/link";
 import { useTypewriter } from "@/hooks/useTypewriter";
 import { MessageItem } from "@/hooks/useAiChat";
+import { BookingAiResponse } from "@/types/aiChat";
 import { StadiumResultCard } from "@/components/ai-assistant/StadiumResultCard";
 import { SlotResultCard } from "@/components/ai-assistant/SlotResultCard";
 import { MatchResultCard } from "@/components/ai-assistant/MatchResultCard";
@@ -15,6 +16,96 @@ import { DraftJoinMatchCard } from "@/components/ai-assistant/DraftJoinMatchCard
 interface ChatMessageProps {
   msg: MessageItem;
   isLatest: boolean;
+}
+
+/** Map booking status code → label + color */
+function bookingStatusLabel(status?: string | null): { label: string; color: string; icon: React.ReactNode } {
+  switch (status) {
+    case "PENDING":
+      return { label: "Chờ xác nhận", color: "text-amber-600 dark:text-amber-400", icon: <Hourglass className="h-3 w-3" /> };
+    case "PENDING_PAYMENT":
+      return { label: "Chờ thanh toán", color: "text-orange-600 dark:text-orange-400", icon: <Hourglass className="h-3 w-3" /> };
+    case "CONFIRMED":
+      return { label: "Đã xác nhận", color: "text-green-600 dark:text-green-400", icon: <BadgeCheck className="h-3 w-3" /> };
+    case "COMPLETED":
+      return { label: "Hoàn thành", color: "text-blue-600 dark:text-blue-400", icon: <BadgeCheck className="h-3 w-3" /> };
+    case "CANCELLED":
+      return { label: "Đã hủy", color: "text-red-500 dark:text-red-400", icon: <XCircle className="h-3 w-3" /> };
+    default:
+      return { label: status ?? "Không rõ", color: "text-muted-foreground", icon: null };
+  }
+}
+
+/** Format ISO LocalDateTime (2026-07-15T08:00:00) → "08:00 - 15/07/2026" */
+function formatSlotTime(startTime?: string | null, endTime?: string | null): string {
+  if (!startTime) return "";
+  try {
+    const start = new Date(startTime);
+    const end = endTime ? new Date(endTime) : null;
+    const timeStr = start.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+    const endStr = end ? end.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "";
+    const dateStr = start.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+    return endStr ? `${timeStr} - ${endStr} | ${dateStr}` : `${timeStr} | ${dateStr}`;
+  } catch {
+    return startTime;
+  }
+}
+
+function BookingCard({ booking }: { booking: BookingAiResponse }) {
+  const { label, color, icon } = bookingStatusLabel(booking.bookingStatus);
+  const timeStr = formatSlotTime(booking.slot?.startTime, booking.slot?.endTime);
+
+  return (
+    <div className="w-full rounded-xl border border-border/70 bg-background shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="bg-primary/5 border-b border-border/50 px-3 py-2 flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-foreground truncate">
+          {booking.stadium?.stadiumName ?? "Sân không xác định"}
+        </span>
+        <span className="text-[10px] font-medium text-muted-foreground shrink-0">
+          #{String(booking.bookingId).padStart(6, "0")}
+        </span>
+      </div>
+
+      {/* Body */}
+      <div className="px-3 py-2.5 flex flex-col gap-1.5">
+        {booking.stadium?.complexName && (
+          <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <MapPin className="h-3 w-3 mt-0.5 shrink-0" />
+            <span className="truncate">{booking.stadium.complexName}</span>
+          </div>
+        )}
+
+        {timeStr && (
+          <div className="flex items-center gap-1.5 text-xs text-foreground">
+            <Clock className="h-3 w-3 shrink-0 text-primary/70" />
+            <span>{timeStr}</span>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mt-1">
+          <div className={`flex items-center gap-1 text-xs font-medium ${color}`}>
+            {icon}
+            <span>{label}</span>
+          </div>
+          {booking.totalPrice != null && (
+            <span className="text-xs font-semibold text-primary">
+              {Number(booking.totalPrice).toLocaleString("vi-VN")}đ
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Footer action */}
+      <div className="border-t border-border/50 px-3 py-2">
+        <Link href={`/booking/${booking.bookingId}`}>
+          <Button size="sm" variant="outline" className="w-full h-7 text-xs">
+            Xem chi tiết
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
 }
 
 export function ChatMessageItem({ msg, isLatest }: ChatMessageProps) {
@@ -70,6 +161,14 @@ export function ChatMessageItem({ msg, isLatest }: ChatMessageProps) {
 
             {msg.slots && msg.slots.length > 0 && (
               <SlotResultCard slots={msg.slots} />
+            )}
+
+            {msg.bookings && msg.bookings.length > 0 && (
+              <div className="flex flex-col gap-2 w-full">
+                {msg.bookings.map((booking) => (
+                  <BookingCard key={booking.bookingId} booking={booking} />
+                ))}
+              </div>
             )}
 
             {msg.matches && msg.matches.length > 0 && (

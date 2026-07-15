@@ -48,11 +48,12 @@ public class AiConversationContextService {
         private List<Integer> lastShownSlotIds;
         private Integer currentStadiumId;
         private PendingAction pendingAction;
-        
+
         // Expanded context
         private String currentIntent;
         private String currentSport;
         private String currentDistrict;
+        private String currentProvince; // Bug #3: Cần lưu province để ưu tiên khu vực người dùng nhắc
         private String currentDate;
         private String currentTime;
         private java.util.Map<String, Object> bookingDraft;
@@ -165,13 +166,14 @@ public class AiConversationContextService {
     }
 
     // Expanded context methods
-    public void saveCurrentFilters(String conversationKey, String sport, String district, String date, String time) {
+    public void saveCurrentFilters(String conversationKey, String sport, String district, String province, String date, String time) {
         if (conversationKey == null) {
             return;
         }
         ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
         if (sport != null) ctx.setCurrentSport(sport);
         if (district != null) ctx.setCurrentDistrict(district);
+        if (province != null) ctx.setCurrentProvince(province); // Bug #3: Lưu province để ưu tiên khu vực người dùng nhắc
         if (date != null) ctx.setCurrentDate(date);
         if (time != null) ctx.setCurrentTime(time);
         save(conversationKey, ctx);
