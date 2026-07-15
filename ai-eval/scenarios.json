@@ -1,0 +1,210 @@
+[
+  {
+    "id": "happy-search-stadiums",
+    "description": "Tìm kiếm sân bóng đá ở Thủ Đức (Happy Path)",
+    "turns": [
+      {
+        "message": "Tìm sân bóng đá ở Thủ Đức",
+        "expect": {
+          "intent": "search_stadiums",
+          "stadiumsNotEmpty": true
+        }
+      }
+    ]
+  },
+  {
+    "id": "happy-get-slots",
+    "description": "Xem lịch trống của sân đầu tiên trong danh sách (Context Happy Path)",
+    "turns": [
+      {
+        "message": "Tìm sân bóng đá ở Thủ Đức",
+        "expect": {
+          "intent": "search_stadiums",
+          "stadiumsNotEmpty": true
+        }
+      },
+      {
+        "message": "Sân đầu tiên có lịch trống hôm nay không?",
+        "expect": {
+          "intent": "get_slots",
+          "slotsNotNull": true
+        }
+      }
+    ]
+  },
+  {
+    "id": "happy-find-match",
+    "description": "Tìm kèo ghép cầu lông Thủ Đức (Happy Path)",
+    "turns": [
+      {
+        "message": "Tìm kèo cầu lông Thủ Đức hôm nay",
+        "expect": {
+          "intent": "find_match"
+        }
+      }
+    ]
+  },
+  {
+    "id": "happy-get-policy",
+    "description": "Hỏi chính sách hủy đặt sân (FAQ Happy Path)",
+    "turns": [
+      {
+        "message": "Chính sách hủy đặt sân như thế nào vậy",
+        "expect": {
+          "intent": "get_policy",
+          "policyTextNotNull": true
+        }
+      }
+    ]
+  },
+  {
+    "id": "bug-price-hallucination",
+    "description": "Chống bịa giá và khu vực khác khi không có thông tin (Bug 2026-07-08)",
+    "turns": [
+      {
+        "message": "Đà Nẵng có sân bóng đá nào không",
+        "expect": {
+          "intent": "search_stadiums",
+          "messageNotContains": ["khoảng giá", "giá thuê", "Hà Nội", "Hồ Chí Minh"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "bug-deictic-reference",
+    "description": "Hiểu đúng đại từ chỉ định \"sân này\" ngay sau search để resolve targetIndex:0 (Bug 2026-07-08)",
+    "turns": [
+      {
+        "message": "Tìm sân bóng đá ở Thủ Đức",
+        "expect": {
+          "intent": "search_stadiums"
+        }
+      },
+      {
+        "message": "sân này có lịch trống từ 20h trở đi không",
+        "expect": {
+          "intent": "get_slots",
+          "slotsNotNull": true,
+          "messageNotContains": ["Chưa xác định", "vui lòng cung cấp", "không tìm thấy sân"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "bug-faq-escalation-mixup",
+    "description": "Phân biệt rõ chính sách hủy sân (FAQ) và chính sách khiếu nại (Bug 2026-07-08)",
+    "turns": [
+      {
+        "message": "Chính sách hoàn tiền khi hủy đặt sân",
+        "expect": {
+          "intent": "get_policy",
+          "policyTextNotNull": true,
+          "messageNotContains": ["khiếu nại", "gửi đơn khiếu nại", "tiếp nhận khiếu nại"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "bug-skip-need-more-info",
+    "description": "Chống tự đoán bừa khi thiếu thông tin cơ bản môn thể thao và khu vực (Bug 2026-07-08)",
+    "turns": [
+      {
+        "message": "Tìm sân trống cho tôi",
+        "expect": {
+          "intent": "need_more_info",
+          "messageContains": ["môn", "khu vực"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "bug-abuse-escalation",
+    "description": "Không tự ý chuyển hướng CSKH/Hotline khi câu hỏi thuộc phạm vi FAQ (Bug 2026-07-08)",
+    "turns": [
+      {
+        "message": "Tôi muốn xem chính sách hủy đặt sân",
+        "expect": {
+          "intent": "get_policy",
+          "policyTextNotNull": true,
+          "messageNotContains": ["Hotline", "CSKH", "Zalo", "1900"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "edge-out-of-scope",
+    "description": "Từ chối lịch sự và đúng phạm vi khi user hỏi câu hỏi ngoài lề (Edge Case)",
+    "turns": [
+      {
+        "message": "Giải hộ tôi phương trình bậc hai x^2 - 4 = 0",
+        "expect": {
+          "intent": "out_of_scope",
+          "messageContains": ["hỗ trợ", "đặt sân"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "edge-target-index-out-of-bound",
+    "description": "Hỏi sân thứ 10 trong khi danh sách search chỉ có 5 sân (Edge Case)",
+    "turns": [
+      {
+        "message": "Tìm sân cầu lông ở Quận 9",
+        "expect": {
+          "intent": "search_stadiums"
+        }
+      },
+      {
+        "message": "Xem giờ trống của sân thứ mười",
+        "expect": {
+          "intent": "get_slots",
+          "messageContains": ["Chưa xác định", "tìm sân trước"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "edge-target-index-word-digits",
+    "description": "Hỏi bằng chữ số thứ tự phức tạp như \"sân thứ hai\", \"sân thứ 3\" (Edge Case)",
+    "turns": [
+      {
+        "message": "Tìm sân bóng đá ở Thủ Đức",
+        "expect": {
+          "intent": "search_stadiums"
+        }
+      },
+      {
+        "message": "sân thứ hai có trống giờ nào không",
+        "expect": {
+          "intent": "get_slots"
+        }
+      }
+    ]
+  },
+  {
+    "id": "happy-stadium-relaxation",
+    "description": "Tìm sân với điều kiện quá chặt -> Tự động nới lỏng (Relaxation Path)",
+    "turns": [
+      {
+        "message": "Tìm sân bóng đá ở Thủ Đức giá dưới 50.000đ từ 10h đến 12h",
+        "expect": {
+          "intent": "search_stadiums",
+          "messageContains": ["sân khác gần với nhu cầu"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "edge-unknown-sport",
+    "description": "Tìm sân chơi môn thể thao lạ chưa có trong hệ thống (Edge Case)",
+    "turns": [
+      {
+        "message": "Tìm sân chơi bóng chày ở Thủ Đức",
+        "expect": {
+          "intent": "search_stadiums",
+          "messageContains": ["Football", "Badminton", "Basketball"]
+        }
+      }
+    ]
+  }
+]

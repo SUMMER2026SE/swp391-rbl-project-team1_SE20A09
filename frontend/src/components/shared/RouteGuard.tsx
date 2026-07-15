@@ -25,9 +25,11 @@ const PROTECTED_PREFIXES = [
   "/notifications",
   "/payments",
   "/complaints",
+  "/community",
   "/appeals",
   "/reports",
   "/ai-assistant",
+
 ];
 
 function isProtectedRoute(pathname: string): boolean {

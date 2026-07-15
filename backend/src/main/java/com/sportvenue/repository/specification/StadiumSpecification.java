@@ -88,7 +88,10 @@ public class StadiumSpecification {
             String searchAddress = "%" + req.getAddress().toLowerCase() + "%";
             preds.add(cb.or(
                 cb.like(cb.lower(root.get("address")), searchAddress),
-                cb.like(cb.lower(root.get("parentStadium").get("complex").get("address")), searchAddress)
+                cb.like(cb.lower(root.get("parentStadium").get("complex").get("address")), searchAddress),
+                // LƯU Ý: AI đôi khi hiểu tên sân là địa chỉ (district/location). Cần tìm cả trong tên sân.
+                cb.like(cb.lower(root.get("stadiumName")), searchAddress),
+                cb.like(cb.lower(root.get("parentStadium").get("complex").get("name")), searchAddress)
             ));
         }
         // Province/district exact-match — chuẩn hoá qua VietnamLocationResolver, thay cho LIKE thô

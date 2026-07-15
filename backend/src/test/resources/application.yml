@@ -89,6 +89,10 @@ server:
 
 # ── App Config ──────────────────────────────────────────────────────────
 app:
+  ai:
+    base-url: ${AI_BASE_URL:https://api.groq.com/openai/v1}
+    api-key: ${GROQ_API_KEY:}
+    model: ${AI_MODEL:llama-3.3-70b-versatile}
   jwt:
     secret: ${JWT_SECRET:test_secret_key_for_ci_only_not_for_production_must_be_256bits}
     access-token-expiry: 86400

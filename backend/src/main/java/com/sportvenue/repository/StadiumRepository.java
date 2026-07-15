@@ -176,4 +176,55 @@ public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaS
         GROUP BY s.complex.complexId
         """)
     List<Object[]> findMinMaxPriceByComplexIds(@Param("complexIds") List<Integer> complexIds);
+
+    /**
+     * Fallback cho AI chat tool: {@link #searchByKeyword} chỉ so khớp tên Court/địa chỉ Complex,
+     * không so khớp tên Facility cha (vd "Sân vận động Cẩm Lệ") — trong khi Court con thường được
+     * đặt tên chung chung ("Sân 1", "Sân 2"). Người dùng chat thường gọi bằng tên Facility.
+     */
+    @EntityGraph(attributePaths = {"sportType", "images", "amenities", "parentStadium", "complex"})
+    @Query("""
+            SELECT s FROM Stadium s
+            LEFT JOIN s.parentStadium p
+            WHERE s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT
+            AND s.stadiumStatus = com.sportvenue.entity.enums.StadiumStatus.AVAILABLE
+            AND p IS NOT NULL
+            AND LOWER(p.stadiumName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+            """)
+    List<Stadium> findCourtsByParentFacilityNameKeyword(@Param("keyword") String keyword);
+
+    /**
+     * Projection nhẹ dùng để so khớp không phân biệt dấu tiếng Việt ở tầng Java (xem
+     * StadiumSearchHandler) — khi model tự đánh sai dấu (vd "Sân vân đơng" thay vì
+     * "Sân vận động") khiến LIKE match ở {@link #findCourtsByParentFacilityNameKeyword} thất bại.
+     */
+    interface CourtFacilityNameProjection {
+        Integer getStadiumId();
+
+        String getFacilityName();
+    }
+
+    @Query("""
+            SELECT s.stadiumId AS stadiumId, p.stadiumName AS facilityName
+            FROM Stadium s
+            LEFT JOIN s.parentStadium p
+            WHERE s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT
+            AND s.stadiumStatus = com.sportvenue.entity.enums.StadiumStatus.AVAILABLE
+            AND p IS NOT NULL
+            """)
+    List<CourtFacilityNameProjection> findAllCourtFacilityNames();
+
+    /**
+     * IDs đầu vào hiện đã được lọc AVAILABLE ở {@link #findAllCourtFacilityNames}, nhưng vẫn
+     * filter lại ở đây (defense-in-depth) — tránh AI gợi ý sân bảo trì nếu status đổi giữa
+     * 2 query hoặc method này được tái sử dụng từ path khác trong tương lai.
+     */
+    @EntityGraph(attributePaths = {"sportType", "images", "amenities", "parentStadium", "complex"})
+    @Query("""
+            SELECT s FROM Stadium s
+            WHERE s.stadiumId IN :ids
+            AND s.nodeType = com.sportvenue.entity.enums.StadiumNodeType.COURT
+            AND s.stadiumStatus = com.sportvenue.entity.enums.StadiumStatus.AVAILABLE
+            """)
+    List<Stadium> findCourtsForAiToolByIds(@Param("ids") List<Integer> ids);
 }

@@ -1,0 +1,197 @@
+import { useState, useEffect, useRef } from "react";
+import { sendChatMessage } from "@/lib/ai-chat-api";
+import { ChatMessage, TimeSlotResponse, BookingAiResponse } from "@/types/aiChat";
+import { StadiumResponse } from "@/types/stadium";
+import { MatchResponse } from "@/types/match";
+
+export interface MessageItem {
+  id: string | number;
+  type: string; // "user" | "assistant"
+  content: string;
+  timestamp: string;
+  stadiums?: StadiumResponse[] | null;
+  slots?: TimeSlotResponse[] | null;
+  matches?: MatchResponse[] | null;
+  /** Danh sách booking của user (intent: my_bookings, booking_status, cancel_booking) */
+  bookings?: BookingAiResponse[] | null;
+  policyText?: string | null;
+  bookingId?: number | null; // ID booking vừa tạo (intent: create_booking) - deprecated
+  draftBooking?: any | null; // Thông tin booking nháp để user confirm
+  matchId?: number | null; // ID kèo vừa tham gia (intent: join_match)
+  draftJoinMatch?: any | null; // Thông tin kèo nháp để user confirm
+  isHistory?: boolean; // Cờ đánh dấu tin nhắn load từ lịch sử cũ, không chạy lại typewriter
+}
+
+export function useAiChat() {
+  const [message, setMessage] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [messages, setMessages] = useState<MessageItem[]>([]);
+
+  // Lưu tọa độ GPS vào ref để dùng ngay khi sendChatMessage mà không cần await
+  const gpsRef = useRef<{ lat: number; lng: number } | null>(null);
+
+  // Prefetch GPS ngay khi hook mount — trước khi user gửi bất kỳ tin nhắn nào
+  useEffect(() => {
+    if (typeof window === "undefined" || !navigator.geolocation) return;
+
+    // Kiểm tra cache trước
+    try {
+      const cached = sessionStorage.getItem("ai_user_gps");
+      if (cached) {
+        const parsed = JSON.parse(cached) as { lat: number; lng: number; cachedAt: number };
+        if (Date.now() - parsed.cachedAt < 5 * 60 * 1000) {
+          gpsRef.current = { lat: parsed.lat, lng: parsed.lng };
+          return;
+        }
+      }
+    } catch { /* ignore */ }
+
+    // Gọi Geolocation API sớm — khi user bấm Allow, kết quả sẽ có ngay trong gpsRef
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        gpsRef.current = coords;
+        // Đồng bộ vào cache để ai-chat-api.ts cũng thấy
+        sessionStorage.setItem(
+          "ai_user_gps",
+          JSON.stringify({ ...coords, cachedAt: Date.now() })
+        );
+      },
+      () => { /* user từ chối hoặc không hỗ trợ — giữ null */ },
+      { timeout: 10000, maximumAge: 0 }
+    );
+  }, []);
+
+  // Đọc lịch sử trò chuyện từ sessionStorage khi mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = sessionStorage.getItem("ai_chat_messages");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as MessageItem[];
+          setMessages(parsed.map(m => ({ ...m, isHistory: true })));
+          return;
+        } catch (e) {
+          // Fallback to default
+        }
+      }
+    }
+    // Lịch sử mặc định nếu chưa có
+    setMessages([
+      {
+        id: "welcome",
+        type: "assistant",
+        content:
+          "Xin chào! Tôi là trợ lý AI của SportHub. Tôi có thể giúp bạn:\n• Tìm sân theo môn, khu vực, giá\n• Xem giờ trống và đặt sân trực tiếp\n• Tìm kèo ghép và tham gia kèo\n\nBạn cần tôi giúp gì?",
+        timestamp: new Date().toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      },
+    ]);
+  }, []);
+
+  // Ghi lịch sử trò chuyện vào sessionStorage mỗi khi tin nhắn thay đổi
+  useEffect(() => {
+    if (typeof window !== "undefined" && messages.length > 0) {
+      sessionStorage.setItem("ai_chat_messages", JSON.stringify(messages));
+    }
+  }, [messages]);
+
+  const handleSend = async (customMessage?: string) => {
+    const q = (customMessage !== undefined ? customMessage : message).trim();
+    if (!q || isSearching) return;
+
+    const userTime = new Date().toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const userMessage: MessageItem = {
+      id: "user-" + Date.now(),
+      type: "user",
+      content: q,
+      timestamp: userTime,
+    };
+
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
+    setMessage("");
+    setIsSearching(true);
+
+    try {
+      // Khi gửi tin mới, toàn bộ tin nhắn hiện hữu chuyển thành history
+      const historyPayload: ChatMessage[] = updatedMessages.slice(0, -1).map((m) => ({
+        role: m.type === "assistant" ? "assistant" : "user",
+        content: m.content,
+      }));
+
+      const result = await sendChatMessage(q, historyPayload, gpsRef.current);
+
+      const aiResponse: MessageItem = {
+        id: "ai-" + Date.now(),
+        type: "assistant",
+        content: result.message || "",
+        timestamp: new Date().toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        stadiums: result.stadiums,
+        slots: result.slots,
+        matches: result.matches,
+        bookings: result.bookings,
+        policyText: result.policyText,
+        bookingId: result.bookingId,
+        draftBooking: result.draftBooking,
+        matchId: result.matchId,
+        draftJoinMatch: result.draftJoinMatch,
+        isHistory: false, // Tin nhắn mới, kích hoạt typewriter
+      };
+
+      setMessages((prev) => [...prev, aiResponse]);
+    } catch (error) {
+      const errorMsg: MessageItem = {
+        id: "err-" + Date.now(),
+        type: "assistant",
+        content: "Không thể kết nối tới máy chủ. Vui lòng kiểm tra lại kết nối mạng của bạn.",
+        timestamp: new Date().toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        isHistory: false,
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleClearHistory = () => {
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("ai_chat_messages");
+      sessionStorage.removeItem("ai_session_id"); // Reset session ID trên Redis context
+    }
+    setMessages([
+      {
+        id: "welcome-" + Date.now(),
+        type: "assistant",
+        content:
+          "Xin chào! Tôi là trợ lý AI của SportHub. Tôi có thể giúp bạn:\n• Tìm sân theo môn, khu vực, giá\n• Xem giờ trống và đặt sân trực tiếp\n• Tìm kèo ghép và tham gia kèo\n\nBạn cần tôi giúp gì?",
+        timestamp: new Date().toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      },
+    ]);
+  };
+
+  return {
+    message,
+    setMessage,
+    isSearching,
+    messages,
+    setMessages,
+    handleSend,
+    handleClearHistory,
+  };
+}

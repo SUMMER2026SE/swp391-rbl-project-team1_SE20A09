@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+
 import type { Session } from "next-auth";
 import { useRouteGuard } from "@/components/shared/RouteGuard";
 import { Header } from "@/components/layout/Header";
@@ -56,6 +57,7 @@ import {
   getMyCreatedMatches,
   getMyJoinedRequests,
   cancelMatchRequest,
+  getMatchDetail,
   MatchResponse,
   JoinRequestResponse,
 } from "@/lib/api/matchmaking";
@@ -111,6 +113,7 @@ function MatchRequestFeedPage() {
   const { data: session } = useSession();
   const { triggerLoginModal } = useRouteGuard();
   const { isOpen, options, confirm, close, execute, isLoading: confirming } = useConfirm();
+  const [hasProcessedParam, setHasProcessedParam] = useState(false);
 
   const requireLogin = () => {
     if (!session?.user) {
@@ -313,6 +316,67 @@ function MatchRequestFeedPage() {
       setMyJoinedRequests([]);
     }
   }, [session]);
+
+  useEffect(() => {
+    if (loadingFeed) return;
+    if (session?.user && loadingSidebar) return;
+    if (hasProcessedParam) return;
+
+    const paramMatchIdStr = searchParams.get("matchId");
+    if (!paramMatchIdStr) {
+      setHasProcessedParam(true);
+      return;
+    }
+
+    const paramMatchId = Number(paramMatchIdStr);
+    if (isNaN(paramMatchId)) {
+      setHasProcessedParam(true);
+      return;
+    }
+
+    // Check myCreatedMatches
+    const myCreated = myCreatedMatches.find((m) => m.matchId === paramMatchId);
+    if (myCreated) {
+      setSelectedManageMatch(myCreated);
+      setShowManageDialog(true);
+      setHasProcessedParam(true);
+      return;
+    }
+
+    // Check myJoinedRequests
+    const myJoined = myJoinedRequests.find((r) => r.matchId === paramMatchId);
+    if (myJoined) {
+      setSelectedJoinedRequest(myJoined);
+      setShowJoinedDetailDialog(true);
+      setHasProcessedParam(true);
+      return;
+    }
+
+    // Check matchRequests feed
+    const feedMatch = matchRequests.find((m) => m.matchId === paramMatchId);
+    if (feedMatch) {
+      setSelectedRequest(feedMatch);
+      setShowJoinDialog(true);
+      setHasProcessedParam(true);
+      return;
+    }
+
+    // Fallback: Fetch specific match details
+    const fetchAndShowMatch = async () => {
+      try {
+        const match = await getMatchDetail(paramMatchId);
+        setSelectedRequest(match);
+        setShowJoinDialog(true);
+      } catch (err) {
+        toast.error("Không tìm thấy thông tin kèo, có thể kèo đã bị xóa.");
+      } finally {
+        setHasProcessedParam(true);
+      }
+    };
+    
+    fetchAndShowMatch();
+
+  }, [loadingFeed, loadingSidebar, session, myCreatedMatches, myJoinedRequests, matchRequests, searchParams, hasProcessedParam]);
 
   const getSkillLevelLabel = (level: string) => {
     const config = {
@@ -1797,12 +1861,13 @@ function MatchRequestFeedPage() {
   );
 }
 
-import { Suspense } from "react";
-
-export default function CommunityPage() {
+function MatchRequestFeedPageWrapper() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
+    <Suspense fallback={<div className="min-h-screen bg-slate-50/50 flex items-center justify-center">Đang tải cộng đồng...</div>}>
       <MatchRequestFeedPage />
     </Suspense>
   );
 }
+
+export default MatchRequestFeedPageWrapper;
+

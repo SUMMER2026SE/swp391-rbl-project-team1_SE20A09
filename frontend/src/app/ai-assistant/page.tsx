@@ -1,218 +1,134 @@
-'use client'
+"use client";
 
-import { useState } from "react";
+import { useRef, useEffect } from "react";
 import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Card } from "@/components/ui/card";
+import { Avatar } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Send, Search, Calendar, TrendingUp, MapPin } from "lucide-react";
-import Image from "next/image";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Bot, Send, Trash2 } from "lucide-react";
+import { useAiChat } from "@/hooks/useAiChat";
+import { ChatMessageItem } from "@/components/ai-assistant/ChatMessageItem";
+import { SuggestionChips } from "@/components/ai-assistant/SuggestionChips";
 
 function AIAssistantPage() {
-  const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      type: "assistant",
-      content:
-        "Xin chào! Tôi là trợ lý AI của SportsBook. Tôi có thể giúp bạn tìm sân, đặt lịch, hoặc gợi ý sân phù hợp. Bạn cần tôi giúp gì?",
-      timestamp: "14:00",
-    },
-  ]);
+  const {
+    message,
+    setMessage,
+    isSearching,
+    messages,
+    handleSend,
+    handleClearHistory,
+  } = useAiChat();
 
-  const quickActions = [
-    { icon: <Search className="h-4 w-4" />, text: "Tìm sân gần tôi" },
-    { icon: <Calendar className="h-4 w-4" />, text: "Xem lịch đặt sân" },
-    { icon: <TrendingUp className="h-4 w-4" />, text: "Gợi ý sân cho tôi" },
-  ];
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const venueRecommendation = {
-    name: "Sân bóng mẫu",
-    image: "",
-    sportType: "Bóng đá",
-    price: 0,
-    rating: 0,
-    location: "TP.HCM",
-    availableSlots: "Trống",
-  };
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isSearching]);
 
-  const handleSend = () => {
-    if (!message.trim()) return;
-
-    const newMessage = {
-      id: messages.length + 1,
-      type: "user",
-      content: message,
-      timestamp: new Date().toLocaleTimeString("vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    };
-
-    setMessages([...messages, newMessage]);
-    setMessage("");
-
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse = {
-        id: messages.length + 2,
-        type: "assistant",
-        content: "Để tôi tìm sân phù hợp cho bạn...",
-        timestamp: new Date().toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      };
-      setMessages((prev) => [...prev, aiResponse]);
-    }, 1000);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSend();
+    }
   };
 
   return (
     <div className="h-screen flex flex-col bg-background">
       <Header />
 
-      <div className="flex-1 container mx-auto px-4 py-8 overflow-hidden flex flex-col">
-        <div className="mb-6 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-3">
-            <Bot className="h-8 w-8 text-primary" />
+      <div className="flex-1 container mx-auto px-4 py-6 overflow-hidden flex flex-col max-w-4xl">
+        <div className="mb-4 text-center shrink-0">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-primary/10 rounded-full mb-2">
+            <Bot className="h-6 w-6 text-primary" />
           </div>
-          <h1 className="text-2xl mb-2">Trợ lý AI đặt sân</h1>
-          <p className="text-muted-foreground">
-            Hỏi tôi bất cứ điều gì về đặt sân và tìm kiếm
+          <h1 className="text-xl font-bold">Trợ lý AI đặt sân</h1>
+          <p className="text-xs text-muted-foreground">
+            Hỏi tôi bất cứ điều gì về sân thể thao, giá cả, lịch trống và kèo ghép
           </p>
         </div>
 
-        <Card className="flex-1 flex flex-col overflow-hidden">
-          <ScrollArea className="flex-1 p-6">
-            <div className="space-y-6">
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex gap-3 ${msg.type === "user" ? "flex-row-reverse" : ""
-                    }`}
-                >
-                  <Avatar className="h-10 w-10 flex-shrink-0">
-                    {msg.type === "assistant" ? (
-                      <div className="w-full h-full bg-primary/10 flex items-center justify-center">
-                        <Bot className="h-6 w-6 text-primary" />
-                      </div>
-                    ) : (
-                      <AvatarFallback>U</AvatarFallback>
-                    )}
-                  </Avatar>
+        <Card className="flex-1 flex flex-col overflow-hidden border-border/80 shadow-sm rounded-xl">
+          {/* Header Card chứa nút Xóa Lịch sử */}
+          <div className="px-6 py-3 border-b border-border/60 flex justify-between items-center bg-muted/10 shrink-0">
+            <div className="flex items-center gap-2">
+              <Bot className="h-4 w-4 text-primary animate-pulse" />
+              <span className="text-xs font-semibold text-gray-700">SportHub Assistant</span>
+            </div>
+            {messages.length > 1 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearHistory}
+                className="text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/5 gap-1.5 h-8 px-2.5 rounded-lg"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Xóa lịch sử
+              </Button>
+            )}
+          </div>
 
-                  <div
-                    className={`flex-1 ${msg.type === "user" ? "text-right" : ""
-                      }`}
-                  >
-                    <div
-                      className={`inline-block max-w-md md:max-w-lg ${msg.type === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted"
-                        } rounded-lg px-4 py-3`}
-                    >
-                      <p className="text-sm">{msg.content}</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {msg.timestamp}
-                    </p>
-                  </div>
-                </div>
+          <ScrollArea className="flex-1 min-h-0 p-6">
+            <div className="space-y-6">
+              {messages.map((msg, idx) => (
+                <ChatMessageItem
+                  key={msg.id}
+                  msg={msg}
+                  isLatest={idx === messages.length - 1}
+                />
               ))}
 
-              {/* Quick Actions (shown on first message) */}
-              {messages.length === 1 && (
-                <div className="flex flex-wrap gap-2 justify-center">
-                  {quickActions.map((action, idx) => (
-                    <Button
-                      key={idx}
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                      onClick={() => setMessage(action.text)}
-                    >
-                      {action.icon}
-                      {action.text}
-                    </Button>
-                  ))}
-                </div>
+              {/* Hiện Suggestion Chips khi chỉ có 1 lời chào */}
+              {messages.length === 1 && !isSearching && (
+                <SuggestionChips onSelect={(text) => handleSend(text)} />
               )}
 
-              {/* Venue Recommendation Card */}
-              {messages.length > 2 && (
-                <div className="flex justify-center">
-                  <Card className="max-w-sm">
-                    <CardContent className="p-4">
-                      <div className="flex gap-3 mb-3">
-                        <Image
-                          src={venueRecommendation.image}
-                          alt={venueRecommendation.name}
-                          width={80}
-                          height={80}
-                          className="rounded-lg object-cover"
-                          unoptimized
-                        />
-                        <div className="flex-1">
-                          <h4 className="mb-1">{venueRecommendation.name}</h4>
-                          <Badge variant="outline" className="mb-2">
-                            {venueRecommendation.sportType}
-                          </Badge>
-                          <div className="flex items-center text-sm text-muted-foreground">
-                            <MapPin className="h-3 w-3 mr-1" />
-                            {venueRecommendation.location}
-                          </div>
-                        </div>
+              {/* Skeleton loading bubble */}
+              {isSearching && (
+                <div className="flex gap-3">
+                  <Avatar className="h-10 w-10 flex-shrink-0">
+                    <div className="w-full h-full bg-primary/10 flex items-center justify-center">
+                      <Bot className="h-6 w-6 text-primary" />
+                    </div>
+                  </Avatar>
+                  <div className="flex-1 flex flex-col gap-2">
+                    <div className="inline-block bg-muted rounded-2xl rounded-tl-sm px-4 py-3 max-w-[120px]">
+                      <div className="flex space-x-1.5 items-center justify-center h-4">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                       </div>
-
-                      <div className="flex items-center justify-between text-sm mb-3">
-                        <span className="text-muted-foreground">
-                          Khung giờ trống
-                        </span>
-                        <span>{venueRecommendation.availableSlots}</span>
-                      </div>
-
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xl text-primary">
-                          {venueRecommendation.price.toLocaleString('vi-VN')}đ
-                        </span>
-                        <span className="text-sm">
-                          ⭐ {venueRecommendation.rating}
-                        </span>
-                      </div>
-
-                      <Button className="w-full" size="sm">
-                        Chọn sân này
-                      </Button>
-                    </CardContent>
-                  </Card>
+                    </div>
+                    <div className="w-full max-w-sm space-y-3 mt-1">
+                      <Skeleton className="h-32 w-full rounded-xl bg-muted/65" />
+                    </div>
+                  </div>
                 </div>
               )}
+              <div ref={chatEndRef} />
             </div>
           </ScrollArea>
 
-          <div className="p-4 border-t">
-            <div className="flex gap-2">
+          <div className="p-4 border-t border-border/60 bg-muted/20 shrink-0">
+            <div className="flex gap-2 max-w-3xl mx-auto">
               <Input
-                placeholder="Hỏi tôi về sân, giá, lịch trống..."
+                placeholder="Hỏi tôi về sân, giá, lịch trống, kèo ghép..."
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter") handleSend();
-                }}
+                onKeyDown={handleKeyDown}
+                disabled={isSearching}
+                className="rounded-xl border-border/80 focus-visible:ring-primary h-10"
               />
-              <Button onClick={handleSend} disabled={!message.trim()}>
-                <Send className="h-5 w-5" />
+              <Button onClick={() => handleSend()} disabled={!message.trim() || isSearching} className="rounded-xl h-10 px-4">
+                <Send className="h-4 w-4" />
               </Button>
             </div>
           </div>
         </Card>
       </div>
-
-      <Footer />
     </div>
   );
 }

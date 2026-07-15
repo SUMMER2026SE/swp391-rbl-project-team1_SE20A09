@@ -1,0 +1,1077 @@
+[
+  {
+    "id": "happy-search-stadiums",
+    "description": "Tìm kiếm sân bóng đá ở Thủ Đức (Happy Path)",
+    "passed": true,
+    "turns": [
+      {
+        "turnIndex": 0,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Để mình tìm ngay cho bạn",
+          "intent": "search_stadiums",
+          "stadiums": [
+            {
+              "stadiumId": 1,
+              "stadiumName": "Sân Bóng Đá Thủ Đức Facility - Sân Bóng Đá Thủ Đức",
+              "description": "Sân bóng đá mini 5vs5 chất lượng cao, cỏ nhân tạo thế hệ 3",
+              "sportTypeId": 1,
+              "address": "123 Võ Văn Ngân, Thủ Đức, TP.HCM",
+              "averageRating": 4.5,
+              "latitude": 10.85,
+              "longitude": 106.755,
+              "distanceInKm": null,
+              "sportName": "Football",
+              "isFootballType": null,
+              "firstImageUrl": "https://images.unsplash.com/photo-1459865264687-595d652de67e?w=800",
+              "imageUrls": [
+                "https://images.unsplash.com/photo-1459865264687-595d652de67e?w=800",
+                "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800",
+                "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800"
+              ],
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 150000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": [
+                {
+                  "amenityId": 1,
+                  "name": "Wifi",
+                  "icon": "wifi"
+                },
+                {
+                  "amenityId": 6,
+                  "name": "Nước uống miễn phí",
+                  "icon": "droplet"
+                },
+                {
+                  "amenityId": 2,
+                  "name": "Bãi đỗ xe",
+                  "icon": "car"
+                },
+                {
+                  "amenityId": 3,
+                  "name": "Căng tin",
+                  "icon": "coffee"
+                },
+                {
+                  "amenityId": 5,
+                  "name": "Phòng thay đồ",
+                  "icon": "user"
+                }
+              ]
+            }
+          ],
+          "slots": null,
+          "matches": null,
+          "policyText": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "happy-get-slots",
+    "description": "Xem lịch trống của sân đầu tiên trong danh sách (Context Happy Path)",
+    "passed": true,
+    "turns": [
+      {
+        "turnIndex": 0,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Để mình tìm ngay cho bạn sân bóng đá ở Thủ Đức",
+          "intent": "search_stadiums",
+          "stadiums": [
+            {
+              "stadiumId": 1,
+              "stadiumName": "Sân Bóng Đá Thủ Đức Facility - Sân Bóng Đá Thủ Đức",
+              "description": "Sân bóng đá mini 5vs5 chất lượng cao, cỏ nhân tạo thế hệ 3",
+              "sportTypeId": 1,
+              "address": "123 Võ Văn Ngân, Thủ Đức, TP.HCM",
+              "averageRating": 4.5,
+              "latitude": 10.85,
+              "longitude": 106.755,
+              "distanceInKm": null,
+              "sportName": "Football",
+              "isFootballType": null,
+              "firstImageUrl": "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800",
+              "imageUrls": [
+                "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800",
+                "https://images.unsplash.com/photo-1459865264687-595d652de67e?w=800",
+                "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800"
+              ],
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 150000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": [
+                {
+                  "amenityId": 5,
+                  "name": "Phòng thay đồ",
+                  "icon": "user"
+                },
+                {
+                  "amenityId": 1,
+                  "name": "Wifi",
+                  "icon": "wifi"
+                },
+                {
+                  "amenityId": 3,
+                  "name": "Căng tin",
+                  "icon": "coffee"
+                },
+                {
+                  "amenityId": 2,
+                  "name": "Bãi đỗ xe",
+                  "icon": "car"
+                },
+                {
+                  "amenityId": 6,
+                  "name": "Nước uống miễn phí",
+                  "icon": "droplet"
+                }
+              ]
+            }
+          ],
+          "slots": null,
+          "matches": null,
+          "policyText": null
+        }
+      },
+      {
+        "turnIndex": 1,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Để mình kiểm tra lịch trống cho sân đầu tiên của bạn",
+          "intent": "get_slots",
+          "stadiums": null,
+          "slots": [
+            {
+              "slotId": 12,
+              "stadiumId": 1,
+              "startTime": "17:00:00",
+              "endTime": "18:00:00",
+              "pricePerSlot": 150000.0,
+              "slotStatus": "AVAILABLE",
+              "available": false
+            },
+            {
+              "slotId": 13,
+              "stadiumId": 1,
+              "startTime": "18:00:00",
+              "endTime": "19:00:00",
+              "pricePerSlot": 150000.0,
+              "slotStatus": "AVAILABLE",
+              "available": true
+            },
+            {
+              "slotId": 14,
+              "stadiumId": 1,
+              "startTime": "19:00:00",
+              "endTime": "20:00:00",
+              "pricePerSlot": 150000.0,
+              "slotStatus": "AVAILABLE",
+              "available": true
+            },
+            {
+              "slotId": 15,
+              "stadiumId": 1,
+              "startTime": "20:00:00",
+              "endTime": "21:00:00",
+              "pricePerSlot": 150000.0,
+              "slotStatus": "AVAILABLE",
+              "available": true
+            },
+            {
+              "slotId": 16,
+              "stadiumId": 1,
+              "startTime": "21:00:00",
+              "endTime": "22:00:00",
+              "pricePerSlot": 150000.0,
+              "slotStatus": "AVAILABLE",
+              "available": true
+            }
+          ],
+          "matches": null,
+          "policyText": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "happy-find-match",
+    "description": "Tìm kèo ghép cầu lông Thủ Đức (Happy Path)",
+    "passed": true,
+    "turns": [
+      {
+        "turnIndex": 0,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Chưa tìm thấy kèo ghép nào phù hợp. Bạn có thể thử đổi khu vực hoặc môn thể thao.",
+          "intent": "find_match",
+          "stadiums": null,
+          "slots": null,
+          "matches": [],
+          "policyText": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "happy-get-policy",
+    "description": "Hỏi chính sách hủy đặt sân (FAQ Happy Path)",
+    "passed": true,
+    "turns": [
+      {
+        "turnIndex": 0,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Mình tra chính sách cho bạn ngay đây:",
+          "intent": "get_policy",
+          "stadiums": null,
+          "slots": null,
+          "matches": null,
+          "policyText": "Vào mục 'Đơn đặt sân của tôi' trên website, chọn đơn và bấm Hủy kèm lý do. Chỉ hủy được đơn CHƯA hoàn thành và CHƯA bị hủy trước đó. Nếu đơn đã thanh toán, hệ thống ghi nhận hoàn tiền; tiền hoàn về qua kênh thanh toán ban đầu và có thể cần thời gian xử lý."
+        }
+      }
+    ]
+  },
+  {
+    "id": "bug-price-hallucination",
+    "description": "Chống bịa giá và khu vực khác khi không có thông tin (Bug 2026-07-08)",
+    "passed": true,
+    "turns": [
+      {
+        "turnIndex": 0,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Để mình tìm ngay cho bạn sân bóng đá tại Đà Nẵng!",
+          "intent": "search_stadiums",
+          "stadiums": [
+            {
+              "stadiumId": 221,
+              "stadiumName": "Tiểu La - Sân 1",
+              "description": null,
+              "sportTypeId": 1,
+              "address": "Đà Nẵng",
+              "averageRating": 4.67,
+              "latitude": 16.04498,
+              "longitude": 108.2129961,
+              "distanceInKm": null,
+              "sportName": "Football",
+              "isFootballType": null,
+              "firstImageUrl": null,
+              "imageUrls": null,
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 350000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": []
+            },
+            {
+              "stadiumId": 652,
+              "stadiumName": "Tiểu La - Sân 1",
+              "description": null,
+              "sportTypeId": 1,
+              "address": "Đà Nẵng",
+              "averageRating": 5.0,
+              "latitude": 16.04498,
+              "longitude": 108.2129961,
+              "distanceInKm": null,
+              "sportName": "Football",
+              "isFootballType": null,
+              "firstImageUrl": null,
+              "imageUrls": null,
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 350000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": []
+            },
+            {
+              "stadiumId": 223,
+              "stadiumName": "Sân vận động Thanh Khê - Sân 1",
+              "description": null,
+              "sportTypeId": 1,
+              "address": "Đà Nẵng",
+              "averageRating": 4.67,
+              "latitude": 16.0609768,
+              "longitude": 108.1831643,
+              "distanceInKm": null,
+              "sportName": "Football",
+              "isFootballType": null,
+              "firstImageUrl": null,
+              "imageUrls": null,
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 381000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": []
+            },
+            {
+              "stadiumId": 654,
+              "stadiumName": "Sân vận động Thanh Khê - Sân 1",
+              "description": null,
+              "sportTypeId": 1,
+              "address": "Đà Nẵng",
+              "averageRating": 5.0,
+              "latitude": 16.0609768,
+              "longitude": 108.1831643,
+              "distanceInKm": null,
+              "sportName": "Football",
+              "isFootballType": null,
+              "firstImageUrl": null,
+              "imageUrls": null,
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 381000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": []
+            },
+            {
+              "stadiumId": 224,
+              "stadiumName": "Sân vận động Thanh Khê - Sân 2",
+              "description": null,
+              "sportTypeId": 1,
+              "address": "Đà Nẵng",
+              "averageRating": 4.0,
+              "latitude": 16.0609768,
+              "longitude": 108.1831643,
+              "distanceInKm": null,
+              "sportName": "Football",
+              "isFootballType": null,
+              "firstImageUrl": null,
+              "imageUrls": null,
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 391000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": []
+            }
+          ],
+          "slots": null,
+          "matches": null,
+          "policyText": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "bug-deictic-reference",
+    "description": "Hiểu đúng đại từ chỉ định \"sân này\" ngay sau search để resolve targetIndex:0 (Bug 2026-07-08)",
+    "passed": true,
+    "turns": [
+      {
+        "turnIndex": 0,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Để mình tìm ngay cho bạn sân bóng đá ở Thủ Đức",
+          "intent": "search_stadiums",
+          "stadiums": [
+            {
+              "stadiumId": 1,
+              "stadiumName": "Sân Bóng Đá Thủ Đức Facility - Sân Bóng Đá Thủ Đức",
+              "description": "Sân bóng đá mini 5vs5 chất lượng cao, cỏ nhân tạo thế hệ 3",
+              "sportTypeId": 1,
+              "address": "123 Võ Văn Ngân, Thủ Đức, TP.HCM",
+              "averageRating": 4.5,
+              "latitude": 10.85,
+              "longitude": 106.755,
+              "distanceInKm": null,
+              "sportName": "Football",
+              "isFootballType": null,
+              "firstImageUrl": "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800",
+              "imageUrls": [
+                "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800",
+                "https://images.unsplash.com/photo-1459865264687-595d652de67e?w=800",
+                "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800"
+              ],
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 150000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": [
+                {
+                  "amenityId": 3,
+                  "name": "Căng tin",
+                  "icon": "coffee"
+                },
+                {
+                  "amenityId": 5,
+                  "name": "Phòng thay đồ",
+                  "icon": "user"
+                },
+                {
+                  "amenityId": 6,
+                  "name": "Nước uống miễn phí",
+                  "icon": "droplet"
+                },
+                {
+                  "amenityId": 1,
+                  "name": "Wifi",
+                  "icon": "wifi"
+                },
+                {
+                  "amenityId": 2,
+                  "name": "Bãi đỗ xe",
+                  "icon": "car"
+                }
+              ]
+            }
+          ],
+          "slots": null,
+          "matches": null,
+          "policyText": null
+        }
+      },
+      {
+        "turnIndex": 1,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Dưới đây là lịch trống của sân này:",
+          "intent": "get_slots",
+          "stadiums": null,
+          "slots": [
+            {
+              "slotId": 12,
+              "stadiumId": 1,
+              "startTime": "17:00:00",
+              "endTime": "18:00:00",
+              "pricePerSlot": 150000.0,
+              "slotStatus": "AVAILABLE",
+              "available": false
+            },
+            {
+              "slotId": 13,
+              "stadiumId": 1,
+              "startTime": "18:00:00",
+              "endTime": "19:00:00",
+              "pricePerSlot": 150000.0,
+              "slotStatus": "AVAILABLE",
+              "available": true
+            },
+            {
+              "slotId": 14,
+              "stadiumId": 1,
+              "startTime": "19:00:00",
+              "endTime": "20:00:00",
+              "pricePerSlot": 150000.0,
+              "slotStatus": "AVAILABLE",
+              "available": true
+            },
+            {
+              "slotId": 15,
+              "stadiumId": 1,
+              "startTime": "20:00:00",
+              "endTime": "21:00:00",
+              "pricePerSlot": 150000.0,
+              "slotStatus": "AVAILABLE",
+              "available": true
+            },
+            {
+              "slotId": 16,
+              "stadiumId": 1,
+              "startTime": "21:00:00",
+              "endTime": "22:00:00",
+              "pricePerSlot": 150000.0,
+              "slotStatus": "AVAILABLE",
+              "available": true
+            }
+          ],
+          "matches": null,
+          "policyText": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "bug-faq-escalation-mixup",
+    "description": "Phân biệt rõ chính sách hủy sân (FAQ) và chính sách khiếu nại (Bug 2026-07-08)",
+    "passed": true,
+    "turns": [
+      {
+        "turnIndex": 0,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Mình tra chính sách cho bạn ngay đây:",
+          "intent": "get_policy",
+          "stadiums": null,
+          "slots": null,
+          "matches": null,
+          "policyText": "Hoàn tiền được ghi nhận khi bạn hủy một đơn đã thanh toán hợp lệ (xem chính sách hủy đặt sân) — tiền về qua đúng kênh thanh toán ban đầu và có thể cần thời gian xử lý."
+        }
+      }
+    ]
+  },
+  {
+    "id": "bug-skip-need-more-info",
+    "description": "Chống tự đoán bừa khi thiếu thông tin cơ bản môn thể thao và khu vực (Bug 2026-07-08)",
+    "passed": true,
+    "turns": [
+      {
+        "turnIndex": 0,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Bạn muốn tìm sân ở khu vực nào và chơi môn thể thao gì? Cho mình biết cụ thể hơn để tìm chính xác nhé.",
+          "intent": "need_more_info",
+          "stadiums": null,
+          "slots": null,
+          "matches": null,
+          "policyText": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "bug-abuse-escalation",
+    "description": "Không tự ý chuyển hướng CSKH/Hotline khi câu hỏi thuộc phạm vi FAQ (Bug 2026-07-08)",
+    "passed": true,
+    "turns": [
+      {
+        "turnIndex": 0,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Đây là thông tin bạn cần:",
+          "intent": "get_policy",
+          "stadiums": null,
+          "slots": null,
+          "matches": null,
+          "policyText": "Vào mục 'Đơn đặt sân của tôi' trên website, chọn đơn và bấm Hủy kèm lý do. Chỉ hủy được đơn CHƯA hoàn thành và CHƯA bị hủy trước đó. Nếu đơn đã thanh toán, hệ thống ghi nhận hoàn tiền; tiền hoàn về qua kênh thanh toán ban đầu và có thể cần thời gian xử lý."
+        }
+      }
+    ]
+  },
+  {
+    "id": "edge-out-of-scope",
+    "description": "Từ chối lịch sự và đúng phạm vi khi user hỏi câu hỏi ngoài lề (Edge Case)",
+    "passed": true,
+    "turns": [
+      {
+        "turnIndex": 0,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Xin lỗi, tôi không hỗ trợ giải toán. Nếu bạn cần tìm sân hoặc đặt sân thể thao, vui lòng hỏi tôi!",
+          "intent": "out_of_scope",
+          "stadiums": null,
+          "slots": null,
+          "matches": null,
+          "policyText": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "edge-target-index-out-of-bound",
+    "description": "Hỏi sân thứ 10 trong khi danh sách search chỉ có 5 sân (Edge Case)",
+    "passed": true,
+    "turns": [
+      {
+        "turnIndex": 0,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Chưa tìm thấy sân đúng khu vực bạn muốn, đây là các sân khác phù hợp hơn:",
+          "intent": "search_stadiums",
+          "stadiums": [
+            {
+              "stadiumId": 20,
+              "stadiumName": "Cầu lông & Bóng bàn - Sân 1",
+              "description": null,
+              "sportTypeId": 2,
+              "address": "Hà Nội",
+              "averageRating": 5.0,
+              "latitude": 21.0007837,
+              "longitude": 105.8440279,
+              "distanceInKm": null,
+              "sportName": "Badminton",
+              "isFootballType": null,
+              "firstImageUrl": null,
+              "imageUrls": null,
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 75000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": []
+            },
+            {
+              "stadiumId": 177,
+              "stadiumName": "Xoài Arena - Tổ hợp sân Cầu Lông - Sân 1",
+              "description": null,
+              "sportTypeId": 2,
+              "address": "Hà Nội",
+              "averageRating": 4.67,
+              "latitude": 21.051603,
+              "longitude": 105.8814885,
+              "distanceInKm": null,
+              "sportName": "Badminton",
+              "isFootballType": null,
+              "firstImageUrl": null,
+              "imageUrls": null,
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 75000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": []
+            },
+            {
+              "stadiumId": 451,
+              "stadiumName": "Cầu lông & Bóng bàn - Sân 1",
+              "description": null,
+              "sportTypeId": 2,
+              "address": "Hà Nội",
+              "averageRating": 5.0,
+              "latitude": 21.0007837,
+              "longitude": 105.8440279,
+              "distanceInKm": null,
+              "sportName": "Badminton",
+              "isFootballType": null,
+              "firstImageUrl": null,
+              "imageUrls": null,
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 75000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": []
+            },
+            {
+              "stadiumId": 608,
+              "stadiumName": "Xoài Arena - Tổ hợp sân Cầu Lông - Sân 1",
+              "description": null,
+              "sportTypeId": 2,
+              "address": "Hà Nội",
+              "averageRating": 5.0,
+              "latitude": 21.051603,
+              "longitude": 105.8814885,
+              "distanceInKm": null,
+              "sportName": "Badminton",
+              "isFootballType": null,
+              "firstImageUrl": null,
+              "imageUrls": null,
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 75000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": []
+            },
+            {
+              "stadiumId": 264,
+              "stadiumName": "Rạch Cát Badminton Club - Sân 1",
+              "description": null,
+              "sportTypeId": 2,
+              "address": "Hồ Chí Minh",
+              "averageRating": 4.5,
+              "latitude": 10.7148856,
+              "longitude": 106.626184,
+              "distanceInKm": null,
+              "sportName": "Badminton",
+              "isFootballType": null,
+              "firstImageUrl": null,
+              "imageUrls": null,
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 79000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": []
+            }
+          ],
+          "slots": null,
+          "matches": null,
+          "policyText": null
+        }
+      },
+      {
+        "turnIndex": 1,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Chưa xác định được sân bạn muốn xem — hãy tìm sân trước (vd hỏi \"tìm sân bóng đá ở Thủ Đức\") rồi hỏi lại giờ trống.",
+          "intent": "get_slots",
+          "stadiums": null,
+          "slots": null,
+          "matches": null,
+          "policyText": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "edge-target-index-word-digits",
+    "description": "Hỏi bằng chữ số thứ tự phức tạp như \"sân thứ hai\", \"sân thứ 3\" (Edge Case)",
+    "passed": true,
+    "turns": [
+      {
+        "turnIndex": 0,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Để mình tìm ngay cho bạn sân bóng đá ở Thủ Đức",
+          "intent": "search_stadiums",
+          "stadiums": [
+            {
+              "stadiumId": 1,
+              "stadiumName": "Sân Bóng Đá Thủ Đức Facility - Sân Bóng Đá Thủ Đức",
+              "description": "Sân bóng đá mini 5vs5 chất lượng cao, cỏ nhân tạo thế hệ 3",
+              "sportTypeId": 1,
+              "address": "123 Võ Văn Ngân, Thủ Đức, TP.HCM",
+              "averageRating": 4.5,
+              "latitude": 10.85,
+              "longitude": 106.755,
+              "distanceInKm": null,
+              "sportName": "Football",
+              "isFootballType": null,
+              "firstImageUrl": "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800",
+              "imageUrls": [
+                "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800",
+                "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800",
+                "https://images.unsplash.com/photo-1459865264687-595d652de67e?w=800"
+              ],
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 150000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": [
+                {
+                  "amenityId": 2,
+                  "name": "Bãi đỗ xe",
+                  "icon": "car"
+                },
+                {
+                  "amenityId": 6,
+                  "name": "Nước uống miễn phí",
+                  "icon": "droplet"
+                },
+                {
+                  "amenityId": 1,
+                  "name": "Wifi",
+                  "icon": "wifi"
+                },
+                {
+                  "amenityId": 5,
+                  "name": "Phòng thay đồ",
+                  "icon": "user"
+                },
+                {
+                  "amenityId": 3,
+                  "name": "Căng tin",
+                  "icon": "coffee"
+                }
+              ]
+            }
+          ],
+          "slots": null,
+          "matches": null,
+          "policyText": null
+        }
+      },
+      {
+        "turnIndex": 1,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Chưa xác định được sân bạn muốn xem — hãy tìm sân trước (vd hỏi \"tìm sân bóng đá ở Thủ Đức\") rồi hỏi lại giờ trống.",
+          "intent": "get_slots",
+          "stadiums": null,
+          "slots": null,
+          "matches": null,
+          "policyText": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "happy-stadium-relaxation",
+    "description": "Tìm sân với điều kiện quá chặt -> Tự động nới lỏng (Relaxation Path)",
+    "passed": true,
+    "turns": [
+      {
+        "turnIndex": 0,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Chưa tìm thấy sân đúng khoảng giá bạn muốn, đây là các sân khác gần với nhu cầu của bạn:",
+          "intent": "search_stadiums",
+          "stadiums": [
+            {
+              "stadiumId": 1,
+              "stadiumName": "Sân Bóng Đá Thủ Đức Facility - Sân Bóng Đá Thủ Đức",
+              "description": "Sân bóng đá mini 5vs5 chất lượng cao, cỏ nhân tạo thế hệ 3",
+              "sportTypeId": 1,
+              "address": "123 Võ Văn Ngân, Thủ Đức, TP.HCM",
+              "averageRating": 4.5,
+              "latitude": 10.85,
+              "longitude": 106.755,
+              "distanceInKm": null,
+              "sportName": "Football",
+              "isFootballType": null,
+              "firstImageUrl": "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800",
+              "imageUrls": [
+                "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?w=800",
+                "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800",
+                "https://images.unsplash.com/photo-1459865264687-595d652de67e?w=800"
+              ],
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 150000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": [
+                {
+                  "amenityId": 3,
+                  "name": "Căng tin",
+                  "icon": "coffee"
+                },
+                {
+                  "amenityId": 2,
+                  "name": "Bãi đỗ xe",
+                  "icon": "car"
+                },
+                {
+                  "amenityId": 5,
+                  "name": "Phòng thay đồ",
+                  "icon": "user"
+                },
+                {
+                  "amenityId": 1,
+                  "name": "Wifi",
+                  "icon": "wifi"
+                },
+                {
+                  "amenityId": 6,
+                  "name": "Nước uống miễn phí",
+                  "icon": "droplet"
+                }
+              ]
+            },
+            {
+              "stadiumId": 284,
+              "stadiumName": "Sân Bóng Đá Chảo Lửa - Sân 1",
+              "description": null,
+              "sportTypeId": 1,
+              "address": "Hồ Chí Minh",
+              "averageRating": 5.0,
+              "latitude": 10.8059337,
+              "longitude": 106.6584014,
+              "distanceInKm": null,
+              "sportName": "Football",
+              "isFootballType": null,
+              "firstImageUrl": null,
+              "imageUrls": null,
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 314000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": []
+            },
+            {
+              "stadiumId": 715,
+              "stadiumName": "Sân Bóng Đá Chảo Lửa - Sân 1",
+              "description": null,
+              "sportTypeId": 1,
+              "address": "Hồ Chí Minh",
+              "averageRating": 5.0,
+              "latitude": 10.8059337,
+              "longitude": 106.6584014,
+              "distanceInKm": null,
+              "sportName": "Football",
+              "isFootballType": null,
+              "firstImageUrl": null,
+              "imageUrls": null,
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 314000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": []
+            },
+            {
+              "stadiumId": 123,
+              "stadiumName": "Sân bóng Nhật Minh - Sân 1",
+              "description": null,
+              "sportTypeId": 1,
+              "address": "32, Phố Linh Đường, Hà Nội",
+              "averageRating": 3.67,
+              "latitude": 20.9578126,
+              "longitude": 105.833977,
+              "distanceInKm": null,
+              "sportName": "Football",
+              "isFootballType": null,
+              "firstImageUrl": null,
+              "imageUrls": null,
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 316000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": []
+            },
+            {
+              "stadiumId": 406,
+              "stadiumName": "Sân thể thao UEL - Sân 1",
+              "description": null,
+              "sportTypeId": 1,
+              "address": "Hồ Chí Minh",
+              "averageRating": 3.5,
+              "latitude": 10.8726028,
+              "longitude": 106.777544,
+              "distanceInKm": null,
+              "sportName": "Football",
+              "isFootballType": null,
+              "firstImageUrl": null,
+              "imageUrls": null,
+              "openTime": "06:00:00",
+              "closeTime": "22:00:00",
+              "pricePerHour": 316000.0,
+              "stadiumStatus": "AVAILABLE",
+              "approvedStatus": "APPROVED",
+              "footballFieldType": null,
+              "underMaintenanceToday": null,
+              "nodeType": null,
+              "complexId": null,
+              "parentStadiumId": null,
+              "amenities": []
+            }
+          ],
+          "slots": null,
+          "matches": null,
+          "policyText": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "edge-unknown-sport",
+    "description": "Tìm sân chơi môn thể thao lạ chưa có trong hệ thống (Edge Case)",
+    "passed": true,
+    "turns": [
+      {
+        "turnIndex": 0,
+        "verdict": "PASS",
+        "reason": "PASS",
+        "response": {
+          "message": "Không tìm thấy môn thể thao \"Bóng chày\" trong hệ thống. Các môn hiện có: Badminton, Basketball, Tennis, Volleyball, Football.",
+          "intent": "search_stadiums",
+          "stadiums": null,
+          "slots": null,
+          "matches": null,
+          "policyText": null
+        }
+      }
+    ]
+  }
+]

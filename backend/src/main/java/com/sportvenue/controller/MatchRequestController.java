@@ -62,6 +62,12 @@ public class MatchRequestController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @GetMapping("/{matchId}")
+    public ResponseEntity<MatchResponse> getMatch(@PathVariable Integer matchId) {
+        log.info("REST request to get Match ID: {}", matchId);
+        return ResponseEntity.ok(matchRequestService.getMatch(matchId));
+    }
+
     @GetMapping
     @Operation(
             summary = "Lấy danh sách các kèo ghép đang mở (Phân trang)",

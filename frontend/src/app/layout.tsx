@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import NextAuthProvider from "@/components/providers/NextAuthProvider";
 import QueryProvider from "@/components/providers/QueryProvider";
 import { RouteGuard } from "@/components/shared/RouteGuard";
+import { ChatWidget } from "@/components/ai-assistant/ChatWidget";
 
 export const metadata: Metadata = {
   title: "SportsBook - Hệ thống đặt sân thể thao trực tuyến",
@@ -24,6 +25,7 @@ export default function RootLayout({
             <RouteGuard>
               {children}
             </RouteGuard>
+            <ChatWidget />
             <Toaster position="top-right" richColors />
           </QueryProvider>
         </NextAuthProvider>
