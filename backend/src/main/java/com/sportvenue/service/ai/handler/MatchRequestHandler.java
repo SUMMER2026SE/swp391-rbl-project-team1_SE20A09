@@ -102,6 +102,29 @@ public class MatchRequestHandler {
             }
         }
 
+        // Nếu vẫn chưa có sportTypeId, thử lấy từ conversation context
+        if (sportTypeId == null && conversationKey != null) {
+            sportTypeId = conversationContextService.getContext(conversationKey)
+                    .filter(ctx -> ctx.getCurrentSport() != null)
+                    .map(ctx -> {
+                        log.info("Merged sportName from context for match search: {}", ctx.getCurrentSport());
+                        return resolveSportTypeId(ctx.getCurrentSport());
+                    })
+                    .orElse(null);
+        }
+
+        // Nếu vẫn không có sportName → hỏi ngược lại (clarification)
+        if (sportTypeId == null) {
+            List<String> supportedSports = sportTypeRepository.findAll().stream()
+                    .map(SportType::getSportName)
+                    .toList();
+            return AiChatTurnResponse.builder()
+                    .intent("need_more_info")
+                    .message("Bạn muốn tìm kèo cho môn thể thao nào vậy? Hệ thống đang có: "
+                            + String.join(", ", supportedSports) + ". Cho mình biết để tìm kèo phù hợp nhé.")
+                    .build();
+        }
+
         Pageable pageable = PageRequest.of(page, size);
         Page<MatchResponse> matches = matchRequestService.getActiveMatches(pageable, location, sportTypeId);
 

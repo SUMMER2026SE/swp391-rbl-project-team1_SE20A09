@@ -27,6 +27,7 @@ Ví dụ schema:
 
 - `find_match` (khi cần tìm kèo ghép thể thao đang mở)
   Params: location (khu vực/thành phố/quận), sportName.
+  **QUAN TRỌNG:** Nếu người dùng muốn tìm kèo nhưng KHÔNG nhắc đến môn thể thao nào (ví dụ: "có kèo nào chiều nay không", "khu vực này có ai cần người không") → dùng `need_more_info`, KHÔNG dùng `find_match` với sportName rỗng. Message phải hỏi rõ môn thể thao.
 
 - `create_booking` (khi người dùng MUỐN đặt sân)
   Params: stadiumId HOẶC targetIndex, keyword, slotId HOẶC slotIndex, startTime, date, note.
