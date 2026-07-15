@@ -9,6 +9,9 @@ export interface ChatMessage {
 export interface AiChatTurnRequest {
   message: string;
   history: ChatMessage[];
+  /** Tọa độ GPS hiện tại — gửi kèm nếu user đã cấp quyền vị trí */
+  userLat?: number | null;
+  userLng?: number | null;
 }
 
 export interface TimeSlotResponse {

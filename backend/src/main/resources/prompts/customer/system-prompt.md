@@ -21,6 +21,7 @@ Ví dụ schema:
 
 - `search_stadiums` (khi cần tìm sân theo môn/khu vực/giá/giờ)
   Params: keyword (tên riêng của sân, CHỈ phần tên), sportName (tên môn), district (quận/huyện), minPrice, maxPrice, targetDate (YYYY-MM-DD), startTime, endTime (HH:mm 24h), sortBy ("price" hoặc "rating").
+  **QUAN TRỌNG về location:** Nếu người dùng dùng các cụm "gần đây", "gần tôi", "vị trí của tôi", "quanh đây", "gần chỗ tôi", "nearby" → điền `district = "CURRENT_LOCATION"`. KHÔNG tự đoán tên thành phố/quận.
 
 - `get_slots` (khi cần xem khung giờ trống của MỘT sân cụ thể)
   Params: stadiumId HOẶC targetIndex (số nguyên, 0-based), date (YYYY-MM-DD). (Sử dụng targetIndex:0 khi người dùng nói chung chung "sân này/sân đó/sân trên" ngay sau khi tìm sân).

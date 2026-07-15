@@ -60,6 +60,16 @@ public class StadiumSearchHandler {
     }
 
     public AiChatTurnResponse handle(JsonNode args, String llmMessage, String conversationKey) {
+        return handle(args, llmMessage, conversationKey, null, null);
+    }
+
+    /**
+     * Overload nhận tọa độ GPS từ Frontend.
+     * Nếu Groq trả về location = "CURRENT_LOCATION" và có coords → tìm theo bán kính GPS.
+     * Nếu không có coords → hỏi user cấp quyền vị trí.
+     */
+    public AiChatTurnResponse handle(JsonNode args, String llmMessage, String conversationKey,
+                                     Double userLat, Double userLng) {
         if (args == null || args.isNull() || args.isMissingNode()) {
             return AiChatTurnResponse.builder()
                     .message("Bạn muốn tìm sân ở khu vực nào và chơi môn thể thao gì? Cho mình biết cụ thể hơn để tìm chính xác nhé.")
@@ -67,10 +77,27 @@ public class StadiumSearchHandler {
                     .build();
         }
 
+        // --- Detect CURRENT_LOCATION ---
+        String rawLocation = args.hasNonNull("location") ? args.get("location").asText()
+                : (args.hasNonNull("district") ? args.get("district").asText() : null);
+        boolean isCurrentLocation = rawLocation != null
+                && rawLocation.toUpperCase().replace("_", "").contains("CURRENTLOCATION");
+
+        if (isCurrentLocation) {
+            if (userLat == null || userLng == null) {
+                return AiChatTurnResponse.builder()
+                        .intent("need_more_info")
+                        .message("Để tìm sân gần bạn nhất, mình cần quyền truy cập vị trí của bạn. " +
+                                "Vui lòng cho phép trình duyệt chia sẻ vị trí và thử lại nhé!")
+                        .build();
+            }
+            return handleGpsSearch(args, llmMessage, conversationKey, userLat, userLng);
+        }
+
         // --- MERGE FROM CONTEXT ---
         String sportName = args.hasNonNull("sportName") ? args.get("sportName").asText() : null;
         String district = args.hasNonNull("district") ? args.get("district").asText() : null;
-        String province = args.hasNonNull("province") ? args.get("province").asText() : null; // Bug #3: lấy từ args
+        String province = args.hasNonNull("province") ? args.get("province").asText() : null;
         String targetDateStr = args.hasNonNull("targetDate") ? args.get("targetDate").asText() : null;
         String startTimeStr = args.hasNonNull("startTime") ? args.get("startTime").asText() : null;
         String endTimeStr = args.hasNonNull("endTime") ? args.get("endTime").asText() : null;
@@ -154,6 +181,79 @@ public class StadiumSearchHandler {
         return AiChatTurnResponse.builder()
                 .message(relaxationNote != null ? relaxationNote : llmMessage)
                 .intent("search_stadiums")
+                .stadiums(stadiums)
+                .build();
+    }
+
+    /**
+     * Tìm sân theo tọa độ GPS — bán kính 15km, sort gần nhất trước.
+     * Kết hợp với sportTypeId nếu user đã chỉ định môn.
+     */
+    private AiChatTurnResponse handleGpsSearch(JsonNode args, String llmMessage, String conversationKey,
+                                               double lat, double lng) {
+        log.info("GPS search: lat={}, lng={}", lat, lng);
+
+        StadiumSearchRequest.StadiumSearchRequestBuilder builder = StadiumSearchRequest.builder()
+                .userLat(lat)
+                .userLng(lng)
+                .radiusInKm(15.0)
+                .sortBy("distance")
+                .sortDirection("ASC")
+                .page(0)
+                .size(AI_SEARCH_RESULT_LIMIT);
+
+        // Áp dụng sport filter nếu có
+        String sportError = applySportNameFilter(builder, args);
+        if (sportError != null) {
+            return AiChatTurnResponse.messageOnly(sportError, "search_stadiums");
+        }
+
+        // Áp dụng datetime filter nếu user chỉ định giờ
+        applyDateTimeFilters(builder, args);
+        applyPriceFilters(builder, args);
+
+        StadiumSearchRequest req = builder.build();
+        List<StadiumResponse> stadiums;
+        try {
+            stadiums = postProcessSearchResults(publicStadiumService.searchStadiums(req).getContent());
+        } catch (Exception e) {
+            log.warn("GPS search failed, falling back to no-radius search", e);
+            stadiums = List.of();
+        }
+
+        // Fallback: nới bán kính lên 30km nếu không tìm thấy gì trong 15km
+        if (stadiums.isEmpty()) {
+            log.info("GPS search: không có sân trong 15km, thử bán kính 30km");
+            req.setRadiusInKm(30.0);
+            try {
+                stadiums = postProcessSearchResults(publicStadiumService.searchStadiums(req).getContent());
+            } catch (Exception e) {
+                log.warn("GPS fallback search also failed", e);
+            }
+        }
+
+        if (stadiums.isEmpty()) {
+            return AiChatTurnResponse.builder()
+                    .intent("search_stadiums")
+                    .message("Không tìm thấy sân nào trong vòng 30km quanh vị trí của bạn. " +
+                            "Bạn thử chỉ định khu vực cụ thể hơn (tên quận/thành phố) để mình tìm nhé.")
+                    .stadiums(List.of())
+                    .build();
+        }
+
+        // Lưu context
+        String sportName = args.hasNonNull("sportName") ? args.get("sportName").asText() : null;
+        conversationContextService.saveCurrentFilters(conversationKey, sportName, null, null, null, null);
+        conversationContextService.saveLastShownStadiums(conversationKey,
+                stadiums.stream().map(StadiumResponse::getStadiumId).toList());
+
+        String msg = (llmMessage != null && !llmMessage.isBlank())
+                ? llmMessage
+                : "Đây là các sân gần vị trí của bạn nhất:";
+
+        return AiChatTurnResponse.builder()
+                .intent("search_stadiums")
+                .message(msg)
                 .stadiums(stadiums)
                 .build();
     }

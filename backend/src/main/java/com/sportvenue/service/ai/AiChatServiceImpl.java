@@ -150,7 +150,7 @@ public class AiChatServiceImpl implements AiChatService {
         }
 
         handlerStartTime = System.currentTimeMillis();
-        AiChatTurnResponse response = dispatch(intentResult, conversationKey, userId);
+        AiChatTurnResponse response = dispatch(intentResult, conversationKey, userId, request.getUserLat(), request.getUserLng());
         processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
 
         // Lưu AiUsageLog (lưu sau khi dispatch để lấy được intent cuối cùng có thể đã bị handler thay đổi do lỗi)
@@ -183,11 +183,12 @@ public class AiChatServiceImpl implements AiChatService {
         return response;
     }
 
-    private AiChatTurnResponse dispatch(ExtractedIntentResult result, String conversationKey, Integer userId) {
+    private AiChatTurnResponse dispatch(ExtractedIntentResult result, String conversationKey, Integer userId,
+                                        Double userLat, Double userLng) {
         String intent = result.getIntent();
         String message = result.getMessage();
         return switch (intent) {
-            case "search_stadiums" -> stadiumSearchHandler.handle(result.getParams(), message, conversationKey);
+            case "search_stadiums" -> stadiumSearchHandler.handle(result.getParams(), message, conversationKey, userLat, userLng);
             case "get_slots" -> slotAvailabilityHandler.handle(result.getParams(), message, conversationKey);
             case "find_match" -> matchRequestHandler.handle(result.getParams(), message, conversationKey);
             case "get_policy" -> policyHandler.handle(result.getParams(), message);

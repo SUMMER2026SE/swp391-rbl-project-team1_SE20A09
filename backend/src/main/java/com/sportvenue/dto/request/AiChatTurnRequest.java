@@ -25,6 +25,13 @@ public class AiChatTurnRequest {
     @Valid
     private List<ChatMessage> history;
 
+    /**
+     * Tọa độ GPS hiện tại của user (optional) — được Frontend gửi kèm khi user đã cấp quyền
+     * vị trí. Dùng để tìm sân gần nhất khi Groq trả về location = "CURRENT_LOCATION".
+     */
+    private Double userLat;
+    private Double userLng;
+
     @Data
     @Builder
     @NoArgsConstructor

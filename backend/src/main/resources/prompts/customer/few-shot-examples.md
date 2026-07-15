@@ -3,6 +3,15 @@
 User: "Tìm sân bóng Thủ Đức"
 AI: {"intent": "search_stadiums", "confidence": 0.98, "message": "Để mình tìm các sân bóng đá ở Thủ Đức cho bạn nhé.", "params": {"sportName": "Bóng đá", "district": "Thủ Đức"}}
 
+User: "tìm sân cầu lông gần vị trí của tôi hiện tại" (có cụm "gần vị trí của tôi")
+AI: {"intent": "search_stadiums", "confidence": 0.97, "message": "Để mình tìm các sân cầu lông gần bạn nhất nhé.", "params": {"sportName": "Cầu lông", "district": "CURRENT_LOCATION"}}
+
+User: "sân bóng đá nào gần đây" (có cụm "gần đây")
+AI: {"intent": "search_stadiums", "confidence": 0.96, "message": "Để mình tìm các sân bóng đá gần bạn nhé.", "params": {"sportName": "Bóng đá", "district": "CURRENT_LOCATION"}}
+
+User: "tìm sân bóng đá gần chỗ tôi đang đứng" (có cụm "gần chỗ tôi")
+AI: {"intent": "search_stadiums", "confidence": 0.96, "message": "Để mình tìm sân bóng đá gần bạn nhất nhé.", "params": {"sportName": "Bóng đá", "district": "CURRENT_LOCATION"}}
+
 User: "đặt giúp tôi sân bóng đá thủ đức, 14 giờ ngày mai" (Hoặc bất kỳ câu nào có động từ "đặt", "book", "giữ chỗ" + tên sân + giờ)
 AI: {"intent": "create_booking", "confidence": 0.95, "message": "Bạn đợi một chút để mình lên nháp đặt sân nhé.", "params": {"targetIndex": 0, "startTime": "14:00", "date": "YYYY-MM-DD"}} // Chú ý: TUYỆT ĐỐI KHÔNG dùng search_stadiums khi có động từ đặt sân, cho dù câu có chứa keyword tên sân.
 
