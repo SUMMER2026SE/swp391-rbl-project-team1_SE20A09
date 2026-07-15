@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { sendChatMessage } from "@/lib/ai-chat-api";
 import { ChatMessage, TimeSlotResponse, BookingAiResponse } from "@/types/aiChat";
 import { StadiumResponse } from "@/types/stadium";
@@ -26,6 +26,41 @@ export function useAiChat() {
   const [message, setMessage] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [messages, setMessages] = useState<MessageItem[]>([]);
+
+  // Lưu tọa độ GPS vào ref để dùng ngay khi sendChatMessage mà không cần await
+  const gpsRef = useRef<{ lat: number; lng: number } | null>(null);
+
+  // Prefetch GPS ngay khi hook mount — trước khi user gửi bất kỳ tin nhắn nào
+  useEffect(() => {
+    if (typeof window === "undefined" || !navigator.geolocation) return;
+
+    // Kiểm tra cache trước
+    try {
+      const cached = sessionStorage.getItem("ai_user_gps");
+      if (cached) {
+        const parsed = JSON.parse(cached) as { lat: number; lng: number; cachedAt: number };
+        if (Date.now() - parsed.cachedAt < 5 * 60 * 1000) {
+          gpsRef.current = { lat: parsed.lat, lng: parsed.lng };
+          return;
+        }
+      }
+    } catch { /* ignore */ }
+
+    // Gọi Geolocation API sớm — khi user bấm Allow, kết quả sẽ có ngay trong gpsRef
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        gpsRef.current = coords;
+        // Đồng bộ vào cache để ai-chat-api.ts cũng thấy
+        sessionStorage.setItem(
+          "ai_user_gps",
+          JSON.stringify({ ...coords, cachedAt: Date.now() })
+        );
+      },
+      () => { /* user từ chối hoặc không hỗ trợ — giữ null */ },
+      { timeout: 10000, maximumAge: 0 }
+    );
+  }, []);
 
   // Đọc lịch sử trò chuyện từ sessionStorage khi mount
   useEffect(() => {
@@ -91,7 +126,7 @@ export function useAiChat() {
         content: m.content,
       }));
 
-      const result = await sendChatMessage(q, historyPayload);
+      const result = await sendChatMessage(q, historyPayload, gpsRef.current);
 
       const aiResponse: MessageItem = {
         id: "ai-" + Date.now(),

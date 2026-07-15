@@ -64,19 +64,21 @@ async function getUserGps(): Promise<{ lat: number; lng: number } | null> {
         resolve(coords);
       },
       () => resolve(null), // Từ chối quyền hoặc timeout → resolve null, không reject
-      { timeout: 4000, maximumAge: GPS_CACHE_TTL_MS }
+      { timeout: 10000, maximumAge: GPS_CACHE_TTL_MS }
     );
   });
 }
 
 export async function sendChatMessage(
   message: string,
-  history: ChatMessage[]
+  history: ChatMessage[],
+  /** Tọa độ GPS do hook truyền vào — ưu tiên hơn cache nội bộ */
+  gpsOverride?: { lat: number; lng: number } | null
 ): Promise<AiChatTurnResponse> {
   const sessionId = getOrCreateSessionId();
 
-  // Lấy GPS song song — không block nếu user chưa cấp quyền
-  const gps = await getUserGps();
+  // Ưu tiên gpsOverride từ hook (đã prefetch), fallback về cache/Geolocation API
+  const gps = gpsOverride ?? (await getUserGps());
 
   const payload: AiChatTurnRequest = {
     message,
