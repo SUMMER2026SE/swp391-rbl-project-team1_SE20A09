@@ -148,12 +148,16 @@ public class GetPriceHandler {
      * Normalize và khớp tên môn thể thao — dùng fuzzy match giống StadiumSearchHandler.
      */
     private Integer resolveSportTypeId(String sportName) {
-        if (sportName == null || sportName.isBlank()) return null;
+        if (sportName == null || sportName.isBlank()) {
+            return null;
+        }
         List<SportType> all = sportTypeRepository.findAll();
         String normalized = normalize(sportName);
         // Exact match trước
         for (SportType st : all) {
-            if (normalize(st.getSportName()).equals(normalized)) return st.getSportTypeId();
+            if (normalize(st.getSportName()).equals(normalized)) {
+                return st.getSportTypeId();
+            }
         }
         // Alias match (đá banh → bóng đá, cầu lông → cầu lông...)
         for (SportType st : all) {

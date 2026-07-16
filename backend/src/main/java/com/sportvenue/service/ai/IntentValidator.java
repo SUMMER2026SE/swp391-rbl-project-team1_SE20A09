@@ -28,7 +28,7 @@ public class IntentValidator {
             "my_bookings", "booking_status", "cancel_booking", "get_price", "recommend_time"
     );
 
-    public record ValidationResult(boolean valid, ExtractedIntentResult overriddenResult, String validationStatus, String errorReason) {}
+    public record ValidationResult(boolean valid, ExtractedIntentResult overriddenResult, String validationStatus, String errorReason) { }
 
     public ValidationResult validate(ExtractedIntentResult intentResult) {
         String intent = intentResult.getIntent();
@@ -46,6 +46,27 @@ public class IntentValidator {
         JsonNode params = intentResult.getParams();
 
         // Validate Date
+        ValidationResult dateValidation = validateDate(params, intentResult);
+        if (dateValidation != null) {
+            return dateValidation;
+        }
+        
+        // Validate targetDate (for search)
+        ValidationResult targetDateValidation = validateTargetDate(params, intentResult);
+        if (targetDateValidation != null) {
+            return targetDateValidation;
+        }
+
+        // Validate Time
+        ValidationResult timeValidation = validateTime(params, intentResult);
+        if (timeValidation != null) {
+            return timeValidation;
+        }
+        
+        return new ValidationResult(true, intentResult, "PASS", null);
+    }
+
+    private ValidationResult validateDate(JsonNode params, ExtractedIntentResult intentResult) {
         if (params != null && params.hasNonNull("date")) {
             String dateStr = params.get("date").asText();
             try {
@@ -70,8 +91,10 @@ public class IntentValidator {
                 return new ValidationResult(false, fallback, "FAIL_INVALID_FORMAT", "Định dạng ngày không hợp lệ");
             }
         }
-        
-        // Validate targetDate (for search)
+        return null;
+    }
+
+    private ValidationResult validateTargetDate(JsonNode params, ExtractedIntentResult intentResult) {
         if (params != null && params.hasNonNull("targetDate")) {
             String dateStr = params.get("targetDate").asText();
             try {
@@ -96,8 +119,10 @@ public class IntentValidator {
                 return new ValidationResult(false, fallback, "FAIL_INVALID_FORMAT", "Định dạng ngày không hợp lệ");
             }
         }
+        return null;
+    }
 
-        // Validate Time
+    private ValidationResult validateTime(JsonNode params, ExtractedIntentResult intentResult) {
         if (params != null && params.hasNonNull("startTime")) {
             String timeStr = params.get("startTime").asText();
             try {
@@ -112,7 +137,6 @@ public class IntentValidator {
                 return new ValidationResult(false, fallback, "FAIL_INVALID_FORMAT", "Định dạng giờ không hợp lệ");
             }
         }
-        
-        return new ValidationResult(true, intentResult, "PASS", null);
+        return null;
     }
 }
