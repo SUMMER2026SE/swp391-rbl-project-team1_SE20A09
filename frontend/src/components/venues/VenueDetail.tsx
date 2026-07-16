@@ -389,7 +389,9 @@ export default function VenueDetail({ venue }: VenueDetailProps) {
           <div className="flex items-center gap-2 text-[12px] font-normal text-white/90">
             <div className="flex items-center gap-0.5 text-[#f0a500]">
               <IconStar className="w-3.5 h-3.5 fill-[#f0a500] text-[#f0a500]" />
-              <span className="font-medium">{venue.rating.toFixed(1)}</span>
+              <span className="font-medium">
+                {venue.reviewCount && venue.reviewCount > 0 ? venue.rating.toFixed(1) : '—'}
+              </span>
             </div>
             <span className="text-white/40">|</span>
             <div className="flex items-center gap-1 truncate max-w-xs md:max-w-md">

@@ -59,7 +59,7 @@ export function FavoriteVenuesSection({ venues }: FavoriteVenuesSectionProps) {
                 <VenueCard
                   {...venue}
                   actionLabel="Đặt lại"
-                  actionHref={`/booking/new?venue=${venue.id}`}
+                  actionHref={`/venues/${venue.id}`}
                 />
               </div>
             ))}

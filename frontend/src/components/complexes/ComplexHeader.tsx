@@ -163,13 +163,13 @@ export default function ComplexHeader({ complex }: ComplexHeaderProps) {
           <div className="flex-shrink-0">
             <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5 min-w-[180px] text-center">
               <div className="text-4xl font-extrabold text-gray-900 leading-none">
-                {rating.toFixed(1)}
+                {complex.reviewCount && complex.reviewCount > 0 ? rating.toFixed(1) : '—'}
               </div>
               <div className="flex items-center justify-center gap-0.5 mt-2">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <IconStar
                     key={star}
-                    className={`w-4 h-4 ${star <= Math.round(rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'}`}
+                    className={`w-4 h-4 ${complex.reviewCount && complex.reviewCount > 0 && star <= Math.round(rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200'}`}
                   />
                 ))}
               </div>

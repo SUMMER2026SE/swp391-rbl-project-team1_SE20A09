@@ -1,9 +1,14 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { searchComplexes } from "@/lib/api/complex";
+import type { StadiumComplexDto } from "@/types/complex";
 
 type WelcomeBarProps = {
   displayName: string;
@@ -12,42 +17,77 @@ type WelcomeBarProps = {
   rewardPoints: number;
 };
 
-const ADS = [
+type HeroSlide = {
+  id: number;
+  image: string;
+  tag: string;
+  title: string;
+  desc: string;
+  href: string;
+};
+
+const FALLBACK_SLIDES: HeroSlide[] = [
   {
-    id: 1,
+    id: -1,
     image: "https://images.unsplash.com/photo-1575361204480-aadea25e6e68?q=80&w=2000&auto=format&fit=crop",
-    tag: "Khuyến mãi",
-    title: "Siêu ưu đãi cuối tuần",
-    desc: "Giảm 20% khi đặt sân bóng đá nhân tạo từ 18:00 - 22:00. Khám phá ngay để không bỏ lỡ trận đấu đỉnh cao!"
+    tag: "Khám phá",
+    title: "Đặt sân thể thao dễ dàng",
+    desc: "Tìm và đặt sân bóng đá, cầu lông, tennis... nhanh chóng chỉ với vài bước.",
+    href: "/search",
   },
-  {
-    id: 2,
-    image: "https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=2000&auto=format&fit=crop",
-    tag: "Sự kiện",
-    title: "Giải đấu bóng rổ mùa hè",
-    desc: "Đăng ký tham gia ngay để nhận phần quà hấp dẫn và giao lưu cùng các đội bóng xuất sắc nhất."
-  },
-  {
-    id: 3,
-    image: "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=2000&auto=format&fit=crop",
-    tag: "Sân mới",
-    title: "Sân cầu lông đạt chuẩn quốc tế",
-    desc: "Trải nghiệm mặt sân thảm cao cấp với hệ thống ánh sáng chống lóa hoàn hảo cho từng pha đập cầu."
-  }
 ];
+
+function toHeroSlide(complex: StadiumComplexDto): HeroSlide {
+  const sportLabel = complex.sportTypes?.[0]?.sportName;
+  return {
+    id: complex.complexId,
+    image: complex.coverImageUrl || FALLBACK_SLIDES[0].image,
+    tag:
+      complex.reviewCount && complex.reviewCount > 0
+        ? `⭐ ${complex.averageRating.toFixed(1)} (${complex.reviewCount} đánh giá)`
+        : "Nổi bật",
+    title: complex.name,
+    desc: [sportLabel, complex.address].filter(Boolean).join(" • "),
+    href: `/complexes/${complex.complexId}?tab=courts`,
+  };
+}
 
 export function WelcomeBar({
   displayName = "bạn",
 }: WelcomeBarProps) {
+  const router = useRouter();
+  const [slides, setSlides] = useState<HeroSlide[]>(FALLBACK_SLIDES);
   const [currentSlide, setCurrentSlide] = useState(0);
   const sliderRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    searchComplexes({ size: 30, page: 0 })
+      .then((res) => {
+        if (cancelled) return;
+        const topRated = [...res.content]
+          .filter((c) => (c.reviewCount ?? 0) > 0)
+          .sort((a, b) => b.averageRating - a.averageRating)
+          .slice(0, 3);
+        if (topRated.length > 0) {
+          setSlides(topRated.map(toHeroSlide));
+          setCurrentSlide(0);
+        }
+      })
+      .catch(() => {
+        // Giữ nguyên FALLBACK_SLIDES nếu API lỗi
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev === ADS.length - 1 ? 0 : prev + 1));
+      setCurrentSlide((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
     }, 6000);
     return () => clearInterval(timer);
-  }, []);
+  }, [slides.length]);
 
   useEffect(() => {
     if (sliderRef.current) {
@@ -59,8 +99,8 @@ export function WelcomeBar({
   }, [currentSlide]);
 
   const goToSlide = (index: number) => setCurrentSlide(index);
-  const nextSlide = () => setCurrentSlide((prev) => (prev === ADS.length - 1 ? 0 : prev + 1));
-  const prevSlide = () => setCurrentSlide((prev) => (prev === 0 ? ADS.length - 1 : prev - 1));
+  const nextSlide = () => setCurrentSlide((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
+  const prevSlide = () => setCurrentSlide((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
 
   return (
     <section className="w-full">
@@ -69,14 +109,19 @@ export function WelcomeBar({
         
         {/* SLIDER TRACK */}
         <div ref={sliderRef} className="flex h-full w-full overflow-x-hidden snap-x snap-mandatory scroll-smooth">
-          {ADS.map((ad, i) => (
-            <div key={ad.id} className="relative w-full h-full flex-shrink-0 snap-center">
+          {slides.map((slide, i) => (
+            <div
+              key={slide.id}
+              className="relative w-full h-full flex-shrink-0 snap-center cursor-pointer"
+              onClick={() => router.push(slide.href)}
+            >
               <Image 
-                src={ad.image} 
-                alt={ad.title} 
+                src={slide.image} 
+                alt={slide.title} 
                 fill
                 priority={i === 0}
                 className="absolute inset-0 object-cover transition-transform duration-[15000ms] ease-linear hover:scale-105" 
+                unoptimized
               />
               
               {/* Dark Gradient Overlay for text readability */}
@@ -88,14 +133,31 @@ export function WelcomeBar({
                 <div className="container mx-auto px-6 sm:px-12 md:px-16 lg:px-20 max-w-7xl">
                   <div className="max-w-3xl">
                     <span className="inline-block px-4 py-1.5 bg-emerald-500 text-white text-xs font-bold uppercase tracking-widest rounded-full mb-6 shadow-lg">
-                      {ad.tag}
+                      {slide.tag}
                     </span>
                     <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-white mb-6 leading-[1.1] drop-shadow-2xl">
-                      {ad.title}
+                      {slide.title}
                     </h2>
                     <p className="text-lg sm:text-xl md:text-2xl text-slate-200 mb-10 max-w-2xl drop-shadow-xl leading-relaxed font-medium">
-                      {ad.desc}
+                      {slide.desc}
                     </p>
+
+                    {/* CTA Button — chặn bubble để không double-navigate với onClick của slide cha */}
+                    <div
+                      className="flex flex-wrap items-center gap-4"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Button
+                        size="lg"
+                        className="h-13 rounded-full bg-white px-8 text-emerald-900 shadow-xl hover:bg-emerald-50 font-bold text-base"
+                        asChild
+                      >
+                        <Link href={slide.href}>
+                          Khám phá sân ngay
+                          <ArrowRight className="ml-2 h-5 w-5" />
+                        </Link>
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -126,7 +188,7 @@ export function WelcomeBar({
 
         {/* Dots Indicator */}
         <div className="absolute bottom-8 left-0 right-0 flex justify-center gap-3 z-10">
-          {ADS.map((_, i) => (
+          {slides.map((_, i) => (
             <button 
               key={i} 
               onClick={() => goToSlide(i)}

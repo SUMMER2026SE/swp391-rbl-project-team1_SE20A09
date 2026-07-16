@@ -542,6 +542,14 @@ function MatchRequestFeedPage() {
     }
   };
 
+  // Chỉ hiển thị sân đúng môn thể thao đã chọn trong form tạo kèo
+  const selectedSportName = sportTypes.find(
+    (st) => st.sportTypeId.toString() === sportTypeId,
+  )?.sportName;
+  const filteredStadiumsForCreate = selectedSportName
+    ? stadiums.filter((st) => st.sportName === selectedSportName)
+    : stadiums;
+
   // Filter local list based on user search
   const filteredRequests = matchRequests.filter((req) => {
     const matchesKeyword =
@@ -1067,7 +1075,13 @@ function MatchRequestFeedPage() {
                 <Label htmlFor="sport" className="font-bold text-slate-700">
                   Môn thể thao *
                 </Label>
-                <Select value={sportTypeId} onValueChange={setSportTypeId}>
+                <Select
+                  value={sportTypeId}
+                  onValueChange={(val) => {
+                    setSportTypeId(val);
+                    setStadiumId(""); // Reset sân đã chọn vì có thể không còn đúng môn
+                  }}
+                >
                   <SelectTrigger id="sport" className="border-slate-200">
                     <SelectValue placeholder="Chọn môn thể thao" />
                   </SelectTrigger>
@@ -1159,17 +1173,31 @@ function MatchRequestFeedPage() {
                     id="venue-select"
                     className="border-slate-200 w-full overflow-hidden [&>span]:truncate"
                   >
-                    <SelectValue placeholder="Chọn sân bóng" />
+                    <SelectValue
+                      placeholder={
+                        selectedSportName
+                          ? "Chọn sân bóng"
+                          : "Chọn môn thể thao trước"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {stadiums.map((st) => (
-                      <SelectItem
-                        key={st.stadiumId}
-                        value={st.stadiumId.toString()}
-                      >
-                        {st.stadiumName} ({st.address})
-                      </SelectItem>
-                    ))}
+                    {filteredStadiumsForCreate.length === 0 ? (
+                      <div className="px-2 py-1.5 text-xs text-slate-400">
+                        {selectedSportName
+                          ? "Không có sân nào cho môn này"
+                          : "Vui lòng chọn môn thể thao trước"}
+                      </div>
+                    ) : (
+                      filteredStadiumsForCreate.map((st) => (
+                        <SelectItem
+                          key={st.stadiumId}
+                          value={st.stadiumId.toString()}
+                        >
+                          {st.stadiumName} ({st.address})
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>

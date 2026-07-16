@@ -49,7 +49,7 @@ export function UpcomingBookingsSection({ bookings }: UpcomingBookingsSectionPro
                 className="home-cta-shine mt-5 rounded-xl bg-green-800 hover:bg-green-900"
                 asChild
               >
-                <Link href="/booking/new">Đặt sân ngay</Link>
+                <Link href="/search">Đặt sân ngay</Link>
               </Button>
             </CardContent>
           </GlowCard>

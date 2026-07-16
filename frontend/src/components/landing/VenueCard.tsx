@@ -42,6 +42,7 @@ export function VenueCard({
   actionHref,
 }: VenueCardProps) {
   const href = actionHref ?? (id ? `/venues/${id}` : "/search");
+  const hasReviews = reviewCount !== undefined ? reviewCount > 0 : rating > 0;
 
   return (
     <Link href={href} className="block group h-full">
@@ -105,8 +106,8 @@ export function VenueCard({
 
             <div className="mt-4 flex items-end justify-between gap-2">
               <div className="flex items-center gap-1.5">
-                <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                <span className="font-semibold">{rating.toFixed(1)}</span>
+                <Star className={`h-4 w-4 ${hasReviews ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`} />
+                <span className="font-semibold">{hasReviews ? rating.toFixed(1) : '—'}</span>
                 {reviewCount != null && (
                   <span className="text-xs text-muted-foreground">({reviewCount})</span>
                 )}

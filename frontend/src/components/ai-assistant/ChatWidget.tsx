@@ -61,7 +61,7 @@ export function ChatWidget() {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end pointer-events-none">
       {/* Panel Chat Widget (GPU-safe animation using transform & opacity) */}
       <Card
         className={`w-[360px] xs:w-[380px] max-w-[calc(100vw-32px)] h-[520px] max-h-[calc(100vh-120px)] flex flex-col overflow-hidden border-border/80 shadow-2xl rounded-2xl bg-background transition-all duration-300 ease-out origin-bottom-right mb-4 ${
@@ -163,7 +163,7 @@ export function ChatWidget() {
       {/* Nút bong bóng nổi để bật/tắt widget */}
       <Button
         onClick={() => setIsOpen(!isOpen)}
-        className={`h-14 w-14 rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border-0 flex items-center justify-center text-white ${
+        className={`h-14 w-14 rounded-full shadow-2xl hover:scale-105 active:scale-95 transition-all duration-200 border-0 flex items-center justify-center text-white pointer-events-auto ${
           isOpen ? "bg-slate-700 hover:bg-slate-800" : "bg-primary hover:bg-primary/95"
         }`}
       >

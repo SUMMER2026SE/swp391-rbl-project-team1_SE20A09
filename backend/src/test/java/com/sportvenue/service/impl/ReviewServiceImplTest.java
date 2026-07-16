@@ -14,6 +14,7 @@ import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.ReviewRepository;
+import com.sportvenue.repository.StadiumComplexRepository;
 import com.sportvenue.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +38,7 @@ class ReviewServiceImplTest {
     @Mock private ReviewRepository reviewRepository;
     @Mock private BookingRepository bookingRepository;
     @Mock private UserRepository userRepository;
+    @Mock private StadiumComplexRepository stadiumComplexRepository;
 
     @InjectMocks private ReviewServiceImpl reviewService;
 
