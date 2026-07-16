@@ -38,7 +38,7 @@ public class SlotAvailabilityHandler {
 
     private Clock clock = Clock.system(ZoneId.of("Asia/Ho_Chi_Minh"));
 
-    void setClock(Clock clock) {
+    public void setClock(Clock clock) {
         this.clock = clock;
     }
 

@@ -55,7 +55,7 @@ public class StadiumSearchHandler {
     /** Giờ Việt Nam — server Docker thường chạy UTC (lệch 7 tiếng). Không final để test override. */
     private Clock clock = Clock.system(ZoneId.of("Asia/Ho_Chi_Minh"));
 
-    void setClock(Clock clock) {
+    public void setClock(Clock clock) {
         this.clock = clock;
     }
 
