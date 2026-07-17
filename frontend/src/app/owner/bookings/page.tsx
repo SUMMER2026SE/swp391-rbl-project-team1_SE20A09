@@ -63,6 +63,8 @@ interface BookingItem {
   amount: number;
   refundAmount: number;
   serviceFee?: number;
+  /** Số tiền thực tế đã thu qua cổng tính đến hiện tại — full nếu PAID, một phần nếu DEPOSITED. */
+  paidAmount?: number;
   paymentStatus: string;
   status: string;
   notes: string;
@@ -102,6 +104,10 @@ function BookingManagementPage() {
   const [isConfirmCashSubmitting, setIsConfirmCashSubmitting] = useState(false);
   const [receiptBooking, setReceiptBooking] = useState<BookingItem | null>(null);
 
+  // Xác nhận đã thu nốt phần còn lại của đơn đặt cọc (DEPOSITED → PAID).
+  const [confirmRemainingBooking, setConfirmRemainingBooking] = useState<BookingItem | null>(null);
+  const [isConfirmRemainingSubmitting, setIsConfirmRemainingSubmitting] = useState(false);
+
   // Báo cáo hành vi khách hàng (Owner → Customer).
   const [reportBooking, setReportBooking] = useState<BookingItem | null>(null);
 
@@ -109,6 +115,37 @@ function BookingManagementPage() {
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+
+  // Tổng Gross/Refund/Fee/Net trên TOÀN BỘ booking (không phụ thuộc phân trang) — lấy từ backend
+  // thay vì tự cộng dồn bookingList (chỉ có 1 trang), tránh bug tổng bị lệch khi tạo đơn mới.
+  const [summary, setSummary] = useState<{
+    grossAmount: number;
+    refundedAmount: number;
+    serviceFee: number;
+    netAmount: number;
+  } | null>(null);
+
+  const fetchSummary = useCallback(async () => {
+    try {
+      const query = new URLSearchParams();
+      if (activeTab !== "all") {
+        query.set("status", activeTab.toUpperCase());
+      }
+      const data = await get<any>(`/owner/bookings/summary?${query.toString()}`);
+      setSummary({
+        grossAmount: Number(data?.grossAmount) || 0,
+        refundedAmount: Number(data?.refundedAmount) || 0,
+        serviceFee: Number(data?.serviceFee) || 0,
+        netAmount: Number(data?.netAmount) || 0,
+      });
+    } catch (error: any) {
+      console.error("Error fetching bookings summary:", error);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    fetchSummary();
+  }, [fetchSummary]);
 
   // Fetch danh sách đặt sân thực tế từ Backend
   const fetchBookings = useCallback(async () => {
@@ -205,6 +242,7 @@ function BookingManagementPage() {
       paid: { label: "Đã thanh toán", className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" },
       refunded: { label: "Đã hoàn tiền", className: "bg-purple-100 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400" },
       awaiting_cash_payment: { label: "Chờ thu tiền mặt", className: "bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400" },
+      deposited: { label: "Đã đặt cọc", className: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400" },
     };
     const item = config[status.toLowerCase() as keyof typeof config] || { label: status, className: "bg-gray-100 text-gray-700" };
     return <Badge className={`${item.className} border-none shadow-none font-medium px-2.5 py-0.5`}>{item.label}</Badge>;
@@ -291,6 +329,7 @@ function BookingManagementPage() {
       setIsCancelModalOpen(false);
       setIsSuccessModalOpen(true);
       toast.success("Đã hoàn tiền và giải phóng sân thành công!", { id: "refund-process" });
+      fetchSummary();
     } catch (error: any) {
       console.error(error);
       toast.error(error.message || "Không thể thực hiện hoàn tiền. Vui lòng kiểm tra lại quyền sở hữu hoặc trạng thái đơn hàng!", { id: "refund-process" });
@@ -308,6 +347,7 @@ function BookingManagementPage() {
         b.id === cancelOnlyBooking.id ? { ...b, status: "cancelled" } : b
       ));
       toast.success("Đã hủy đơn thành công");
+      fetchSummary();
       setCancelOnlyBooking(null);
       setCancelOnlyReason("");
     } catch (error: any) {
@@ -326,6 +366,7 @@ function BookingManagementPage() {
         b.id === confirmCashBooking.id ? { ...b, paymentStatus: "paid" } : b
       ));
       toast.success("Đã xác nhận thu tiền mặt thành công");
+      fetchSummary();
       setReceiptBooking({ ...confirmCashBooking, paymentStatus: "paid" });
       setConfirmCashBooking(null);
     } catch (error: any) {
@@ -335,14 +376,41 @@ function BookingManagementPage() {
     }
   };
 
+  const handleConfirmRemainingReceived = async () => {
+    if (!confirmRemainingBooking) return;
+    try {
+      setIsConfirmRemainingSubmitting(true);
+      await put(`/owner/bookings/${confirmRemainingBooking.id}/confirm-remaining-payment`, {});
+      setBookingList(prev => prev.map(b =>
+        b.id === confirmRemainingBooking.id ? { ...b, paymentStatus: "paid" } : b
+      ));
+      toast.success("Đã xác nhận thu nốt phần còn lại thành công");
+      fetchSummary();
+      const remaining = confirmRemainingBooking.amount - (confirmRemainingBooking.paidAmount || 0);
+      setReceiptBooking({ ...confirmRemainingBooking, paymentStatus: "paid", amount: remaining });
+      setConfirmRemainingBooking(null);
+    } catch (error: any) {
+      toast.error(error.message || "Không thể xác nhận thu tiền, vui lòng thử lại");
+    } finally {
+      setIsConfirmRemainingSubmitting(false);
+    }
+  };
+
   const BookingRow = ({ booking }: { booking: BookingItem }) => {
     const isExpanded = expandedRow === booking.id;
-    const canRefund = booking.status.toLowerCase() === "confirmed" && booking.paymentStatus.toLowerCase() === "paid";
+    // Backend (RefundServiceImpl.validateOwnershipAndStatus) đã cho phép hoàn tiền cho cả PAID
+    // lẫn DEPOSITED từ trước — mở thêm điều kiện ở đây để Owner có nút hủy/hoàn tiền cho đơn cọc
+    // (vd lỗi do sân → hoàn 100% gồm phí dịch vụ).
+    const canRefund = booking.status.toLowerCase() === "confirmed"
+      && (booking.paymentStatus.toLowerCase() === "paid" || booking.paymentStatus.toLowerCase() === "deposited");
     // KHÔNG gate theo status CONFIRMED/COMPLETED cụ thể — BookingCompletionScheduler có thể chuyển
     // CONFIRMED→COMPLETED chỉ dựa vào giờ chơi, không xét paymentStatus, nên 1 đơn cash có thể đã
     // COMPLETED mà vẫn chưa thu tiền. Nhưng PHẢI loại trừ CANCELLED — đơn hủy không còn gì để thu,
     // backend cũng chặn (BadRequestException) nên nút hiện ra chỉ để báo lỗi vô nghĩa.
     const canConfirmCash = booking.paymentStatus.toLowerCase() === "awaiting_cash_payment"
+      && booking.status.toLowerCase() !== "cancelled";
+    // Đơn đặt cọc — khách trả nốt phần còn lại tại sân, tương tự canConfirmCash.
+    const canConfirmRemaining = booking.paymentStatus.toLowerCase() === "deposited"
       && booking.status.toLowerCase() !== "cancelled";
     const canCancelUnpaid = booking.status.toLowerCase() === "confirmed"
       && booking.paymentStatus.toLowerCase() === "awaiting_cash_payment";
@@ -371,8 +439,13 @@ function BookingManagementPage() {
           </td>
           <td className="p-4 align-middle text-right text-emerald-600 dark:text-emerald-400 font-bold">
             {(() => {
-              const isPaidType = booking.paymentStatus.toLowerCase() === "paid" || booking.paymentStatus.toLowerCase() === "refunded";
-              const netVal = isPaidType ? (booking.amount - (booking.serviceFee || 0) - booking.refundAmount) : 0;
+              const status = booking.paymentStatus.toLowerCase();
+              const isPaidType = status === "paid" || status === "refunded";
+              // Đơn cọc: phí dịch vụ đã bị trừ ngay lúc đặt cọc (không đợi tới lúc thu nốt) —
+              // hiện paidAmount - serviceFee để khớp với Ví, tránh hiện "0đ" gây hiểu lầm.
+              const netVal = isPaidType
+                ? (booking.amount - (booking.serviceFee || 0) - booking.refundAmount)
+                : (status === "deposited" ? ((booking.paidAmount || 0) - (booking.serviceFee || 0)) : 0);
               return `${netVal.toLocaleString('vi-VN')}đ`;
             })()}
           </td>
@@ -403,6 +476,16 @@ function BookingManagementPage() {
                 >
                   <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
                   Xác nhận đã thu tiền
+                </Button>
+              )}
+              {canConfirmRemaining && (
+                <Button
+                  size="sm"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-sm transition-all duration-200"
+                  onClick={() => setConfirmRemainingBooking(booking)}
+                >
+                  <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+                  Xác nhận thu nốt
                 </Button>
               )}
               {canCancelUnpaid && (
@@ -544,32 +627,12 @@ function BookingManagementPage() {
     );
   };
 
-  const getActiveBookings = () => {
-    switch (activeTab) {
-      case "pending":
-        return filterBookings("pending");
-      case "confirmed":
-        return filterBookings("confirmed");
-      case "completed":
-        return filterBookings("completed");
-      case "cancelled":
-        return filterBookings("cancelled");
-      default:
-        return bookingList;
-    }
-  };
-
-  const activeBookings = getActiveBookings();
-  const totalGrossAmount = activeBookings.reduce((sum, b) => {
-    const isPaidType = b.paymentStatus.toLowerCase() === "paid" || b.paymentStatus.toLowerCase() === "refunded";
-    return sum + (isPaidType ? b.amount : 0);
-  }, 0);
-  const totalRefundedAmount = activeBookings.reduce((sum, b) => sum + (b.refundAmount || 0), 0);
-  const totalServiceFee = activeBookings.reduce((sum, b) => {
-    const isPaidType = b.paymentStatus.toLowerCase() === "paid" || b.paymentStatus.toLowerCase() === "refunded";
-    return sum + (isPaidType ? (b.serviceFee || 0) : 0);
-  }, 0);
-  const totalNetAmount = totalGrossAmount - totalRefundedAmount - totalServiceFee;
+  // Tổng lấy từ backend (/owner/bookings/summary) — SUM trên toàn bộ booking của Owner, không
+  // phụ thuộc bookingList (chỉ đang giữ 1 trang) để tránh bug tổng giảm dần khi tạo đơn mới.
+  const totalGrossAmount = summary?.grossAmount ?? 0;
+  const totalRefundedAmount = summary?.refundedAmount ?? 0;
+  const totalServiceFee = summary?.serviceFee ?? 0;
+  const totalNetAmount = summary?.netAmount ?? 0;
 
   return (
     <>
@@ -1193,6 +1256,69 @@ function BookingManagementPage() {
               disabled={isConfirmCashSubmitting}
             >
               {isConfirmCashSubmitting ? "Đang xử lý..." : "Xác nhận đã thu tiền"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmRemainingBooking !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRemainingBooking(null);
+        }}
+      >
+        <DialogContent className="max-w-md border dark:border-slate-800 shadow-2xl rounded-xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-indigo-600">
+              <CheckCircle className="h-5 w-5" /> Xác nhận thu nốt phần còn lại
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs">
+              Khách đã đặt cọc trước — vui lòng kiểm tra lại thông tin trước khi xác nhận đã thu đủ phần còn lại tại sân. Hành động này sẽ đánh dấu đơn đã thanh toán đủ và không thể hoàn tác qua nút này.
+            </DialogDescription>
+          </DialogHeader>
+
+          {confirmRemainingBooking && (
+            <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Mã đơn:</span>
+                <span className="font-mono font-bold text-primary">{confirmRemainingBooking.displayId}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Khách hàng:</span>
+                <span className="font-medium text-slate-800 dark:text-slate-200">{confirmRemainingBooking.customer.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Đã đặt cọc:</span>
+                <span className="font-medium text-slate-800 dark:text-slate-200">
+                  {(confirmRemainingBooking.paidAmount || 0).toLocaleString('vi-VN')}đ
+                </span>
+              </div>
+              <div className="flex justify-between border-t pt-2 mt-2">
+                <span className="text-muted-foreground font-semibold">Số tiền thu nốt tại sân:</span>
+                <span className="font-bold text-indigo-600">
+                  {(confirmRemainingBooking.amount - (confirmRemainingBooking.paidAmount || 0)).toLocaleString('vi-VN')}đ
+                </span>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setConfirmRemainingBooking(null)}
+              disabled={isConfirmRemainingSubmitting}
+            >
+              Quay lại
+            </Button>
+            <Button
+              type="button"
+              className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white"
+              onClick={handleConfirmRemainingReceived}
+              disabled={isConfirmRemainingSubmitting}
+            >
+              {isConfirmRemainingSubmitting ? "Đang xử lý..." : "Xác nhận đã thu đủ"}
             </Button>
           </DialogFooter>
         </DialogContent>

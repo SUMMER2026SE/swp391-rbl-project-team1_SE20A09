@@ -331,13 +331,25 @@ public class PaymentServiceImpl implements PaymentService {
                         );
                     }
                 } else if (booking.getPaymentStatus() == PaymentStatus.DEPOSITED) {
+                    // Trừ phí dịch vụ ngay lúc cọc (không đợi tới lúc thu nốt) — tiền cọc đã là
+                    // giao dịch thật qua VNPay, nên Platform cần được ghi nhận doanh thu ngay,
+                    // tránh trường hợp khách hủy trước khi thu nốt khiến Platform mất trắng phí.
+                    BigDecimal ownerShare = totalAmount.subtract(serviceFee);
                     walletService.recordOwnerTransaction(
                             resolvedOwner.getOwnerId(),
-                            totalAmount,
+                            ownerShare,
                             booking.getBookingId(),
                             WalletTransactionType.BOOKING_CREDIT,
-                            "Tiền đặt cọc đặt sân #" + booking.getBookingId()
+                            "Tiền đặt cọc đặt sân #" + booking.getBookingId() + " (đã trừ phí dịch vụ)"
                     );
+                    if (serviceFee.compareTo(BigDecimal.ZERO) > 0) {
+                        walletService.recordPlatformTransaction(
+                                serviceFee,
+                                booking.getBookingId(),
+                                WalletTransactionType.SERVICE_FEE_CREDIT,
+                                "Phí dịch vụ từ đơn đặt cọc #" + booking.getBookingId()
+                        );
+                    }
                 }
             }
 

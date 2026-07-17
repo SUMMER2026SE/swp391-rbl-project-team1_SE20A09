@@ -13,6 +13,8 @@ import {
   BarChart3,
   Calendar,
   Wallet,
+  WalletCards,
+  Landmark,
   Bell,
   AlertTriangle,
   ChevronRight,
@@ -103,20 +105,36 @@ export function UserAccountMenu({ user }: { user: NonNullable<Session["user"]> }
         <DropdownMenuSeparator />
 
         {user.roleName === "Admin" && (
-          <DropdownMenuItem asChild>
-            <Link href="/admin/dashboard" className="cursor-pointer">
-              <Settings className="mr-2 h-4 w-4" />
-              <span>Trang Admin</span>
-            </Link>
-          </DropdownMenuItem>
+          <>
+            <DropdownMenuItem asChild>
+              <Link href="/admin/dashboard" className="cursor-pointer">
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Trang Admin</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/admin/wallet" className="cursor-pointer">
+                <Landmark className="mr-2 h-4 w-4" />
+                <span>Ví hệ thống</span>
+              </Link>
+            </DropdownMenuItem>
+          </>
         )}
         {user.roleName === "Owner" && user.ownerApprovedStatus === "APPROVED" && (
-          <DropdownMenuItem asChild>
-            <Link href="/owner/dashboard" className="cursor-pointer">
-              <BarChart2 className="mr-2 h-4 w-4" />
-              <span>Quản lý sân của tôi</span>
-            </Link>
-          </DropdownMenuItem>
+          <>
+            <DropdownMenuItem asChild>
+              <Link href="/owner/dashboard" className="cursor-pointer">
+                <BarChart2 className="mr-2 h-4 w-4" />
+                <span>Quản lý sân của tôi</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/owner/wallet" className="cursor-pointer">
+                <WalletCards className="mr-2 h-4 w-4" />
+                <span>Ví của tôi</span>
+              </Link>
+            </DropdownMenuItem>
+          </>
         )}
 
         <DropdownMenuItem asChild>

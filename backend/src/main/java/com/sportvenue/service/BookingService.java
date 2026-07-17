@@ -121,6 +121,20 @@ public interface BookingService {
     BookingDetailResponse confirmCashPaymentReceived(UserPrincipal principal, Integer bookingId);
 
     /**
+     * UC-OWN: Owner xác nhận ĐÃ THU phần còn lại của đơn đặt cọc (30%) khi khách tới sân —
+     * chuyển {@code paymentStatus} {@code DEPOSITED} → {@code PAID}, tạo thêm 1 {@code Payment}
+     * (CASH, SUCCESS) cho phần chênh lệch còn lại.
+     *
+     * <p>Idempotent: nếu đã {@code PAID} thì trả về trạng thái hiện tại thay vì lỗi.</p>
+     *
+     * @throws com.sportvenue.exception.ResourceNotFoundException nếu booking không tồn tại.
+     * @throws com.sportvenue.exception.ForbiddenException nếu principal không phải Owner của sân này.
+     * @throws com.sportvenue.exception.BadRequestException nếu booking đã hủy hoặc paymentStatus
+     *         không phải {@code DEPOSITED}/{@code PAID}.
+     */
+    BookingDetailResponse confirmRemainingPaymentReceived(UserPrincipal principal, Integer bookingId);
+
+    /**
     /**
      * UC-CUS-04: Xem chi tiết một đơn đặt sân theo ID.
      * Chỉ chủ booking mới được xem — trả 403 nếu userId không khớp.

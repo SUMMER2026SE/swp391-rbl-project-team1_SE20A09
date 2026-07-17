@@ -114,4 +114,20 @@ public class OwnerBookingController {
 
         return ResponseEntity.ok(bookingService.confirmCashPaymentReceived(userPrincipal, bookingId));
     }
+
+    /**
+     * Owner xác nhận ĐÃ THU phần còn lại của đơn đặt cọc khi khách tới sân.
+     * Idempotent — gọi lại trên đơn đã {@code PAID} trả về trạng thái hiện tại, không lỗi.
+     */
+    @PutMapping("/{bookingId}/confirm-remaining-payment")
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(summary = "Xác nhận đã thu nốt phần còn lại đơn đặt cọc",
+               description = "Owner xác nhận đã thu đủ phần còn lại tại sân cho đơn đang đặt cọc — "
+                       + "chuyển paymentStatus DEPOSITED sang PAID.")
+    public ResponseEntity<BookingDetailResponse> confirmRemainingPayment(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable Integer bookingId) {
+
+        return ResponseEntity.ok(bookingService.confirmRemainingPaymentReceived(userPrincipal, bookingId));
+    }
 }

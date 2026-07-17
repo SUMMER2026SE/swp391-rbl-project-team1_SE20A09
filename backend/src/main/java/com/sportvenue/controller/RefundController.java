@@ -60,6 +60,20 @@ public class RefundController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/summary")
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(
+            summary = "Tổng hợp Gross/Refund/Fee/Net trên toàn bộ booking của Owner",
+            description = "Tính trên TOÀN BỘ booking (không phụ thuộc phân trang) — tránh lệch số "
+                    + "khi chỉ cộng dồn các booking đang hiển thị trên 1 trang."
+    )
+    public ResponseEntity<com.sportvenue.dto.response.OwnerBookingsSummaryResponse> getOwnerBookingsSummary(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestParam(required = false) BookingStatus status) {
+
+        return ResponseEntity.ok(refundService.getOwnerBookingsSummary(userPrincipal.getUsername(), status));
+    }
+
     @GetMapping("/{bookingId}/refund/preview")
     @PreAuthorize("hasRole('Owner')")
     @Operation(

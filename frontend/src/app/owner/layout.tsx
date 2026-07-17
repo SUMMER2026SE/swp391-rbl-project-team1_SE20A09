@@ -16,7 +16,6 @@ import {
   Calendar as CalendarIcon,
   HelpCircle,
   ShieldAlert,
-  WalletCards,
 } from "lucide-react";
 import { OwnerNotificationBell } from "@/components/notifications/OwnerNotificationBell";
 import { ChatBadge } from "@/components/chat/ChatBadge";
@@ -59,7 +58,6 @@ export default function OwnerLayout({
     { href: "/owner/venues", label: "Sân của tôi", icon: BarChart3 },
     { href: "/owner/bookings", label: "Lịch đặt", icon: Calendar },
     { href: "/owner/revenue", label: "Doanh thu", icon: Wallet },
-    { href: "/owner/wallet", label: "Ví của tôi", icon: WalletCards },
     { href: "/owner/refund-exceptions", label: "Ngoại lệ hoàn tiền", icon: HelpCircle },
     { href: "/owner/complaints", label: "Khiếu nại", icon: AlertTriangle },
     { href: "/owner/reports", label: "Báo cáo của tôi", icon: ShieldAlert },

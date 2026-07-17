@@ -11,6 +11,7 @@ import com.sportvenue.entity.RefundExceptionRequest;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.entity.enums.NotificationType;
+import com.sportvenue.entity.enums.PaymentMethod;
 import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.entity.enums.RefundExceptionStatus;
 import com.sportvenue.entity.enums.RefundReasonType;
@@ -125,22 +126,24 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
             throw new BadRequestException("Đơn này đã có yêu cầu ngoại lệ đang được xử lý.");
         }
         // 5. Phải từng có 1 giao dịch thanh toán THẬT qua cổng thanh toán
-        Payment originalPayment = paymentRepository.findSuccessPaymentsByBookingId(req.getBookingId())
-                .stream().findFirst().orElse(null);
-        if (originalPayment == null) {
+        // SUM toàn bộ payment SUCCESS (không chỉ lấy 1 dòng) — đơn cọc đã thu nốt có 2 dòng (VNPay
+        // cọc + CASH còn lại), .findFirst() sẽ hiểu nhầm đơn đã thanh toán đủ thành đơn đặt cọc.
+        List<Payment> successPayments = paymentRepository.findSuccessPaymentsByBookingId(req.getBookingId());
+        if (successPayments.isEmpty()) {
             throw new BadRequestException("Đơn này chưa từng thanh toán qua cổng thanh toán — không có gì để hoàn.");
         }
+        BigDecimal totalPaid = RefundServiceImpl.sumPaidAmount(successPayments);
         // 5.5 Chặn đơn đặt cọc — Chỉ áp dụng yêu cầu ngoại lệ cho đơn thanh toán toàn bộ (100%)
         BigDecimal totalPrice = booking.getTotalPrice() != null ? booking.getTotalPrice() : BigDecimal.ZERO;
         BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
         BigDecimal baseCourtPrice = totalPrice.subtract(serviceFee);
-        if (originalPayment.getAmount().compareTo(baseCourtPrice) < 0) {
+        if (totalPaid.compareTo(baseCourtPrice) < 0) {
             throw new BadRequestException("Yêu cầu ngoại lệ không áp dụng cho đơn đặt cọc (chỉ áp dụng cho đơn thanh toán toàn bộ).");
         }
         // 6. [Guard] Chỉ áp dụng cho booking đã hoàn 0% hoặc một phần
         existingRefund.ifPresent(refund -> {
             if (refund.getPaymentStatus() != TransactionStatus.FAILED
-                    && refund.getAmount().abs().compareTo(originalPayment.getAmount()) >= 0) {
+                    && refund.getAmount().abs().compareTo(totalPaid) >= 0) {
                 throw new BadRequestException("Booking đã được hoàn tiền toàn bộ — không đủ điều kiện xin ngoại lệ.");
             }
         });
@@ -343,13 +346,17 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
      */
     private Payment createPendingRefundRecord(RefundExceptionRequest request) {
         Integer bookingId = request.getBooking().getBookingId();
-        Payment originalPayment = paymentRepository
-                .findSuccessPaymentsByBookingId(bookingId)
-                .stream().findFirst()
-                .orElseThrow(() -> new BadRequestException("Không tìm thấy giao dịch gốc cho booking #" + bookingId));
+        // SUM toàn bộ payment SUCCESS làm cơ sở tính hoàn (đơn cọc đã thu nốt có 2 dòng: VNPay cọc +
+        // CASH còn lại) — pickReferencePayment chỉ dùng để lấy phương thức/mã giao dịch tham chiếu.
+        List<Payment> successPayments = paymentRepository.findSuccessPaymentsByBookingId(bookingId);
+        if (successPayments.isEmpty()) {
+            throw new BadRequestException("Không tìm thấy giao dịch gốc cho booking #" + bookingId);
+        }
+        Payment originalPayment = RefundServiceImpl.pickReferencePayment(successPayments);
+        BigDecimal totalPaid = RefundServiceImpl.sumPaidAmount(successPayments);
 
         BigDecimal serviceFee = request.getBooking().getServiceFee() != null ? request.getBooking().getServiceFee() : BigDecimal.ZERO;
-        BigDecimal baseAmount = originalPayment.getAmount().subtract(serviceFee);
+        BigDecimal baseAmount = totalPaid.subtract(serviceFee);
         if (baseAmount.compareTo(BigDecimal.ZERO) < 0) {
             baseAmount = BigDecimal.ZERO;
         }
@@ -403,10 +410,14 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
      * (KHÔNG bao gồm phí dịch vụ, để giữ tính công bằng tài chính với Owner và đồng nhất với khách tự hủy standard).</p>
      */
     private void executeGatewayRefund(RefundExceptionRequest request, Payment pendingRefundPayment) {
-        Payment originalPayment = paymentRepository
-                .findSuccessPaymentsByBookingId(request.getBooking().getBookingId())
-                .stream().findFirst()
-                .orElseThrow(() -> new BadRequestException("Không tìm thấy giao dịch gốc."));
+        List<Payment> successPayments = paymentRepository
+                .findSuccessPaymentsByBookingId(request.getBooking().getBookingId());
+        if (successPayments.isEmpty()) {
+            throw new BadRequestException("Không tìm thấy giao dịch gốc.");
+        }
+        // Ưu tiên payment VNPay làm tham chiếu gateway — đơn cọc đã thu nốt có thêm 1 payment CASH,
+        // không có giao dịch VNPay gốc để hoàn qua gateway thật.
+        Payment originalPayment = RefundServiceImpl.pickReferencePayment(successPayments);
 
         BigDecimal refundAmount = pendingRefundPayment.getAmount().abs();
 
@@ -414,6 +425,10 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
         if (refundAmount.compareTo(BigDecimal.ZERO) == 0) {
             // Top-up = 0đ (vd Admin duyệt đúng bằng % Owner đã duyệt trước) -> không có gì thêm
             // để hoàn, không gọi gateway (gateway thật/mock đều từ chối yêu cầu hoàn 0đ).
+            gatewaySuccess = true;
+        } else if (originalPayment.getPaymentMethod() == PaymentMethod.CASH) {
+            log.info("[RefundException] Booking #{} sử dụng phương thức CASH — tự động duyệt hoàn tiền bỏ qua gateway VNPay",
+                    request.getBooking().getBookingId());
             gatewaySuccess = true;
         } else {
             gatewaySuccess = false;

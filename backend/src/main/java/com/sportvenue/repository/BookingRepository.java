@@ -293,6 +293,15 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
             @Param("status") BookingStatus status,
             Pageable pageable);
 
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.stadium.owner.user.email = :email
+            AND (:status IS NULL OR b.bookingStatus = :status)
+            """)
+    List<Booking> findAllByOwnerEmailAndStatus(
+            @Param("email") String email,
+            @Param("status") BookingStatus status);
+
     /** Lấy danh sách đặt sân của tất cả các sân thuộc Owner có phân trang và filter status */
     @EntityGraph(attributePaths = {"user", "stadium", "stadium.sportType", "slot"})
     @Query("""

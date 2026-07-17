@@ -454,7 +454,7 @@ class RefundServiceTest {
                 .transactionCode("TXN123").paymentStatus(TransactionStatus.SUCCESS).build();
 
         RefundServiceImpl.RefundCalculation calc = RefundServiceImpl.calculateRefund(
-                booking, depositPayment, RefundReasonType.OWNER_FAULT, "http://proof.jpg", false);
+                booking, depositPayment.getAmount(), RefundReasonType.OWNER_FAULT, "http://proof.jpg", false);
 
         assertEquals(100, calc.getPercentage());
         assertEquals(0, new BigDecimal("300000").compareTo(calc.getAmount()));
