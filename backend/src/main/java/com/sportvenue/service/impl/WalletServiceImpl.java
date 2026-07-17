@@ -14,7 +14,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -40,30 +43,50 @@ public class WalletServiceImpl implements WalletService {
     private final WalletTransactionRepository walletTransactionRepository;
     private final OwnerRepository ownerRepository;
     private final BookingRepository bookingRepository;
+    private final PlatformTransactionManager transactionManager;
 
     @Override
     @Transactional
     public Wallet getOrCreateOwnerWallet(Integer ownerId) {
         return walletRepository.findByOwnerOwnerId(ownerId)
-                .orElseGet(() -> {
-                    log.info("Khởi tạo ví mới cho Owner ID: {}", ownerId);
-                    Owner owner = ownerRepository.findById(ownerId)
-                            .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chủ sân với ID " + ownerId));
-                    try {
-                        Wallet newWallet = Wallet.builder()
-                                .owner(owner)
-                                .isPlatform(false)
-                                .balance(BigDecimal.ZERO)
-                                .createdAt(LocalDateTime.now())
-                                .updatedAt(LocalDateTime.now())
-                                .build();
-                        return walletRepository.saveAndFlush(newWallet);
-                    } catch (DataIntegrityViolationException e) {
-                        log.warn("Ví của Owner ID {} đã được luồng khác tạo đồng thời. Đang truy vấn lại.", ownerId);
-                        return walletRepository.findByOwnerOwnerId(ownerId)
-                                .orElseThrow(() -> new IllegalStateException("Lỗi tranh chấp đồng thời khi khởi tạo ví Owner", e));
-                    }
-                });
+                .orElseGet(() -> createOwnerWalletHandlingRace(ownerId));
+    }
+
+    /**
+     * Tạo ví Owner trong 1 transaction ĐỘC LẬP (REQUIRES_NEW qua TransactionTemplate tự tạo,
+     * không dùng @Transactional để tránh vấn đề self-invocation bỏ qua AOP proxy — cùng lý do
+     * RefundServiceImpl/RefundExceptionServiceImpl đã dùng TransactionTemplate tường minh).
+     *
+     * <p>Lý do bắt buộc phải REQUIRES_NEW: PostgreSQL abort TOÀN BỘ transaction khi gặp bất kỳ
+     * lỗi nào (không riêng Hibernate rollback-only) — nếu insert ví bị lỗi trùng khoá (2 luồng
+     * cùng tạo ví cho 1 Owner) chạy trong transaction của caller (`getOrCreateOwnerWallet`/
+     * `recordOwnerTransaction`), transaction đó sẽ ở trạng thái "aborted" và câu query tìm lại
+     * ví ngay sau đó (`findByOwnerOwnerId`) cũng lỗi theo dù ví đã tồn tại. Cô lập việc insert
+     * vào 1 transaction riêng đảm bảo nếu nó rollback, transaction của caller vẫn lành lặn để
+     * query lại thành công.</p>
+     */
+    private Wallet createOwnerWalletHandlingRace(Integer ownerId) {
+        log.info("Khởi tạo ví mới cho Owner ID: {}", ownerId);
+        TransactionTemplate requiresNew = new TransactionTemplate(transactionManager);
+        requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        try {
+            return requiresNew.execute(status -> {
+                Owner owner = ownerRepository.findById(ownerId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chủ sân với ID " + ownerId));
+                Wallet newWallet = Wallet.builder()
+                        .owner(owner)
+                        .isPlatform(false)
+                        .balance(BigDecimal.ZERO)
+                        .createdAt(LocalDateTime.now())
+                        .updatedAt(LocalDateTime.now())
+                        .build();
+                return walletRepository.saveAndFlush(newWallet);
+            });
+        } catch (DataIntegrityViolationException e) {
+            log.warn("Ví của Owner ID {} đã được luồng khác tạo đồng thời. Đang truy vấn lại.", ownerId);
+            return walletRepository.findByOwnerOwnerId(ownerId)
+                    .orElseThrow(() -> new IllegalStateException("Lỗi tranh chấp đồng thời khi khởi tạo ví Owner", e));
+        }
     }
 
     @Override

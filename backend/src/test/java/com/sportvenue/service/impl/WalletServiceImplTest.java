@@ -23,6 +23,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -41,6 +43,7 @@ class WalletServiceImplTest {
     @Mock private WalletTransactionRepository walletTransactionRepository;
     @Mock private OwnerRepository ownerRepository;
     @Mock private BookingRepository bookingRepository;
+    @Mock private PlatformTransactionManager transactionManager;
 
     @InjectMocks
     private WalletServiceImpl walletService;
@@ -92,6 +95,7 @@ class WalletServiceImplTest {
         when(walletRepository.findByOwnerOwnerId(10)).thenReturn(Optional.empty());
         when(ownerRepository.findById(10)).thenReturn(Optional.of(owner));
         when(walletRepository.saveAndFlush(any(Wallet.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
 
         Wallet result = walletService.getOrCreateOwnerWallet(10);
 
