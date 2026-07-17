@@ -65,18 +65,20 @@ api.interceptors.request.use(
       delete config.headers['Content-Type']
     }
     if (typeof window !== 'undefined') {
-      // Try NextAuth session first, fallback to localStorage
-      try {
-        const { getSession } = await import('next-auth/react')
-        const session = await getSession()
-        const token = (session as any)?.accessToken
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`
-        }
-      } catch {
-        const token = localStorage.getItem('access_token')
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`
+      // Try localStorage first (fast, local), fallback to getSession() (network call)
+      const localToken = localStorage.getItem('access_token')
+      if (localToken) {
+        config.headers.Authorization = `Bearer ${localToken}`
+      } else {
+        try {
+          const { getSession } = await import('next-auth/react')
+          const session = await getSession()
+          const token = (session as any)?.accessToken
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`
+          }
+        } catch {
+          // Ignore error and proceed without token
         }
       }
     }
