@@ -14,7 +14,8 @@ import {
   TrendingUp,
   CalendarRange,
   X,
-  HelpCircle
+  HelpCircle,
+  Landmark
 } from "lucide-react";
 
 interface AdminSidebarProps {
@@ -36,6 +37,7 @@ export function AdminSidebar({ isOpen, setIsOpen }: AdminSidebarProps) {
     { id: 'appeals', href: '/admin/appeals', label: 'Kháng cáo', icon: ShieldAlert },
     { id: 'moderation-analytics', href: '/admin/moderation-analytics', label: 'Thống kê vi phạm', icon: BarChart3 },
     { id: 'refund-exceptions', href: '/admin/refund-exceptions', label: 'Ngoại lệ hoàn tiền', icon: HelpCircle },
+    { id: 'wallet', href: '/admin/wallet', label: 'Ví hệ thống', icon: Landmark },
   ];
 
   return (

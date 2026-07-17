@@ -32,6 +32,7 @@ import com.sportvenue.repository.TimeSlotExceptionRepository;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.AdminDashboardService;
 import com.sportvenue.service.MaintenanceScheduleService;
+import com.sportvenue.service.WalletService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -96,6 +97,7 @@ class BookingServiceImplTest {
     @Mock private com.sportvenue.service.NotificationService notificationService;
     @Mock private com.sportvenue.util.AfterCommitExecutor afterCommitExecutor;
     @Mock private AdminDashboardService adminDashboardService;
+    @Mock private WalletService walletService;
 
     @InjectMocks private BookingServiceImpl bookingService;
 

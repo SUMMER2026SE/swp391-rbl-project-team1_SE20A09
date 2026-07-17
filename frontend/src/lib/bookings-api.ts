@@ -368,6 +368,8 @@ export type RefundPreviewResponse = {
   paymentStatus: string;
   processedAt: string;
   reason: string;
+  /** Giải thích chính sách hoàn tiền áp dụng — vd cọc không hoàn, hủy sớm >24h... */
+  cancellationPolicyDescription?: string | null;
 };
 
 /**

@@ -16,6 +16,7 @@ import com.sportvenue.entity.enums.PaymentMethod;
 import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.entity.enums.RefundExceptionStatus;
 import com.sportvenue.entity.enums.TransactionStatus;
+import com.sportvenue.entity.enums.WalletTransactionType;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.repository.BookingRepository;
@@ -24,6 +25,7 @@ import com.sportvenue.repository.RefundExceptionRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.NotificationService;
 import com.sportvenue.service.PaymentService;
+import com.sportvenue.service.WalletService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,6 +58,7 @@ class RefundExceptionServiceImplTest {
     @Mock private NotificationService notificationService;
     @Mock private PaymentService paymentService;
     @Mock private TransactionTemplate transactionTemplate;
+    @Mock private WalletService walletService;
 
     @InjectMocks
     private RefundExceptionServiceImpl service;
@@ -330,7 +333,7 @@ class RefundExceptionServiceImplTest {
         });
         when(paymentRepository.findById(99)).thenReturn(Optional.of(
                 Payment.builder().paymentId(99).paymentStatus(TransactionStatus.PENDING).build()));
-        when(bookingRepository.findById(100)).thenReturn(Optional.of(cancelledBooking));
+        when(bookingRepository.findByIdForUpdate(100)).thenReturn(Optional.of(cancelledBooking));
 
         OwnerReviewRequest req = new OwnerReviewRequest();
         req.setApproved(true);
@@ -342,6 +345,13 @@ class RefundExceptionServiceImplTest {
         assertEquals(RefundExceptionStatus.APPROVED_OWNER, res.getStatus());
         assertEquals(100, res.getRefundPercent());
         verify(paymentService).processRefund(any(), any(), any());
+        verify(walletService).recordOwnerTransaction(
+                eq(owner.getOwnerId()),
+                eq(new BigDecimal("-150000")),
+                eq(cancelledBooking.getBookingId()),
+                eq(WalletTransactionType.REFUND_DEBIT),
+                anyString()
+        );
     }
 
     @Test
@@ -448,7 +458,7 @@ class RefundExceptionServiceImplTest {
         });
         when(paymentRepository.findById(88)).thenReturn(Optional.of(
                 Payment.builder().paymentId(88).paymentStatus(TransactionStatus.PENDING).build()));
-        when(bookingRepository.findById(100)).thenReturn(Optional.of(cancelledBooking));
+        when(bookingRepository.findByIdForUpdate(100)).thenReturn(Optional.of(cancelledBooking));
 
         AdminDecisionRequest req = new AdminDecisionRequest();
         req.setApproved(true);
@@ -458,6 +468,13 @@ class RefundExceptionServiceImplTest {
 
         assertEquals(RefundExceptionStatus.APPROVED_ADMIN, res.getStatus());
         verify(paymentService).processRefund(any(), eq(new BigDecimal("75000")), any());
+        verify(walletService).recordOwnerTransaction(
+                eq(owner.getOwnerId()),
+                eq(new BigDecimal("-75000")),
+                eq(cancelledBooking.getBookingId()),
+                eq(WalletTransactionType.REFUND_DEBIT),
+                anyString()
+        );
     }
 
     @Test
@@ -511,7 +528,7 @@ class RefundExceptionServiceImplTest {
         });
         when(paymentRepository.findById(91)).thenReturn(Optional.of(
                 Payment.builder().paymentId(91).paymentStatus(TransactionStatus.PENDING).build()));
-        when(bookingRepository.findById(100)).thenReturn(Optional.of(cancelledBooking));
+        when(bookingRepository.findByIdForUpdate(100)).thenReturn(Optional.of(cancelledBooking));
 
         AdminDecisionRequest req = new AdminDecisionRequest();
         req.setApproved(true);
@@ -521,6 +538,13 @@ class RefundExceptionServiceImplTest {
 
         // Desired = 150000 (100%), đã hoàn 75000 trước đó -> chỉ gọi gateway với phần còn lại 75000
         verify(paymentService).processRefund(any(), eq(new BigDecimal("75000")), any());
+        verify(walletService).recordOwnerTransaction(
+                eq(owner.getOwnerId()),
+                eq(new BigDecimal("-75000")),
+                eq(cancelledBooking.getBookingId()),
+                eq(WalletTransactionType.REFUND_DEBIT),
+                anyString()
+        );
     }
 
     // ═══════════════════════════════════════════════════════════

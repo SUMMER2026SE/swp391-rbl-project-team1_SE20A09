@@ -16,6 +16,7 @@ import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.entity.enums.TransactionStatus;
 import com.sportvenue.entity.enums.RefundReasonType;
+import com.sportvenue.entity.enums.PaymentMethod;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.exception.ResourceNotFoundException;
@@ -42,6 +43,8 @@ import org.springframework.data.domain.Pageable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.springframework.transaction.support.TransactionTemplate;
+import com.sportvenue.service.WalletService;
+import com.sportvenue.entity.enums.WalletTransactionType;
 
 @Service
 @RequiredArgsConstructor
@@ -59,6 +62,7 @@ public class RefundServiceImpl implements RefundService {
     private final NotificationService notificationService;
     private final CustomerNotificationService customerNotificationService;
     private final AfterCommitExecutor afterCommitExecutor;
+    private final WalletService walletService;
 
     @Override
     public RefundResponse processRefund(Integer bookingId, RefundRequest request, String ownerEmail) {
@@ -135,8 +139,13 @@ public class RefundServiceImpl implements RefundService {
     private void processGatewayRefundTx(RefundProcessContext ctx, Integer bookingId, String reason) {
         boolean gatewaySuccess = false;
         try {
-            paymentService.processRefund(ctx.originalPayment, ctx.calculation.getAmount(), reason);
-            gatewaySuccess = true;
+            if (ctx.originalPayment.getPaymentMethod() == PaymentMethod.CASH) {
+                log.info("Booking #{} sử dụng phương thức CASH — tự động duyệt hoàn tiền bỏ qua gateway VNPay", bookingId);
+                gatewaySuccess = true;
+            } else {
+                paymentService.processRefund(ctx.originalPayment, ctx.calculation.getAmount(), reason);
+                gatewaySuccess = true;
+            }
         } catch (Exception e) {
             log.error("Refund gateway failed for booking {}", bookingId, e);
         }
@@ -149,9 +158,45 @@ public class RefundServiceImpl implements RefundService {
                 paymentRepository.save(payment);
             }
             if (finalSuccess) {
-                Booking booking = bookingRepository.findById(bookingId).orElse(null);
+                Booking booking = bookingRepository.findByIdForUpdate(bookingId).orElse(null);
                 if (booking != null) {
                     updateBookingAndReleaseSlot(booking, reason);
+
+                    // Ghi nhận trừ tiền từ ví nội bộ
+                    Owner resolvedOwner = booking.getStadium() != null ? booking.getStadium().resolveOwner() : null;
+                    if (resolvedOwner != null) {
+                        BigDecimal refundAmt = ctx.calculation.getAmount();
+                        BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
+
+                        if (ctx.calculation.isIncludesServiceFee()) {
+                            // OWNER_FAULT: Owner bị trừ venuePrice, platform trả lại serviceFee cho khách
+                            BigDecimal ownerDebit = refundAmt.subtract(serviceFee);
+                            walletService.recordOwnerTransaction(
+                                    resolvedOwner.getOwnerId(),
+                                    ownerDebit.negate(),
+                                    booking.getBookingId(),
+                                    WalletTransactionType.REFUND_DEBIT,
+                                    "Khách hoàn tiền do lỗi chủ sân (Owner Fault)"
+                            );
+                            if (serviceFee.compareTo(BigDecimal.ZERO) > 0) {
+                                walletService.recordPlatformTransaction(
+                                        serviceFee.negate(),
+                                        booking.getBookingId(),
+                                        WalletTransactionType.REFUND_FEE_DEBIT,
+                                        "Platform hoàn lại phí dịch vụ đơn #" + booking.getBookingId()
+                                );
+                            }
+                        } else {
+                            // Huỷ bình thường: Chỉ trừ ví Owner số tiền thực hoàn (đã trừ phí dịch vụ)
+                            walletService.recordOwnerTransaction(
+                                    resolvedOwner.getOwnerId(),
+                                    refundAmt.negate(),
+                                    booking.getBookingId(),
+                                    WalletTransactionType.REFUND_DEBIT,
+                                    "Khách huỷ đặt sân tự động (Tiền hoàn đã khấu trừ phí dịch vụ)"
+                            );
+                        }
+                    }
                 }
             }
             return null;
@@ -205,7 +250,7 @@ public class RefundServiceImpl implements RefundService {
             if (!isPreview && (proofUrl == null || proofUrl.trim().isEmpty())) {
                 throw new BadRequestException("Bắt buộc phải cung cấp bằng chứng (ảnh/mô tả) khi lỗi do chủ sân");
             }
-            return new RefundCalculation(100, paidAmount);
+            return new RefundCalculation(100, paidAmount, true);
         }
 
         // Đặt cọc bị khách tự hủy -> giữ chỗ, KHÔNG hoàn lại (đúng bản chất tiền cọc trong thực
@@ -213,7 +258,7 @@ public class RefundServiceImpl implements RefundService {
         // thanh toán đầy đủ vẫn áp tiering 24h/12h bên dưới. Lỗi do sân (nhánh OWNER_FAULT phía
         // trên) vẫn hoàn 100% cọc như bình thường vì không phải lỗi của khách.
         if (booking.getPaymentStatus() == PaymentStatus.DEPOSITED) {
-            return new RefundCalculation(0, BigDecimal.ZERO);
+            return new RefundCalculation(0, BigDecimal.ZERO, false);
         }
 
         // Khách tự hủy -> Phí dịch vụ không hoàn trả (non-refundable)
@@ -241,7 +286,7 @@ public class RefundServiceImpl implements RefundService {
             refundAmount = BigDecimal.ZERO;
         }
 
-        return new RefundCalculation(refundPercentage, refundAmount);
+        return new RefundCalculation(refundPercentage, refundAmount, false);
     }
 
     private void updateBookingAndReleaseSlot(Booking booking, String reason) {
@@ -258,6 +303,21 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private RefundResponse buildRefundResponse(Booking booking, RefundCalculation calc, String reason) {
+        String policyDesc = "";
+        if (calc.isIncludesServiceFee()) {
+            policyDesc = "Hủy do lỗi chủ sân: Hoàn lại toàn bộ 100% số tiền đã cọc/thanh toán (bao gồm cả phí dịch vụ).";
+        } else if (booking.getPaymentStatus() == PaymentStatus.DEPOSITED) {
+            policyDesc = "Đơn đặt cọc (30%): Khách tự hủy mất 100% tiền đặt cọc (tiền cọc dùng để giữ chỗ và không hoàn lại).";
+        } else {
+            if (calc.getPercentage() == 100) {
+                policyDesc = "Hủy trước 24 giờ: Hoàn lại 100% giá trị sân (phí dịch vụ hệ thống không hoàn lại).";
+            } else if (calc.getPercentage() == 50) {
+                policyDesc = "Hủy trước từ 12 đến 24 giờ: Hoàn lại 50% giá trị sân (phí dịch vụ hệ thống không hoàn lại).";
+            } else {
+                policyDesc = "Hủy dưới 12 giờ: Hoàn lại 0% (khách tự hủy sát giờ chơi).";
+            }
+        }
+
         return RefundResponse.builder()
                 .bookingId(booking.getBookingId())
                 .stadiumName(booking.getStadium().getStadiumName())
@@ -271,6 +331,7 @@ public class RefundServiceImpl implements RefundService {
                 .paymentStatus(booking.getPaymentStatus().name())
                 .processedAt(LocalDateTime.now())
                 .reason(reason != null ? reason.trim() : "")
+                .cancellationPolicyDescription(policyDesc)
                 .build();
     }
 
@@ -493,5 +554,6 @@ public class RefundServiceImpl implements RefundService {
     static class RefundCalculation {
         private final int percentage;
         private final BigDecimal amount;
+        private final boolean includesServiceFee;
     }
 }

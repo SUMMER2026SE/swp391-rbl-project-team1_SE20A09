@@ -100,6 +100,7 @@ function BookingManagementPage() {
   // Xác nhận đã thu tiền mặt tại sân (AWAITING_CASH_PAYMENT → PAID).
   const [confirmCashBooking, setConfirmCashBooking] = useState<BookingItem | null>(null);
   const [isConfirmCashSubmitting, setIsConfirmCashSubmitting] = useState(false);
+  const [receiptBooking, setReceiptBooking] = useState<BookingItem | null>(null);
 
   // Báo cáo hành vi khách hàng (Owner → Customer).
   const [reportBooking, setReportBooking] = useState<BookingItem | null>(null);
@@ -325,6 +326,7 @@ function BookingManagementPage() {
         b.id === confirmCashBooking.id ? { ...b, paymentStatus: "paid" } : b
       ));
       toast.success("Đã xác nhận thu tiền mặt thành công");
+      setReceiptBooking({ ...confirmCashBooking, paymentStatus: "paid" });
       setConfirmCashBooking(null);
     } catch (error: any) {
       toast.error(error.message || "Không thể xác nhận thu tiền, vui lòng thử lại");
@@ -526,6 +528,8 @@ function BookingManagementPage() {
                   )}
                 </div>
 
+                <BookingExceptionHistory bookingId={booking.id} />
+
                 {booking.notes && (
                   <div className="col-span-full bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded border text-xs text-slate-600 dark:text-slate-300">
                     <span className="font-semibold text-primary block mb-0.5">Ghi chú:</span>
@@ -658,7 +662,10 @@ function BookingManagementPage() {
                 <h3 className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
                   {totalNetAmount.toLocaleString('vi-VN')}đ
                 </h3>
-                <p className="text-[11px] text-emerald-800 dark:text-emerald-400 mt-1">Số tiền thực tế chủ sân thu về sau hủy hoàn</p>
+                <p className="text-[11px] text-emerald-800 dark:text-emerald-400 mt-1">Số tiền thực tế chủ sân thu về sau khi trừ hoàn tiền và phí dịch vụ</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 font-mono">
+                  {totalGrossAmount.toLocaleString('vi-VN')}đ (Gross) - {totalRefundedAmount.toLocaleString('vi-VN')}đ (Refund) - {totalServiceFee.toLocaleString('vi-VN')}đ (Fee)
+                </p>
               </div>
               <div className="bg-emerald-100 text-emerald-600 p-3 rounded-lg dark:bg-emerald-950/30 dark:text-emerald-400">
                 <CheckCircle className="h-6 w-6" />
@@ -847,7 +854,7 @@ function BookingManagementPage() {
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto border dark:border-slate-800 shadow-2xl rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2 text-rose-600">
-              <RotateCcw className="h-5.5 w-5.5" />
+              <RotateCcw className="h-5 w-5" />
               Yêu Cầu Hủy & Hoàn Tiền
             </DialogTitle>
             <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs">
@@ -914,12 +921,13 @@ function BookingManagementPage() {
                       <span className="font-extrabold text-lg text-emerald-600 dark:text-emerald-400">{previewData.refundAmount.toLocaleString('vi-VN')}đ</span>
                     </div>
                     <p className="text-[11px] leading-relaxed text-muted-foreground border-t pt-2 mt-1.5 italic">
-                      {previewData.refundPercentage === 100 
-                        ? "Hủy trước giờ chơi >= 24 giờ. Khách hàng nhận lại toàn bộ tiền sân." 
-                        : previewData.refundPercentage === 50 
-                        ? "Hủy trước giờ chơi từ 12 giờ đến dưới 24 giờ. Khách hàng nhận lại 50% tiền sân." 
-                        : "Hủy quá sát giờ chơi (< 12 giờ). Khách hàng không được hoàn tiền theo điều khoản."
-                      }
+                      {previewData.cancellationPolicyDescription || (
+                        previewData.refundPercentage === 100 
+                          ? "Hủy trước giờ chơi >= 24 giờ. Khách hàng nhận lại toàn bộ tiền sân." 
+                          : previewData.refundPercentage === 50 
+                          ? "Hủy trước giờ chơi từ 12 giờ đến dưới 24 giờ. Khách hàng nhận lại 50% tiền sân." 
+                          : "Hủy quá sát giờ chơi (< 12 giờ). Khách hàng không được hoàn tiền theo điều khoản."
+                      )}
                     </p>
                   </>
                 ) : (
@@ -1147,15 +1155,26 @@ function BookingManagementPage() {
               <CheckCircle className="h-5 w-5" /> Xác nhận đã thu tiền mặt
             </DialogTitle>
             <DialogDescription className="text-slate-500 dark:text-slate-400 text-xs">
-              Bạn có chắc chắn đã thu đủ{" "}
-              <span className="font-semibold text-slate-800 dark:text-slate-200">
-                {confirmCashBooking?.amount.toLocaleString('vi-VN')}đ
-              </span>{" "}
-              tiền mặt tại sân cho đơn{" "}
-              <span className="font-mono font-semibold">{confirmCashBooking?.displayId}</span> chưa?
-              Hành động này sẽ đánh dấu đơn đã thanh toán và không thể hoàn tác qua nút này.
+              Vui lòng kiểm tra lại thông tin trước khi xác nhận. Hành động này sẽ đánh dấu đơn đã thanh toán và không thể hoàn tác qua nút này.
             </DialogDescription>
           </DialogHeader>
+
+          {confirmCashBooking && (
+            <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Mã đơn:</span>
+                <span className="font-mono font-bold text-primary">{confirmCashBooking.displayId}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Khách hàng:</span>
+                <span className="font-medium text-slate-800 dark:text-slate-200">{confirmCashBooking.customer.name}</span>
+              </div>
+              <div className="flex justify-between border-t pt-2 mt-2">
+                <span className="text-muted-foreground font-semibold">Số tiền thu tại sân:</span>
+                <span className="font-bold text-emerald-600">{confirmCashBooking.amount.toLocaleString('vi-VN')}đ</span>
+              </div>
+            </div>
+          )}
 
           <DialogFooter className="gap-2">
             <Button
@@ -1174,6 +1193,75 @@ function BookingManagementPage() {
               disabled={isConfirmCashSubmitting}
             >
               {isConfirmCashSubmitting ? "Đang xử lý..." : "Xác nhận đã thu tiền"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={receiptBooking !== null}
+        onOpenChange={(open) => {
+          if (!open) setReceiptBooking(null);
+        }}
+      >
+        <DialogContent className="max-w-md border dark:border-slate-800 shadow-2xl rounded-2xl p-0 overflow-hidden bg-white">
+          <div className="bg-emerald-600 p-6 text-white text-center relative">
+            <CheckCircle className="h-12 w-12 mx-auto mb-2 text-emerald-100 animate-bounce" />
+            <h3 className="text-xl font-bold">Biên nhận thanh toán</h3>
+            <p className="text-xs text-emerald-100/90 mt-1">Đơn đặt sân đã được xác nhận thanh toán tiền mặt</p>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="text-center pb-4 border-b border-dashed border-slate-200">
+              <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Mã đơn đặt sân</span>
+              <div className="text-2xl font-mono font-bold text-slate-800 mt-0.5">{receiptBooking?.displayId}</div>
+            </div>
+            
+            <div className="space-y-2.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Khách hàng:</span>
+                <span className="font-semibold text-slate-800">{receiptBooking?.customer.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Số điện thoại:</span>
+                <span className="font-semibold text-slate-800">{receiptBooking?.customer.phone}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Sân chơi:</span>
+                <span className="font-semibold text-slate-800 text-right">
+                  {receiptBooking?.venue}
+                  {receiptBooking?.complexName && (
+                    <span className="block text-xs font-normal text-slate-400">{receiptBooking.complexName}</span>
+                  )}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Thời gian:</span>
+                <span className="font-semibold text-slate-800">{receiptBooking?.time} ({receiptBooking?.date})</span>
+              </div>
+              
+              <div className="w-full border-t border-slate-100 my-3" />
+              
+              <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl">
+                <span className="text-slate-600 font-medium">Số tiền thu mặt:</span>
+                <span className="text-lg font-bold text-emerald-600">
+                  {receiptBooking?.amount.toLocaleString('vi-VN')}đ
+                </span>
+              </div>
+              {receiptBooking?.serviceFee !== undefined && receiptBooking.serviceFee > 0 && (
+                <div className="flex justify-between text-xs text-amber-600 bg-amber-50 px-3 py-2.5 rounded-xl mt-1 border border-amber-100/50">
+                  <span>Phí dịch vụ khấu trừ ví:</span>
+                  <span className="font-semibold">-{receiptBooking.serviceFee.toLocaleString('vi-VN')}đ</span>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="p-6 bg-slate-50/50 border-t border-slate-100 gap-2">
+            <Button
+              type="button"
+              className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11 shadow-md shadow-emerald-600/10"
+              onClick={() => setReceiptBooking(null)}
+            >
+              Đóng biên nhận
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1198,3 +1286,98 @@ function BookingManagementPage() {
 }
 
 export default BookingManagementPage;
+
+function BookingExceptionHistory({ bookingId }: { bookingId: number }) {
+  const [exception, setException] = useState<any | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const data = await get<any>(`/refund-exceptions/booking/${bookingId}/latest`);
+        if (active) setException(data || null);
+      } catch {
+        if (active) setException(null);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    load();
+    return () => { active = false; };
+  }, [bookingId]);
+
+  if (loading) {
+    return (
+      <div className="col-span-full flex items-center gap-2 text-xs text-slate-500 py-2">
+        <span className="animate-spin rounded-full h-3 w-3 border-2 border-indigo-600 border-t-transparent"></span>
+        Đang tải lịch sử ngoại lệ...
+      </div>
+    );
+  }
+
+  if (!exception) return null;
+
+  return (
+    <div className="col-span-full border border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-900/40 p-4 space-y-3">
+      <div className="flex justify-between items-center border-b border-slate-200/60 pb-2">
+        <span className="font-bold text-xs text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+          Chi tiết yêu cầu bất khả kháng
+        </span>
+        <Badge variant="outline" className="font-bold text-[9px] uppercase bg-white dark:bg-slate-800 border-slate-300">
+          {exception.status === "PENDING_OWNER" ? "Chờ bạn duyệt" :
+           exception.status === "APPROVED_OWNER" ? "Đã duyệt (GĐ 1)" :
+           exception.status === "PENDING_ADMIN" ? "Khách khiếu nại lên Admin (GĐ 2)" :
+           exception.status === "APPROVED_ADMIN" ? "Admin đã duyệt" :
+           exception.status === "REJECTED_OWNER" ? "Đã từ chối" :
+           exception.status === "REJECTED_ADMIN" ? "Admin từ chối" : exception.status}
+        </Badge>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div className="space-y-1">
+          <span className="text-slate-400 font-semibold block uppercase tracking-wider text-[9px]">Lý do từ khách</span>
+          <p className="text-slate-700 dark:text-slate-300 font-medium italic">"{exception.reason}"</p>
+          {exception.evidenceUrl && (
+            <a href={exception.evidenceUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-700 hover:underline font-semibold block mt-1.5 flex items-center gap-1">
+              <span>Xem bằng chứng đính kèm ↗</span>
+            </a>
+          )}
+        </div>
+
+        <div className="space-y-2.5 border-l pl-4 border-slate-200 dark:border-slate-800">
+          {/* Stage 1: Owner Review */}
+          <div className="space-y-0.5">
+            <span className="text-slate-400 font-semibold block uppercase tracking-wider text-[9px]">Giai đoạn 1: Chủ sân phản hồi</span>
+            {exception.ownerNote ? (
+              <p className="text-slate-700 dark:text-slate-300">
+                Tỷ lệ duyệt hoàn: <span className="font-bold text-emerald-600 dark:text-emerald-400">{exception.refundPercent}%</span>
+                <br />
+                Ý kiến: <span className="italic">"{exception.ownerNote}"</span>
+              </p>
+            ) : (
+              <p className="text-slate-400 italic">Chưa phản hồi (đang chờ xử lý)</p>
+            )}
+          </div>
+
+          {/* Stage 2: Admin Decision */}
+          <div className="space-y-0.5 pt-1.5 border-t border-slate-200/60 dark:border-slate-800">
+            <span className="text-slate-400 font-semibold block uppercase tracking-wider text-[9px]">Giai đoạn 2: Quyết định của Admin</span>
+            {exception.adminNote ? (
+              <p className="text-slate-700 dark:text-slate-300">
+                Trạng thái: <span className="font-bold text-emerald-600 dark:text-emerald-400">Đã giải quyết ({exception.refundPercent}%)</span>
+                <br />
+                Phản hồi: <span className="italic">"{exception.adminNote}"</span>
+              </p>
+            ) : exception.status === "PENDING_ADMIN" ? (
+              <p className="text-amber-600 dark:text-amber-400 font-semibold italic">Khách hàng không hài lòng. Đang chờ Admin phán quyết cuối cùng...</p>
+            ) : (
+              <p className="text-slate-400 italic">Chưa chuyển tiếp lên Admin</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

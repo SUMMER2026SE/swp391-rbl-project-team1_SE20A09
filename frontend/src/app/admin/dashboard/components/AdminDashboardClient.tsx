@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   XCircle,
   X,
+  Landmark,
 } from "lucide-react";
 import { useDateFilter, type DateRange } from "@/app/admin/date-filter-context";
 
@@ -373,6 +374,17 @@ export default function AdminDashboardClient({
   initialData
 }: AdminDashboardClientProps) {
   const { dateRange } = useDateFilter();
+  const [platformBalance, setPlatformBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    import("@/lib/wallet-api")
+      .then(({ fetchAdminWalletBalance }) => {
+        fetchAdminWalletBalance()
+          .then((res) => setPlatformBalance(res.balance))
+          .catch((err) => console.error("Lỗi khi lấy số dư ví admin:", err));
+      })
+      .catch((err) => console.error("Import error for wallet-api:", err));
+  }, []);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["admin-dashboard", dateRange],
@@ -422,7 +434,7 @@ export default function AdminDashboardClient({
       <DateFilterPanel />
 
       {/* KPI SECTION */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5">
         <div className="lg:col-span-1 bg-emerald-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-600/20 relative overflow-hidden group">
           <div className="absolute -right-6 -top-6 bg-white/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-white/20 transition-all"></div>
           <div className="flex justify-between items-start mb-4 relative z-10">
@@ -430,7 +442,7 @@ export default function AdminDashboardClient({
               <DollarSign className="h-6 w-6 text-white" />
             </div>
           </div>
-          <h3 className="text-emerald-100 text-sm font-medium mb-1 relative z-10">Doanh thu hệ thống</h3>
+          <h3 className="text-emerald-100 text-sm font-medium mb-1 relative z-10">Doanh thu luân chuyển (Gross)</h3>
           <div className="text-2xl font-bold tracking-tight mb-2 relative z-10">
             {new Intl.NumberFormat("vi-VN", {
               style: "currency",
@@ -439,9 +451,34 @@ export default function AdminDashboardClient({
             }).format(data.totalRevenue)}
           </div>
           <div className="text-xs text-emerald-200 font-medium relative z-10">
-            {dateRange ? "Trong khoảng ngày đã chọn" : "Số liệu thời gian thực"}
+            {dateRange ? "Trong khoảng ngày đã chọn" : "Tổng dòng tiền giao dịch hệ thống"}
           </div>
         </div>
+
+        {/* Platform Wallet Balance Card (Phí dịch vụ thực thu) */}
+        <Link href="/admin/wallet" className="lg:col-span-1 bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-6 text-white shadow-lg shadow-indigo-600/20 relative overflow-hidden group hover:shadow-xl hover:scale-[1.02] transition-all">
+          <div className="absolute -right-6 -top-6 bg-white/10 w-24 h-24 rounded-full blur-2xl group-hover:bg-white/20 transition-all"></div>
+          <div className="flex justify-between items-start mb-4 relative z-10">
+            <div className="p-2 bg-white/20 rounded-xl">
+              <Landmark className="h-6 w-6 text-white" />
+            </div>
+          </div>
+          <h3 className="text-indigo-100 text-sm font-medium mb-1 relative z-10">Doanh thu thực thu (Net)</h3>
+          <div className="text-2xl font-bold tracking-tight mb-2 relative z-10">
+            {platformBalance !== null ? (
+              new Intl.NumberFormat("vi-VN", {
+                style: "currency",
+                currency: "VND",
+                maximumFractionDigits: 0,
+              }).format(platformBalance)
+            ) : (
+              "---"
+            )}
+          </div>
+          <div className="text-xs text-indigo-200 font-medium relative z-10">
+            Tổng phí dịch vụ thực nhận (Ví)
+          </div>
+        </Link>
 
         {KPI_DATA.map((kpi, idx) => (
           <div key={idx} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-md transition-shadow group">

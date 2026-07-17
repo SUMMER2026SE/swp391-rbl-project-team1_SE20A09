@@ -38,6 +38,8 @@ import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.repository.TimeSlotExceptionRepository;
 import com.sportvenue.entity.TimeSlotException;
+import com.sportvenue.service.WalletService;
+import com.sportvenue.entity.enums.WalletTransactionType;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.AdminDashboardService;
 import com.sportvenue.service.BookingService;
@@ -125,6 +127,7 @@ public class BookingServiceImpl implements BookingService {
     private final CustomerNotificationService customerNotificationService;
     private final AfterCommitExecutor afterCommitExecutor;
     private final AdminDashboardService adminDashboardService;
+    private final WalletService walletService;
 
     @Override
     @Transactional
@@ -404,6 +407,29 @@ public class BookingServiceImpl implements BookingService {
 
         booking.setPaymentStatus(PaymentStatus.PAID);
         Booking saved = bookingRepository.save(booking);
+
+        // Ghi nhận vào ví nội bộ
+        Owner bookingOwner = saved.getStadium() != null ? saved.getStadium().resolveOwner() : null;
+        if (bookingOwner != null) {
+            BigDecimal serviceFee = saved.getServiceFee() != null ? saved.getServiceFee() : BigDecimal.ZERO;
+            if (serviceFee.compareTo(BigDecimal.ZERO) > 0) {
+                // Owner bị khấu trừ phí dịch vụ vì đã thu tiền mặt trực tiếp từ khách
+                walletService.recordOwnerTransaction(
+                        bookingOwner.getOwnerId(),
+                        serviceFee.negate(),
+                        saved.getBookingId(),
+                        WalletTransactionType.SERVICE_FEE_DEBIT,
+                        "Khấu trừ phí dịch vụ đơn đặt sân tiền mặt #" + saved.getBookingId()
+                );
+                // Platform nhận phí dịch vụ
+                walletService.recordPlatformTransaction(
+                        serviceFee,
+                        saved.getBookingId(),
+                        WalletTransactionType.SERVICE_FEE_CREDIT,
+                        "Phí dịch vụ từ đơn tiền mặt #" + saved.getBookingId()
+                );
+            }
+        }
 
         try {
             notificationService.publishNotificationEvent(

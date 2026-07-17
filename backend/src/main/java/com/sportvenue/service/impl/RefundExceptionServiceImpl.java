@@ -37,6 +37,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
+import com.sportvenue.entity.Owner;
+import com.sportvenue.service.WalletService;
+import com.sportvenue.entity.enums.WalletTransactionType;
 import java.util.Optional;
 
 @Service
@@ -60,6 +63,7 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
     private final CustomerNotificationService customerNotificationService;
     private final PaymentService paymentService;
     private final TransactionTemplate transactionTemplate;
+    private final WalletService walletService;
 
     // ─────────────────────────────────────────────────────────
     // PUBLIC METHODS
@@ -434,10 +438,24 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
                 paymentRepository.save(saved);
             }
             if (success) {
-                Booking booking = bookingRepository.findById(bookingId).orElse(null);
+                Booking booking = bookingRepository.findByIdForUpdate(bookingId).orElse(null);
                 if (booking != null) {
                     booking.setPaymentStatus(PaymentStatus.REFUNDED);
                     bookingRepository.save(booking);
+
+                    // Khấu trừ ví Owner số tiền thực hoàn (chính sách FORCE_MAJEURE luôn giữ lại phí dịch vụ nên platform không đổi)
+                    if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
+                        Owner resolvedOwner = booking.getStadium() != null ? booking.getStadium().resolveOwner() : null;
+                        if (resolvedOwner != null) {
+                            walletService.recordOwnerTransaction(
+                                    resolvedOwner.getOwnerId(),
+                                    refundAmount.negate(),
+                                    booking.getBookingId(),
+                                    WalletTransactionType.REFUND_DEBIT,
+                                    "Hoàn tiền do sự kiện bất khả kháng (Force Majeure)"
+                            );
+                        }
+                    }
                 }
             }
             return null;
