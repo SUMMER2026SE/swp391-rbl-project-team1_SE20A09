@@ -44,6 +44,7 @@ import { get, post, put } from "@/lib/api";
 import { cancelBooking } from "@/lib/bookings-api";
 import type { PageResponse } from "@/types/common";
 import { ReportUserDialog } from "@/components/reports/ReportUserDialog";
+import { fetchWalletTransactionsByBooking, type WalletTransaction } from "@/lib/wallet-api";
 
 interface BookingItem {
   id: number;
@@ -612,6 +613,8 @@ function BookingManagementPage() {
                 </div>
 
                 <BookingExceptionHistory bookingId={booking.id} />
+
+                <BookingWalletHistory bookingId={booking.id} />
 
                 {booking.notes && (
                   <div className="col-span-full bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded border text-xs text-slate-600 dark:text-slate-300">
@@ -1504,6 +1507,79 @@ function BookingExceptionHistory({ bookingId }: { bookingId: number }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+const WALLET_TX_LABELS: Record<string, { label: string }> = {
+  BOOKING_CREDIT: { label: "Ghi nhận doanh thu vào ví chủ sân" },
+  SERVICE_FEE_CREDIT: { label: "Phí dịch vụ ghi nhận vào ví nền tảng" },
+  REFUND_DEBIT: { label: "Hoàn tiền — trừ ví chủ sân" },
+  REFUND_FEE_DEBIT: { label: "Hoàn phí dịch vụ — trừ ví nền tảng" },
+  SERVICE_FEE_DEBIT: { label: "Khấu trừ phí dịch vụ (thu tiền mặt)" },
+};
+
+function BookingWalletHistory({ bookingId }: { bookingId: number }) {
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const data = await fetchWalletTransactionsByBooking(bookingId);
+        if (active) setTransactions(data);
+      } catch {
+        if (active) setTransactions([]);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    load();
+    return () => { active = false; };
+  }, [bookingId]);
+
+  if (loading) {
+    return (
+      <div className="col-span-full flex items-center gap-2 text-xs text-slate-500 py-2">
+        <span className="animate-spin rounded-full h-3 w-3 border-2 border-indigo-600 border-t-transparent"></span>
+        Đang tải lịch sử giao dịch ví...
+      </div>
+    );
+  }
+
+  if (transactions.length === 0) return null;
+
+  return (
+    <div className="col-span-full border border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-900/40 p-4 space-y-3">
+      <div className="flex justify-between items-center border-b border-slate-200/60 pb-2">
+        <span className="font-bold text-xs text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+          Lịch sử giao dịch Ví (đối soát dòng tiền)
+        </span>
+      </div>
+
+      <ul className="space-y-2 text-xs">
+        {transactions.map((tx) => {
+          const meta = WALLET_TX_LABELS[tx.transactionType] || { label: tx.transactionType };
+          const isPositive = tx.amount >= 0;
+          return (
+            <li
+              key={tx.transactionId}
+              className="flex items-center justify-between gap-3 border-b border-dashed border-slate-200/60 dark:border-slate-800 pb-2 last:border-0 last:pb-0"
+            >
+              <div className="space-y-0.5">
+                <span className="font-medium text-slate-700 dark:text-slate-300 block">{meta.label}</span>
+                <span className="text-[10px] text-slate-400">{new Date(tx.createdAt).toLocaleString('vi-VN')}</span>
+                {tx.note && <span className="text-[10px] text-slate-400 italic block">{tx.note}</span>}
+              </div>
+              <span className={`font-bold whitespace-nowrap ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                {isPositive ? "+" : ""}{tx.amount.toLocaleString('vi-VN')}đ
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
