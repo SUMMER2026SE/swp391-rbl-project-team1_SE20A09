@@ -1,4 +1,8 @@
-import Link from "next/link";
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { Card, CardContent, CardFooter } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -6,6 +10,8 @@ import { Calendar, Clock, Users, User } from "lucide-react";
 import { MatchResponse } from "@/types/match";
 
 export function MatchResultCard({ match }: { match: MatchResponse }) {
+  const router = useRouter();
+  const { data: session } = useSession();
   const {
     hostName,
     stadiumName,
@@ -42,8 +48,18 @@ export function MatchResultCard({ match }: { match: MatchResponse }) {
     }
   };
 
+  const handleJoinClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!session?.user) {
+      // Redirect to login, come back to this match after login
+      signIn(undefined, { callbackUrl: `/community?matchId=${match.matchId}` });
+      return;
+    }
+    router.push(`/community?matchId=${match.matchId}`);
+  };
+
   return (
-    <Link href={`/community?matchId=${match.matchId}`} className="block group w-full max-w-sm">
+    <div className="block group w-full max-w-sm">
       <Card className="overflow-hidden border-border/80 transition-all duration-300 hover:-translate-y-1 hover:border-primary/25 hover:shadow-xl hover:shadow-primary/10 h-full flex flex-col justify-between">
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-2.5">
@@ -71,7 +87,9 @@ export function MatchResultCard({ match }: { match: MatchResponse }) {
             </div>
             <div className="flex items-center text-xs text-muted-foreground gap-2">
               <Clock className="h-3.5 w-3.5 text-primary" />
-              <span>{formatTime(startTime)} - {formatTime(endTime)}</span>
+              <span>
+                {formatTime(startTime)} - {formatTime(endTime)}
+              </span>
             </div>
             <div className="flex items-center text-xs text-muted-foreground gap-2">
               <Users className="h-3.5 w-3.5 text-primary" />
@@ -82,7 +100,9 @@ export function MatchResultCard({ match }: { match: MatchResponse }) {
           </div>
 
           <div className="mt-4 flex items-center justify-between">
-            <span className="text-[10px] text-muted-foreground">Chi phí/người</span>
+            <span className="text-[10px] text-muted-foreground">
+              Chi phí/người
+            </span>
             <span className="font-bold text-sm text-primary">
               {splitPrice && pricePerPlayer > 0
                 ? `${pricePerPlayer.toLocaleString("vi-VN")}đ`
@@ -92,11 +112,15 @@ export function MatchResultCard({ match }: { match: MatchResponse }) {
         </CardContent>
 
         <CardFooter className="p-4 pt-0">
-          <Button className="w-full rounded-lg font-semibold text-xs py-1.5 h-8" type="button">
+          <Button
+            className="w-full rounded-lg font-semibold text-xs py-1.5 h-8"
+            type="button"
+            onClick={handleJoinClick}
+          >
             Tham gia ghép kèo
           </Button>
         </CardFooter>
       </Card>
-    </Link>
+    </div>
   );
 }

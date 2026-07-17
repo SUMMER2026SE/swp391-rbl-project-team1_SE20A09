@@ -79,7 +79,11 @@ const isMatchEnded = (playDate: string, endTime: string) => {
   return new Date() > endDateTime;
 };
 
-const isMatchInProgress = (playDate: string, startTime: string, endTime: string) => {
+const isMatchInProgress = (
+  playDate: string,
+  startTime: string,
+  endTime: string,
+) => {
   if (!playDate || !startTime || !endTime) return false;
   const startDateTime = new Date(`${playDate}T${startTime}`);
   const endDateTime = new Date(`${playDate}T${endTime}`);
@@ -90,7 +94,8 @@ const isMatchInProgress = (playDate: string, startTime: string, endTime: string)
 const getMatchDisplayStatus = (m: MatchResponse) => {
   if (m.matchStatus === "CANCELLED") return "Đã hủy";
   if (isMatchEnded(m.playDate, m.endTime)) return "Đã kết thúc";
-  if (isMatchInProgress(m.playDate, m.startTime, m.endTime)) return "Đang diễn ra";
+  if (isMatchInProgress(m.playDate, m.startTime, m.endTime))
+    return "Đang diễn ra";
   if (m.matchStatus === "OPEN") return "Mở";
   if (m.matchStatus === "FULL") return "Đầy";
   return m.matchStatus;
@@ -98,8 +103,10 @@ const getMatchDisplayStatus = (m: MatchResponse) => {
 
 const getMatchStatusBadgeClass = (m: MatchResponse) => {
   if (m.matchStatus === "CANCELLED") return "bg-rose-500 hover:bg-rose-600";
-  if (isMatchEnded(m.playDate, m.endTime)) return "bg-slate-500 hover:bg-slate-600";
-  if (isMatchInProgress(m.playDate, m.startTime, m.endTime)) return "bg-blue-500 hover:bg-blue-600";
+  if (isMatchEnded(m.playDate, m.endTime))
+    return "bg-slate-500 hover:bg-slate-600";
+  if (isMatchInProgress(m.playDate, m.startTime, m.endTime))
+    return "bg-blue-500 hover:bg-blue-600";
   if (m.matchStatus === "OPEN") return "bg-emerald-500 hover:bg-emerald-600";
   if (m.matchStatus === "FULL") return "bg-amber-500 hover:bg-amber-600";
   return "bg-slate-400 hover:bg-slate-500";
@@ -109,10 +116,16 @@ function MatchRequestFeedPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const notifyMatchId = searchParams.get("matchId");
   const { data: session } = useSession();
   const { triggerLoginModal } = useRouteGuard();
-  const { isOpen, options, confirm, close, execute, isLoading: confirming } = useConfirm();
+  const {
+    isOpen,
+    options,
+    confirm,
+    close,
+    execute,
+    isLoading: confirming,
+  } = useConfirm();
   const [hasProcessedParam, setHasProcessedParam] = useState(false);
 
   const requireLogin = () => {
@@ -129,7 +142,8 @@ function MatchRequestFeedPage() {
     null,
   );
   const [showJoinedDetailDialog, setShowJoinedDetailDialog] = useState(false);
-  const [selectedJoinedRequest, setSelectedJoinedRequest] = useState<JoinRequestResponse | null>(null);
+  const [selectedJoinedRequest, setSelectedJoinedRequest] =
+    useState<JoinRequestResponse | null>(null);
   const [openingChat, setOpeningChat] = useState(false);
 
   // Báo cáo hành vi trong context kèo đấu (Host ↔ Người tham gia).
@@ -146,20 +160,33 @@ function MatchRequestFeedPage() {
       setOpeningChat(true);
       const result = group
         ? await getMatchConversation(selectedJoinedRequest.matchId)
-        : { conversationId: await createContextualConversation(selectedJoinedRequest.hostUserId!, {
-            action: 'match_referral', matchId: selectedJoinedRequest.matchId,
-            title: selectedJoinedRequest.matchTitle || `Kèo #${selectedJoinedRequest.matchId}`,
-            sportName: selectedJoinedRequest.sportName, playDate: selectedJoinedRequest.playDate,
-          }) };
+        : {
+            conversationId: await createContextualConversation(
+              selectedJoinedRequest.hostUserId!,
+              {
+                action: "match_referral",
+                matchId: selectedJoinedRequest.matchId,
+                title:
+                  selectedJoinedRequest.matchTitle ||
+                  `Kèo #${selectedJoinedRequest.matchId}`,
+                sportName: selectedJoinedRequest.sportName,
+                playDate: selectedJoinedRequest.playDate,
+              },
+            ),
+          };
       setShowJoinedDetailDialog(false);
       router.push(chatUrl(result.conversationId));
-    } catch { toast.error('Không thể mở cuộc trò chuyện'); }
-    finally { setOpeningChat(false); }
+    } catch {
+      toast.error("Không thể mở cuộc trò chuyện");
+    } finally {
+      setOpeningChat(false);
+    }
   };
 
   // Host manage dialog states
   const [showManageDialog, setShowManageDialog] = useState(false);
-  const [selectedManageMatch, setSelectedManageMatch] = useState<MatchResponse | null>(null);
+  const [selectedManageMatch, setSelectedManageMatch] =
+    useState<MatchResponse | null>(null);
   const [joinRequests, setJoinRequests] = useState<JoinRequestResponse[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [actioningId, setActioningId] = useState<number | null>(null);
@@ -175,7 +202,8 @@ function MatchRequestFeedPage() {
       const conversationId = await createContextualConversation(req.userId, {
         action: "match_referral",
         matchId: selectedManageMatch.matchId,
-        title: selectedManageMatch.title || `Kèo #${selectedManageMatch.matchId}`,
+        title:
+          selectedManageMatch.title || `Kèo #${selectedManageMatch.matchId}`,
         sportName: selectedManageMatch.sportName,
         playDate: selectedManageMatch.playDate,
       });
@@ -227,7 +255,9 @@ function MatchRequestFeedPage() {
 
   // Sidebar states
   const [myCreatedMatches, setMyCreatedMatches] = useState<MatchResponse[]>([]);
-  const [myJoinedRequests, setMyJoinedRequests] = useState<JoinRequestResponse[]>([]);
+  const [myJoinedRequests, setMyJoinedRequests] = useState<
+    JoinRequestResponse[]
+  >([]);
   const [loadingSidebar, setLoadingSidebar] = useState(false);
 
   // Fetch match requests
@@ -297,16 +327,13 @@ function MatchRequestFeedPage() {
     fetchDropdowns();
   }, []);
 
-  // Auto-open manage dialog when navigated from notification with matchId param
-  useEffect(() => {
-    if (!notifyMatchId || loadingFeed || matchRequests.length === 0) return;
-    const matchId = Number(notifyMatchId);
-    const match = matchRequests.find((m) => m.matchId === matchId);
-    if (match) {
-      setSelectedManageMatch(match);
-      setShowManageDialog(true);
-    }
-  }, [notifyMatchId, loadingFeed, matchRequests]);
+  // (Previously had a useEffect here that auto-opened the HOST manage dialog for ANY
+  // matchId in the URL. It was wrong: when the AI "Tham gia ghép kèo" card navigated
+  // to /community?matchId=X for a non-host user, this effect fired first and opened
+  // the host-only manage dialog → backend rejected with
+  // "Only the host of this match can view join requests".
+  // The single useEffect below correctly routes by user role (host → manage,
+  // joiner → joined detail, guest → join request dialog).)
 
   useEffect(() => {
     if (session?.user) {
@@ -355,6 +382,7 @@ function MatchRequestFeedPage() {
     // Check matchRequests feed
     const feedMatch = matchRequests.find((m) => m.matchId === paramMatchId);
     if (feedMatch) {
+      if (requireLogin()) return; // Redirect to login if not authenticated
       setSelectedRequest(feedMatch);
       setShowJoinDialog(true);
       setHasProcessedParam(true);
@@ -364,6 +392,7 @@ function MatchRequestFeedPage() {
     // Fallback: Fetch specific match details
     const fetchAndShowMatch = async () => {
       try {
+        if (requireLogin()) return; // Redirect to login if not authenticated
         const match = await getMatchDetail(paramMatchId);
         setSelectedRequest(match);
         setShowJoinDialog(true);
@@ -373,10 +402,18 @@ function MatchRequestFeedPage() {
         setHasProcessedParam(true);
       }
     };
-    
-    fetchAndShowMatch();
 
-  }, [loadingFeed, loadingSidebar, session, myCreatedMatches, myJoinedRequests, matchRequests, searchParams, hasProcessedParam]);
+    fetchAndShowMatch();
+  }, [
+    loadingFeed,
+    loadingSidebar,
+    session,
+    myCreatedMatches,
+    myJoinedRequests,
+    matchRequests,
+    searchParams,
+    hasProcessedParam,
+  ]);
 
   const getSkillLevelLabel = (level: string) => {
     const config = {
@@ -396,7 +433,10 @@ function MatchRequestFeedPage() {
       ADVANCED:
         "bg-purple-50/40 text-purple-600 border-purple-100 hover:bg-purple-50/40",
     };
-    return config[level as keyof typeof config] || "bg-slate-50/40 text-slate-500 border-slate-100";
+    return (
+      config[level as keyof typeof config] ||
+      "bg-slate-50/40 text-slate-500 border-slate-100"
+    );
   };
 
   const handleCreateMatch = async (e: React.FormEvent) => {
@@ -471,6 +511,7 @@ function MatchRequestFeedPage() {
 
   const handleJoinMatch = async () => {
     if (!selectedRequest) return;
+    if (requireLogin()) return; // Redirect to login if not authenticated
     if (selectedRequest.matchingType === "TEAM_VS_TEAM" && !joinNote.trim()) {
       toast.error("Vui lòng nhập Tên đội bóng của bạn!");
       return;
@@ -542,14 +583,6 @@ function MatchRequestFeedPage() {
     }
   };
 
-  // Chỉ hiển thị sân đúng môn thể thao đã chọn trong form tạo kèo
-  const selectedSportName = sportTypes.find(
-    (st) => st.sportTypeId.toString() === sportTypeId,
-  )?.sportName;
-  const filteredStadiumsForCreate = selectedSportName
-    ? stadiums.filter((st) => st.sportName === selectedSportName)
-    : stadiums;
-
   // Filter local list based on user search
   const filteredRequests = matchRequests.filter((req) => {
     const matchesKeyword =
@@ -557,7 +590,8 @@ function MatchRequestFeedPage() {
       (req.description &&
         req.description.toLowerCase().includes(searchKeyword.toLowerCase())) ||
       req.stadiumName.toLowerCase().includes(searchKeyword.toLowerCase()) ||
-      (req.complexName && req.complexName.toLowerCase().includes(searchKeyword.toLowerCase()));
+      (req.complexName &&
+        req.complexName.toLowerCase().includes(searchKeyword.toLowerCase()));
 
     const matchesSport =
       filterSport === "all" ||
@@ -670,8 +704,8 @@ function MatchRequestFeedPage() {
                   Chưa có kèo nào khả dụng
                 </h3>
                 <p className="text-slate-400 text-sm max-w-sm mx-auto">
-                  Không tìm thấy kèo chơi nào phù hợp với bộ lọc hoặc hiện tại chưa
-                  có lời mời nào. Bạn hãy là người đầu tiên tạo kèo nhé!
+                  Không tìm thấy kèo chơi nào phù hợp với bộ lọc hoặc hiện tại
+                  chưa có lời mời nào. Bạn hãy là người đầu tiên tạo kèo nhé!
                 </p>
               </div>
             ) : (
@@ -701,15 +735,19 @@ function MatchRequestFeedPage() {
                                 </span>
                                 <span>•</span>
                                 <span>
-                                  {new Date(request.createdAt).toLocaleDateString("vi-VN")}
+                                  {new Date(
+                                    request.createdAt,
+                                  ).toLocaleDateString("vi-VN")}
                                 </span>
                               </div>
                               <h2 className="text-xl font-extrabold text-slate-900 tracking-tight mt-1 hover:text-primary transition-colors">
                                 {request.title}
                               </h2>
                             </div>
-                            
-                            {session?.user && (session.user as Session["user"])?.userId === request.hostUserId ? (
+
+                            {session?.user &&
+                            (session.user as Session["user"])?.userId ===
+                              request.hostUserId ? (
                               <Button
                                 onClick={() => {
                                   setSelectedManageMatch(request);
@@ -792,21 +830,29 @@ function MatchRequestFeedPage() {
                             <div className="flex items-center text-primary-600 bg-primary/5 px-2.5 py-1 rounded-md">
                               <Calendar className="h-3.5 w-3.5 mr-1.5 text-primary" />
                               <span>
-                                {new Date(request.playDate).toLocaleDateString("vi-VN")}
+                                {new Date(request.playDate).toLocaleDateString(
+                                  "vi-VN",
+                                )}
                               </span>
                             </div>
 
                             <div className="flex items-center text-blue-600 bg-blue-50/50 px-2.5 py-1 rounded-md">
                               <Clock className="h-3.5 w-3.5 mr-1.5 text-blue-500" />
                               <span>
-                                {request.startTime.substring(0, 5)} - {request.endTime.substring(0, 5)}
+                                {request.startTime.substring(0, 5)} -{" "}
+                                {request.endTime.substring(0, 5)}
                               </span>
                             </div>
 
-                            <div className="flex items-center text-slate-600 bg-slate-50 px-2.5 py-1 rounded-md max-w-xs md:max-w-sm truncate" title={`${request.stadiumName}${request.complexName ? ` — ${request.complexName}` : ""} (${request.stadiumAddress})`}>
+                            <div
+                              className="flex items-center text-slate-600 bg-slate-50 px-2.5 py-1 rounded-md max-w-xs md:max-w-sm truncate"
+                              title={`${request.stadiumName}${request.complexName ? ` — ${request.complexName}` : ""} (${request.stadiumAddress})`}
+                            >
                               <MapPin className="h-3.5 w-3.5 mr-1.5 text-slate-500" />
                               <span>
-                                {request.complexName ? `${request.stadiumName} — ${request.complexName}` : request.stadiumName}
+                                {request.complexName
+                                  ? `${request.stadiumName} — ${request.complexName}`
+                                  : request.stadiumName}
                               </span>
                             </div>
                           </div>
@@ -819,16 +865,30 @@ function MatchRequestFeedPage() {
                                   <Users className="w-4 h-4 text-primary/70" />
                                   {request.matchingType === "TEAM_VS_TEAM" ? (
                                     <>
-                                      Trạng thái: <strong className="text-primary font-bold">{request.currentPlayers}/2 đội</strong>
+                                      Trạng thái:{" "}
+                                      <strong className="text-primary font-bold">
+                                        {request.currentPlayers}/2 đội
+                                      </strong>
                                     </>
                                   ) : (
                                     <>
-                                      Đã ghép: <strong className="text-primary font-bold">{request.currentPlayers}/{request.maxPlayers} thành viên</strong>
+                                      Đã ghép:{" "}
+                                      <strong className="text-primary font-bold">
+                                        {request.currentPlayers}/
+                                        {request.maxPlayers} thành viên
+                                      </strong>
                                     </>
                                   )}
                                 </span>
                                 <span className="text-[10px] font-bold text-slate-400">
-                                  {Math.round((request.currentPlayers / (request.matchingType === "TEAM_VS_TEAM" ? 2 : request.maxPlayers)) * 100)}%
+                                  {Math.round(
+                                    (request.currentPlayers /
+                                      (request.matchingType === "TEAM_VS_TEAM"
+                                        ? 2
+                                        : request.maxPlayers)) *
+                                      100,
+                                  )}
+                                  %
                                 </span>
                               </div>
                               <div className="w-full bg-slate-100 rounded-full h-2">
@@ -845,24 +905,36 @@ function MatchRequestFeedPage() {
                               </div>
                             </div>
 
-                            {request.splitPrice && request.pricePerPlayer !== undefined && (
-                              <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50/50 border border-emerald-100/50 px-2.5 py-1.5 rounded-lg shrink-0 w-fit self-start md:self-center">
-                                <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
-                                <span>
-                                  {request.matchingType === "TEAM_VS_TEAM" ? (
-                                    <>
-                                      Chia đôi: <strong className="text-emerald-700">{request.pricePerPlayer.toLocaleString("vi-VN")} đ/đội</strong>
-                                    </>
-                                  ) : (
-                                    <>
-                                      Chia tiền: <strong className="text-emerald-700">{request.pricePerPlayer.toLocaleString("vi-VN")} đ/người</strong>
-                                    </>
-                                  )}
-                                </span>
-                              </div>
-                            )}
+                            {request.splitPrice &&
+                              request.pricePerPlayer !== undefined && (
+                                <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50/50 border border-emerald-100/50 px-2.5 py-1.5 rounded-lg shrink-0 w-fit self-start md:self-center">
+                                  <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+                                  <span>
+                                    {request.matchingType === "TEAM_VS_TEAM" ? (
+                                      <>
+                                        Chia đôi:{" "}
+                                        <strong className="text-emerald-700">
+                                          {request.pricePerPlayer.toLocaleString(
+                                            "vi-VN",
+                                          )}{" "}
+                                          đ/đội
+                                        </strong>
+                                      </>
+                                    ) : (
+                                      <>
+                                        Chia tiền:{" "}
+                                        <strong className="text-emerald-700">
+                                          {request.pricePerPlayer.toLocaleString(
+                                            "vi-VN",
+                                          )}{" "}
+                                          đ/người
+                                        </strong>
+                                      </>
+                                    )}
+                                  </span>
+                                </div>
+                              )}
                           </div>
-
                         </div>
                       </div>
                     </CardContent>
@@ -879,7 +951,9 @@ function MatchRequestFeedPage() {
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-4 py-3.5 bg-gradient-to-r from-primary/5 to-primary/10 border-b border-slate-100 flex items-center gap-2">
                   <TrendingUp className="w-4.5 h-4.5 text-primary" />
-                  <h3 className="text-sm font-bold text-slate-800">Kèo tôi tạo</h3>
+                  <h3 className="text-sm font-bold text-slate-800">
+                    Kèo tôi tạo
+                  </h3>
                   <span className="ml-auto text-xs font-bold bg-primary/15 text-primary px-2.5 py-0.5 rounded-full">
                     {myCreatedMatches.length}
                   </span>
@@ -891,7 +965,9 @@ function MatchRequestFeedPage() {
                     </div>
                   ) : myCreatedMatches.length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
-                      <p className="text-xs text-slate-400">Bạn chưa tạo kèo nào.</p>
+                      <p className="text-xs text-slate-400">
+                        Bạn chưa tạo kèo nào.
+                      </p>
                     </div>
                   ) : (
                     myCreatedMatches.map((m) => (
@@ -909,14 +985,27 @@ function MatchRequestFeedPage() {
                             {m.title}
                           </p>
                           <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
-                            <span className="font-semibold text-slate-700">{m.sportName}</span>
+                            <span className="font-semibold text-slate-700">
+                              {m.sportName}
+                            </span>
                             <span>•</span>
-                            <span>{new Date(m.playDate).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}</span>
+                            <span>
+                              {new Date(m.playDate).toLocaleDateString(
+                                "vi-VN",
+                                { day: "2-digit", month: "2-digit" },
+                              )}
+                            </span>
                             <span>•</span>
-                            <span>{m.startTime.substring(0, 5)}-{m.endTime.substring(0, 5)}</span>
+                            <span>
+                              {m.startTime.substring(0, 5)}-
+                              {m.endTime.substring(0, 5)}
+                            </span>
                           </p>
                           <p className="text-[10px] text-slate-400 mt-1 font-semibold">
-                            Sĩ số: {m.currentPlayers}/{m.matchingType === "TEAM_VS_TEAM" ? "2 đội" : `${m.maxPlayers} người`}
+                            Sĩ số: {m.currentPlayers}/
+                            {m.matchingType === "TEAM_VS_TEAM"
+                              ? "2 đội"
+                              : `${m.maxPlayers} người`}
                           </p>
                         </div>
                         <div className="flex flex-col items-end gap-2 shrink-0">
@@ -938,9 +1027,16 @@ function MatchRequestFeedPage() {
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-4 py-3.5 bg-gradient-to-r from-blue-50 to-blue-100/30 border-b border-slate-100 flex items-center gap-2">
                   <ShieldAlert className="w-4.5 h-4.5 text-blue-600" />
-                  <h3 className="text-sm font-bold text-slate-800">Đơn tôi đã gửi</h3>
+                  <h3 className="text-sm font-bold text-slate-800">
+                    Đơn tôi đã gửi
+                  </h3>
                   <span className="ml-auto text-xs font-bold bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-full">
-                    {myJoinedRequests.filter((r) => r.requestStatus === "PENDING").length} chờ
+                    {
+                      myJoinedRequests.filter(
+                        (r) => r.requestStatus === "PENDING",
+                      ).length
+                    }{" "}
+                    chờ
                   </span>
                 </div>
                 <div className="p-3 h-[280px] overflow-y-auto space-y-2 flex flex-col">
@@ -950,7 +1046,9 @@ function MatchRequestFeedPage() {
                     </div>
                   ) : myJoinedRequests.length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
-                      <p className="text-xs text-slate-400">Bạn chưa gửi đơn tham gia nào.</p>
+                      <p className="text-xs text-slate-400">
+                        Bạn chưa gửi đơn tham gia nào.
+                      </p>
                     </div>
                   ) : (
                     myJoinedRequests.map((req) => (
@@ -969,13 +1067,24 @@ function MatchRequestFeedPage() {
                           </p>
                           {req.sportName && (
                             <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
-                              <span className="font-semibold text-slate-700">{req.sportName}</span>
+                              <span className="font-semibold text-slate-700">
+                                {req.sportName}
+                              </span>
                               <span>•</span>
-                              <span>{req.playDate ? new Date(req.playDate).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }) : ""}</span>
+                              <span>
+                                {req.playDate
+                                  ? new Date(req.playDate).toLocaleDateString(
+                                      "vi-VN",
+                                      { day: "2-digit", month: "2-digit" },
+                                    )
+                                  : ""}
+                              </span>
                             </p>
                           )}
                           {req.message && (
-                            <p className="text-[11px] text-slate-400 italic truncate mt-1">"{req.message}"</p>
+                            <p className="text-[11px] text-slate-400 italic truncate mt-1">
+                              "{req.message}"
+                            </p>
                           )}
                         </div>
                         <div className="flex flex-col items-end gap-2 shrink-0">
@@ -985,19 +1094,19 @@ function MatchRequestFeedPage() {
                               req.requestStatus === "PENDING"
                                 ? "bg-amber-500 hover:bg-amber-600"
                                 : req.requestStatus === "APPROVED"
-                                ? "bg-emerald-500 hover:bg-emerald-600"
-                                : req.requestStatus === "CANCELLED"
-                                ? "bg-slate-400 hover:bg-slate-500"
-                                : "bg-rose-500 hover:bg-rose-600"
+                                  ? "bg-emerald-500 hover:bg-emerald-600"
+                                  : req.requestStatus === "CANCELLED"
+                                    ? "bg-slate-400 hover:bg-slate-500"
+                                    : "bg-rose-500 hover:bg-rose-600"
                             }`}
                           >
                             {req.requestStatus === "PENDING"
                               ? "Chờ"
                               : req.requestStatus === "APPROVED"
-                              ? "Duyệt"
-                              : req.requestStatus === "CANCELLED"
-                              ? "Đã hủy"
-                              : "Từ chối"}
+                                ? "Duyệt"
+                                : req.requestStatus === "CANCELLED"
+                                  ? "Đã hủy"
+                                  : "Từ chối"}
                           </Badge>
                           <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
                         </div>
@@ -1075,13 +1184,7 @@ function MatchRequestFeedPage() {
                 <Label htmlFor="sport" className="font-bold text-slate-700">
                   Môn thể thao *
                 </Label>
-                <Select
-                  value={sportTypeId}
-                  onValueChange={(val) => {
-                    setSportTypeId(val);
-                    setStadiumId(""); // Reset sân đã chọn vì có thể không còn đúng môn
-                  }}
-                >
+                <Select value={sportTypeId} onValueChange={setSportTypeId}>
                   <SelectTrigger id="sport" className="border-slate-200">
                     <SelectValue placeholder="Chọn môn thể thao" />
                   </SelectTrigger>
@@ -1173,31 +1276,17 @@ function MatchRequestFeedPage() {
                     id="venue-select"
                     className="border-slate-200 w-full overflow-hidden [&>span]:truncate"
                   >
-                    <SelectValue
-                      placeholder={
-                        selectedSportName
-                          ? "Chọn sân bóng"
-                          : "Chọn môn thể thao trước"
-                      }
-                    />
+                    <SelectValue placeholder="Chọn sân bóng" />
                   </SelectTrigger>
                   <SelectContent>
-                    {filteredStadiumsForCreate.length === 0 ? (
-                      <div className="px-2 py-1.5 text-xs text-slate-400">
-                        {selectedSportName
-                          ? "Không có sân nào cho môn này"
-                          : "Vui lòng chọn môn thể thao trước"}
-                      </div>
-                    ) : (
-                      filteredStadiumsForCreate.map((st) => (
-                        <SelectItem
-                          key={st.stadiumId}
-                          value={st.stadiumId.toString()}
-                        >
-                          {st.stadiumName} ({st.address})
-                        </SelectItem>
-                      ))
-                    )}
+                    {stadiums.map((st) => (
+                      <SelectItem
+                        key={st.stadiumId}
+                        value={st.stadiumId.toString()}
+                      >
+                        {st.stadiumName} ({st.address})
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1353,7 +1442,8 @@ function MatchRequestFeedPage() {
                       Sân vận động:{" "}
                       <strong className="text-slate-700">
                         {selectedRequest.stadiumName}
-                        {selectedRequest.complexName && ` (${selectedRequest.complexName})`}
+                        {selectedRequest.complexName &&
+                          ` (${selectedRequest.complexName})`}
                       </strong>
                     </div>
                     <div>
@@ -1441,15 +1531,45 @@ function MatchRequestFeedPage() {
                   <h3 className="font-extrabold text-slate-900 text-base leading-snug">
                     {selectedManageMatch.title}
                   </h3>
-                  <Badge className={`${getMatchStatusBadgeClass(selectedManageMatch)} text-white border-0`}>
+                  <Badge
+                    className={`${getMatchStatusBadgeClass(selectedManageMatch)} text-white border-0`}
+                  >
                     {getMatchDisplayStatus(selectedManageMatch)}
                   </Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-y-2.5 gap-x-6 text-xs font-semibold text-slate-500 border-t border-slate-200/60 pt-3">
-                  <div>Sân bóng: <span className="text-slate-800 font-bold">{selectedManageMatch.stadiumName}{selectedManageMatch.complexName && ` (${selectedManageMatch.complexName})`}</span></div>
-                  <div>Ngày chơi: <span className="text-slate-800 font-bold">{new Date(selectedManageMatch.playDate).toLocaleDateString("vi-VN")}</span></div>
-                  <div>Giờ chơi: <span className="text-slate-800 font-bold">{selectedManageMatch.startTime.substring(0, 5)} - {selectedManageMatch.endTime.substring(0, 5)}</span></div>
-                  <div>Sĩ số hiện tại: <span className="text-slate-800 font-bold">{selectedManageMatch.currentPlayers}/{selectedManageMatch.matchingType === "TEAM_VS_TEAM" ? "2 đội" : selectedManageMatch.maxPlayers}</span></div>
+                  <div>
+                    Sân bóng:{" "}
+                    <span className="text-slate-800 font-bold">
+                      {selectedManageMatch.stadiumName}
+                      {selectedManageMatch.complexName &&
+                        ` (${selectedManageMatch.complexName})`}
+                    </span>
+                  </div>
+                  <div>
+                    Ngày chơi:{" "}
+                    <span className="text-slate-800 font-bold">
+                      {new Date(
+                        selectedManageMatch.playDate,
+                      ).toLocaleDateString("vi-VN")}
+                    </span>
+                  </div>
+                  <div>
+                    Giờ chơi:{" "}
+                    <span className="text-slate-800 font-bold">
+                      {selectedManageMatch.startTime.substring(0, 5)} -{" "}
+                      {selectedManageMatch.endTime.substring(0, 5)}
+                    </span>
+                  </div>
+                  <div>
+                    Sĩ số hiện tại:{" "}
+                    <span className="text-slate-800 font-bold">
+                      {selectedManageMatch.currentPlayers}/
+                      {selectedManageMatch.matchingType === "TEAM_VS_TEAM"
+                        ? "2 đội"
+                        : selectedManageMatch.maxPlayers}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -1467,8 +1587,12 @@ function MatchRequestFeedPage() {
                 ) : joinRequests.length === 0 ? (
                   <div className="text-center py-12 border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
                     <Users className="w-10 h-10 text-slate-300 mx-auto mb-2.5" />
-                    <p className="text-sm font-semibold text-slate-500">Chưa có ai đăng ký tham gia</p>
-                    <p className="text-xs text-slate-400 mt-1">Yêu cầu tham gia từ người dùng khác sẽ hiển thị tại đây.</p>
+                    <p className="text-sm font-semibold text-slate-500">
+                      Chưa có ai đăng ký tham gia
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Yêu cầu tham gia từ người dùng khác sẽ hiển thị tại đây.
+                    </p>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -1480,20 +1604,23 @@ function MatchRequestFeedPage() {
                         {/* Requester Info */}
                         <div className="flex justify-between items-center gap-3">
                           <div className="flex gap-3 items-center min-w-0">
-                          <Avatar className="h-10 w-10 border border-slate-100 shadow-2xs shrink-0">
-                            <AvatarImage
-                              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(req.fullName)}`}
-                            />
-                            <AvatarFallback>{req.fullName[0]}</AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0">
-                            <div className="font-bold text-slate-800 text-sm truncate">
-                              {req.fullName}
+                            <Avatar className="h-10 w-10 border border-slate-100 shadow-2xs shrink-0">
+                              <AvatarImage
+                                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(req.fullName)}`}
+                              />
+                              <AvatarFallback>{req.fullName[0]}</AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <div className="font-bold text-slate-800 text-sm truncate">
+                                {req.fullName}
+                              </div>
+                              <div className="text-slate-400 text-[10px] mt-0.5 truncate">
+                                {req.email} • Đăng ký:{" "}
+                                {new Date(req.createdAt).toLocaleDateString(
+                                  "vi-VN",
+                                )}
+                              </div>
                             </div>
-                            <div className="text-slate-400 text-[10px] mt-0.5 truncate">
-                              {req.email} • Đăng ký: {new Date(req.createdAt).toLocaleDateString("vi-VN")}
-                            </div>
-                          </div>
                           </div>
                           {req.userId && req.requestStatus === "PENDING" && (
                             <Button
@@ -1518,7 +1645,10 @@ function MatchRequestFeedPage() {
                         {req.message && (
                           <div className="bg-slate-50 border border-slate-100/80 p-3 rounded-lg text-xs text-slate-600 leading-relaxed font-medium">
                             <span className="font-bold text-slate-700 block mb-1">
-                              {selectedManageMatch.matchingType === "TEAM_VS_TEAM" ? "💼 Tên đội bóng của đối thủ:" : "💬 Lời nhắn:"}
+                              {selectedManageMatch.matchingType ===
+                              "TEAM_VS_TEAM"
+                                ? "💼 Tên đội bóng của đối thủ:"
+                                : "💬 Lời nhắn:"}
                             </span>
                             "{req.message}"
                           </div>
@@ -1631,7 +1761,10 @@ function MatchRequestFeedPage() {
       </Dialog>
 
       {/* Joined Request Detail Dialog */}
-      <Dialog open={showJoinedDetailDialog} onOpenChange={setShowJoinedDetailDialog}>
+      <Dialog
+        open={showJoinedDetailDialog}
+        onOpenChange={setShowJoinedDetailDialog}
+      >
         <DialogContent className="w-[95%] sm:max-w-md bg-white border border-slate-200 p-5 sm:p-6 max-h-[90vh] overflow-y-auto">
           <DialogHeader className="border-b pb-3.5 mb-2">
             <DialogTitle className="text-xl font-bold text-slate-800">
@@ -1644,7 +1777,8 @@ function MatchRequestFeedPage() {
               {/* Match overview */}
               <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl">
                 <h3 className="font-extrabold text-slate-900 text-base mb-3 leading-snug">
-                  {selectedJoinedRequest.matchTitle || `Kèo #${selectedJoinedRequest.matchId}`}
+                  {selectedJoinedRequest.matchTitle ||
+                    `Kèo #${selectedJoinedRequest.matchId}`}
                 </h3>
                 <div className="space-y-2 text-xs font-semibold text-slate-500">
                   {selectedJoinedRequest.sportName && (
@@ -1672,10 +1806,13 @@ function MatchRequestFeedPage() {
                     <div className="flex justify-between items-center py-1.5 border-b border-slate-200/50">
                       <span className="text-slate-400">Thời gian</span>
                       <strong className="text-slate-800 font-bold">
-                        {new Date(selectedJoinedRequest.playDate).toLocaleDateString("vi-VN")}{" "}
-                        {selectedJoinedRequest.startTime && selectedJoinedRequest.endTime ? (
-                          `(${selectedJoinedRequest.startTime.substring(0, 5)} - ${selectedJoinedRequest.endTime.substring(0, 5)})`
-                        ) : ""}
+                        {new Date(
+                          selectedJoinedRequest.playDate,
+                        ).toLocaleDateString("vi-VN")}{" "}
+                        {selectedJoinedRequest.startTime &&
+                        selectedJoinedRequest.endTime
+                          ? `(${selectedJoinedRequest.startTime.substring(0, 5)} - ${selectedJoinedRequest.endTime.substring(0, 5)})`
+                          : ""}
                       </strong>
                     </div>
                   )}
@@ -1683,7 +1820,9 @@ function MatchRequestFeedPage() {
                     <div className="flex justify-between items-center py-1.5">
                       <span className="text-slate-400">Hình thức</span>
                       <strong className="text-slate-800 font-bold">
-                        {selectedJoinedRequest.matchingType === "TEAM_VS_TEAM" ? "Đội vs Đội" : "Ghép lẻ"}
+                        {selectedJoinedRequest.matchingType === "TEAM_VS_TEAM"
+                          ? "Đội vs Đội"
+                          : "Ghép lẻ"}
                       </strong>
                     </div>
                   )}
@@ -1692,34 +1831,53 @@ function MatchRequestFeedPage() {
 
               {/* Status details */}
               <div className="space-y-2">
-                <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider block">Trạng thái đơn</span>
-                <div className={`p-4 rounded-xl border flex items-start gap-3 ${
-                  selectedJoinedRequest.requestStatus === "PENDING"
-                    ? "bg-amber-50/50 border-amber-200/60 text-amber-800"
-                    : selectedJoinedRequest.requestStatus === "APPROVED"
-                    ? "bg-emerald-50/50 border-emerald-200/60 text-emerald-800"
-                    : selectedJoinedRequest.requestStatus === "CANCELLED"
-                    ? "bg-slate-50 border-slate-200 text-slate-700"
-                    : "bg-rose-50/50 border-rose-200/60 text-rose-800"
-                }`}>
+                <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider block">
+                  Trạng thái đơn
+                </span>
+                <div
+                  className={`p-4 rounded-xl border flex items-start gap-3 ${
+                    selectedJoinedRequest.requestStatus === "PENDING"
+                      ? "bg-amber-50/50 border-amber-200/60 text-amber-800"
+                      : selectedJoinedRequest.requestStatus === "APPROVED"
+                        ? "bg-emerald-50/50 border-emerald-200/60 text-emerald-800"
+                        : selectedJoinedRequest.requestStatus === "CANCELLED"
+                          ? "bg-slate-50 border-slate-200 text-slate-700"
+                          : "bg-rose-50/50 border-rose-200/60 text-rose-800"
+                  }`}
+                >
                   <div className="flex-1">
                     <div className="font-bold text-sm">
-                      {selectedJoinedRequest.requestStatus === "PENDING" && "Đang chờ Host phê duyệt"}
-                      {selectedJoinedRequest.requestStatus === "APPROVED" && "Đã được phê duyệt tham gia"}
-                      {selectedJoinedRequest.requestStatus === "REJECTED" && "Yêu cầu đã bị từ chối"}
-                      {selectedJoinedRequest.requestStatus === "CANCELLED" && "Kèo đã bị hủy bởi Host"}
+                      {selectedJoinedRequest.requestStatus === "PENDING" &&
+                        "Đang chờ Host phê duyệt"}
+                      {selectedJoinedRequest.requestStatus === "APPROVED" &&
+                        "Đã được phê duyệt tham gia"}
+                      {selectedJoinedRequest.requestStatus === "REJECTED" &&
+                        "Yêu cầu đã bị từ chối"}
+                      {selectedJoinedRequest.requestStatus === "CANCELLED" &&
+                        "Kèo đã bị hủy bởi Host"}
                     </div>
                     <div className="text-xs mt-1 text-slate-500 font-semibold leading-relaxed">
-                      {selectedJoinedRequest.requestStatus === "PENDING" && "Host đang xem xét lời mời tham gia của bạn. Vui lòng quay lại kiểm tra sau."}
-                      {selectedJoinedRequest.requestStatus === "APPROVED" && "Chúc mừng! Bạn đã trở thành một phần của kèo này. Hãy liên hệ với Host."}
-                      {selectedJoinedRequest.requestStatus === "REJECTED" && "Rất tiếc, yêu cầu tham gia của bạn không được phê duyệt lần này. Hãy tìm các kèo khác nhé!"}
+                      {selectedJoinedRequest.requestStatus === "PENDING" &&
+                        "Host đang xem xét lời mời tham gia của bạn. Vui lòng quay lại kiểm tra sau."}
+                      {selectedJoinedRequest.requestStatus === "APPROVED" &&
+                        "Chúc mừng! Bạn đã trở thành một phần của kèo này. Hãy liên hệ với Host."}
+                      {selectedJoinedRequest.requestStatus === "REJECTED" &&
+                        "Rất tiếc, yêu cầu tham gia của bạn không được phê duyệt lần này. Hãy tìm các kèo khác nhé!"}
                       {selectedJoinedRequest.requestStatus === "CANCELLED" && (
                         <div className="space-y-2.5">
-                          <div>Kèo chơi này đã bị hủy bởi người tạo kèo. Bạn vui lòng tìm kiếm các kèo chơi khác nhé!</div>
+                          <div>
+                            Kèo chơi này đã bị hủy bởi người tạo kèo. Bạn vui
+                            lòng tìm kiếm các kèo chơi khác nhé!
+                          </div>
                           {selectedJoinedRequest.cancelReason && (
                             <div className="p-3 bg-slate-100/90 border border-slate-200/50 rounded-xl text-slate-700 font-bold not-italic">
-                              <span className="font-extrabold text-[10px] text-slate-400 block uppercase tracking-wider mb-1">Lý do hủy từ Host:</span>
-                              <span className="italic font-medium text-slate-600">&ldquo;{selectedJoinedRequest.cancelReason}&rdquo;</span>
+                              <span className="font-extrabold text-[10px] text-slate-400 block uppercase tracking-wider mb-1">
+                                Lý do hủy từ Host:
+                              </span>
+                              <span className="italic font-medium text-slate-600">
+                                &ldquo;{selectedJoinedRequest.cancelReason}
+                                &rdquo;
+                              </span>
                             </div>
                           )}
                         </div>
@@ -1733,7 +1891,9 @@ function MatchRequestFeedPage() {
               {selectedJoinedRequest.message && (
                 <div className="space-y-2">
                   <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider block">
-                    {selectedJoinedRequest.matchingType === "TEAM_VS_TEAM" ? "Tên đội bóng của bạn" : "Lời nhắn của bạn"}
+                    {selectedJoinedRequest.matchingType === "TEAM_VS_TEAM"
+                      ? "Tên đội bóng của bạn"
+                      : "Lời nhắn của bạn"}
                   </span>
                   <div className="p-3 bg-slate-50 border border-slate-100 rounded-lg text-xs font-medium text-slate-600 leading-relaxed italic">
                     "{selectedJoinedRequest.message}"
@@ -1742,32 +1902,49 @@ function MatchRequestFeedPage() {
               )}
 
               {/* Contact info for approved status */}
-              {selectedJoinedRequest.requestStatus === "APPROVED" && selectedJoinedRequest.hostName && (
-                <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl space-y-3">
-                  <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">📞 Thông tin liên hệ Host</span>
-                  <div className="space-y-2 text-xs text-slate-600 font-medium">
-                    <div className="flex justify-between items-center">
-                      <span>Tên Host:</span>
-                      <span className="text-slate-800 font-bold">{selectedJoinedRequest.hostName}</span>
+              {selectedJoinedRequest.requestStatus === "APPROVED" &&
+                selectedJoinedRequest.hostName && (
+                  <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl space-y-3">
+                    <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">
+                      📞 Thông tin liên hệ Host
+                    </span>
+                    <div className="space-y-2 text-xs text-slate-600 font-medium">
+                      <div className="flex justify-between items-center">
+                        <span>Tên Host:</span>
+                        <span className="text-slate-800 font-bold">
+                          {selectedJoinedRequest.hostName}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span>Email liên hệ:</span>
+                        <span className="text-slate-800 font-bold">
+                          {selectedJoinedRequest.hostEmail || "N/A"}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span>Email liên hệ:</span>
-                      <span className="text-slate-800 font-bold">{selectedJoinedRequest.hostEmail || "N/A"}</span>
-                    </div>
+                    <Button
+                      type="button"
+                      className="w-full"
+                      disabled={openingChat}
+                      onClick={() => openJoinedRequestChat(true)}
+                    >
+                      {openingChat ? "Đang mở..." : "Vào nhóm chat của kèo"}
+                    </Button>
                   </div>
-                  <Button type="button" className="w-full" disabled={openingChat}
-                    onClick={() => openJoinedRequestChat(true)}>
-                    {openingChat ? 'Đang mở...' : 'Vào nhóm chat của kèo'}
-                  </Button>
-                </div>
-              )}
+                )}
 
-              {selectedJoinedRequest.requestStatus === "PENDING" && selectedJoinedRequest.hostUserId && (
-                <Button type="button" variant="outline" className="w-full" disabled={openingChat}
-                  onClick={() => openJoinedRequestChat(false)}>
-                  {openingChat ? 'Đang mở...' : 'Nhắn tin hỏi Host'}
-                </Button>
-              )}
+              {selectedJoinedRequest.requestStatus === "PENDING" &&
+                selectedJoinedRequest.hostUserId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    disabled={openingChat}
+                    onClick={() => openJoinedRequestChat(false)}
+                  >
+                    {openingChat ? "Đang mở..." : "Nhắn tin hỏi Host"}
+                  </Button>
+                )}
 
               {selectedJoinedRequest.hostUserId && (
                 <Button
@@ -1815,14 +1992,24 @@ function MatchRequestFeedPage() {
             <div className="p-3.5 bg-rose-50 border border-rose-100 rounded-xl text-xs text-rose-800 flex gap-2.5 items-start">
               <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
               <div>
-                <div className="font-bold text-sm mb-0.5">Xác nhận hủy kèo chơi này?</div>
-                Hành động này không thể hoàn tác. Tất cả người dùng đã được duyệt hoặc đang chờ sẽ nhận được thông báo hủy và trạng thái đơn của họ sẽ tự động chuyển sang đã hủy.
+                <div className="font-bold text-sm mb-0.5">
+                  Xác nhận hủy kèo chơi này?
+                </div>
+                Hành động này không thể hoàn tác. Tất cả người dùng đã được
+                duyệt hoặc đang chờ sẽ nhận được thông báo hủy và trạng thái đơn
+                của họ sẽ tự động chuyển sang đã hủy.
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="cancel-reason" className="font-bold text-slate-700 text-sm">
-                Lý do hủy kèo <span className="text-slate-400 font-normal">(không bắt buộc)</span>
+              <Label
+                htmlFor="cancel-reason"
+                className="font-bold text-slate-700 text-sm"
+              >
+                Lý do hủy kèo{" "}
+                <span className="text-slate-400 font-normal">
+                  (không bắt buộc)
+                </span>
               </Label>
               <Textarea
                 id="cancel-reason"
@@ -1833,7 +2020,9 @@ function MatchRequestFeedPage() {
                 className="border-slate-200 text-sm focus:ring-primary/20"
                 maxLength={200}
               />
-              <p className="text-[10px] text-slate-400 text-right">Tối đa 200 ký tự</p>
+              <p className="text-[10px] text-slate-400 text-right">
+                Tối đa 200 ký tự
+              </p>
             </div>
 
             <div className="flex gap-3 border-t pt-4">
@@ -1891,11 +2080,16 @@ function MatchRequestFeedPage() {
 
 function MatchRequestFeedPageWrapper() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-50/50 flex items-center justify-center">Đang tải cộng đồng...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-50/50 flex items-center justify-center">
+          Đang tải cộng đồng...
+        </div>
+      }
+    >
       <MatchRequestFeedPage />
     </Suspense>
   );
 }
 
 export default MatchRequestFeedPageWrapper;
-
