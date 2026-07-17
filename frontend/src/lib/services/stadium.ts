@@ -1,4 +1,5 @@
 import { post, get, put, patch, del } from '../api';
+import { AxiosRequestConfig } from 'axios';
 import {
   CreateStadiumRequest,
   UpdateStadiumRequest,
@@ -25,28 +26,28 @@ export const stadiumService = {
     return get<SportType[]>('/sport-types');
   },
 
-  getMyStadiums: (params?: { search?: string; sportTypeId?: number; status?: string }) => {
+  getMyStadiums: (params?: { search?: string; sportTypeId?: number; status?: string }, config?: AxiosRequestConfig) => {
     const query = new URLSearchParams();
     if (params?.search) query.append('search', params.search);
     if (params?.sportTypeId) query.append('sportTypeId', params.sportTypeId.toString());
     if (params?.status) query.append('status', params.status);
     const queryString = query.toString();
-    return get<StadiumResponse[]>(`/stadiums/my${queryString ? `?${queryString}` : ''}`);
+    return get<StadiumResponse[]>(`/stadiums/my${queryString ? `?${queryString}` : ''}`, config);
   },
 
-  getStadiumById: (stadiumId: number) => {
-    return get<StadiumResponse>(`/stadiums/${stadiumId}`);
+  getStadiumById: (stadiumId: number, config?: AxiosRequestConfig) => {
+    return get<StadiumResponse>(`/stadiums/${stadiumId}`, config);
   },
 
   updateStadium: (stadiumId: number, data: UpdateStadiumRequest) => {
     return put<StadiumResponse>(`/stadiums/${stadiumId}`, data);
   },
 
-  getAllStadiums: (approvedStatus?: string) => {
+  getAllStadiums: (approvedStatus?: string, config?: AxiosRequestConfig) => {
     const query = new URLSearchParams();
     if (approvedStatus) query.append('approvedStatus', approvedStatus);
     const queryString = query.toString();
-    return get<StadiumResponse[]>(`/stadiums${queryString ? `?${queryString}` : ''}`);
+    return get<StadiumResponse[]>(`/stadiums${queryString ? `?${queryString}` : ''}`, config);
   },
 
   approveStadium: (stadiumId: number) => {
@@ -57,11 +58,11 @@ export const stadiumService = {
     return put<StadiumResponse>(`/stadiums/${stadiumId}/reject`, {});
   },
 
-  getAllComplexesAdmin: (approvedStatus?: string) => {
+  getAllComplexesAdmin: (approvedStatus?: string, config?: AxiosRequestConfig) => {
     const query = new URLSearchParams();
     if (approvedStatus) query.append('approvedStatus', approvedStatus);
     const queryString = query.toString();
-    return get<ComplexResponse[]>(`/complexes${queryString ? `?${queryString}` : ''}`);
+    return get<ComplexResponse[]>(`/complexes${queryString ? `?${queryString}` : ''}`, config);
   },
 
   approveComplex: (complexId: number) => {
@@ -86,8 +87,8 @@ export const stadiumService = {
     return del<void>(`/stadiums/${stadiumId}`);
   },
   
-  getMyComplexes: () => {
-    return get<ComplexResponse[]>('/complexes/my');
+  getMyComplexes: (config?: AxiosRequestConfig) => {
+    return get<ComplexResponse[]>('/complexes/my', config);
   },
 
   createFacility: (data: CreateFacilityRequest) => {
