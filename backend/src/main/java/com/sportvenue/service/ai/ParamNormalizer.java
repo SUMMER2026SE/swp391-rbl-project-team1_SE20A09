@@ -18,6 +18,7 @@ public class ParamNormalizer {
     private final ObjectMapper objectMapper;
     
     private static final Map<String, String> SPORT_MAP = new HashMap<>();
+
     static {
         SPORT_MAP.put("đá banh", "Bóng đá");
         SPORT_MAP.put("bóng đá", "Bóng đá");
@@ -36,6 +37,7 @@ public class ParamNormalizer {
     }
     
     private static final Map<String, String> DISTRICT_MAP = new HashMap<>();
+
     static {
         DISTRICT_MAP.put("q1", "Quận 1");
         DISTRICT_MAP.put("quận 1", "Quận 1");

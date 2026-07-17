@@ -6,6 +6,7 @@ import com.sportvenue.dto.response.ReviewResponse;
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.Review;
 import com.sportvenue.entity.Stadium;
+import com.sportvenue.entity.StadiumComplex;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.exception.BadRequestException;
@@ -13,6 +14,7 @@ import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.ReviewRepository;
+import com.sportvenue.repository.StadiumComplexRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.ReviewService;
 import com.sportvenue.service.CustomerNotificationService;
@@ -36,6 +38,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
     private final CustomerNotificationService customerNotificationService;
+    private final StadiumComplexRepository stadiumComplexRepository;
 
     @Override
     @Transactional
@@ -70,14 +73,8 @@ public class ReviewServiceImpl implements ReviewService {
 
         review = reviewRepository.save(review);
 
-        // Calculate and update stadium average rating + review count
-        Stadium stadium = booking.getStadium();
-        Optional<Double> avgRatingOpt = reviewRepository.calculateAverageRating(stadium.getStadiumId());
-        long reviewCount = reviewRepository.countByStadiumStadiumId(stadium.getStadiumId());
-        if (avgRatingOpt.isPresent()) {
-            stadium.setAverageRating(BigDecimal.valueOf(avgRatingOpt.get()));
-            stadium.setReviewCount((int) reviewCount);
-        }
+        // Calculate and update stadium + complex average rating and review counts
+        updateStadiumAndComplexRating(booking.getStadium());
 
         return mapToResponse(review);
     }
@@ -154,13 +151,36 @@ public class ReviewServiceImpl implements ReviewService {
         review.setComment(request.getComment().trim());
         review = reviewRepository.save(review);
 
-        Optional<Double> avgRatingOpt = reviewRepository.calculateAverageRating(review.getStadium().getStadiumId());
-        if (avgRatingOpt.isPresent()) {
-            Stadium stadium = review.getStadium();
-            stadium.setAverageRating(BigDecimal.valueOf(avgRatingOpt.get()));
-        }
+        // Calculate and update stadium + complex average rating and review counts
+        updateStadiumAndComplexRating(review.getStadium());
 
         return mapToResponse(review);
+    }
+
+    private void updateStadiumAndComplexRating(Stadium stadium) {
+        Optional<Double> avgRatingOpt = reviewRepository.calculateAverageRating(stadium.getStadiumId());
+        long reviewCount = reviewRepository.countByStadiumStadiumId(stadium.getStadiumId());
+        if (avgRatingOpt.isPresent()) {
+            stadium.setAverageRating(BigDecimal.valueOf(avgRatingOpt.get()));
+            stadium.setReviewCount((int) reviewCount);
+        } else {
+            stadium.setAverageRating(BigDecimal.valueOf(5.0));
+            stadium.setReviewCount(0);
+        }
+
+        if (stadium.getComplex() != null) {
+            StadiumComplex complex = stadium.getComplex();
+            Optional<Double> complexAvgOpt = reviewRepository.calculateAverageRatingForComplex(complex.getComplexId());
+            long complexReviewCount = reviewRepository.countByStadiumComplexComplexId(complex.getComplexId());
+            if (complexAvgOpt.isPresent()) {
+                complex.setAverageRating(BigDecimal.valueOf(complexAvgOpt.get()));
+                complex.setReviewCount((int) complexReviewCount);
+            } else {
+                complex.setAverageRating(BigDecimal.valueOf(5.0));
+                complex.setReviewCount(0);
+            }
+            stadiumComplexRepository.save(complex);
+        }
     }
 
     @Override

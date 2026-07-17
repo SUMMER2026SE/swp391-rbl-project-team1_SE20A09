@@ -80,6 +80,7 @@ export function FeaturedVenuesSection() {
                   sportType={venue.sportName}
                   price={venue.pricePerHour}
                   rating={venue.averageRating ?? 5}
+                  reviewCount={venue.totalReviews}
                   location={venue.address}
                 />
               </div>

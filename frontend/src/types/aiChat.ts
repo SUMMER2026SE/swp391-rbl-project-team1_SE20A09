@@ -27,7 +27,7 @@ export interface TimeSlotResponse {
 export interface DraftBookingResponse {
   stadiumId: number;
   stadiumName: string;
-  date: string; // YYYY-MM-DD
+  date: string; // dd/MM/yyyy (display format — convert before using in ISO date params)
   startTime: string; // HH:mm
   price: number;
 }

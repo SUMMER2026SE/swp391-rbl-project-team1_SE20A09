@@ -119,6 +119,14 @@ class AiChatE2ETest {
                 bookingService, stadiumRepository, userRepository,
                 bookingRepository, maintenanceScheduleService, conversationContextService);
 
+        java.time.Clock fixedClock = java.time.Clock.fixed(
+                java.time.Instant.parse("2026-07-15T01:00:00Z"),
+                java.time.ZoneId.of("Asia/Ho_Chi_Minh")
+        );
+        stadiumSearchHandler.setClock(fixedClock);
+        slotAvailabilityHandler.setClock(fixedClock);
+        bookingHandler.setClock(fixedClock);
+
         MatchRequestHandler matchRequestHandler = mock(MatchRequestHandler.class);
         PolicyHandler policyHandler = mock(PolicyHandler.class);
         JoinMatchHandler joinMatchHandler = mock(JoinMatchHandler.class);
@@ -127,6 +135,7 @@ class AiChatE2ETest {
                 matchRequestHandler, policyHandler, bookingHandler, joinMatchHandler, myBookingsHandler,
                 bookingStatusHandler, cancelBookingHandler, getPriceHandler, recommendTimeHandler,
                 aiUsageLogRepository, paramNormalizer, intentValidator);
+        aiChatService.setClock(fixedClock);
     }
 
     private AiChatTurnRequest request(String message) {
@@ -273,7 +282,7 @@ class AiChatE2ETest {
         assertThat(res3.getIntent()).isEqualTo("confirm_booking");
         assertThat(res3.getDraftBooking()).isNotNull();
         assertThat(res3.getDraftBooking().getStartTime()).isEqualTo("14:00");
-        assertThat(res3.getDraftBooking().getDate()).isEqualTo("2026-07-16");
+        assertThat(res3.getDraftBooking().getDate()).isEqualTo("16/07/2026");
         assertThat(res3.getDraftBooking().getStadiumId()).isEqualTo(99);
     }
 

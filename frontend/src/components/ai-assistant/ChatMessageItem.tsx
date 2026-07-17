@@ -36,6 +36,12 @@ function bookingStatusLabel(status?: string | null): { label: string; color: str
   }
 }
 
+/** Convert backend display date "dd/MM/yyyy" (DraftBookingResponse.date) → ISO "yyyy-MM-dd" for URL params */
+function toIsoDate(displayDate: string): string {
+  const [day, month, year] = displayDate.split("/");
+  return day && month && year ? `${year}-${month}-${day}` : displayDate;
+}
+
 /** Format ISO LocalDateTime (2026-07-15T08:00:00) → "08:00 - 15/07/2026" */
 function formatSlotTime(startTime?: string | null, endTime?: string | null): string {
   if (!startTime) return "";
@@ -237,7 +243,7 @@ export function ChatMessageItem({ msg, isLatest }: ChatMessageProps) {
                     </div>
                   </div>
                 </div>
-                <Link href={`/booking/new?venueId=${msg.draftBooking.stadiumId}&date=${msg.draftBooking.date}&slot=${msg.draftBooking.startTime}`}>
+                <Link href={`/booking/new?venueId=${msg.draftBooking.stadiumId}&date=${toIsoDate(msg.draftBooking.date)}&slot=${msg.draftBooking.startTime}`}>
                   <Button size="sm" className="w-full bg-amber-500 hover:bg-amber-600 text-white font-medium shadow-sm transition-all hover:shadow-md">
                     Tiến hành Đặt Sân & Thanh toán
                   </Button>

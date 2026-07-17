@@ -41,50 +41,13 @@ public class MatchRequestHandler {
 
     public AiChatTurnResponse handle(JsonNode args, String llmMessage, String conversationKey) {
         if (args == null || args.isNull() || args.isMissingNode()) {
-            Pageable pageable = PageRequest.of(0, DEFAULT_SIZE);
-            Page<MatchResponse> matches = matchRequestService.getActiveMatches(pageable, null, null);
-            if (matches.isEmpty()) {
-                return AiChatTurnResponse.builder()
-                        .message("Hiện tại chưa có kèo ghép nào đang mở.")
-                        .intent("find_match")
-                        .matches(List.of())
-                        .build();
-            }
-            if (conversationKey != null) {
-                conversationContextService.saveLastShownMatches(conversationKey, matches.getContent().stream().map(MatchResponse::getMatchId).toList());
-            }
-            return AiChatTurnResponse.builder()
-                    .message(llmMessage != null && !llmMessage.isBlank() ? llmMessage : "Dưới đây là một số kèo ghép hiện đang mở:")
-                    .intent("find_match")
-                    .matches(matches.getContent())
-                    .build();
+            return handleDefaultMatches(llmMessage, conversationKey);
         }
 
         int page = args.hasNonNull("page") ? args.get("page").asInt() : 0;
         int size = args.hasNonNull("size") ? Math.min(args.get("size").asInt(), MAX_SIZE) : DEFAULT_SIZE;
 
-        // Bug #3: Lấy location từ context province nếu không có location trong args
-        String location = null;
-        if (args.hasNonNull("location")) {
-            String rawLocation = args.get("location").asText();
-            VietnamLocationResolver.LocationMatch match = locationResolver.deriveFromAddress(rawLocation);
-            if (match.district() != null) {
-                location = match.district();
-            } else if (match.province() != null) {
-                location = match.province();
-            } else {
-                location = rawLocation;
-            }
-        } else if (conversationKey != null) {
-            // Bug #3: Fallback sang context province khi không có location
-            location = conversationContextService.getContext(conversationKey)
-                    .filter(ctx -> ctx.getCurrentProvince() != null)
-                    .map(ctx -> {
-                        log.info("Merged province from context for match search: {}", ctx.getCurrentProvince());
-                        return ctx.getCurrentProvince();
-                    })
-                    .orElse(null);
-        }
+        String location = resolveLocation(args, conversationKey);
 
         Integer sportTypeId = null;
         if (args.hasNonNull("sportName")) {
@@ -102,7 +65,6 @@ public class MatchRequestHandler {
             }
         }
 
-        // Nếu vẫn chưa có sportTypeId, thử lấy từ conversation context
         if (sportTypeId == null && conversationKey != null) {
             sportTypeId = conversationContextService.getContext(conversationKey)
                     .filter(ctx -> ctx.getCurrentSport() != null)
@@ -113,7 +75,6 @@ public class MatchRequestHandler {
                     .orElse(null);
         }
 
-        // Nếu vẫn không có sportName → hỏi ngược lại (clarification)
         if (sportTypeId == null) {
             List<String> supportedSports = sportTypeRepository.findAll().stream()
                     .map(SportType::getSportName)
@@ -128,28 +89,10 @@ public class MatchRequestHandler {
         Pageable pageable = PageRequest.of(page, size);
         Page<MatchResponse> matches = matchRequestService.getActiveMatches(pageable, location, sportTypeId);
 
-        // Bug #7: Hiển thị rõ tiêu chí đã lọc khi không tìm thấy kèo
         if (matches.isEmpty()) {
-            StringBuilder noMatchMessage = new StringBuilder("Chưa tìm thấy kèo ghép nào");
-            if (location != null) {
-                noMatchMessage.append(" ở ").append(location);
-            }
-            if (sportTypeId != null) {
-                // Lấy tên sport từ repository
-                String sportName = sportTypeRepository.findById(sportTypeId)
-                        .map(SportType::getSportName)
-                        .orElse("môn này");
-                noMatchMessage.append(" cho ").append(sportName);
-            }
-            noMatchMessage.append(". Bạn có thể thử đổi khu vực hoặc môn thể thao.");
-            return AiChatTurnResponse.builder()
-                    .message(noMatchMessage.toString())
-                    .intent("find_match")
-                    .matches(List.of())
-                    .build();
+            return handleNoMatchesFound(location, sportTypeId);
         }
 
-        // Lưu match IDs để user có thể chọn theo thứ tự khi tham gia kèo
         if (conversationKey != null) {
             List<Integer> matchIds = matches.getContent().stream()
                     .map(MatchResponse::getMatchId)
@@ -161,6 +104,68 @@ public class MatchRequestHandler {
                 .message(llmMessage)
                 .intent("find_match")
                 .matches(matches.getContent())
+                .build();
+    }
+
+    private AiChatTurnResponse handleDefaultMatches(String llmMessage, String conversationKey) {
+        Pageable pageable = PageRequest.of(0, DEFAULT_SIZE);
+        Page<MatchResponse> matches = matchRequestService.getActiveMatches(pageable, null, null);
+        if (matches.isEmpty()) {
+            return AiChatTurnResponse.builder()
+                    .message("Hiện tại chưa có kèo ghép nào đang mở.")
+                    .intent("find_match")
+                    .matches(List.of())
+                    .build();
+        }
+        if (conversationKey != null) {
+            conversationContextService.saveLastShownMatches(conversationKey, matches.getContent().stream().map(MatchResponse::getMatchId).toList());
+        }
+        return AiChatTurnResponse.builder()
+                .message(llmMessage != null && !llmMessage.isBlank() ? llmMessage : "Dưới đây là một số kèo ghép hiện đang mở:")
+                .intent("find_match")
+                .matches(matches.getContent())
+                .build();
+    }
+
+    private String resolveLocation(JsonNode args, String conversationKey) {
+        if (args.hasNonNull("location")) {
+            String rawLocation = args.get("location").asText();
+            VietnamLocationResolver.LocationMatch match = locationResolver.deriveFromAddress(rawLocation);
+            if (match.district() != null) {
+                return match.district();
+            } else if (match.province() != null) {
+                return match.province();
+            } else {
+                return rawLocation;
+            }
+        } else if (conversationKey != null) {
+            return conversationContextService.getContext(conversationKey)
+                    .filter(ctx -> ctx.getCurrentProvince() != null)
+                    .map(ctx -> {
+                        log.info("Merged province from context for match search: {}", ctx.getCurrentProvince());
+                        return ctx.getCurrentProvince();
+                    })
+                    .orElse(null);
+        }
+        return null;
+    }
+
+    private AiChatTurnResponse handleNoMatchesFound(String location, Integer sportTypeId) {
+        StringBuilder noMatchMessage = new StringBuilder("Chưa tìm thấy kèo ghép nào");
+        if (location != null) {
+            noMatchMessage.append(" ở ").append(location);
+        }
+        if (sportTypeId != null) {
+            String sportName = sportTypeRepository.findById(sportTypeId)
+                    .map(SportType::getSportName)
+                    .orElse("môn này");
+            noMatchMessage.append(" cho ").append(sportName);
+        }
+        noMatchMessage.append(". Bạn có thể thử đổi khu vực hoặc môn thể thao.");
+        return AiChatTurnResponse.builder()
+                .message(noMatchMessage.toString())
+                .intent("find_match")
+                .matches(List.of())
                 .build();
     }
 

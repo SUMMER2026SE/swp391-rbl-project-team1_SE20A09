@@ -371,7 +371,9 @@ export default function ComplexDetail({
             <div className="flex items-center gap-2 text-[12px] font-normal text-white/90">
               <div className="flex items-center gap-0.5 text-[#f0a500]">
                 <IconStar className="w-3.5 h-3.5 fill-[#f0a500] text-[#f0a500]" />
-                <span className="font-medium">{(complex.averageRating || 5.0).toFixed(1)}</span>
+                <span className="font-medium">
+                  {complex.reviewCount && complex.reviewCount > 0 ? (complex.averageRating || 5.0).toFixed(1) : '—'}
+                </span>
               </div>
               <span className="text-white/40">|</span>
               <div className="flex items-center gap-1 truncate max-w-xs md:max-w-md">
@@ -635,10 +637,10 @@ export default function ComplexDetail({
                   <div className="bg-gray-50 border-[0.5px] border-gray-200 rounded-[8px] p-4 flex flex-col md:flex-row items-center gap-5">
                     <div className="text-center shrink-0 min-w-[120px]">
                       <span className="block text-[36px] font-extrabold text-gray-800 leading-none">
-                        {(complex.averageRating || 5.0).toFixed(1)}
+                        {complex.reviewCount && complex.reviewCount > 0 ? (complex.averageRating || 5.0).toFixed(1) : '—'}
                       </span>
                       <div className="flex items-center justify-center gap-0.5 mt-2">
-                        {renderStars(complex.averageRating || 5.0, 14)}
+                        {renderStars(complex.reviewCount && complex.reviewCount > 0 ? complex.averageRating || 5.0 : 0.0, 14)}
                       </div>
                       <span className="block text-[11px] text-gray-400 font-normal mt-1.5">
                         {complex.reviewCount || 0} lượt đánh giá

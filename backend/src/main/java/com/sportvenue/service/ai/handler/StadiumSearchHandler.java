@@ -55,7 +55,7 @@ public class StadiumSearchHandler {
     /** Giờ Việt Nam — server Docker thường chạy UTC (lệch 7 tiếng). Không final để test override. */
     private Clock clock = Clock.system(ZoneId.of("Asia/Ho_Chi_Minh"));
 
-    void setClock(Clock clock) {
+    public void setClock(Clock clock) {
         this.clock = clock;
     }
 
@@ -68,6 +68,18 @@ public class StadiumSearchHandler {
      * Nếu Groq trả về location = "CURRENT_LOCATION" và có coords → tìm theo bán kính GPS.
      * Nếu không có coords → hỏi user cấp quyền vị trí.
      */
+    private static class SearchContextHolder {
+        final String sportName;
+        final String district;
+        final String province;
+
+        SearchContextHolder(String sportName, String district, String province) {
+            this.sportName = sportName;
+            this.district = district;
+            this.province = province;
+        }
+    }
+
     public AiChatTurnResponse handle(JsonNode args, String llmMessage, String conversationKey,
                                      Double userLat, Double userLng) {
         if (args == null || args.isNull() || args.isMissingNode()) {
@@ -77,13 +89,7 @@ public class StadiumSearchHandler {
                     .build();
         }
 
-        // --- Detect CURRENT_LOCATION ---
-        String rawLocation = args.hasNonNull("location") ? args.get("location").asText()
-                : (args.hasNonNull("district") ? args.get("district").asText() : null);
-        boolean isCurrentLocation = rawLocation != null
-                && rawLocation.toUpperCase().replace("_", "").contains("CURRENTLOCATION");
-
-        if (isCurrentLocation) {
+        if (isGpsSearch(args)) {
             if (userLat == null || userLng == null) {
                 return AiChatTurnResponse.builder()
                         .intent("need_more_info")
@@ -95,33 +101,10 @@ public class StadiumSearchHandler {
         }
 
         // --- MERGE FROM CONTEXT ---
-        String sportName = args.hasNonNull("sportName") ? args.get("sportName").asText() : null;
-        String district = args.hasNonNull("district") ? args.get("district").asText() : null;
-        String province = args.hasNonNull("province") ? args.get("province").asText() : null;
-        String targetDateStr = args.hasNonNull("targetDate") ? args.get("targetDate").asText() : null;
-        String startTimeStr = args.hasNonNull("startTime") ? args.get("startTime").asText() : null;
-        String endTimeStr = args.hasNonNull("endTime") ? args.get("endTime").asText() : null;
-
-        java.util.Optional<AiConversationContextService.ConversationContext> ctxOpt = conversationContextService.getContext(conversationKey);
-        if (ctxOpt.isPresent()) {
-            AiConversationContextService.ConversationContext ctx = ctxOpt.get();
-            if (sportName == null && ctx.getCurrentSport() != null) {
-                sportName = ctx.getCurrentSport();
-                log.info("Merged sportName from context: {}", sportName);
-            }
-            // Bug #3: Ưu tiên district/province từ user nhắc MỚI, chỉ fallback sang context khi không có
-            if (district == null && ctx.getCurrentDistrict() != null) {
-                district = ctx.getCurrentDistrict();
-                log.info("Merged district from context: {}", district);
-            }
-            if (province == null && ctx.getCurrentProvince() != null) {
-                province = ctx.getCurrentProvince();
-                log.info("Merged province from context: {}", province);
-            }
-        }
+        SearchContextHolder context = mergeContextFilters(args, conversationKey);
 
         // Guardrail cứng bằng code (sau khi merge context)
-        if (sportName == null && district == null && province == null && !args.hasNonNull("keyword")) {
+        if (context.sportName == null && context.district == null && context.province == null && !args.hasNonNull("keyword")) {
             return AiChatTurnResponse.builder()
                     .message("Bạn muốn tìm sân ở khu vực nào và chơi môn thể thao gì? Cho mình biết cụ thể hơn để tìm chính xác nhé.")
                     .intent("need_more_info")
@@ -129,26 +112,15 @@ public class StadiumSearchHandler {
         }
 
         // Lưu context mới (bao gồm cả province - Bug #3)
-        conversationContextService.saveCurrentFilters(conversationKey, sportName, district, province, targetDateStr, startTimeStr);
+        String targetDateStr = args.hasNonNull("targetDate") ? args.get("targetDate").asText() : null;
+        String startTimeStr = args.hasNonNull("startTime") ? args.get("startTime").asText() : null;
+        conversationContextService.saveCurrentFilters(conversationKey, context.sportName, context.district, context.province, targetDateStr, startTimeStr);
 
         StadiumSearchRequest.StadiumSearchRequestBuilder builder = StadiumSearchRequest.builder();
-
-        if (args.hasNonNull("keyword")) {
-            builder.keyword(args.get("keyword").asText());
-        }
-
-        String sportError = applySportNameFilter(builder, args);
+        String sportError = applyFilters(builder, args, context);
         if (sportError != null) {
             return AiChatTurnResponse.messageOnly(sportError, "search_stadiums");
         }
-
-        applyDistrictFilter(builder, args, province);
-        applyPriceFilters(builder, args);
-        applyDateTimeFilters(builder, args);
-        applySort(builder, args);
-
-        builder.page(0);
-        builder.size(AI_SEARCH_RESULT_LIMIT);
 
         StadiumSearchRequest searchRequest = builder.build();
         PageResponse<StadiumResponse> result = publicStadiumService.searchStadiums(searchRequest);
@@ -183,6 +155,57 @@ public class StadiumSearchHandler {
                 .intent("search_stadiums")
                 .stadiums(stadiums)
                 .build();
+    }
+
+    private boolean isGpsSearch(JsonNode args) {
+        String rawLocation = args.hasNonNull("location") ? args.get("location").asText()
+                : (args.hasNonNull("district") ? args.get("district").asText() : null);
+        return rawLocation != null
+                && rawLocation.toUpperCase().replace("_", "").contains("CURRENTLOCATION");
+    }
+
+    private SearchContextHolder mergeContextFilters(JsonNode args, String conversationKey) {
+        String sportName = args.hasNonNull("sportName") ? args.get("sportName").asText() : null;
+        String district = args.hasNonNull("district") ? args.get("district").asText() : null;
+        String province = args.hasNonNull("province") ? args.get("province").asText() : null;
+
+        java.util.Optional<AiConversationContextService.ConversationContext> ctxOpt = conversationContextService.getContext(conversationKey);
+        if (ctxOpt.isPresent()) {
+            AiConversationContextService.ConversationContext ctx = ctxOpt.get();
+            if (sportName == null && ctx.getCurrentSport() != null) {
+                sportName = ctx.getCurrentSport();
+                log.info("Merged sportName from context: {}", sportName);
+            }
+            if (district == null && ctx.getCurrentDistrict() != null) {
+                district = ctx.getCurrentDistrict();
+                log.info("Merged district from context: {}", district);
+            }
+            if (province == null && ctx.getCurrentProvince() != null) {
+                province = ctx.getCurrentProvince();
+                log.info("Merged province from context: {}", province);
+            }
+        }
+        return new SearchContextHolder(sportName, district, province);
+    }
+
+    private String applyFilters(StadiumSearchRequest.StadiumSearchRequestBuilder builder, JsonNode args, SearchContextHolder context) {
+        if (args.hasNonNull("keyword")) {
+            builder.keyword(args.get("keyword").asText());
+        }
+
+        String sportError = applySportNameFilter(builder, args);
+        if (sportError != null) {
+            return sportError;
+        }
+
+        applyDistrictFilter(builder, args, context.province);
+        applyPriceFilters(builder, args);
+        applyDateTimeFilters(builder, args);
+        applySort(builder, args);
+
+        builder.page(0);
+        builder.size(AI_SEARCH_RESULT_LIMIT);
+        return null;
     }
 
     /**

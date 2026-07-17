@@ -47,7 +47,7 @@ export function DraftJoinMatchCard({ draftJoinMatch }: DraftJoinMatchCardProps) 
         <p className="text-xs text-blue-700 dark:text-blue-400 mb-3">
           Đang chờ chủ kèo xác nhận. Bạn sẽ được thông báo khi có kết quả.
         </p>
-        <Link href={`/community`}>
+        <Link href={`/community?matchId=${draftJoinMatch.matchId}`}>
           <Button size="sm" variant="outline" className="w-full border-blue-300 text-blue-700 hover:bg-blue-100">
             Xem kèo của tôi
           </Button>

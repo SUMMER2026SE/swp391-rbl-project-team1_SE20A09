@@ -80,20 +80,23 @@ public class AiChatServiceImpl implements AiChatService {
     private static final String FALLBACK_MESSAGE =
             "Xin lỗi, tôi chưa giải quyết được vấn đề của bạn. Vui lòng liên hệ CSKH qua Hotline: 1900 xxxx hoặc Zalo SportHub để được hỗ trợ trực tiếp.";
 
+    private record IntentParseResult(
+        ExtractedIntentResult intentResult,
+        boolean ruleOverride,
+        String validationStatus,
+        String errorReason
+    ) { }
+
     @Override
     public AiChatTurnResponse handleChat(AiChatTurnRequest request, UserPrincipal userPrincipal, String conversationKey) {
         Integer userId = userPrincipal != null ? userPrincipal.getUserId() : null;
         String systemPrompt = buildSystemPrompt(userId);
         List<GroqClient.ChatMessage> history = toGroqHistory(request.getHistory());
 
-        ExtractedIntentResult intentResult;
-        GroqClient.GroqResult result = null;
+        GroqClient.GroqResult result;
         long startTime = System.currentTimeMillis();
-        long latencyMs = 0;
-
         try {
             result = groqClient.chatJson(model, systemPrompt, history, request.getMessage());
-            latencyMs = System.currentTimeMillis() - startTime;
             log.debug("Groq raw JSON cho message '{}': {}", request.getMessage(), result.text());
         } catch (LlmGatewayException e) {
             log.error("Lỗi gọi Groq gateway (kind={}): {}", e.getKind(), e.getMessage());
@@ -102,16 +105,28 @@ public class AiChatServiceImpl implements AiChatService {
                     : "Hệ thống AI đang tạm gián đoạn kết nối. Vui lòng thử lại sau.";
             return AiChatTurnResponse.messageOnly(errorMessage, "unknown");
         }
+        long latencyMs = System.currentTimeMillis() - startTime;
 
+        IntentParseResult parseResult = parseAndValidateIntent(result, request.getMessage());
+
+        long handlerStartTime = System.currentTimeMillis();
+        AiChatTurnResponse response = dispatch(parseResult.intentResult(), conversationKey, userId, request.getUserLat(), request.getUserLng());
+        long processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
+
+        saveUsageLog(userId, parseResult, result, request.getMessage(), response, latencyMs, processingTimeHandlerMs);
+
+        return response;
+    }
+
+    private IntentParseResult parseAndValidateIntent(GroqClient.GroqResult result, String userMessage) {
+        ExtractedIntentResult intentResult;
         boolean ruleOverride = false;
         String validationStatus = "PASS";
         String errorReason = null;
-        long handlerStartTime;
-        long processingTimeHandlerMs = 0;
-        
+
         try {
             intentResult = objectMapper.readValue(result.text(), ExtractedIntentResult.class);
-            log.info("Intent nhận diện: '{}' -> '{}', confidence: {}", request.getMessage(), intentResult.getIntent(), intentResult.getConfidence());
+            log.info("Intent nhận diện: '{}' -> '{}', confidence: {}", userMessage, intentResult.getIntent(), intentResult.getConfidence());
 
             // Normalize params
             intentResult = paramNormalizer.normalize(intentResult);
@@ -126,7 +141,7 @@ public class AiChatServiceImpl implements AiChatService {
             }
 
             if (!ruleOverride) {
-                boolean overrideResult = applyRuleBasedOverrides(intentResult, request.getMessage());
+                boolean overrideResult = applyRuleBasedOverrides(intentResult, userMessage);
                 if (overrideResult) {
                     ruleOverride = true;
                     validationStatus = "RULE_OVERRIDE";
@@ -149,11 +164,11 @@ public class AiChatServiceImpl implements AiChatService {
             errorReason = e.getMessage();
         }
 
-        handlerStartTime = System.currentTimeMillis();
-        AiChatTurnResponse response = dispatch(intentResult, conversationKey, userId, request.getUserLat(), request.getUserLng());
-        processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
+        return new IntentParseResult(intentResult, ruleOverride, validationStatus, errorReason);
+    }
 
-        // Lưu AiUsageLog (lưu sau khi dispatch để lấy được intent cuối cùng có thể đã bị handler thay đổi do lỗi)
+    private void saveUsageLog(Integer userId, IntentParseResult parseResult, GroqClient.GroqResult result,
+                              String userMessage, AiChatTurnResponse response, long latencyMs, long processingTimeHandlerMs) {
         try {
             AiUsageLog usageLog = AiUsageLog.builder()
                     .userId(userId)
@@ -162,25 +177,22 @@ public class AiChatServiceImpl implements AiChatService {
                     .inputTokens(result.inputTokens())
                     .outputTokens(result.outputTokens())
                     .latencyMs(latencyMs)
-                    .userInput(request.getMessage())
+                    .userInput(userMessage)
                     .rawLlmResponse(result.text())
-                    .parsedIntent(intentResult.getIntent())
+                    .parsedIntent(parseResult.intentResult().getIntent())
                     .actionResult(objectMapper.writeValueAsString(response))
-                    .promptVersion("1.0") // Thể hiện version prompt sau khi refactor
-                    .confidence(intentResult.getConfidence())
-                    .ruleOverride(ruleOverride)
-                    .validationResult(validationStatus)
-                    .errorReason(errorReason)
+                    .promptVersion("1.0")
+                    .confidence(parseResult.intentResult().getConfidence())
+                    .ruleOverride(parseResult.ruleOverride())
+                    .validationResult(parseResult.validationStatus())
+                    .errorReason(parseResult.errorReason())
                     .processingTimeAiMs(latencyMs)
                     .processingTimeHandlerMs(processingTimeHandlerMs)
-                    // TODO: cập nhật redisHit từ context (sẽ implement trong phase 4)
                     .build();
             aiUsageLogRepository.save(usageLog);
         } catch (Exception e) {
             log.error("Không thể ghi log AI usage", e);
         }
-
-        return response;
     }
 
     private AiChatTurnResponse dispatch(ExtractedIntentResult result, String conversationKey, Integer userId,

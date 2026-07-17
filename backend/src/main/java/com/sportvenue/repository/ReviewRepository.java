@@ -52,6 +52,10 @@ public interface ReviewRepository extends JpaRepository<Review, Integer> {
 
     long countByStadiumStadiumId(Integer stadiumId);
 
+    /** Tính điểm trung bình của complex — gọi sau khi có review mới để cập nhật StadiumComplex. */
+    @Query("SELECT AVG(r.ratingScore) FROM Review r WHERE r.stadium.complex.complexId = :complexId")
+    Optional<Double> calculateAverageRatingForComplex(@Param("complexId") Integer complexId);
+
     /** Đếm gộp số review theo danh sách sân — tránh N+1 khi render trang chủ. */
     @Query("SELECT r.stadium.stadiumId, COUNT(r) FROM Review r WHERE r.stadium.stadiumId IN :stadiumIds GROUP BY r.stadium.stadiumId")
     List<Object[]> countReviewsByStadiumIdIn(@Param("stadiumIds") List<Integer> stadiumIds);

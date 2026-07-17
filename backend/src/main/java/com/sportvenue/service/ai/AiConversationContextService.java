@@ -171,21 +171,35 @@ public class AiConversationContextService {
             return;
         }
         ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
-        if (sport != null) ctx.setCurrentSport(sport);
-        if (district != null) ctx.setCurrentDistrict(district);
-        if (province != null) ctx.setCurrentProvince(province); // Bug #3: Lưu province để ưu tiên khu vực người dùng nhắc
-        if (date != null) ctx.setCurrentDate(date);
-        if (time != null) ctx.setCurrentTime(time);
+        if (sport != null) {
+            ctx.setCurrentSport(sport);
+        }
+        if (district != null) {
+            ctx.setCurrentDistrict(district);
+        }
+        if (province != null) {
+            ctx.setCurrentProvince(province); // Bug #3: Lưu province để ưu tiên khu vực người dùng nhắc
+        }
+        if (date != null) {
+            ctx.setCurrentDate(date);
+        }
+        if (time != null) {
+            ctx.setCurrentTime(time);
+        }
         save(conversationKey, ctx);
     }
 
     public Optional<ConversationContext> getContext(String conversationKey) {
-        if (conversationKey == null) return Optional.empty();
+        if (conversationKey == null) {
+            return Optional.empty();
+        }
         return load(conversationKey);
     }
     
     public void saveBookingDraft(String conversationKey, java.util.Map<String, Object> draft) {
-        if (conversationKey == null) return;
+        if (conversationKey == null) {
+            return;
+        }
         ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
         ctx.setBookingDraft(draft);
         save(conversationKey, ctx);

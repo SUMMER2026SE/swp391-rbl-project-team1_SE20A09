@@ -90,7 +90,7 @@ class AiChatServiceImplLogTest {
                         "{\"intent\":\"search_stadiums\",\"message\":\"Ok\",\"params\":{}}",
                         120, 80, 200));
 
-        when(stadiumSearchHandler.handle(any(), any(), any()))
+        when(stadiumSearchHandler.handle(any(), any(), any(), any(), any()))
                 .thenReturn(AiChatTurnResponse.builder().intent("search_stadiums").build());
 
         service.handleChat(request("Tìm sân bóng đá"), null, "s:test");
