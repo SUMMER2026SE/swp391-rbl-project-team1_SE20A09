@@ -1,4 +1,5 @@
 import api from '../api'
+import { AxiosRequestConfig } from 'axios'
 
 export interface Amenity {
   amenityId: number
@@ -63,12 +64,12 @@ export async function searchStadiums(params: StadiumSearchRequest): Promise<Page
   return res.data
 }
 
-export async function getAmenities(): Promise<Amenity[]> {
-  const res = await api.get<Amenity[]>('/public/amenities')
+export async function getAmenities(config?: AxiosRequestConfig): Promise<Amenity[]> {
+  const res = await api.get<Amenity[]>('/public/amenities', config)
   return res.data
 }
 
-export async function getSportTypes(): Promise<{ sportTypeId: number, sportName: string }[]> {
-  const res = await api.get<{ sportTypeId: number, sportName: string }[]>('/sport-types')
+export async function getSportTypes(config?: AxiosRequestConfig): Promise<{ sportTypeId: number, sportName: string }[]> {
+  const res = await api.get<{ sportTypeId: number, sportName: string }[]>('/sport-types', config)
   return res.data
 }

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AdminCustomersPage from "../customers/page";
 import AdminOwnersPage from "../owners/page";
-import OwnerApprovalPage from "../owner-approvals/page";
+import AdminOwnerApprovalsClient from "../owner-approvals/components/AdminOwnerApprovalsClient";
 
 type MainTab = "customers" | "owners";
 type OwnerTab = "accounts" | "approvals";
@@ -89,7 +89,7 @@ export default function AdminUsersPage() {
             </TabsContent>
 
             <TabsContent value="approvals" className="mt-0">
-              <OwnerApprovalPage />
+              <AdminOwnerApprovalsClient initialApplications={[]} initialTotalPages={0} />
             </TabsContent>
           </Tabs>
         </TabsContent>
