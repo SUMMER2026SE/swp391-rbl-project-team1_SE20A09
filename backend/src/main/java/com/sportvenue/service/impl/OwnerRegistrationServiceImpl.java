@@ -48,6 +48,7 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
     private final com.sportvenue.service.AdminDashboardService adminDashboardService;
     private final EmailService emailService;
     private final AfterCommitExecutor afterCommitExecutor;
+    private final com.sportvenue.service.WalletService walletService;
 
     @Override
     @Transactional
@@ -246,6 +247,13 @@ public class OwnerRegistrationServiceImpl implements OwnerRegistrationService {
 
         userRepository.save(user);
         log.info("Owner registration APPROVED for email: {}. Role upgraded to Owner.", user.getEmail());
+
+        // Khởi tạo ví cho Owner khi được duyệt
+        try {
+            walletService.getOrCreateOwnerWallet(owner.getOwnerId());
+        } catch (Exception e) {
+            log.error("Failed to initialize wallet for Owner ID: {}", owner.getOwnerId(), e);
+        }
 
         notificationService.createNotification(
                 user.getUserId(),

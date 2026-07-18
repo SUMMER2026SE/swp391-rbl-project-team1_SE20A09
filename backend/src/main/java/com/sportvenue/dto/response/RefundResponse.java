@@ -25,4 +25,5 @@ public class RefundResponse {
     private String paymentStatus;      // REFUNDED
     private LocalDateTime processedAt;
     private String reason;
+    private String cancellationPolicyDescription;
 }

@@ -73,6 +73,22 @@ function getPaymentStatusBadge(status: string, refundedAmount?: number | null) {
   );
 }
 
+/** Giải thích chính sách hoàn tiền đã áp dụng — suy ra từ dữ liệu đã có, không gọi thêm API. */
+function getCancellationPolicyText(booking: BookingDetailItem): string | null {
+  if (booking.refundedAmount === null || booking.refundPercent === null) return null;
+  const wasDeposit = booking.paidAmount !== null && booking.paidAmount < booking.totalPrice;
+  if (wasDeposit && booking.refundPercent === 0) {
+    return "Đơn đặt cọc (30%): khách tự hủy mất toàn bộ tiền cọc — đây là chi phí giữ chỗ theo chính sách đặt cọc, không phải lỗi hệ thống.";
+  }
+  if (booking.refundPercent === 100) {
+    return "Hủy trước giờ chơi ≥ 24 giờ (hoặc do lỗi từ phía sân): hoàn lại toàn bộ giá trị sân.";
+  }
+  if (booking.refundPercent === 50) {
+    return "Hủy trước giờ chơi từ 12 đến dưới 24 giờ: hoàn lại 50% giá trị sân, phí dịch vụ không hoàn.";
+  }
+  return "Hủy quá sát giờ chơi (< 12 giờ) nên không được hoàn tiền theo chính sách.";
+}
+
 export default function BookingDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -392,15 +408,35 @@ export default function BookingDetailPage() {
                   {booking.paymentStatus === 'refunded' && (
                     <>
                       <Separator className="bg-slate-100" />
-                      <div className="flex justify-between items-center text-sm bg-blue-50/60 -mx-2 px-2 py-2 rounded-xl">
-                        <span className="text-blue-700 font-semibold">
-                          {booking.refundedAmount === 0 ? "Số tiền hoàn" : "Đã hoàn tiền"}
-                        </span>
-                        <span className="font-bold text-blue-700">
-                          {booking.refundedAmount !== null
-                            ? `${booking.refundedAmount.toLocaleString('vi-VN')}đ${booking.refundPercent !== null ? ` (${booking.refundPercent}%)` : ''}`
-                            : 'Đang xử lý...'}
-                        </span>
+                      <div className="flex flex-col gap-2 bg-blue-50/60 -mx-2 px-3 py-2.5 rounded-xl">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-blue-700 font-semibold">
+                            {booking.refundedAmount === 0 ? "Số tiền hoàn" : "Đã hoàn tiền"}
+                          </span>
+                          <span className="font-bold text-blue-700">
+                            {booking.refundedAmount !== null
+                              ? `${booking.refundedAmount.toLocaleString('vi-VN')}đ${booking.refundPercent !== null ? ` (${booking.refundPercent}%)` : ''}`
+                              : 'Đang xử lý...'}
+                          </span>
+                        </div>
+                        {getCancellationPolicyText(booking) && (
+                          <p className="text-[11px] text-blue-600/80 italic border-t border-blue-100/50 pt-1.5">
+                            {getCancellationPolicyText(booking)}
+                          </p>
+                        )}
+                        {booking.refundedAmount !== null && booking.refundedAmount > 0 && (
+                          <div className="mt-1 flex flex-col gap-1 text-[11px] text-slate-500 border-t border-blue-100/50 pt-1.5">
+                            <div className="flex justify-between items-center">
+                              <span>Mã tham chiếu VNPay (Demo):</span>
+                              <span className="font-mono bg-blue-100/70 px-1.5 py-0.5 rounded text-blue-800 text-[10px]">
+                                VNP-REFUND-{booking.id}-1721245678
+                              </span>
+                            </div>
+                            <span className="text-[9px] text-slate-400 italic text-right">
+                              * Mã tham chiếu giả lập để minh họa luồng tiền
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </>
                   )}

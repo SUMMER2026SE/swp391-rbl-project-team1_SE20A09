@@ -2,6 +2,7 @@ package com.sportvenue.service;
 
 import com.sportvenue.dto.request.RefundRequest;
 import com.sportvenue.dto.response.OwnerBookingResponse;
+import com.sportvenue.dto.response.OwnerBookingsSummaryResponse;
 import com.sportvenue.dto.response.RefundResponse;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.entity.enums.RefundReasonType;
@@ -59,4 +60,14 @@ public interface RefundService {
      */
     Page<OwnerBookingResponse> getOwnerBookings(
             String ownerEmail, BookingStatus status, Pageable pageable);
+
+    /**
+     * Tổng hợp Gross/Refund/Fee/Net trên TOÀN BỘ booking của Owner (không phụ thuộc phân trang) —
+     * dùng cho card summary, tránh bug tổng bị lệch khi chỉ cộng dồn 1 trang đang hiển thị.
+     *
+     * @param ownerEmail Email của Owner đang thực hiện thao tác
+     * @param status trạng thái cần lọc, null để lấy tất cả
+     * @return Tổng hợp doanh thu
+     */
+    OwnerBookingsSummaryResponse getOwnerBookingsSummary(String ownerEmail, BookingStatus status);
 }

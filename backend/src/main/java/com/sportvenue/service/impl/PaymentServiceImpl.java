@@ -21,6 +21,9 @@ import com.sportvenue.service.NotificationService;
 import com.sportvenue.service.VnpayRefundGateway;
 import com.sportvenue.util.AfterCommitExecutor;
 import com.sportvenue.util.VNPayUtil;
+import com.sportvenue.entity.Owner;
+import com.sportvenue.service.WalletService;
+import com.sportvenue.entity.enums.WalletTransactionType;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,6 +67,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final CustomerNotificationService customerNotificationService;
     private final AfterCommitExecutor afterCommitExecutor;
     private final VnpayRefundGateway vnpayRefundGateway;
+    private final WalletService walletService;
 
     @Override
     @Transactional
@@ -303,6 +307,51 @@ public class PaymentServiceImpl implements PaymentService {
                 booking.setPaymentStatus(PaymentStatus.DEPOSITED);
             }
             bookingRepository.save(booking);
+
+            // Ghi nhận vào ví nội bộ
+            Owner resolvedOwner = booking.getStadium() != null ? booking.getStadium().resolveOwner() : null;
+            if (resolvedOwner != null) {
+                BigDecimal totalAmount = payment.getAmount();
+                BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
+                if (booking.getPaymentStatus() == PaymentStatus.PAID) {
+                    BigDecimal ownerShare = totalAmount.subtract(serviceFee);
+                    walletService.recordOwnerTransaction(
+                            resolvedOwner.getOwnerId(),
+                            ownerShare,
+                            booking.getBookingId(),
+                            WalletTransactionType.BOOKING_CREDIT,
+                            "Doanh thu đặt sân (đã trừ phí dịch vụ)"
+                    );
+                    if (serviceFee.compareTo(BigDecimal.ZERO) > 0) {
+                        walletService.recordPlatformTransaction(
+                                serviceFee,
+                                booking.getBookingId(),
+                                WalletTransactionType.SERVICE_FEE_CREDIT,
+                                "Phí dịch vụ từ đơn đặt sân #" + booking.getBookingId()
+                        );
+                    }
+                } else if (booking.getPaymentStatus() == PaymentStatus.DEPOSITED) {
+                    // Trừ phí dịch vụ ngay lúc cọc (không đợi tới lúc thu nốt) — tiền cọc đã là
+                    // giao dịch thật qua VNPay, nên Platform cần được ghi nhận doanh thu ngay,
+                    // tránh trường hợp khách hủy trước khi thu nốt khiến Platform mất trắng phí.
+                    BigDecimal ownerShare = totalAmount.subtract(serviceFee);
+                    walletService.recordOwnerTransaction(
+                            resolvedOwner.getOwnerId(),
+                            ownerShare,
+                            booking.getBookingId(),
+                            WalletTransactionType.BOOKING_CREDIT,
+                            "Tiền đặt cọc đặt sân #" + booking.getBookingId() + " (đã trừ phí dịch vụ)"
+                    );
+                    if (serviceFee.compareTo(BigDecimal.ZERO) > 0) {
+                        walletService.recordPlatformTransaction(
+                                serviceFee,
+                                booking.getBookingId(),
+                                WalletTransactionType.SERVICE_FEE_CREDIT,
+                                "Phí dịch vụ từ đơn đặt cọc #" + booking.getBookingId()
+                        );
+                    }
+                }
+            }
 
             final Booking finalBookingForCallback = booking;
             try {

@@ -38,6 +38,8 @@ import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.repository.TimeSlotExceptionRepository;
 import com.sportvenue.entity.TimeSlotException;
+import com.sportvenue.service.WalletService;
+import com.sportvenue.entity.enums.WalletTransactionType;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.AdminDashboardService;
 import com.sportvenue.service.BookingService;
@@ -125,6 +127,7 @@ public class BookingServiceImpl implements BookingService {
     private final CustomerNotificationService customerNotificationService;
     private final AfterCommitExecutor afterCommitExecutor;
     private final AdminDashboardService adminDashboardService;
+    private final WalletService walletService;
 
     @Override
     @Transactional
@@ -367,26 +370,14 @@ public class BookingServiceImpl implements BookingService {
                         "Không tìm thấy booking với ID " + bookingId));
 
         Integer currentUserId = principal.getUser().getUserId();
-        Owner resolvedOwner = booking.getStadium() != null ? booking.getStadium().resolveOwner() : null;
-        if (resolvedOwner == null || resolvedOwner.getUser() == null
-                || !resolvedOwner.getUser().getUserId().equals(currentUserId)) {
-            throw new ForbiddenException("Bạn không có quyền xác nhận thanh toán cho đơn đặt sân này");
-        }
+        checkBookingOwnership(principal, booking);
 
         // Idempotent — double-click hoặc network retry, trả trạng thái hiện tại thay vì lỗi.
         if (booking.getPaymentStatus() == PaymentStatus.PAID) {
             return toBookingDetailResponse(booking, booking.getStadium(), booking.getSlot());
         }
 
-        if (booking.getBookingStatus() == BookingStatus.CANCELLED) {
-            throw new BadRequestException("Booking #" + bookingId + " đã bị hủy — không thể xác nhận thu tiền");
-        }
-
-        if (booking.getPaymentStatus() != PaymentStatus.AWAITING_CASH_PAYMENT) {
-            throw new BadRequestException(
-                    "Booking #" + bookingId + " không ở trạng thái chờ thu tiền mặt. Hiện tại: "
-                            + booking.getPaymentStatus());
-        }
+        validateCashPaymentStatus(booking, bookingId);
 
         Payment cashPayment = paymentRepository
                 .findCashPaymentsByBookingIdAndMethodAndStatus(
@@ -405,6 +396,9 @@ public class BookingServiceImpl implements BookingService {
         booking.setPaymentStatus(PaymentStatus.PAID);
         Booking saved = bookingRepository.save(booking);
 
+        // Ghi nhận vào ví nội bộ
+        recordWalletForCashPayment(saved);
+
         try {
             notificationService.publishNotificationEvent(
                     saved.getUser().getUserId(),
@@ -417,13 +411,137 @@ public class BookingServiceImpl implements BookingService {
             log.error("Failed to publish cash-payment-confirmed notification for booking {}", saved.getBookingId(), e);
         }
 
-        // Doanh thu Owner/revenue report tự tính đúng (sum theo TransactionStatus.SUCCESS) — chỉ
-        // cần xóa cache dashboard admin vì gross revenue/confirmed-payment count thay đổi.
         adminDashboardService.evictDashboardCache();
-
         log.info("💵 Owner {} xác nhận đã thu tiền mặt cho booking #{}", currentUserId, saved.getBookingId());
 
         return toBookingDetailResponse(saved, saved.getStadium(), saved.getSlot());
+    }
+
+    @Override
+    @Transactional
+    public BookingDetailResponse confirmRemainingPaymentReceived(UserPrincipal principal, Integer bookingId) {
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy booking với ID " + bookingId));
+
+        Integer currentUserId = principal.getUser().getUserId();
+        checkBookingOwnership(principal, booking);
+
+        // Idempotent — double-click hoặc network retry, trả trạng thái hiện tại thay vì lỗi.
+        if (booking.getPaymentStatus() == PaymentStatus.PAID) {
+            return toBookingDetailResponse(booking, booking.getStadium(), booking.getSlot());
+        }
+
+        validateRemainingPaymentStatus(booking, bookingId);
+
+        Payment depositPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
+                .stream().findFirst()
+                .orElseThrow(() -> new BadRequestException(
+                        "Không tìm thấy giao dịch cọc đã thanh toán cho đơn này"));
+
+        BigDecimal depositAmount = depositPayment.getAmount();
+        BigDecimal totalPrice = booking.getTotalPrice();
+        BigDecimal remainingAmount = totalPrice.subtract(depositAmount);
+
+        Payment remainingPayment = Payment.builder()
+                .booking(booking)
+                .paymentMethod(PaymentMethod.CASH)
+                .amount(remainingAmount)
+                .transactionCode("CASH-REMAINING-" + bookingId)
+                .paymentStatus(TransactionStatus.SUCCESS)
+                .paidAt(LocalDateTime.now())
+                .build();
+        paymentRepository.save(remainingPayment);
+
+        booking.setPaymentStatus(PaymentStatus.PAID);
+        Booking saved = bookingRepository.save(booking);
+
+        // Ghi nhận vào ví nội bộ
+        recordWalletForRemainingPayment(saved, remainingAmount);
+
+        try {
+            notificationService.publishNotificationEvent(
+                    saved.getUser().getUserId(),
+                    "Đã xác nhận thanh toán đủ",
+                    "Chủ sân đã xác nhận thu đủ phần còn lại cho đơn đặt sân #" + saved.getBookingId()
+                            + " tại " + saved.getStadium().getStadiumName() + ".",
+                    com.sportvenue.entity.enums.NotificationType.PAYMENT,
+                    String.valueOf(saved.getBookingId()));
+        } catch (Exception e) {
+            log.error("Failed to publish remaining-payment-confirmed notification for booking {}", saved.getBookingId(), e);
+        }
+
+        adminDashboardService.evictDashboardCache();
+        log.info("💵 Owner {} xác nhận đã thu nốt phần còn lại cho booking #{}", currentUserId, saved.getBookingId());
+
+        return toBookingDetailResponse(saved, saved.getStadium(), saved.getSlot());
+    }
+
+    private void checkBookingOwnership(UserPrincipal principal, Booking booking) {
+        Integer currentUserId = principal.getUser().getUserId();
+        Owner resolvedOwner = booking.getStadium() != null ? booking.getStadium().resolveOwner() : null;
+        if (resolvedOwner == null || resolvedOwner.getUser() == null
+                || !resolvedOwner.getUser().getUserId().equals(currentUserId)) {
+            throw new ForbiddenException("Bạn không có quyền xác nhận thanh toán cho đơn đặt sân này");
+        }
+    }
+
+    private void validateCashPaymentStatus(Booking booking, Integer bookingId) {
+        if (booking.getBookingStatus() == BookingStatus.CANCELLED) {
+            throw new BadRequestException("Booking #" + bookingId + " đã bị hủy — không thể xác nhận thu tiền");
+        }
+        if (booking.getPaymentStatus() != PaymentStatus.AWAITING_CASH_PAYMENT) {
+            throw new BadRequestException(
+                    "Booking #" + bookingId + " không ở trạng thái chờ thu tiền mặt. Hiện tại: "
+                            + booking.getPaymentStatus());
+        }
+    }
+
+    private void validateRemainingPaymentStatus(Booking booking, Integer bookingId) {
+        if (booking.getBookingStatus() == BookingStatus.CANCELLED) {
+            throw new BadRequestException("Booking #" + bookingId + " đã bị hủy — không thể xác nhận thu tiền");
+        }
+        if (booking.getPaymentStatus() != PaymentStatus.DEPOSITED) {
+            throw new BadRequestException(
+                    "Booking #" + bookingId + " không ở trạng thái đặt cọc. Hiện tại: "
+                            + booking.getPaymentStatus());
+        }
+    }
+
+    private void recordWalletForCashPayment(Booking booking) {
+        Owner bookingOwner = booking.getStadium() != null ? booking.getStadium().resolveOwner() : null;
+        if (bookingOwner == null) {
+            return;
+        }
+        BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
+        if (serviceFee.compareTo(BigDecimal.ZERO) > 0) {
+            walletService.recordOwnerTransaction(
+                    bookingOwner.getOwnerId(),
+                    serviceFee.negate(),
+                    booking.getBookingId(),
+                    WalletTransactionType.SERVICE_FEE_DEBIT,
+                    "Khấu trừ phí dịch vụ đơn đặt sân tiền mặt #" + booking.getBookingId()
+            );
+            walletService.recordPlatformTransaction(
+                    serviceFee,
+                    booking.getBookingId(),
+                    WalletTransactionType.SERVICE_FEE_CREDIT,
+                    "Phí dịch vụ từ đơn tiền mặt #" + booking.getBookingId()
+            );
+        }
+    }
+
+    private void recordWalletForRemainingPayment(Booking booking, BigDecimal remainingAmount) {
+        Owner bookingOwner = booking.getStadium() != null ? booking.getStadium().resolveOwner() : null;
+        if (bookingOwner != null) {
+            walletService.recordOwnerTransaction(
+                    bookingOwner.getOwnerId(),
+                    remainingAmount,
+                    booking.getBookingId(),
+                    WalletTransactionType.BOOKING_CREDIT,
+                    "Thu nốt phần còn lại đơn đặt cọc #" + booking.getBookingId()
+            );
+        }
     }
 
     @Override
@@ -466,15 +584,20 @@ public class BookingServiceImpl implements BookingService {
                     }
                 });
 
-                originalPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
-                        .stream().findFirst().orElse(null);
+                List<Payment> successPaymentsForCancel = paymentRepository.findSuccessPaymentsByBookingId(bookingId);
+                originalPayment = successPaymentsForCancel.isEmpty()
+                        ? null
+                        : RefundServiceImpl.pickReferencePayment(successPaymentsForCancel);
 
                 if (originalPayment != null) {
                     // docs/qa_findings_refactor_plan.md mục 1.2: PHẢI áp cùng công thức tiering
                     // (24h/12h/OWNER_FAULT) với /owner/bookings/{id}/refund — trước đây hoàn thẳng
                     // 100% originalPayment.getAmount() bất kể còn bao lâu tới giờ chơi.
+                    // SUM tất cả payment SUCCESS (không chỉ payment tham chiếu) — đơn cọc đã thu nốt
+                    // có 2 dòng (VNPay cọc + CASH còn lại), tính thiếu sẽ hoàn thiếu tiền cho khách.
+                    BigDecimal totalPaidForCancel = RefundServiceImpl.sumPaidAmount(successPaymentsForCancel);
                     RefundServiceImpl.RefundCalculation calculation = RefundServiceImpl.calculateRefund(
-                            booking, originalPayment, RefundReasonType.CUSTOMER_REQUEST, null, false);
+                            booking, totalPaidForCancel, RefundReasonType.CUSTOMER_REQUEST, null, false);
 
                     refundPayment = Payment.builder()
                         .booking(booking)
@@ -549,6 +672,10 @@ public class BookingServiceImpl implements BookingService {
             // Hủy <12h trước giờ chơi -> tiering trả về 0đ (docs/qa_findings_refactor_plan.md mục 1.3).
             // Không có gì để hoàn nên KHÔNG gọi cổng thanh toán (gateway thật/mock đều từ chối
             // yêu cầu hoàn 0đ) — coi như "thành công" luôn để booking chuyển CANCELLED bình thường.
+            gatewaySuccess = true;
+        } else if (ctx.originalPayment.getPaymentMethod() == PaymentMethod.CASH) {
+            // Đơn thanh toán tiền mặt — không có giao dịch VNPay gốc để hoàn qua gateway.
+            log.info("Booking #{} sử dụng phương thức CASH — tự động duyệt hoàn tiền bỏ qua gateway VNPay", bookingId);
             gatewaySuccess = true;
         } else {
             gatewaySuccess = false;
@@ -956,17 +1083,24 @@ public class BookingServiceImpl implements BookingService {
 
         // Số tiền THỰC TẾ đã charge qua cổng — khác totalPrice khi là đơn đặt cọc (chỉ thu 30%),
         // để FE hiển thị rõ "Đã đặt cọc: Xđ" thay vì chỉ ghi nhãn "Đặt cọc" mà không rõ số tiền.
-        BigDecimal paidAmount = paymentRepository.findSuccessPaymentsByBookingId(booking.getBookingId())
-                .stream().findFirst()
-                .map(Payment::getAmount)
-                .orElse(null);
+        // SUM toàn bộ payment SUCCESS (không chỉ lấy 1 dòng) — vì sau khi Owner xác nhận thu nốt
+        // phần còn lại của đơn cọc, booking có tới 2 dòng Payment SUCCESS (cọc VNPay + tiền mặt còn
+        // lại); .findFirst() không có ORDER BY nên có thể lấy nhầm dòng, khiến FE hiểu sai là vẫn
+        // còn nợ tiền dù đã thanh toán đủ.
+        List<Payment> successPayments = paymentRepository.findSuccessPaymentsByBookingId(booking.getBookingId());
+        BigDecimal paidAmount = successPayments.isEmpty()
+                ? null
+                : successPayments.stream().map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // Hiển thị số tiền/% thực tế đã hoàn cho khách theo dõi — trước đây chỉ có badge
         // "Đã hoàn tiền" chung chung, không rõ hoàn bao nhiêu (0%, 50%, hay 100%).
         // Cộng dồn TẤT CẢ payment hoàn tiền SUCCESS (không chỉ lấy 1 dòng mới nhất) — vì luồng
         // "Yêu cầu ngoại lệ" có thể tạo thêm payment hoàn bổ sung (top-up) sau lần hoàn gốc, lấy
-        // 1 dòng sẽ hiện thiếu số tiền thực đã nhận. % tính trên paidAmount (số tiền thực đã
-        // charge) chứ không phải totalPrice — vì đơn đặt cọc chỉ thu 30% totalPrice.
+        // 1 dòng sẽ hiện thiếu số tiền thực đã nhận.
+        // % LUÔN tính trên paidAmount (TOÀN BỘ số tiền đã thanh toán, gồm cả phí dịch vụ) — không
+        // trừ phí ra khỏi mẫu số. Trước đây dùng "baseRefundable = paidAmount - serviceFee" làm mẫu
+        // số, nên trường hợp hoàn 100% gồm cả phí (OWNER_FAULT: refundedAmount = paidAmount) lại
+        // hiện %>100 (vd 111%, hoặc 150% với đơn cọc) do chia cho số đã trừ phí thay vì tổng thật.
         BigDecimal refundedAmount = null;
         Integer refundPercent = null;
         if (booking.getPaymentStatus() == PaymentStatus.REFUNDED) {
@@ -974,18 +1108,7 @@ public class BookingServiceImpl implements BookingService {
                     .filter(p -> p.getPaymentStatus() == TransactionStatus.SUCCESS)
                     .map(p -> p.getAmount().abs())
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
-            BigDecimal baseRefundable = paidAmount != null ? paidAmount.subtract(serviceFee) : BigDecimal.ZERO;
-            if (baseRefundable.compareTo(BigDecimal.ZERO) < 0) {
-                baseRefundable = BigDecimal.ZERO;
-            }
-
-            if (baseRefundable.compareTo(BigDecimal.ZERO) > 0) {
-                refundPercent = refundedAmount
-                        .multiply(BigDecimal.valueOf(100))
-                        .divide(baseRefundable, 0, RoundingMode.HALF_UP)
-                        .intValue();
-            } else if (paidAmount != null && paidAmount.compareTo(BigDecimal.ZERO) > 0) {
+            if (paidAmount != null && paidAmount.compareTo(BigDecimal.ZERO) > 0) {
                 refundPercent = refundedAmount
                         .multiply(BigDecimal.valueOf(100))
                         .divide(paidAmount, 0, RoundingMode.HALF_UP)
