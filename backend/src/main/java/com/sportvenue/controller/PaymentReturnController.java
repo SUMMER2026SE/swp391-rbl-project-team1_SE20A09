@@ -4,6 +4,7 @@ import com.sportvenue.config.VNPayConfig;
 import com.sportvenue.dto.response.VnpayIpnResponse;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.service.PaymentService;
+import com.sportvenue.service.WalletTopupService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,14 +29,19 @@ import org.springframework.web.servlet.view.RedirectView;
 public class PaymentReturnController {
 
     private final PaymentService paymentService;
+    private final WalletTopupService walletTopupService;
     private final VNPayConfig vnPayConfig;
 
     @GetMapping("/vnpay-return")
     @Operation(
             summary = "VNPay redirect về sau thanh toán",
             description = "Public endpoint. Xác thực checksum, cập nhật DB, redirect sang VNPAY_RETURN_URL "
-                    + "với query success/bookingId/reason.")
+                    + "với query success/bookingId/reason. Nếu txnRef thuộc giao dịch nạp ví (tiền tố "
+                    + "TOPUP-), redirect sang trang Ví thay vì trang kết quả thanh toán booking.")
     public RedirectView vnpayReturn(HttpServletRequest request) {
+        if (walletTopupService.isTopupCallback(request)) {
+            return vnpayReturnForTopup(request);
+        }
         PaymentService.ReturnResult result;
         try {
             result = paymentService.handleVnpayReturn(request);
@@ -58,6 +64,9 @@ public class PaymentReturnController {
                     + "vô hạn nếu không nhận được 200).")
     public ResponseEntity<VnpayIpnResponse> vnpayIpn(HttpServletRequest request) {
         try {
+            if (walletTopupService.isTopupCallback(request)) {
+                return ResponseEntity.ok(walletTopupService.handleTopupIpn(request));
+            }
             return ResponseEntity.ok(paymentService.handleVnpayIpn(request));
         } catch (Exception ex) {
             log.error("Lỗi không mong đợi khi xử lý VNPay IPN", ex);
@@ -68,12 +77,39 @@ public class PaymentReturnController {
         }
     }
 
+    private RedirectView vnpayReturnForTopup(HttpServletRequest request) {
+        WalletTopupService.TopupReturnResult result;
+        try {
+            result = walletTopupService.handleTopupReturn(request);
+        } catch (BadRequestException ex) {
+            log.warn("VNPay return nạp ví bị từ chối: {}", ex.getMessage());
+            return buildWalletRedirect(false, null, ex.getMessage());
+        } catch (Exception ex) {
+            log.error("Lỗi không mong đợi khi xử lý VNPay return nạp ví", ex);
+            return buildWalletRedirect(false, null, "internal_error");
+        }
+        return buildWalletRedirect(result.success(), result.amount(), result.reason());
+    }
+
     private RedirectView buildRedirect(boolean success, Integer bookingId, String reason) {
         // Redirect về FE (frontend-return-url) — không phải BE return-url.
         StringBuilder sb = new StringBuilder(vnPayConfig.getFrontendReturnUrl());
         sb.append(success ? "?success=true" : "?success=false");
         if (bookingId != null) {
             sb.append("&bookingId=").append(bookingId);
+        }
+        if (reason != null && !reason.isBlank()) {
+            sb.append("&reason=").append(java.net.URLEncoder.encode(
+                    reason, java.nio.charset.StandardCharsets.UTF_8));
+        }
+        return new RedirectView(sb.toString());
+    }
+
+    private RedirectView buildWalletRedirect(boolean success, java.math.BigDecimal amount, String reason) {
+        StringBuilder sb = new StringBuilder(vnPayConfig.getFrontendWalletReturnUrl());
+        sb.append(success ? "?topupSuccess=true" : "?topupSuccess=false");
+        if (amount != null) {
+            sb.append("&amount=").append(amount.toBigInteger());
         }
         if (reason != null && !reason.isBlank()) {
             sb.append("&reason=").append(java.net.URLEncoder.encode(
