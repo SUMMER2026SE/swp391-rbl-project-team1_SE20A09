@@ -26,7 +26,6 @@ import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.RefundService;
-import com.sportvenue.service.PaymentService;
 import com.sportvenue.service.EmailService;
 import com.sportvenue.service.NotificationService;
 import com.sportvenue.service.CustomerNotificationService;
@@ -56,7 +55,6 @@ public class RefundServiceImpl implements RefundService {
     private final TimeSlotRepository timeSlotRepository;
     private final UserRepository userRepository;
     private final OwnerRepository ownerRepository;
-    private final PaymentService paymentService;
     private final TransactionTemplate transactionTemplate;
     private final EmailService emailService;
     private final NotificationService notificationService;
@@ -139,76 +137,73 @@ public class RefundServiceImpl implements RefundService {
         });
     }
 
+    /**
+     * Hoàn tiền cho Customer — credit thẳng vào Ví nội bộ thay vì gọi gateway VNPay (mock, không
+     * làm gì thật). Không còn network call nào để chờ, nên toàn bộ cập nhật Payment + Booking +
+     * Owner/Platform wallet + Customer wallet chạy chung 1 transaction ACID duy nhất — nếu bất kỳ
+     * bước nào lỗi (vd lỗi DB khi credit ví), cả giao dịch hủy đơn rollback theo, tránh trạng thái
+     * nửa vời "đã hủy nhưng ví chưa nhận tiền".
+     */
     private void processGatewayRefundTx(RefundProcessContext ctx, Integer bookingId, String reason) {
-        boolean gatewaySuccess = false;
-        try {
-            if (ctx.originalPayment.getPaymentMethod() == PaymentMethod.CASH) {
-                log.info("Booking #{} sử dụng phương thức CASH — tự động duyệt hoàn tiền bỏ qua gateway VNPay", bookingId);
-                gatewaySuccess = true;
-            } else {
-                paymentService.processRefund(ctx.originalPayment, ctx.calculation.getAmount(), reason);
-                gatewaySuccess = true;
-            }
-        } catch (Exception e) {
-            log.error("Refund gateway failed for booking {}", bookingId, e);
-        }
-
-        final boolean finalSuccess = gatewaySuccess;
         transactionTemplate.execute(status -> {
             Payment payment = paymentRepository.findById(ctx.refundPayment.getPaymentId()).orElse(null);
             if (payment != null) {
-                payment.setPaymentStatus(finalSuccess ? TransactionStatus.SUCCESS : TransactionStatus.FAILED);
+                payment.setPaymentStatus(TransactionStatus.SUCCESS);
                 paymentRepository.save(payment);
             }
-            if (finalSuccess) {
-                Booking booking = bookingRepository.findByIdForUpdate(bookingId).orElse(null);
-                if (booking != null) {
-                    updateBookingAndReleaseSlot(booking, reason);
 
-                    // Ghi nhận trừ tiền từ ví nội bộ
-                    Owner resolvedOwner = booking.getStadium() != null ? booking.getStadium().resolveOwner() : null;
-                    if (resolvedOwner != null) {
-                        BigDecimal refundAmt = ctx.calculation.getAmount();
-                        BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
+            Booking booking = bookingRepository.findByIdForUpdate(bookingId).orElse(null);
+            if (booking != null) {
+                updateBookingAndReleaseSlot(booking, reason);
 
-                        if (ctx.calculation.isIncludesServiceFee()) {
-                            // OWNER_FAULT: Owner bị trừ venuePrice, platform trả lại serviceFee cho khách
-                            BigDecimal ownerDebit = refundAmt.subtract(serviceFee);
-                            walletService.recordOwnerTransaction(
-                                    resolvedOwner.getOwnerId(),
-                                    ownerDebit.negate(),
+                BigDecimal refundAmt = ctx.calculation.getAmount();
+                BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
+
+                // Ghi nhận trừ tiền từ ví nội bộ Owner/Platform — giữ nguyên logic, không đổi.
+                Owner resolvedOwner = booking.getStadium() != null ? booking.getStadium().resolveOwner() : null;
+                if (resolvedOwner != null) {
+                    if (ctx.calculation.isIncludesServiceFee()) {
+                        // OWNER_FAULT: Owner bị trừ venuePrice, platform trả lại serviceFee cho khách
+                        BigDecimal ownerDebit = refundAmt.subtract(serviceFee);
+                        walletService.recordOwnerTransaction(
+                                resolvedOwner.getOwnerId(),
+                                ownerDebit.negate(),
+                                booking.getBookingId(),
+                                WalletTransactionType.REFUND_DEBIT,
+                                "Khách hoàn tiền do lỗi chủ sân (Owner Fault)"
+                        );
+                        if (serviceFee.compareTo(BigDecimal.ZERO) > 0) {
+                            walletService.recordPlatformTransaction(
+                                    serviceFee.negate(),
                                     booking.getBookingId(),
-                                    WalletTransactionType.REFUND_DEBIT,
-                                    "Khách hoàn tiền do lỗi chủ sân (Owner Fault)"
-                            );
-                            if (serviceFee.compareTo(BigDecimal.ZERO) > 0) {
-                                walletService.recordPlatformTransaction(
-                                        serviceFee.negate(),
-                                        booking.getBookingId(),
-                                        WalletTransactionType.REFUND_FEE_DEBIT,
-                                        "Platform hoàn lại phí dịch vụ đơn #" + booking.getBookingId()
-                                );
-                            }
-                        } else {
-                            // Huỷ bình thường: Chỉ trừ ví Owner số tiền thực hoàn (đã trừ phí dịch vụ)
-                            walletService.recordOwnerTransaction(
-                                    resolvedOwner.getOwnerId(),
-                                    refundAmt.negate(),
-                                    booking.getBookingId(),
-                                    WalletTransactionType.REFUND_DEBIT,
-                                    "Khách huỷ đặt sân tự động (Tiền hoàn đã khấu trừ phí dịch vụ)"
+                                    WalletTransactionType.REFUND_FEE_DEBIT,
+                                    "Platform hoàn lại phí dịch vụ đơn #" + booking.getBookingId()
                             );
                         }
+                    } else {
+                        // Huỷ bình thường: Chỉ trừ ví Owner số tiền thực hoàn (đã trừ phí dịch vụ)
+                        walletService.recordOwnerTransaction(
+                                resolvedOwner.getOwnerId(),
+                                refundAmt.negate(),
+                                booking.getBookingId(),
+                                WalletTransactionType.REFUND_DEBIT,
+                                "Khách huỷ đặt sân tự động (Tiền hoàn đã khấu trừ phí dịch vụ)"
+                        );
                     }
                 }
+
+                // Credit ví Customer — thay cho gọi gateway VNPay, bất kể đơn gốc trả bằng
+                // CASH/VNPAY/WALLET đều hoàn về đây.
+                walletService.recordCustomerTransaction(
+                        booking.getUser().getUserId(),
+                        refundAmt,
+                        booking.getBookingId(),
+                        WalletTransactionType.CUSTOMER_REFUND_CREDIT,
+                        "Hoàn tiền huỷ đơn đặt sân #" + booking.getBookingId()
+                );
             }
             return null;
         });
-
-        if (!gatewaySuccess) {
-            throw new BadRequestException(
-                    "Lỗi hoàn tiền qua cổng thanh toán. Giao dịch hủy đơn thất bại. Vui lòng thử lại sau.");
-        }
     }
 
     @RequiredArgsConstructor
@@ -384,20 +379,7 @@ public class RefundServiceImpl implements RefundService {
         // 5. Áp dụng chính sách hoàn tiền
         RefundCalculation calculation = calculateRefund(booking, totalPaid, reasonType, null, true);
 
-        return RefundResponse.builder()
-                .bookingId(booking.getBookingId())
-                .stadiumName(booking.getStadium().getStadiumName())
-                .customerName(booking.getUser().getFirstName() + " " + booking.getUser().getLastName())
-                .playTime(playTime(booking))
-                .originalPrice(booking.getTotalPrice())
-                .serviceFee(booking.getServiceFee())
-                .refundAmount(calculation.getAmount())
-                .refundPercentage(calculation.getPercentage())
-                .bookingStatus(booking.getBookingStatus().name())
-                .paymentStatus(booking.getPaymentStatus().name())
-                .processedAt(LocalDateTime.now())
-                .reason("Xem trước hoàn tiền")
-                .build();
+        return buildRefundResponse(booking, calculation, "Xem trước hoàn tiền");
     }
 
     @Transactional(readOnly = true)
@@ -437,19 +419,7 @@ public class RefundServiceImpl implements RefundService {
         // 5. Áp dụng chính sách hoàn tiền
         RefundCalculation calculation = calculateRefund(booking, totalPaidForPreview, RefundReasonType.CUSTOMER_REQUEST, null, true);
 
-        return RefundResponse.builder()
-                .bookingId(booking.getBookingId())
-                .stadiumName(booking.getStadium().getStadiumName())
-                .customerName(booking.getUser().getFirstName() + " " + booking.getUser().getLastName())
-                .playTime(playTime(booking))
-                .originalPrice(booking.getTotalPrice())
-                .refundAmount(calculation.getAmount())
-                .refundPercentage(calculation.getPercentage())
-                .bookingStatus(booking.getBookingStatus().name())
-                .paymentStatus(booking.getPaymentStatus().name())
-                .processedAt(LocalDateTime.now())
-                .reason("Xem trước hoàn tiền")
-                .build();
+        return buildRefundResponse(booking, calculation, "Xem trước hoàn tiền");
     }
 
     @Transactional(readOnly = true)

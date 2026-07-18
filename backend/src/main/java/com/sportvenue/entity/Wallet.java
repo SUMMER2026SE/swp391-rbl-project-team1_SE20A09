@@ -42,6 +42,10 @@ public class Wallet implements Serializable {
     @JoinColumn(name = "owner_id", unique = true)
     private Owner owner;
 
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", unique = true)
+    private User user;
+
     @Column(name = "is_platform", nullable = false)
     private boolean isPlatform;
 

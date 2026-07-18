@@ -108,7 +108,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         // 4. Sinh mã giao dịch — dùng làm vnp_TxnRef và làm transactionCode để tra cứu khi return
-        String txnRef = bookingId + "_" + System.currentTimeMillis();
+        String txnRef = bookingId + "_" + java.util.UUID.randomUUID().toString().substring(0, 8);
 
         // 5. VNPay yêu cầu amount * 100 (đơn vị nhỏ nhất)
         BigDecimal totalPrice = booking.getTotalPrice();
@@ -118,7 +118,7 @@ public class PaymentServiceImpl implements PaymentService {
         
         BigDecimal amountToPay = totalPrice;
         if ("DEPOSIT".equalsIgnoreCase(paymentOption)) {
-            amountToPay = totalPrice.multiply(new BigDecimal("0.3")).setScale(0, java.math.RoundingMode.CEILING);
+            amountToPay = com.sportvenue.util.BookingPricingUtils.calculateDepositAmount(totalPrice);
         }
         
         long amountVnp = amountToPay.multiply(BigDecimal.valueOf(100)).longValueExact();
@@ -162,7 +162,7 @@ public class PaymentServiceImpl implements PaymentService {
         params.put("vnp_OrderType", vnPayConfig.getOrderType());
         params.put("vnp_Locale", vnPayConfig.getLocale());
         params.put("vnp_ReturnUrl", vnPayConfig.getReturnUrl());
-        params.put("vnp_IpAddr", resolveClientIp(request));
+        params.put("vnp_IpAddr", VNPayUtil.resolveClientIp(request));
         params.put("vnp_CreateDate", createDate);
         params.put("vnp_ExpireDate", expireDate);
         return params;
@@ -381,22 +381,6 @@ public class PaymentServiceImpl implements PaymentService {
         }
         log.warn("VNPay thanh toán THẤT BẠI — txnRef={}, responseCode={}",
                 txnRef, responseCode);
-    }
-
-    /**
-     * Lấy IP client — thử X-Forwarded-For trước (khi qua proxy), fallback sang remoteAddr.
-     * Giá trị gửi cho VNPay không bắt buộc chính xác trong sandbox nhưng vẫn cần có.
-     */
-    private String resolveClientIp(HttpServletRequest request) {
-        try {
-            String ipAddress = request.getHeader("X-Forwarded-For");
-            if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
-                ipAddress = request.getRemoteAddr();
-            }
-            return ipAddress;
-        } catch (Exception ex) {
-            return "127.0.0.1";
-        }
     }
 
     @Override

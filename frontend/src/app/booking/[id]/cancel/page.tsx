@@ -81,7 +81,7 @@ export default function CancelBookingPage() {
                     <>
                       <p>
                         {preview.refundAmount > 0
-                          ? `Bạn sẽ được hoàn lại: ${preview.refundAmount.toLocaleString("vi-VN")}đ (${preview.refundPercentage}% số tiền thực thu).`
+                          ? `Bạn sẽ được hoàn lại: ${preview.refundAmount.toLocaleString("vi-VN")}đ (${preview.refundPercentage}% số tiền thực thu). Số tiền hoàn sẽ được cộng vào Ví của bạn ngay sau khi huỷ.`
                           : "Đơn này sẽ không được hoàn tiền."}
                       </p>
                       {preview.cancellationPolicyDescription && (

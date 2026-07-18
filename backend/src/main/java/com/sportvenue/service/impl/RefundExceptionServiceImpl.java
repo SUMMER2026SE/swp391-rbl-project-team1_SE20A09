@@ -11,7 +11,6 @@ import com.sportvenue.entity.RefundExceptionRequest;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.entity.enums.NotificationType;
-import com.sportvenue.entity.enums.PaymentMethod;
 import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.entity.enums.RefundExceptionStatus;
 import com.sportvenue.entity.enums.RefundReasonType;
@@ -25,7 +24,6 @@ import com.sportvenue.repository.RefundExceptionRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.CustomerNotificationService;
 import com.sportvenue.service.NotificationService;
-import com.sportvenue.service.PaymentService;
 import com.sportvenue.service.RefundExceptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -62,7 +60,6 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final CustomerNotificationService customerNotificationService;
-    private final PaymentService paymentService;
     private final TransactionTemplate transactionTemplate;
     private final WalletService walletService;
 
@@ -402,9 +399,10 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
     }
 
     /**
-     * Phase 2: Gọi gateway và cập nhật trạng thái Payment trong transaction riêng.
-     * Không có @Transactional bao ngoài — exception propagate về controller → client nhận 400.
-     * Gateway lỗi: Payment=FAILED, request status giữ nguyên APPROVED_* → Admin có thể audit/retry.
+     * Phase 2: Credit tiền hoàn vào Ví Customer + cập nhật trạng thái Payment — không còn gọi
+     * gateway VNPay nên không còn network call nào để chờ; toàn bộ cập nhật Payment + Booking +
+     * Owner wallet + Customer wallet chạy chung 1 transaction ACID duy nhất (không có @Transactional
+     * bao ngoài — exception propagate về controller → client nhận 400, rollback theo).
      *
      * <p>Chính sách phí dịch vụ FORCE_MAJEURE: hoàn refundPercent × (originalPayment.getAmount() - serviceFee)
      * (KHÔNG bao gồm phí dịch vụ, để giữ tính công bằng tài chính với Owner và đồng nhất với khách tự hủy standard).</p>
@@ -415,74 +413,52 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
         if (successPayments.isEmpty()) {
             throw new BadRequestException("Không tìm thấy giao dịch gốc.");
         }
-        // Ưu tiên payment VNPay làm tham chiếu gateway — đơn cọc đã thu nốt có thêm 1 payment CASH,
-        // không có giao dịch VNPay gốc để hoàn qua gateway thật.
-        Payment originalPayment = RefundServiceImpl.pickReferencePayment(successPayments);
 
         BigDecimal refundAmount = pendingRefundPayment.getAmount().abs();
-
-        boolean gatewaySuccess;
-        if (refundAmount.compareTo(BigDecimal.ZERO) == 0) {
-            // Top-up = 0đ (vd Admin duyệt đúng bằng % Owner đã duyệt trước) -> không có gì thêm
-            // để hoàn, không gọi gateway (gateway thật/mock đều từ chối yêu cầu hoàn 0đ).
-            gatewaySuccess = true;
-        } else if (originalPayment.getPaymentMethod() == PaymentMethod.CASH) {
-            log.info("[RefundException] Booking #{} sử dụng phương thức CASH — tự động duyệt hoàn tiền bỏ qua gateway VNPay",
-                    request.getBooking().getBookingId());
-            gatewaySuccess = true;
-        } else {
-            gatewaySuccess = false;
-            try {
-                paymentService.processRefund(originalPayment, refundAmount,
-                        "Ngoại lệ bất khả kháng — Yêu cầu #" + request.getRequestId());
-                gatewaySuccess = true;
-            } catch (Exception e) {
-                log.error("[RefundException] Gateway failed for requestId={}, bookingId={}",
-                        request.getRequestId(), request.getBooking().getBookingId(), e);
-            }
-        }
-
-        final boolean success = gatewaySuccess;
-        final Integer bookingId = request.getBooking().getBookingId();
-        final Integer paymentId = pendingRefundPayment.getPaymentId();
+        Integer bookingId = request.getBooking().getBookingId();
+        Integer paymentId = pendingRefundPayment.getPaymentId();
 
         transactionTemplate.execute(status -> {
             Payment saved = paymentRepository.findById(paymentId).orElse(null);
             if (saved != null) {
-                saved.setPaymentStatus(success ? TransactionStatus.SUCCESS : TransactionStatus.FAILED);
+                saved.setPaymentStatus(TransactionStatus.SUCCESS);
                 paymentRepository.save(saved);
             }
-            if (success) {
-                Booking booking = bookingRepository.findByIdForUpdate(bookingId).orElse(null);
-                if (booking != null) {
-                    booking.setPaymentStatus(PaymentStatus.REFUNDED);
-                    bookingRepository.save(booking);
 
+            Booking booking = bookingRepository.findByIdForUpdate(bookingId).orElse(null);
+            if (booking != null) {
+                booking.setPaymentStatus(PaymentStatus.REFUNDED);
+                bookingRepository.save(booking);
+
+                // Top-up = 0đ (vd Admin duyệt đúng bằng % Owner đã duyệt trước) -> không có gì
+                // thêm để hoàn, bỏ qua cả 2 bước debit Owner và credit Customer.
+                if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
                     // Khấu trừ ví Owner số tiền thực hoàn (chính sách FORCE_MAJEURE luôn giữ lại phí dịch vụ nên platform không đổi)
-                    if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
-                        Owner resolvedOwner = booking.getStadium() != null ? booking.getStadium().resolveOwner() : null;
-                        if (resolvedOwner != null) {
-                            walletService.recordOwnerTransaction(
-                                    resolvedOwner.getOwnerId(),
-                                    refundAmount.negate(),
-                                    booking.getBookingId(),
-                                    WalletTransactionType.REFUND_DEBIT,
-                                    "Hoàn tiền do sự kiện bất khả kháng (Force Majeure)"
-                            );
-                        }
+                    Owner resolvedOwner = booking.getStadium() != null ? booking.getStadium().resolveOwner() : null;
+                    if (resolvedOwner != null) {
+                        walletService.recordOwnerTransaction(
+                                resolvedOwner.getOwnerId(),
+                                refundAmount.negate(),
+                                booking.getBookingId(),
+                                WalletTransactionType.REFUND_DEBIT,
+                                "Hoàn tiền do sự kiện bất khả kháng (Force Majeure)"
+                        );
                     }
+
+                    // Credit ví Customer — thay cho gọi gateway VNPay.
+                    walletService.recordCustomerTransaction(
+                            booking.getUser().getUserId(),
+                            refundAmount,
+                            booking.getBookingId(),
+                            WalletTransactionType.CUSTOMER_REFUND_CREDIT,
+                            "Hoàn tiền ngoại lệ bất khả kháng đơn đặt sân #" + booking.getBookingId()
+                    );
                 }
             }
             return null;
         });
 
-        if (!gatewaySuccess) {
-            throw new BadRequestException(
-                    "Yêu cầu đã được duyệt nhưng hoàn tiền thực tế thất bại do lỗi cổng thanh toán. "
-                    + "Admin vui lòng kiểm tra Payment #" + paymentId + " và retry thủ công.");
-        }
-
-        log.info("[RefundException] Phase2: Gateway refund SUCCESS for requestId={}, amount={}",
+        log.info("[RefundException] Phase2: Refund vào ví Customer SUCCESS for requestId={}, amount={}",
                 request.getRequestId(), refundAmount);
     }
 

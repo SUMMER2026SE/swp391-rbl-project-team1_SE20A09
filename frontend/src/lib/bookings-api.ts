@@ -153,6 +153,11 @@ export type BookingDetailItem = {
   note: string | null;
   ownerUserId?: number;
   stadiumId?: number;
+  accessories?: {
+    accessoryName: string;
+    quantity: number;
+    unitPrice: number;
+  }[];
 };
 
 export async function fetchBookingDetail(id: string | number): Promise<BookingDetailItem> {
@@ -180,6 +185,11 @@ export async function fetchBookingDetail(id: string | number): Promise<BookingDe
     note: data.note || null,
     ownerUserId: data.stadium?.ownerUserId,
     stadiumId: data.stadium?.stadiumId,
+    accessories: data.accessories?.map((a: any) => ({
+      accessoryName: a.accessoryName,
+      quantity: Number(a.quantity),
+      unitPrice: Number(a.unitPrice),
+    })) || [],
   };
 }
 

@@ -44,7 +44,6 @@ import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.AdminDashboardService;
 import com.sportvenue.service.BookingService;
 import com.sportvenue.service.MaintenanceScheduleService;
-import com.sportvenue.service.PaymentService;
 import com.sportvenue.service.CustomerNotificationService;
 import com.sportvenue.service.EmailService;
 import com.sportvenue.service.NotificationService;
@@ -120,7 +119,6 @@ public class BookingServiceImpl implements BookingService {
     private final BookingAccessoryRepository bookingAccessoryRepository;
     private final TimeSlotExceptionRepository timeSlotExceptionRepository;
     private final MaintenanceScheduleService maintenanceScheduleService;
-    private final PaymentService paymentService;
     private final TransactionTemplate transactionTemplate;
     private final EmailService emailService;
     private final NotificationService notificationService;
@@ -456,8 +454,9 @@ public class BookingServiceImpl implements BookingService {
         booking.setPaymentStatus(PaymentStatus.PAID);
         Booking saved = bookingRepository.save(booking);
 
-        // Ghi nhận vào ví nội bộ
-        recordWalletForRemainingPayment(saved, remainingAmount);
+        // Không ghi nhận tăng ví Owner vì Owner đã thu tiền mặt trực tiếp bên ngoài hệ thống.
+        // Tránh tình trạng Owner được nhận tiền 2 lần (offline + rút tiền online từ ví ảo).
+        // (Khác với payRemainingWithWallet khi tiền được trừ từ ví Customer chuyển sang ví Owner).
 
         try {
             notificationService.publishNotificationEvent(
@@ -475,6 +474,162 @@ public class BookingServiceImpl implements BookingService {
         log.info("💵 Owner {} xác nhận đã thu nốt phần còn lại cho booking #{}", currentUserId, saved.getBookingId());
 
         return toBookingDetailResponse(saved, saved.getStadium(), saved.getSlot());
+    }
+
+    @Override
+    @Transactional
+    public BookingDetailResponse payWithWallet(UserPrincipal principal, Integer bookingId, String paymentOption) {
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy booking với ID " + bookingId));
+
+        checkBookingBelongsToCustomer(principal, booking);
+
+        // Idempotent — double-click hoặc network retry, trả trạng thái hiện tại thay vì lỗi.
+        if (booking.getPaymentStatus() == PaymentStatus.PAID) {
+            return toBookingDetailResponse(booking, booking.getStadium(), booking.getSlot());
+        }
+
+        if (booking.getBookingStatus() != BookingStatus.PENDING_PAYMENT) {
+            throw new BadRequestException("Đơn này không thể thanh toán (trạng thái hiện tại: "
+                    + booking.getBookingStatus() + ")");
+        }
+        if (booking.getExpiredAt() != null && booking.getExpiredAt().isBefore(LocalDateTime.now())) {
+            throw new BadRequestException("Đơn đặt sân đã hết hạn giữ chỗ — vui lòng đặt lại");
+        }
+
+        BigDecimal totalPrice = booking.getTotalPrice();
+        if (totalPrice == null) {
+            throw new BadRequestException("Đơn đặt sân chưa có tổng tiền — không thể thanh toán");
+        }
+
+        boolean isDeposit = "DEPOSIT".equalsIgnoreCase(paymentOption);
+        BigDecimal amountToPay = isDeposit
+                ? com.sportvenue.util.BookingPricingUtils.calculateDepositAmount(totalPrice)
+                : totalPrice;
+
+        Integer customerId = principal.getUserId();
+        walletService.debitCustomerWalletForPayment(
+                customerId, amountToPay, bookingId,
+                isDeposit ? "Đặt cọc đơn đặt sân #" + bookingId + " bằng Ví"
+                        : "Thanh toán đơn đặt sân #" + bookingId + " bằng Ví");
+
+        Payment payment = Payment.builder()
+                .booking(booking)
+                .paymentMethod(PaymentMethod.WALLET)
+                .amount(amountToPay)
+                .transactionCode("WALLET-" + bookingId + "-" + System.currentTimeMillis())
+                .paymentStatus(TransactionStatus.SUCCESS)
+                .paidAt(LocalDateTime.now())
+                .build();
+        paymentRepository.save(payment);
+
+        booking.setBookingStatus(BookingStatus.CONFIRMED);
+        booking.setPaymentStatus(isDeposit ? PaymentStatus.DEPOSITED : PaymentStatus.PAID);
+        booking.setExpiredAt(null);
+        Booking saved = bookingRepository.save(booking);
+
+        creditOwnerAndPlatformForWalletPayment(saved, amountToPay, isDeposit
+                ? "Tiền đặt cọc đặt sân #" + saved.getBookingId() + " bằng Ví (đã trừ phí dịch vụ)"
+                : "Doanh thu đặt sân #" + saved.getBookingId() + " bằng Ví (đã trừ phí dịch vụ)");
+
+        try {
+            customerNotificationService.notifyPaymentReceived(saved.getUser().getUserId(), payment);
+        } catch (Exception e) {
+            log.error("Failed to publish wallet payment notification for booking {}", saved.getBookingId(), e);
+        }
+
+        adminDashboardService.evictDashboardCache();
+        log.info("💳 Customer {} thanh toán {} bằng Ví cho booking #{} — amount={}",
+                customerId, isDeposit ? "cọc" : "toàn phần", saved.getBookingId(), amountToPay);
+
+        return toBookingDetailResponse(saved, saved.getStadium(), saved.getSlot());
+    }
+
+    @Override
+    @Transactional
+    public BookingDetailResponse payRemainingWithWallet(UserPrincipal principal, Integer bookingId) {
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy booking với ID " + bookingId));
+
+        checkBookingBelongsToCustomer(principal, booking);
+
+        // Idempotent guard — bắt buộc để tránh race với confirmRemainingPaymentReceived (Owner tự
+        // xác nhận tiền mặt) khi cả 2 đường đóng đơn cùng nhắm vào 1 booking DEPOSITED: nếu thiếu,
+        // ví Customer có thể bị trừ tiền dù đơn đã được Owner xác nhận thu tiền mặt xong.
+        if (booking.getPaymentStatus() == PaymentStatus.PAID) {
+            return toBookingDetailResponse(booking, booking.getStadium(), booking.getSlot());
+        }
+
+        validateRemainingPaymentStatus(booking, bookingId);
+
+        Payment depositPayment = paymentRepository.findSuccessPaymentsByBookingId(bookingId)
+                .stream().findFirst()
+                .orElseThrow(() -> new BadRequestException(
+                        "Không tìm thấy giao dịch cọc đã thanh toán cho đơn này"));
+
+        BigDecimal depositAmount = depositPayment.getAmount();
+        BigDecimal totalPrice = booking.getTotalPrice();
+        BigDecimal remainingAmount = totalPrice.subtract(depositAmount);
+
+        Integer customerId = principal.getUserId();
+        walletService.debitCustomerWalletForPayment(
+                customerId, remainingAmount, bookingId,
+                "Thanh toán nốt phần còn lại đơn đặt sân #" + bookingId + " bằng Ví");
+
+        Payment remainingPayment = Payment.builder()
+                .booking(booking)
+                .paymentMethod(PaymentMethod.WALLET)
+                .amount(remainingAmount)
+                .transactionCode("WALLET-REMAINING-" + bookingId)
+                .paymentStatus(TransactionStatus.SUCCESS)
+                .paidAt(LocalDateTime.now())
+                .build();
+        paymentRepository.save(remainingPayment);
+
+        booking.setPaymentStatus(PaymentStatus.PAID);
+        Booking saved = bookingRepository.save(booking);
+
+        // Không trừ phí dịch vụ nữa — đã trừ lúc đặt cọc, y hệt confirmRemainingPaymentReceived.
+        recordWalletForRemainingPayment(saved, remainingAmount);
+
+        try {
+            customerNotificationService.notifyPaymentReceived(saved.getUser().getUserId(), remainingPayment);
+        } catch (Exception e) {
+            log.error("Failed to publish wallet remaining-payment notification for booking {}", saved.getBookingId(), e);
+        }
+
+        adminDashboardService.evictDashboardCache();
+        log.info("💳 Customer {} tự thanh toán nốt phần còn lại bằng Ví cho booking #{} — amount={}",
+                customerId, saved.getBookingId(), remainingAmount);
+
+        return toBookingDetailResponse(saved, saved.getStadium(), saved.getSlot());
+    }
+
+    private void checkBookingBelongsToCustomer(UserPrincipal principal, Booking booking) {
+        Integer currentUserId = principal.getUser().getUserId();
+        if (booking.getUser() == null || !booking.getUser().getUserId().equals(currentUserId)) {
+            throw new ForbiddenException("Bạn không có quyền thanh toán đơn đặt sân này");
+        }
+    }
+
+    private void creditOwnerAndPlatformForWalletPayment(Booking booking, BigDecimal amount, String note) {
+        Owner resolvedOwner = booking.getStadium() != null ? booking.getStadium().resolveOwner() : null;
+        if (resolvedOwner == null) {
+            return;
+        }
+        BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
+        BigDecimal ownerShare = amount.subtract(serviceFee);
+        walletService.recordOwnerTransaction(
+                resolvedOwner.getOwnerId(), ownerShare, booking.getBookingId(),
+                WalletTransactionType.BOOKING_CREDIT, note);
+        if (serviceFee.compareTo(BigDecimal.ZERO) > 0) {
+            walletService.recordPlatformTransaction(
+                    serviceFee, booking.getBookingId(),
+                    WalletTransactionType.SERVICE_FEE_CREDIT,
+                    "Phí dịch vụ từ đơn đặt sân #" + booking.getBookingId());
+        }
     }
 
     private void checkBookingOwnership(UserPrincipal principal, Booking booking) {
@@ -664,60 +819,64 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
+    /**
+     * Hoàn tiền cho Customer khi tự hủy đơn — credit thẳng vào Ví nội bộ thay vì gọi gateway VNPay
+     * (mock, không làm gì thật). Không còn network call nào để chờ, nên toàn bộ cập nhật Payment +
+     * Booking + Customer wallet chạy chung 1 transaction ACID duy nhất.
+     */
     private void processGatewayRefundTx(CancelProcessContext ctx, Integer bookingId, String reason, Integer currentUserId) {
         BigDecimal refundAmount = ctx.refundPayment.getAmount().abs();
 
-        boolean gatewaySuccess;
-        if (refundAmount.compareTo(BigDecimal.ZERO) == 0) {
-            // Hủy <12h trước giờ chơi -> tiering trả về 0đ (docs/qa_findings_refactor_plan.md mục 1.3).
-            // Không có gì để hoàn nên KHÔNG gọi cổng thanh toán (gateway thật/mock đều từ chối
-            // yêu cầu hoàn 0đ) — coi như "thành công" luôn để booking chuyển CANCELLED bình thường.
-            gatewaySuccess = true;
-        } else if (ctx.originalPayment.getPaymentMethod() == PaymentMethod.CASH) {
-            // Đơn thanh toán tiền mặt — không có giao dịch VNPay gốc để hoàn qua gateway.
-            log.info("Booking #{} sử dụng phương thức CASH — tự động duyệt hoàn tiền bỏ qua gateway VNPay", bookingId);
-            gatewaySuccess = true;
-        } else {
-            gatewaySuccess = false;
-            try {
-                paymentService.processRefund(ctx.originalPayment, refundAmount,
-                        reason != null ? reason : "Khách hàng tự hủy");
-                gatewaySuccess = true;
-            } catch (Exception e) {
-                log.error("Refund gateway failed for customer cancel booking {}", bookingId, e);
-            }
-        }
-
-        final boolean finalSuccess = gatewaySuccess;
         transactionTemplate.execute(status -> {
             Payment payment = paymentRepository.findById(ctx.refundPayment.getPaymentId()).orElse(null);
             if (payment != null) {
-                payment.setPaymentStatus(finalSuccess ? TransactionStatus.SUCCESS : TransactionStatus.FAILED);
+                payment.setPaymentStatus(TransactionStatus.SUCCESS);
                 paymentRepository.save(payment);
             }
-            if (finalSuccess) {
-                Booking booking = bookingRepository.findById(bookingId).orElse(null);
-                if (booking != null) {
-                    booking.setBookingStatus(BookingStatus.CANCELLED);
-                    booking.setCancelReason(reason);
-                    booking.setPaymentStatus(PaymentStatus.REFUNDED);
-                    booking.setExpiredAt(null);
-                    
-                    TimeSlot slot = booking.getSlot();
-                    if (slot != null && slot.getSlotStatus() == SlotStatus.BOOKED) {
-                        slot.setSlotStatus(SlotStatus.AVAILABLE);
-                        timeSlotRepository.save(slot);
-                    }
-                    bookingRepository.save(booking);
-                    sendCancellationEmailAndNotification(booking, reason, currentUserId);
+
+            Booking booking = bookingRepository.findById(bookingId).orElse(null);
+            if (booking != null) {
+                booking.setBookingStatus(BookingStatus.CANCELLED);
+                booking.setCancelReason(reason);
+                booking.setPaymentStatus(PaymentStatus.REFUNDED);
+                booking.setExpiredAt(null);
+
+                TimeSlot slot = booking.getSlot();
+                if (slot != null && slot.getSlotStatus() == SlotStatus.BOOKED) {
+                    slot.setSlotStatus(SlotStatus.AVAILABLE);
+                    timeSlotRepository.save(slot);
                 }
+                bookingRepository.save(booking);
+
+                // Credit ví Customer — thay cho gọi gateway VNPay, bất kể đơn gốc trả bằng
+                // CASH/VNPAY/WALLET đều hoàn về đây. Hủy <12h trước giờ chơi tiering về 0đ
+                // (docs/qa_findings_refactor_plan.md mục 1.3) thì không có gì để credit.
+                if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
+                    walletService.recordCustomerTransaction(
+                            booking.getUser().getUserId(),
+                            refundAmount,
+                            booking.getBookingId(),
+                            WalletTransactionType.CUSTOMER_REFUND_CREDIT,
+                            "Hoàn tiền huỷ đơn đặt sân #" + booking.getBookingId()
+                    );
+
+                    // Khấu trừ ví Owner số tiền thực hoàn cho khách (đã khấu trừ phí dịch vụ)
+                    Owner resolvedOwner = booking.getStadium() != null ? booking.getStadium().resolveOwner() : null;
+                    if (resolvedOwner != null) {
+                        walletService.recordOwnerTransaction(
+                                resolvedOwner.getOwnerId(),
+                                refundAmount.negate(),
+                                booking.getBookingId(),
+                                WalletTransactionType.REFUND_DEBIT,
+                                "Khách huỷ đặt sân tự động đơn #" + booking.getBookingId()
+                        );
+                    }
+                }
+
+                sendCancellationEmailAndNotification(booking, reason, currentUserId);
             }
             return null;
         });
-        
-        if (!gatewaySuccess) {
-            throw new BadRequestException("Lỗi hoàn tiền qua cổng thanh toán. Giao dịch hủy đơn thất bại. Vui lòng thử lại sau.");
-        }
     }
 
     @RequiredArgsConstructor
@@ -1116,6 +1275,8 @@ public class BookingServiceImpl implements BookingService {
             }
         }
 
+        List<com.sportvenue.dto.booking.BookingDetailResponse.AccessoryInfo> accessoriesDto = mapBookingAccessories(booking.getBookingId());
+
         return BookingDetailResponse.builder()
                 .bookingId(booking.getBookingId())
                 .displayId("BK" + String.format("%06d", booking.getBookingId()))
@@ -1137,6 +1298,7 @@ public class BookingServiceImpl implements BookingService {
                         .build())
                 .totalPrice(booking.getTotalPrice())
                 .serviceFee(booking.getServiceFee())
+                .accessories(accessoriesDto)
                 .paidAmount(paidAmount)
                 .status(booking.getBookingStatus().name().toLowerCase())
                 .paymentStatus(booking.getPaymentStatus().name().toLowerCase())
@@ -1146,6 +1308,32 @@ public class BookingServiceImpl implements BookingService {
                 .expiredAt(booking.getExpiredAt())
                 .createdAt(booking.getBookingDate())
                 .build();
+    }
+
+    private List<com.sportvenue.dto.booking.BookingDetailResponse.AccessoryInfo> mapBookingAccessories(Integer bookingId) {
+        List<com.sportvenue.dto.booking.BookingDetailResponse.AccessoryInfo> accessoriesDto = new java.util.ArrayList<>();
+        try {
+            List<BookingAccessory> bookingAccessories = bookingAccessoryRepository.findByBookingBookingId(bookingId);
+            if (bookingAccessories != null && !bookingAccessories.isEmpty()) {
+                List<Integer> accessoryIds = bookingAccessories.stream()
+                        .map(BookingAccessory::getAccessoryId)
+                        .distinct()
+                        .collect(Collectors.toList());
+                Map<Integer, String> accessoryNameMap = accessoryRepository.findAllById(accessoryIds).stream()
+                        .collect(Collectors.toMap(Accessory::getAccessoryId, Accessory::getName, (a, b) -> a));
+
+                accessoriesDto = bookingAccessories.stream()
+                        .map(ba -> com.sportvenue.dto.booking.BookingDetailResponse.AccessoryInfo.builder()
+                                .accessoryName(accessoryNameMap.getOrDefault(ba.getAccessoryId(), "Phụ kiện #" + ba.getAccessoryId()))
+                                .quantity(ba.getQuantity())
+                                .unitPrice(ba.getUnitPrice())
+                                .build())
+                        .collect(Collectors.toList());
+            }
+        } catch (Exception e) {
+            log.error("Failed to load accessories for booking {}", bookingId, e);
+        }
+        return accessoriesDto;
     }
 
     private TimeSlotResponse toTimeSlotResponse(TimeSlot slot, boolean bookedOnDate, boolean isFuture) {

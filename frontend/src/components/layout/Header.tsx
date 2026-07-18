@@ -145,12 +145,20 @@ export function UserAccountMenu({ user }: { user: NonNullable<Session["user"]> }
         </DropdownMenuItem>
 
         {user.roleName === "Customer" && (
-          <DropdownMenuItem asChild>
-            <Link href="/profile?tab=bookings" className="cursor-pointer">
-              <Clock className="mr-2 h-4 w-4" />
-              <span>Lịch sử đặt sân</span>
-            </Link>
-          </DropdownMenuItem>
+          <>
+            <DropdownMenuItem asChild>
+              <Link href="/profile?tab=bookings" className="cursor-pointer">
+                <Clock className="mr-2 h-4 w-4" />
+                <span>Lịch sử đặt sân</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/wallet" className="cursor-pointer">
+                <WalletCards className="mr-2 h-4 w-4" />
+                <span>Ví của tôi</span>
+              </Link>
+            </DropdownMenuItem>
+          </>
         )}
 
         <DropdownMenuSeparator />

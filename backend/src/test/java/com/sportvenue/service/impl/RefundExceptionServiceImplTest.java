@@ -24,7 +24,6 @@ import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.RefundExceptionRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.NotificationService;
-import com.sportvenue.service.PaymentService;
 import com.sportvenue.service.WalletService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -56,7 +55,6 @@ class RefundExceptionServiceImplTest {
     @Mock private PaymentRepository paymentRepository;
     @Mock private UserRepository userRepository;
     @Mock private NotificationService notificationService;
-    @Mock private PaymentService paymentService;
     @Mock private TransactionTemplate transactionTemplate;
     @Mock private WalletService walletService;
 
@@ -344,12 +342,18 @@ class RefundExceptionServiceImplTest {
 
         assertEquals(RefundExceptionStatus.APPROVED_OWNER, res.getStatus());
         assertEquals(100, res.getRefundPercent());
-        verify(paymentService).processRefund(any(), any(), any());
         verify(walletService).recordOwnerTransaction(
                 eq(owner.getOwnerId()),
                 eq(new BigDecimal("-150000")),
                 eq(cancelledBooking.getBookingId()),
                 eq(WalletTransactionType.REFUND_DEBIT),
+                anyString()
+        );
+        verify(walletService).recordCustomerTransaction(
+                eq(customer.getUserId()),
+                eq(new BigDecimal("150000")),
+                eq(cancelledBooking.getBookingId()),
+                eq(WalletTransactionType.CUSTOMER_REFUND_CREDIT),
                 anyString()
         );
     }
@@ -396,7 +400,7 @@ class RefundExceptionServiceImplTest {
 
         assertEquals(RefundExceptionStatus.REJECTED_OWNER, res.getStatus());
         assertTrue(res.isCanEscalate());
-        verify(paymentService, never()).processRefund(any(), any(), any());
+        verify(walletService, never()).recordCustomerTransaction(any(), any(), any(), any(), any());
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -441,7 +445,7 @@ class RefundExceptionServiceImplTest {
     }
 
     // ═══════════════════════════════════════════════════════════
-    // adminDecide — gateway resilience
+    // adminDecide — refund credit vào Ví Customer
     // ═══════════════════════════════════════════════════════════
 
     @Test
@@ -467,7 +471,6 @@ class RefundExceptionServiceImplTest {
         RefundExceptionResponse res = service.adminDecide("admin@test.com", 1, req);
 
         assertEquals(RefundExceptionStatus.APPROVED_ADMIN, res.getStatus());
-        verify(paymentService).processRefund(any(), eq(new BigDecimal("75000")), any());
         verify(walletService).recordOwnerTransaction(
                 eq(owner.getOwnerId()),
                 eq(new BigDecimal("-75000")),
@@ -475,36 +478,13 @@ class RefundExceptionServiceImplTest {
                 eq(WalletTransactionType.REFUND_DEBIT),
                 anyString()
         );
-    }
-
-    @Test
-    @DisplayName("adminDecide: gateway throw → Payment=FAILED, status giữ APPROVED_ADMIN, throw 400")
-    void adminDecide_gatewayFails_paymentFailedStatusPreserved() {
-        RefundExceptionRequest request = buildRequest(RefundExceptionStatus.PENDING_ADMIN);
-        request.setRefundPercent(100);
-        when(refundExceptionRepository.findById(1)).thenReturn(Optional.of(request));
-        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(successPayment));
-
-        Payment pendingPayment = Payment.builder().paymentId(77)
-                .amount(new BigDecimal("-150000")).paymentStatus(TransactionStatus.PENDING).build();
-        when(paymentRepository.save(any())).thenReturn(pendingPayment);
-        when(paymentRepository.findById(77)).thenReturn(Optional.of(pendingPayment));
-
-        doThrow(new RuntimeException("Gateway timeout")).when(paymentService)
-                .processRefund(any(), any(), any());
-
-        AdminDecisionRequest req = new AdminDecisionRequest();
-        req.setApproved(true);
-        req.setRefundPercent(100);
-
-        // Phải throw BadRequestException về client (không nuốt lỗi)
-        assertThrows(BadRequestException.class,
-                () -> service.adminDecide("admin@test.com", 1, req));
-
-        // Payment phải được set FAILED (không rollback, không mất dấu vết)
-        verify(transactionTemplate, atLeastOnce()).execute(any());
-        // Status request giữ APPROVED_ADMIN (không rollback về PENDING_ADMIN)
-        assertEquals(RefundExceptionStatus.APPROVED_ADMIN, request.getStatus());
+        verify(walletService).recordCustomerTransaction(
+                eq(customer.getUserId()),
+                eq(new BigDecimal("75000")),
+                eq(cancelledBooking.getBookingId()),
+                eq(WalletTransactionType.CUSTOMER_REFUND_CREDIT),
+                anyString()
+        );
     }
 
     @Test
@@ -536,13 +516,19 @@ class RefundExceptionServiceImplTest {
 
         service.adminDecide("admin@test.com", 1, req);
 
-        // Desired = 150000 (100%), đã hoàn 75000 trước đó -> chỉ gọi gateway với phần còn lại 75000
-        verify(paymentService).processRefund(any(), eq(new BigDecimal("75000")), any());
+        // Desired = 150000 (100%), đã hoàn 75000 trước đó -> chỉ credit ví với phần còn lại 75000
         verify(walletService).recordOwnerTransaction(
                 eq(owner.getOwnerId()),
                 eq(new BigDecimal("-75000")),
                 eq(cancelledBooking.getBookingId()),
                 eq(WalletTransactionType.REFUND_DEBIT),
+                anyString()
+        );
+        verify(walletService).recordCustomerTransaction(
+                eq(customer.getUserId()),
+                eq(new BigDecimal("75000")),
+                eq(cancelledBooking.getBookingId()),
+                eq(WalletTransactionType.CUSTOMER_REFUND_CREDIT),
                 anyString()
         );
     }
