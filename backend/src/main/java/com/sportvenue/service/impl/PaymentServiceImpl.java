@@ -108,7 +108,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         // 4. Sinh mã giao dịch — dùng làm vnp_TxnRef và làm transactionCode để tra cứu khi return
-        String txnRef = bookingId + "_" + System.currentTimeMillis();
+        String txnRef = bookingId + "_" + java.util.UUID.randomUUID().toString().substring(0, 8);
 
         // 5. VNPay yêu cầu amount * 100 (đơn vị nhỏ nhất)
         BigDecimal totalPrice = booking.getTotalPrice();

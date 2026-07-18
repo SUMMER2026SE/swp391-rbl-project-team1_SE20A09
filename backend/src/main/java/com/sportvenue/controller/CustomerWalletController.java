@@ -26,6 +26,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.github.bucket4j.Bucket;
+import io.github.bucket4j.BucketConfiguration;
+import io.github.bucket4j.distributed.proxy.ProxyManager;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import com.sportvenue.exception.BadRequestException;
+
 /**
  * Controller quản lý Ví nội bộ dành cho Customer — xem số dư, lịch sử giao dịch, nạp tiền qua VNPay.
  */
@@ -39,6 +46,7 @@ public class CustomerWalletController {
 
     private final WalletService walletService;
     private final WalletTopupService walletTopupService;
+    private final ProxyManager<byte[]> proxyManager;
 
     @GetMapping
     @Operation(summary = "Xem số dư ví", description = "Lấy số dư hiện tại trong ví nội bộ của Customer.")
@@ -64,6 +72,17 @@ public class CustomerWalletController {
             @Valid @RequestBody WalletTopupRequest request,
             HttpServletRequest httpRequest) {
         log.info("Customer ID {} requested wallet topup, amount={}", principal.getUserId(), request.getAmount());
+
+        String rateLimitKey = "rate_limit:wallet_topup:" + principal.getUserId();
+        BucketConfiguration bucketConfig = BucketConfiguration.builder()
+                .addLimit(limit -> limit.capacity(5).refillGreedy(5, Duration.ofMinutes(1)))
+                .build();
+        Bucket bucket = proxyManager.builder().build(rateLimitKey.getBytes(StandardCharsets.UTF_8), bucketConfig);
+        if (!bucket.tryConsume(1)) {
+            log.warn("Rate limit exceeded for wallet topup: userId={}", principal.getUserId());
+            throw new BadRequestException("Bạn thao tác quá nhanh. Vui lòng đợi 1 phút trước khi tạo yêu cầu nạp tiền mới.");
+        }
+
         return ResponseEntity.ok(walletTopupService.initiateTopup(principal, request, httpRequest));
     }
 }

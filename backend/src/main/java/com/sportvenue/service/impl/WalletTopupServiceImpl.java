@@ -63,7 +63,7 @@ public class WalletTopupServiceImpl implements WalletTopupService {
         Integer userId = principal.getUserId();
         BigDecimal amount = request.getAmount();
 
-        String txnRef = TXN_REF_PREFIX + userId + "-" + System.currentTimeMillis();
+        String txnRef = TXN_REF_PREFIX + userId + "-" + java.util.UUID.randomUUID().toString().substring(0, 8);
 
         WalletTopup topup = WalletTopup.builder()
                 .user(userRepository.getReferenceById(userId))
