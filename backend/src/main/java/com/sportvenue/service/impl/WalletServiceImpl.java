@@ -1,12 +1,15 @@
 package com.sportvenue.service.impl;
 
 import com.sportvenue.entity.Owner;
+import com.sportvenue.entity.User;
 import com.sportvenue.entity.Wallet;
 import com.sportvenue.entity.WalletTransaction;
 import com.sportvenue.entity.enums.WalletTransactionType;
+import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.OwnerRepository;
+import com.sportvenue.repository.UserRepository;
 import com.sportvenue.repository.WalletRepository;
 import com.sportvenue.repository.WalletTransactionRepository;
 import com.sportvenue.service.WalletService;
@@ -42,6 +45,7 @@ public class WalletServiceImpl implements WalletService {
     private final WalletRepository walletRepository;
     private final WalletTransactionRepository walletTransactionRepository;
     private final OwnerRepository ownerRepository;
+    private final UserRepository userRepository;
     private final BookingRepository bookingRepository;
     private final PlatformTransactionManager transactionManager;
 
@@ -242,6 +246,102 @@ public class WalletServiceImpl implements WalletService {
                 .map(this::mapToTransactionResponse)
                 .collect(Collectors.toList());
         return PageResponse.of(page, dtoList);
+    }
+
+    @Override
+    @Transactional
+    public Wallet getOrCreateCustomerWallet(Integer userId) {
+        return walletRepository.findByUserUserId(userId)
+                .orElseGet(() -> createCustomerWalletHandlingRace(userId));
+    }
+
+    /**
+     * Tạo ví Customer trong 1 transaction ĐỘC LẬP (REQUIRES_NEW) — cùng lý do với
+     * {@link #createOwnerWalletHandlingRace(Integer)}: cô lập việc insert để tránh
+     * transaction của caller bị PostgreSQL abort khi 2 luồng cùng tạo ví cho 1 Customer.
+     */
+    private Wallet createCustomerWalletHandlingRace(Integer userId) {
+        log.info("Khởi tạo ví mới cho Customer ID: {}", userId);
+        TransactionTemplate requiresNew = new TransactionTemplate(transactionManager);
+        requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        try {
+            return requiresNew.execute(status -> {
+                User user = userRepository.findById(userId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản với ID " + userId));
+                Wallet newWallet = Wallet.builder()
+                        .user(user)
+                        .isPlatform(false)
+                        .balance(BigDecimal.ZERO)
+                        .createdAt(LocalDateTime.now())
+                        .updatedAt(LocalDateTime.now())
+                        .build();
+                return walletRepository.saveAndFlush(newWallet);
+            });
+        } catch (DataIntegrityViolationException e) {
+            log.warn("Ví của Customer ID {} đã được luồng khác tạo đồng thời. Đang truy vấn lại.", userId);
+            return walletRepository.findByUserUserId(userId)
+                    .orElseThrow(() -> new IllegalStateException("Lỗi tranh chấp đồng thời khi khởi tạo ví Customer", e));
+        }
+    }
+
+    @Override
+    @Transactional
+    public void recordCustomerTransaction(Integer userId, BigDecimal signedAmount, Integer bookingId, WalletTransactionType type, String note) {
+        log.info("Ghi nhận giao dịch Customer Wallet - UserId: {}, Amount: {}, BookingId: {}, Type: {}", userId, signedAmount, bookingId, type);
+
+        Wallet wallet = walletRepository.findByUserIdForUpdate(userId)
+                .orElseGet(() -> {
+                    Wallet w = getOrCreateCustomerWallet(userId);
+                    return walletRepository.findByUserIdForUpdate(userId)
+                            .orElse(w);
+                });
+
+        wallet.setBalance(wallet.getBalance().add(signedAmount));
+        wallet.setUpdatedAt(LocalDateTime.now());
+        walletRepository.save(wallet);
+
+        WalletTransaction tx = WalletTransaction.builder()
+                .wallet(wallet)
+                .amount(signedAmount)
+                .booking(bookingId != null ? bookingRepository.getReferenceById(bookingId) : null)
+                .transactionType(type)
+                .note(note)
+                .createdAt(LocalDateTime.now())
+                .build();
+        walletTransactionRepository.save(tx);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public WalletBalanceResponse getCustomerWalletBalance(Integer userId) {
+        Wallet wallet = getOrCreateCustomerWallet(userId);
+        return new WalletBalanceResponse(wallet.getBalance());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<WalletTransactionResponse> getCustomerWalletTransactions(Integer userId, Pageable pageable) {
+        Wallet wallet = getOrCreateCustomerWallet(userId);
+        Page<WalletTransaction> page = walletTransactionRepository.findByWalletWalletIdOrderByCreatedAtDesc(wallet.getWalletId(), pageable);
+        List<WalletTransactionResponse> dtoList = page.getContent().stream()
+                .map(this::mapToTransactionResponse)
+                .collect(Collectors.toList());
+        return PageResponse.of(page, dtoList);
+    }
+
+    @Override
+    @Transactional
+    public void debitCustomerWalletForPayment(Integer userId, BigDecimal amount, Integer bookingId, String note) {
+        Wallet wallet = walletRepository.findByUserIdForUpdate(userId)
+                .orElseGet(() -> {
+                    Wallet w = getOrCreateCustomerWallet(userId);
+                    return walletRepository.findByUserIdForUpdate(userId)
+                            .orElse(w);
+                });
+        if (wallet.getBalance().compareTo(amount) < 0) {
+            throw new BadRequestException("Số dư ví không đủ, vui lòng nạp thêm hoặc chọn phương thức khác");
+        }
+        recordCustomerTransaction(userId, amount.negate(), bookingId, WalletTransactionType.CUSTOMER_PAYMENT_DEBIT, note);
     }
 
     private WalletTransactionResponse mapToTransactionResponse(WalletTransaction tx) {
