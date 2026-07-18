@@ -1275,28 +1275,7 @@ public class BookingServiceImpl implements BookingService {
             }
         }
 
-        List<com.sportvenue.dto.booking.BookingDetailResponse.AccessoryInfo> accessoriesDto = new java.util.ArrayList<>();
-        try {
-            List<BookingAccessory> bookingAccessories = bookingAccessoryRepository.findByBookingBookingId(booking.getBookingId());
-            if (bookingAccessories != null && !bookingAccessories.isEmpty()) {
-                List<Integer> accessoryIds = bookingAccessories.stream()
-                        .map(BookingAccessory::getAccessoryId)
-                        .distinct()
-                        .collect(Collectors.toList());
-                Map<Integer, String> accessoryNameMap = accessoryRepository.findAllById(accessoryIds).stream()
-                        .collect(Collectors.toMap(Accessory::getAccessoryId, Accessory::getName, (a, b) -> a));
-
-                accessoriesDto = bookingAccessories.stream()
-                        .map(ba -> com.sportvenue.dto.booking.BookingDetailResponse.AccessoryInfo.builder()
-                                .accessoryName(accessoryNameMap.getOrDefault(ba.getAccessoryId(), "Phụ kiện #" + ba.getAccessoryId()))
-                                .quantity(ba.getQuantity())
-                                .unitPrice(ba.getUnitPrice())
-                                .build())
-                        .collect(Collectors.toList());
-            }
-        } catch (Exception e) {
-            log.error("Failed to load accessories for booking {}", booking.getBookingId(), e);
-        }
+        List<com.sportvenue.dto.booking.BookingDetailResponse.AccessoryInfo> accessoriesDto = mapBookingAccessories(booking.getBookingId());
 
         return BookingDetailResponse.builder()
                 .bookingId(booking.getBookingId())
@@ -1329,6 +1308,32 @@ public class BookingServiceImpl implements BookingService {
                 .expiredAt(booking.getExpiredAt())
                 .createdAt(booking.getBookingDate())
                 .build();
+    }
+
+    private List<com.sportvenue.dto.booking.BookingDetailResponse.AccessoryInfo> mapBookingAccessories(Integer bookingId) {
+        List<com.sportvenue.dto.booking.BookingDetailResponse.AccessoryInfo> accessoriesDto = new java.util.ArrayList<>();
+        try {
+            List<BookingAccessory> bookingAccessories = bookingAccessoryRepository.findByBookingBookingId(bookingId);
+            if (bookingAccessories != null && !bookingAccessories.isEmpty()) {
+                List<Integer> accessoryIds = bookingAccessories.stream()
+                        .map(BookingAccessory::getAccessoryId)
+                        .distinct()
+                        .collect(Collectors.toList());
+                Map<Integer, String> accessoryNameMap = accessoryRepository.findAllById(accessoryIds).stream()
+                        .collect(Collectors.toMap(Accessory::getAccessoryId, Accessory::getName, (a, b) -> a));
+
+                accessoriesDto = bookingAccessories.stream()
+                        .map(ba -> com.sportvenue.dto.booking.BookingDetailResponse.AccessoryInfo.builder()
+                                .accessoryName(accessoryNameMap.getOrDefault(ba.getAccessoryId(), "Phụ kiện #" + ba.getAccessoryId()))
+                                .quantity(ba.getQuantity())
+                                .unitPrice(ba.getUnitPrice())
+                                .build())
+                        .collect(Collectors.toList());
+            }
+        } catch (Exception e) {
+            log.error("Failed to load accessories for booking {}", bookingId, e);
+        }
+        return accessoriesDto;
     }
 
     private TimeSlotResponse toTimeSlotResponse(TimeSlot slot, boolean bookedOnDate, boolean isFuture) {
