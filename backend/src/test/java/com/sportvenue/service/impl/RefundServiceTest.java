@@ -22,7 +22,6 @@ import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
-import com.sportvenue.service.PaymentService;
 import com.sportvenue.service.WalletService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -58,8 +57,6 @@ class RefundServiceTest {
     private UserRepository userRepository;
     @Mock
     private OwnerRepository ownerRepository;
-    @Mock
-    private PaymentService paymentService;
     @Mock
     private TransactionTemplate transactionTemplate;
 
@@ -461,53 +458,6 @@ class RefundServiceTest {
     }
 
     @Test
-    @DisplayName("processRefund: gateway fails -> throws exception and keeps booking intact")
-    void processRefund_gatewayFails_keepsBookingIntact() {
-        // Arrange
-        booking.setTotalPrice(new BigDecimal("150000"));
-        booking.setReservationDate(LocalDate.now().plusDays(7));
-
-        RefundRequest request = new RefundRequest();
-        request.setReason("Owner cancelled");
-        request.setReasonType(RefundReasonType.OWNER_FAULT);
-        request.setProofUrl("https://proof.url/proof.jpg");
-
-        when(userRepository.findByEmail("owner@example.com")).thenReturn(Optional.of(ownerUser));
-        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
-        when(bookingRepository.findByIdForUpdate(1)).thenReturn(Optional.of(booking));
-        when(paymentRepository.findSuccessPaymentsByBookingId(1)).thenReturn(List.of(originalPayment));
-
-        when(paymentRepository.save(any(Payment.class))).thenAnswer(inv -> {
-            Payment p = inv.getArgument(0);
-            if (p.getPaymentId() == null) {
-                p.setPaymentId(200);
-            }
-            return p;
-        });
-        when(paymentRepository.findById(200)).thenAnswer(inv -> {
-            Payment p = Payment.builder()
-                    .paymentId(200)
-                    .amount(new BigDecimal("-150000"))
-                    .build();
-            return Optional.of(p);
-        });
-
-        doThrow(new RuntimeException("Gateway error"))
-                .when(paymentService).processRefund(any(), any(), any());
-
-        // Act & Assert
-        BadRequestException ex = assertThrows(BadRequestException.class, 
-                () -> refundService.processRefund(1, request, "owner@example.com"));
-        
-        assertTrue(ex.getMessage().contains("thất bại"));
-        
-        // Confirm booking state is untouched
-        assertEquals(BookingStatus.CONFIRMED, booking.getBookingStatus());
-        assertEquals(PaymentStatus.PAID, booking.getPaymentStatus());
-        assertEquals(SlotStatus.BOOKED, slot.getSlotStatus());
-    }
-
-    @Test
     @DisplayName("processRefund: refund already pending -> throws BadRequestException")
     void processRefund_refundAlreadyPending_throwsBadRequest() {
         // Arrange
@@ -570,6 +520,13 @@ class RefundServiceTest {
                 anyString()
         );
         verify(walletService, never()).recordPlatformTransaction(any(), any(), any(), any());
+        verify(walletService).recordCustomerTransaction(
+                eq(ownerUser.getUserId()),
+                eq(new BigDecimal("140000")),
+                eq(booking.getBookingId()),
+                eq(WalletTransactionType.CUSTOMER_REFUND_CREDIT),
+                anyString()
+        );
     }
 
     @Test
@@ -608,6 +565,13 @@ class RefundServiceTest {
                 anyString()
         );
         verify(walletService, never()).recordPlatformTransaction(any(), any(), any(), any());
+        verify(walletService).recordCustomerTransaction(
+                eq(ownerUser.getUserId()),
+                eq(new BigDecimal("70000")),
+                eq(booking.getBookingId()),
+                eq(WalletTransactionType.CUSTOMER_REFUND_CREDIT),
+                anyString()
+        );
     }
 
     @Test
@@ -677,6 +641,13 @@ class RefundServiceTest {
                 eq(new BigDecimal("-10000")), // service fee refunded from platform
                 eq(booking.getBookingId()),
                 eq(WalletTransactionType.REFUND_FEE_DEBIT),
+                anyString()
+        );
+        verify(walletService).recordCustomerTransaction(
+                eq(ownerUser.getUserId()),
+                eq(new BigDecimal("150000")), // OWNER_FAULT: khách nhận lại toàn bộ, kể cả phí dịch vụ
+                eq(booking.getBookingId()),
+                eq(WalletTransactionType.CUSTOMER_REFUND_CREDIT),
                 anyString()
         );
     }

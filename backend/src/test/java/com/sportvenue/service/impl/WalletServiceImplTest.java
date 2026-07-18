@@ -5,12 +5,15 @@ import com.sportvenue.dto.response.WalletBalanceResponse;
 import com.sportvenue.dto.response.WalletTransactionResponse;
 import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.Owner;
+import com.sportvenue.entity.User;
 import com.sportvenue.entity.Wallet;
 import com.sportvenue.entity.WalletTransaction;
 import com.sportvenue.entity.enums.WalletTransactionType;
+import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.OwnerRepository;
+import com.sportvenue.repository.UserRepository;
 import com.sportvenue.repository.WalletRepository;
 import com.sportvenue.repository.WalletTransactionRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +45,7 @@ class WalletServiceImplTest {
     @Mock private WalletRepository walletRepository;
     @Mock private WalletTransactionRepository walletTransactionRepository;
     @Mock private OwnerRepository ownerRepository;
+    @Mock private UserRepository userRepository;
     @Mock private BookingRepository bookingRepository;
     @Mock private PlatformTransactionManager transactionManager;
 
@@ -51,6 +55,8 @@ class WalletServiceImplTest {
     private Owner owner;
     private Wallet ownerWallet;
     private Wallet platformWallet;
+    private User customerUser;
+    private Wallet customerWallet;
 
     @BeforeEach
     void setUp() {
@@ -73,6 +79,22 @@ class WalletServiceImplTest {
                 .owner(null)
                 .isPlatform(true)
                 .balance(new BigDecimal("10000"))
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+
+        customerUser = User.builder()
+                .userId(30)
+                .email("customer@test.com")
+                .firstName("Khach")
+                .lastName("Hang")
+                .build();
+
+        customerWallet = Wallet.builder()
+                .walletId(3)
+                .user(customerUser)
+                .isPlatform(false)
+                .balance(new BigDecimal("200000"))
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -182,5 +204,86 @@ class WalletServiceImplTest {
         when(walletRepository.findByIsPlatformTrue()).thenReturn(Optional.of(platformWallet));
         BigDecimal balance = walletService.getPlatformBalance();
         assertEquals(new BigDecimal("10000"), balance);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Customer wallet
+    // ═══════════════════════════════════════════════════════════
+
+    @Test
+    void getOrCreateCustomerWallet_existingWallet_returnsWallet() {
+        when(walletRepository.findByUserUserId(30)).thenReturn(Optional.of(customerWallet));
+
+        Wallet result = walletService.getOrCreateCustomerWallet(30);
+
+        assertNotNull(result);
+        assertEquals(3, result.getWalletId());
+        assertEquals(new BigDecimal("200000"), result.getBalance());
+        verify(walletRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void getOrCreateCustomerWallet_newWallet_createsAndReturnsWallet() {
+        when(walletRepository.findByUserUserId(30)).thenReturn(Optional.empty());
+        when(userRepository.findById(30)).thenReturn(Optional.of(customerUser));
+        when(walletRepository.saveAndFlush(any(Wallet.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+
+        Wallet result = walletService.getOrCreateCustomerWallet(30);
+
+        assertNotNull(result);
+        assertFalse(result.isPlatform());
+        assertEquals(BigDecimal.ZERO, result.getBalance());
+        verify(walletRepository, times(1)).saveAndFlush(any(Wallet.class));
+    }
+
+    @Test
+    void recordCustomerTransaction_creditsWallet() {
+        when(walletRepository.findByUserIdForUpdate(30)).thenReturn(Optional.of(customerWallet));
+        when(walletRepository.save(any(Wallet.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(walletTransactionRepository.save(any(WalletTransaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        walletService.recordCustomerTransaction(30, new BigDecimal("50000"), null,
+                WalletTransactionType.CUSTOMER_TOPUP_CREDIT, "Nạp tiền vào ví");
+
+        assertEquals(new BigDecimal("250000"), customerWallet.getBalance());
+        verify(walletRepository).save(customerWallet);
+        verify(walletTransactionRepository).save(any(WalletTransaction.class));
+    }
+
+    @Test
+    void getCustomerWalletBalance_returnsBalanceResponse() {
+        when(walletRepository.findByUserUserId(30)).thenReturn(Optional.of(customerWallet));
+
+        WalletBalanceResponse response = walletService.getCustomerWalletBalance(30);
+
+        assertNotNull(response);
+        assertEquals(new BigDecimal("200000"), response.getBalance());
+    }
+
+    @Test
+    void debitCustomerWalletForPayment_sufficientBalance_debitsWallet() {
+        when(walletRepository.findByUserIdForUpdate(30)).thenReturn(Optional.of(customerWallet));
+        when(walletRepository.save(any(Wallet.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(walletTransactionRepository.save(any(WalletTransaction.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        walletService.debitCustomerWalletForPayment(30, new BigDecimal("150000"), 500, "Thanh toán đơn #500 bằng Ví");
+
+        assertEquals(new BigDecimal("50000"), customerWallet.getBalance());
+        verify(walletTransactionRepository).save(argThat(tx ->
+                tx.getTransactionType() == WalletTransactionType.CUSTOMER_PAYMENT_DEBIT
+                        && tx.getAmount().compareTo(new BigDecimal("-150000")) == 0));
+    }
+
+    @Test
+    void debitCustomerWalletForPayment_insufficientBalance_throwsBadRequestAndDoesNotDebit() {
+        when(walletRepository.findByUserIdForUpdate(30)).thenReturn(Optional.of(customerWallet));
+
+        assertThrows(BadRequestException.class, () ->
+                walletService.debitCustomerWalletForPayment(30, new BigDecimal("250000"), 500, "Thanh toán đơn #500 bằng Ví"));
+
+        assertEquals(new BigDecimal("200000"), customerWallet.getBalance());
+        verify(walletTransactionRepository, never()).save(any());
+        verify(walletRepository, never()).save(any(Wallet.class));
     }
 }
