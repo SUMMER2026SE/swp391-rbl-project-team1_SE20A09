@@ -68,6 +68,11 @@ public class BookingDetailResponse {
     @Schema(description = "Ghi chú của khách (nếu có)")
     private String note;
 
+    @Schema(description = "Lý do hủy đơn — NULL nếu đơn bị hệ thống tự hủy do hết hạn giữ chỗ "
+            + "(BookingExpiryScheduler không set field này), có giá trị nếu khách/chủ sân chủ động hủy.",
+            example = "Khách đổi lịch")
+    private String cancelReason;
+
     @Schema(description = "Thời điểm tạo đơn đặt")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
