@@ -104,7 +104,7 @@ export function TimeSlotManager({
   const [selectedSlotForChoice, setSelectedSlotForChoice] = React.useState<{
     slot: WeeklySlotItem
     date: string
-    action: "edit" | "toggle" | "delete"
+    action: "edit" | "toggle" | "delete" | "walk_in"
   } | null>(null)
   const [isChoiceOpen, setIsChoiceOpen] = React.useState<boolean>(false)
   const [selectedDate, setSelectedDate] = React.useState<string | undefined>(undefined)
