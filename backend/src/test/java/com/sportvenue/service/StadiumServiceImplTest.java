@@ -794,7 +794,7 @@ class StadiumServiceImplTest {
                 .approvedStatus(ApprovedStatus.APPROVED)
                 .build();
                 
-        when(stadiumRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class)))
+        when(stadiumRepository.findAllByOwnerForTree(owner.getOwnerId()))
                 .thenReturn(List.of(court));
                 
         when(stadiumMapper.toResponse(parent)).thenReturn(StadiumResponse.builder().stadiumId(20).build());
