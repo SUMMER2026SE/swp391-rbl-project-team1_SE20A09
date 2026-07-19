@@ -244,39 +244,16 @@ public class OwnerBookingService {
             throw new BadRequestException("Khung giờ này đã được đặt.");
         }
 
-        BigDecimal totalPrice = slot.getPricePerSlot();
-        
-        // Process accessories
         List<BookingAccessory> bookingAccessories = new ArrayList<>();
-        if (request.getAccessories() != null && !request.getAccessories().isEmpty()) {
-            for (AccessoryItem item : request.getAccessories()) {
-                Accessory acc = accessoryRepository.findById(item.getAccessoryId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phụ kiện với ID " + item.getAccessoryId()));
-                
-                if (!Boolean.TRUE.equals(acc.getIsAvailable())) {
-                    throw new BadRequestException("Phụ kiện #" + acc.getAccessoryId() + " hiện không khả dụng");
-                }
-                
-                BigDecimal lineTotal = acc.getPricePerUnit().multiply(BigDecimal.valueOf(item.getQuantity()));
-                totalPrice = totalPrice.add(lineTotal);
-                
-                bookingAccessories.add(BookingAccessory.builder()
-                        .accessoryId(acc.getAccessoryId())
-                        .quantity(item.getQuantity())
-                        .unitPrice(acc.getPricePerUnit())
-                        .build());
-            }
-        }
-
-        // Không tính serviceFee cho Walk-in (hoặc tính = 0)
-        BigDecimal serviceFee = BigDecimal.ZERO;
+        BigDecimal extraPrice = processWalkInAccessories(request.getAccessories(), bookingAccessories);
+        BigDecimal totalPrice = slot.getPricePerSlot().add(extraPrice);
 
         Booking booking = Booking.builder()
                 .user(null) // Khách vãng lai
                 .stadium(stadium)
                 .slot(slot)
                 .totalPrice(totalPrice)
-                .serviceFee(serviceFee)
+                .serviceFee(BigDecimal.ZERO)
                 .bookingStatus(BookingStatus.CONFIRMED)
                 .paymentStatus(PaymentStatus.PAID)
                 .reservationDate(request.getReservationDate())
@@ -284,10 +261,6 @@ public class OwnerBookingService {
                 .build();
         
         Booking saved = bookingRepository.save(booking);
-        // KHÔNG thay đổi SlotStatus của TimeSlot entity vĩnh viễn.
-        // getWeeklySlots() detect trạng thái BOOKED qua Booking records (CONFIRMED),
-        // đó là thiết kế gốc. Nếu đổi sang BOOKED thì slot bị loại khỏi query
-        // findByStadiumStadiumIdAndSlotStatus(AVAILABLE) và không hiện trên weekly grid.
         
         if (!bookingAccessories.isEmpty()) {
             for (BookingAccessory ba : bookingAccessories) {
@@ -296,7 +269,38 @@ public class OwnerBookingService {
             bookingAccessoryRepository.saveAll(bookingAccessories);
         }
         
-        // Tạo Payment
+        createWalkInPayment(saved, totalPrice);
+        
+        log.info("🛒 Đã tạo Walk-in Booking #{} cho sân {} kèm {} phụ kiện", saved.getBookingId(), stadium.getStadiumId(), bookingAccessories.size());
+        
+        return toBookingResponse(saved);
+    }
+
+    private BigDecimal processWalkInAccessories(List<AccessoryItem> items, List<BookingAccessory> bookingAccessories) {
+        BigDecimal extraPrice = BigDecimal.ZERO;
+        if (items != null && !items.isEmpty()) {
+            for (AccessoryItem item : items) {
+                Accessory acc = accessoryRepository.findById(item.getAccessoryId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phụ kiện với ID " + item.getAccessoryId()));
+                
+                if (!Boolean.TRUE.equals(acc.getIsAvailable())) {
+                    throw new BadRequestException("Phụ kiện #" + acc.getAccessoryId() + " hiện không khả dụng");
+                }
+                
+                BigDecimal lineTotal = acc.getPricePerUnit().multiply(BigDecimal.valueOf(item.getQuantity()));
+                extraPrice = extraPrice.add(lineTotal);
+                
+                bookingAccessories.add(BookingAccessory.builder()
+                        .accessoryId(acc.getAccessoryId())
+                        .quantity(item.getQuantity())
+                        .unitPrice(acc.getPricePerUnit())
+                        .build());
+            }
+        }
+        return extraPrice;
+    }
+
+    private void createWalkInPayment(Booking saved, BigDecimal totalPrice) {
         Payment payment = Payment.builder()
                 .booking(saved)
                 .paymentMethod(PaymentMethod.CASH)
@@ -306,10 +310,6 @@ public class OwnerBookingService {
                 .paidAt(LocalDateTime.now())
                 .build();
         paymentRepository.save(payment);
-        
-        log.info("🛒 Đã tạo Walk-in Booking #{} cho sân {} kèm {} phụ kiện", saved.getBookingId(), stadium.getStadiumId(), bookingAccessories.size());
-        
-        return toBookingResponse(saved);
     }
     
     // ── Helper methods ────────────────────────────────────────────
