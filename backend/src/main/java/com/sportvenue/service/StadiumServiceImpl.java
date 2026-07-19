@@ -547,6 +547,7 @@ public class StadiumServiceImpl implements StadiumService {
         for (Booking booking : futureBookings) {
             booking.setBookingStatus(BookingStatus.CANCELLED);
             booking.setNote("Sân bị đóng cửa vĩnh viễn bởi chủ sân.");
+            booking.setCancelReason("Sân bị đóng cửa vĩnh viễn bởi chủ sân.");
             if (booking.getSlot() != null) {
                 booking.getSlot().setSlotStatus(com.sportvenue.entity.enums.SlotStatus.AVAILABLE);
             }

@@ -675,10 +675,13 @@ export default function BookingDetailPage() {
               )}
               {booking.status === 'cancelled' && (
                 <>
-                  {/* Chỉ hiện khiếu nại/báo cáo khi đơn có cancelReason (huỷ thủ công — từng có
-                      tương tác/thanh toán thật). cancelReason NULL nghĩa là BookingExpiryScheduler
-                      tự huỷ do hết hạn giữ chỗ — chưa từng phát sinh gì để khiếu nại. */}
-                  {booking.cancelReason != null && (
+                  {/* Chỉ hiện khiếu nại/báo cáo khi đơn có cancelReason (huỷ thủ công) HOẶC đã từng
+                      thực sự thu tiền rồi hoàn (paymentStatus=refunded) — tức có giao dịch thật.
+                      cancelReason có thể NULL ngay cả khi huỷ thủ công nếu người hủy để trống lý do
+                      (vd Owner hủy/hoàn tiền không bắt buộc nhập lý do), nên không thể chỉ dựa vào
+                      cancelReason một mình. Chỉ khi CẢ HAI đều rỗng — auto-cancel do hết hạn giữ chỗ,
+                      chưa từng thanh toán — thì mới thực sự chưa có gì để khiếu nại. */}
+                  {(booking.cancelReason != null || booking.paymentStatus.toLowerCase() === 'refunded') && (
                     <>
                       <Button
                         variant="outline"

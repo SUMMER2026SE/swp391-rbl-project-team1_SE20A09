@@ -183,6 +183,7 @@ public class OwnerBookingService {
         // PO quyết định gộp chung để đơn giản hóa flow, lý do từ chối sẽ được ghi vào note.
         booking.setBookingStatus(BookingStatus.CANCELLED);
         booking.setNote("Lý do từ chối: " + reason);
+        booking.setCancelReason(reason);
 
         // Chỉ giải phóng slot cho người khác đặt khi không có đơn CONFIRMED khác đang chiếm giữ slot này
         TimeSlot slot = booking.getSlot();
