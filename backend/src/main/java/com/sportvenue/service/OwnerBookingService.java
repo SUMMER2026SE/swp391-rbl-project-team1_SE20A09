@@ -360,7 +360,7 @@ public class OwnerBookingService {
                         .stadiumName(stadium.getStadiumName())
                         .complexName(StadiumUtils.resolveComplexName(stadium))
                         .address(StadiumUtils.resolveAddress(stadium))
-                        .sportType(resolveSportName(stadium))
+                        .sportType(StadiumUtils.resolveSportName(stadium))
                         .build())
                 .slot(BookingResponse.SlotInfo.builder()
                         .slotId(slot.getSlotId())
@@ -402,21 +402,36 @@ public class OwnerBookingService {
     }
 
     /**
-     * Resolve sport name theo cấu trúc cây sân (COURT → FACILITY → Complex).
-     * Sân con (COURT/FACILITY) trong khu tổ hợp có thể kế thừa sport type từ sân cha.
+     * Void (hủy) một đơn walk-in tạo nhầm.
+     * Chỉ áp dụng cho walk-in booking đang CONFIRMED — giải phóng slot về AVAILABLE.
+     * Owner phải sở hữu sân mới được thao tác.
      */
-    private String resolveSportName(Stadium stadium) {
-        if (stadium == null) {
-            return "Khác";
+    @Transactional
+    public BookingResponse voidWalkInBooking(Integer ownerUserId, Integer bookingId) {
+        Owner owner = findOwnerByUserId(ownerUserId);
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn walk-in: " + bookingId));
+
+        if (!Boolean.TRUE.equals(booking.getIsWalkIn())) {
+            throw new BadRequestException("Chỉ có thể hủy đơn vãng lai (walk-in).");
         }
-        if (stadium.getSportType() != null) {
-            return stadium.getSportType().getSportName();
+
+        if (booking.getBookingStatus() != BookingStatus.CONFIRMED) {
+            throw new BadRequestException("Chỉ có thể hủy đơn walk-in đang ở trạng thái CONFIRMED.");
         }
-        // COURT kế thừa từ FACILITY cha
-        if (stadium.getParentStadium() != null
-                && stadium.getParentStadium().getSportType() != null) {
-            return stadium.getParentStadium().getSportType().getSportName();
+
+        validateStadiumOwnership(booking.getStadium().getStadiumId(), owner.getOwnerId());
+
+        booking.setBookingStatus(BookingStatus.CANCELLED);
+        booking.setNote("Đơn vãng lai bị hủy bởi chủ sân (nhập nhầm).");
+
+        // Giải phóng khung giờ để có thể đặt lại
+        TimeSlot slot = booking.getSlot();
+        if (slot != null) {
+            slot.setSlotStatus(SlotStatus.AVAILABLE);
         }
-        return "Khác";
+
+        log.info("🗑️ Walk-in Booking #{} bị void bởi owner {}", bookingId, ownerUserId);
+        return toBookingResponse(booking);
     }
 }

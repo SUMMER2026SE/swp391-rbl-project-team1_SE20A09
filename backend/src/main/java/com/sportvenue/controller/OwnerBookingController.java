@@ -20,6 +20,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -144,5 +145,21 @@ public class OwnerBookingController {
             @Valid @RequestBody com.sportvenue.dto.request.CreateWalkInBookingRequest request) {
 
         return ResponseEntity.ok(ownerBookingService.createWalkInBooking(userPrincipal.getUser().getUserId(), request));
+    }
+
+    /**
+     * Void (hủy) một đơn walk-in tạo nhầm.
+     * Chỉ owner sở hữu sân mới được thao tác. Slot được giải phóng về AVAILABLE.
+     */
+    @DeleteMapping("/walk-in/{bookingId}")
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(summary = "Hủy đơn vãng lai tạo nhầm",
+               description = "Owner hủy một walk-in booking đang CONFIRMED do nhập nhầm. Slot sẽ được giải phóng lại.")
+    public ResponseEntity<BookingResponse> voidWalkInBooking(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable Integer bookingId) {
+
+        return ResponseEntity.ok(
+                ownerBookingService.voidWalkInBooking(userPrincipal.getUser().getUserId(), bookingId));
     }
 }

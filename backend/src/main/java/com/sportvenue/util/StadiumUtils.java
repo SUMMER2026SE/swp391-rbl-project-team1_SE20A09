@@ -62,4 +62,24 @@ public class StadiumUtils {
             default -> sportName;
         };
     }
+
+    /**
+     * Resolve tên môn thể thao từ sân theo cấu trúc cây (COURT → FACILITY → "Khác").
+     * COURT kế thừa sportType từ FACILITY cha nếu bản thân không có sportType.
+     * Dùng thay cho mọi chỗ gọi getSportType() trực tiếp mà không fallback.
+     */
+    public static String resolveSportName(Stadium stadium) {
+        if (stadium == null) {
+            return "Khác";
+        }
+        if (stadium.getSportType() != null) {
+            return stadium.getSportType().getSportName();
+        }
+        // COURT kế thừa từ FACILITY cha
+        if (stadium.getParentStadium() != null
+                && stadium.getParentStadium().getSportType() != null) {
+            return stadium.getParentStadium().getSportType().getSportName();
+        }
+        return "Khác";
+    }
 }
