@@ -29,6 +29,7 @@ public class OwnerBookingResponse {
     private String status;
     private String notes;
     private String playTimeRaw;
+    private Boolean isWalkIn;
 
     @Data
     @Builder

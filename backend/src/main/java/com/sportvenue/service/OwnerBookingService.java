@@ -11,7 +11,13 @@ import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.entity.enums.SlotStatus;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
+import com.sportvenue.entity.Payment;
+import com.sportvenue.entity.enums.PaymentMethod;
+import com.sportvenue.entity.enums.PaymentStatus;
+import com.sportvenue.entity.enums.TransactionStatus;
+import com.sportvenue.dto.request.CreateWalkInBookingRequest;
 import com.sportvenue.repository.BookingRepository;
+import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.TimeSlotRepository;
@@ -25,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -46,6 +53,7 @@ public class OwnerBookingService {
     private final StadiumRepository stadiumRepository;
     private final TimeSlotRepository timeSlotRepository;
     private final BookingService bookingService;
+    private final PaymentRepository paymentRepository;
 
     @Transactional(readOnly = true)
     public WeeklySlotResponse getOwnerWeeklySlots(Integer userId, Integer stadiumId, LocalDate weekStart) {
@@ -195,6 +203,69 @@ public class OwnerBookingService {
         return toBookingResponse(booking);
     }
 
+    /**
+     * Tạo đơn đặt sân trực tiếp tại quầy.
+     */
+    @Transactional
+    public BookingResponse createWalkInBooking(Integer ownerUserId, CreateWalkInBookingRequest request) {
+        Owner owner = findOwnerByUserId(ownerUserId);
+        
+        Stadium stadium = stadiumRepository.findById(request.getStadiumId())
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sân: " + request.getStadiumId()));
+        
+        validateStadiumOwnership(stadium.getStadiumId(), owner.getOwnerId());
+        
+        TimeSlot slot = timeSlotRepository.findByIdForUpdate(request.getSlotId())
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy khung giờ: " + request.getSlotId()));
+        
+        if (slot.getSlotStatus() != SlotStatus.AVAILABLE) {
+            throw new BadRequestException("Khung giờ này không khả dụng.");
+        }
+        
+        // Check conflict
+        boolean hasConflict = bookingRepository.existsActiveBooking(
+                stadium.getStadiumId(), slot.getSlotId(), request.getReservationDate(), 
+                List.of(BookingStatus.PENDING_PAYMENT, BookingStatus.PENDING, BookingStatus.CONFIRMED));
+        
+        if (hasConflict) {
+            throw new BadRequestException("Khung giờ này đã được đặt.");
+        }
+
+        BigDecimal totalPrice = slot.getPricePerSlot();
+        // Không tính serviceFee cho Walk-in (hoặc tính = 0)
+        BigDecimal serviceFee = BigDecimal.ZERO;
+
+        Booking booking = Booking.builder()
+                .user(null) // Khách vãng lai
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(totalPrice)
+                .serviceFee(serviceFee)
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .reservationDate(request.getReservationDate())
+                .isWalkIn(true)
+                .build();
+        
+        Booking saved = bookingRepository.save(booking);
+        slot.setSlotStatus(SlotStatus.BOOKED);
+        
+        // Tạo Payment
+        Payment payment = Payment.builder()
+                .booking(saved)
+                .paymentMethod(PaymentMethod.CASH)
+                .amount(totalPrice)
+                .transactionCode("WALK_IN_" + saved.getBookingId())
+                .paymentStatus(TransactionStatus.SUCCESS)
+                .paidAt(LocalDateTime.now())
+                .build();
+        paymentRepository.save(payment);
+        
+        log.info("🛒 Đã tạo Walk-in Booking #{} cho sân {}", saved.getBookingId(), stadium.getStadiumId());
+        
+        return toBookingResponse(saved);
+    }
+    
     // ── Helper methods ────────────────────────────────────────────
 
     private Owner findOwnerByUserId(Integer userId) {
@@ -220,16 +291,24 @@ public class OwnerBookingService {
         Stadium stadium = booking.getStadium();
         TimeSlot slot = booking.getSlot();
 
+        BookingResponse.CustomerInfo customerInfo = null;
+        if (customer != null) {
+            customerInfo = BookingResponse.CustomerInfo.builder()
+                    .userId(customer.getUserId())
+                    .fullName(customer.getLastName() + " " + customer.getFirstName())
+                    .email(maskEmail(customer.getEmail()))
+                    .phoneNumber(maskPhone(customer.getPhoneNumber()))
+                    .avatarUrl(customer.getAvatarUrl())
+                    .build();
+        } else {
+            customerInfo = BookingResponse.CustomerInfo.builder()
+                    .fullName("Khách vãng lai")
+                    .build();
+        }
+
         return BookingResponse.builder()
                 .bookingId(booking.getBookingId())
-                .customer(BookingResponse.CustomerInfo.builder()
-                        .userId(customer.getUserId())
-                        .fullName(customer.getLastName()
-                                + " " + customer.getFirstName())
-                        .email(maskEmail(customer.getEmail()))
-                        .phoneNumber(maskPhone(customer.getPhoneNumber()))
-                        .avatarUrl(customer.getAvatarUrl())
-                        .build())
+                .customer(customerInfo)
                 .stadium(BookingResponse.StadiumInfo.builder()
                         .stadiumId(stadium.getStadiumId())
                         .stadiumName(stadium.getStadiumName())
@@ -248,6 +327,7 @@ public class OwnerBookingService {
                 .note(booking.getNote())
                 .bookingDate(booking.getBookingDate())
                 .recurringGroupId(booking.getRecurringGroupId())
+                .isWalkIn(booking.getIsWalkIn())
                 .build();
     }
 

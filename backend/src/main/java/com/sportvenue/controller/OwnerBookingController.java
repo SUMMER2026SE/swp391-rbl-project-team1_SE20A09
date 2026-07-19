@@ -22,6 +22,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -129,5 +130,19 @@ public class OwnerBookingController {
             @PathVariable Integer bookingId) {
 
         return ResponseEntity.ok(bookingService.confirmRemainingPaymentReceived(userPrincipal, bookingId));
+    }
+
+    /**
+     * Tạo Walk-in booking (Khách đặt tại sân).
+     */
+    @PostMapping("/walk-in")
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(summary = "Tạo đơn đặt sân tại quầy",
+               description = "Owner tạo đơn cho khách vãng lai (không qua app). Đơn được tự động CONFIRMED và PAID.")
+    public ResponseEntity<BookingResponse> createWalkInBooking(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @Valid @RequestBody com.sportvenue.dto.request.CreateWalkInBookingRequest request) {
+
+        return ResponseEntity.ok(ownerBookingService.createWalkInBooking(userPrincipal.getUser().getUserId(), request));
     }
 }

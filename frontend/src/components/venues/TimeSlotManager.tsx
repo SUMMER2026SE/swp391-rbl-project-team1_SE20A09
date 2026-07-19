@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { toast } from "sonner"
-import { Plus, Loader2, Trash2, Zap, Clock, CalendarDays, Edit3, ChevronLeft, ChevronRight, Grid, List, Power } from "lucide-react"
+import { Plus, Loader2, Trash2, Zap, Clock, CalendarDays, Edit3, ChevronLeft, ChevronRight, Grid, List, Power, UserPlus } from "lucide-react"
 import {
   getStadiumTimeSlots,
   createTimeSlot,
@@ -35,6 +35,7 @@ import { useConfirm } from "@/hooks/useConfirm"
 import { EditTimeSlotDialog } from "./EditTimeSlotDialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import WeeklyAgendaGrid from "./WeeklyAgendaGrid"
+import { WalkInBookingDialog } from "@/components/bookings/WalkInBookingDialog"
 
 // ── Date management helpers ──────────────────────────────────────────────────
 function mondayOfThisWeek(): string {
@@ -109,6 +110,9 @@ export function TimeSlotManager({
   const [selectedDate, setSelectedDate] = React.useState<string | undefined>(undefined)
   const [selectedBooking, setSelectedBooking] = React.useState<{ slot: WeeklySlotItem; date: string } | null>(null)
   const [openingBookingChat, setOpeningBookingChat] = React.useState(false)
+
+  // Walk-in booking state
+  const [walkInSlot, setWalkInSlot] = React.useState<{ slot: WeeklySlotItem; date: string } | null>(null)
 
   const handleMessageCustomer = async () => {
     const selected = selectedBooking
@@ -268,6 +272,8 @@ export function TimeSlotManager({
       } catch (error) {
         toast.error("Không thể xóa khung giờ")
       }
+    } else if (action === "walk_in") {
+      setWalkInSlot({ slot, date })
     }
   }
 
@@ -763,6 +769,23 @@ export function TimeSlotManager({
           )}
         </DialogContent>
       </Dialog>
+
+      {walkInSlot && (
+        <WalkInBookingDialog
+          isOpen={!!walkInSlot}
+          onClose={() => setWalkInSlot(null)}
+          onSuccess={() => {
+            setWalkInSlot(null)
+            loadData()
+          }}
+          stadiumId={stadiumId}
+          slotId={walkInSlot.slot.slotId}
+          date={walkInSlot.date}
+          startTime={walkInSlot.slot.startTime}
+          endTime={walkInSlot.slot.endTime}
+          price={walkInSlot.slot.price}
+        />
+      )}
     </div>
   )
 }
@@ -771,7 +794,7 @@ export function TimeSlotManager({
 
 interface OwnerSlotBlockProps {
   slot: WeeklySlotItem
-  onChoice: (action: "edit" | "toggle" | "delete") => void
+  onChoice: (action: "edit" | "toggle" | "delete" | "walk_in") => void
   onBooked: () => void
 }
 
@@ -838,6 +861,17 @@ function OwnerSlotBlock({ slot, onChoice, onBooked }: OwnerSlotBlockProps) {
           >
             <Trash2 className="w-3.5 h-3.5" />
           </Button>
+          {isAvailable && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => { e.stopPropagation(); onChoice("walk_in") }}
+              className="h-7 w-7 bg-white/90 hover:bg-blue-50 text-slate-700 hover:text-blue-600 rounded-full transition-all"
+              title="Tạo đơn tại quầy"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+            </Button>
+          )}
         </div>
       </div>
     )

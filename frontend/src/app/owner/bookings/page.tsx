@@ -70,6 +70,7 @@ interface BookingItem {
   status: string;
   notes: string;
   playTimeRaw: string;
+  isWalkIn?: boolean;
 }
 
 function BookingManagementPage() {
@@ -402,7 +403,7 @@ function BookingManagementPage() {
     // Backend (RefundServiceImpl.validateOwnershipAndStatus) đã cho phép hoàn tiền cho cả PAID
     // lẫn DEPOSITED từ trước — mở thêm điều kiện ở đây để Owner có nút hủy/hoàn tiền cho đơn cọc
     // (vd lỗi do sân → hoàn 100% gồm phí dịch vụ).
-    const canRefund = booking.status.toLowerCase() === "confirmed"
+    const canRefund = !booking.isWalkIn && booking.status.toLowerCase() === "confirmed"
       && (booking.paymentStatus.toLowerCase() === "paid" || booking.paymentStatus.toLowerCase() === "deposited");
     // KHÔNG gate theo status CONFIRMED/COMPLETED cụ thể — BookingCompletionScheduler có thể chuyển
     // CONFIRMED→COMPLETED chỉ dựa vào giờ chơi, không xét paymentStatus, nên 1 đơn cash có thể đã
@@ -413,7 +414,7 @@ function BookingManagementPage() {
     // Đơn đặt cọc — khách trả nốt phần còn lại tại sân, tương tự canConfirmCash.
     const canConfirmRemaining = booking.paymentStatus.toLowerCase() === "deposited"
       && booking.status.toLowerCase() !== "cancelled";
-    const canCancelUnpaid = booking.status.toLowerCase() === "confirmed"
+    const canCancelUnpaid = !booking.isWalkIn && booking.status.toLowerCase() === "confirmed"
       && booking.paymentStatus.toLowerCase() === "awaiting_cash_payment";
 
     return (

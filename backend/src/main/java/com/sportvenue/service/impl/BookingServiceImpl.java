@@ -803,6 +803,10 @@ public class BookingServiceImpl implements BookingService {
             throw new BadRequestException(
                     "Không thể hủy đơn đặt sân ở trạng thái " + currentStatus);
         }
+        
+        if (Boolean.TRUE.equals(booking.getIsWalkIn())) {
+            throw new BadRequestException("Không thể hoàn/hủy cho đơn khách vãng lai thanh toán tại sân");
+        }
 
         // docs/qa_findings_refactor_plan.md mục 1.2: luồng hủy chung này luôn hoàn 100% không
         // tiering theo giờ, khác với /owner/bookings/{id}/refund áp dụng chính sách chặt chẽ hơn

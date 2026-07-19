@@ -341,6 +341,19 @@ export async function createBooking(
 
 export type BookingDetailResponse = CreateBookingResponse;
 
+export type CreateWalkInBookingPayload = {
+  stadiumId: number;
+  slotId: number;
+  reservationDate: string;
+};
+
+/**
+ * Tạo đơn đặt sân tại quầy (Owner) - Tự động confirmed và paid (tiền mặt).
+ */
+export async function createWalkInBooking(payload: CreateWalkInBookingPayload): Promise<BookingDetailResponse> {
+  return post<BookingDetailResponse>("/owner/bookings/walk-in", payload);
+}
+
 // ── UC-CUS-03: Cancel booking ───────────────────────────────────────────────
 
 /**
