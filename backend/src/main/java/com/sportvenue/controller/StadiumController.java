@@ -77,7 +77,7 @@ public class StadiumController {
     @GetMapping("/my")
     @PreAuthorize("hasRole('Owner')")
     @RequireApprovedOwner
-    @Operation(summary = "Get my stadiums", description = "Returns all stadiums owned by the authenticated owner.")
+    @Operation(summary = "Get my stadiums", description = "Returns all stadiums owned by the authenticated owner. Optional status filter values: ACTIVE, PENDING, SUSPENDED.")
     public ResponseEntity<List<StadiumResponse>> getMyStadiums(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @RequestParam(required = false) String search,

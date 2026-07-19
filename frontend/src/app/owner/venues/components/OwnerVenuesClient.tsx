@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -76,9 +77,18 @@ export default function OwnerVenuesClient({
   initialVenues,
 }: OwnerVenuesClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const currentStatus = searchParams.get('status') || '';
+
   const [complexes, setComplexes] = useState<ComplexResponse[]>(initialComplexes);
   const [venues, setVenues] = useState<StadiumResponse[]>(initialVenues);
   const [loading, setLoading] = useState(false);
+
+  // Sync state when initial props update via SSR query-param change
+  useEffect(() => {
+    setComplexes(initialComplexes);
+    setVenues(initialVenues);
+  }, [initialComplexes, initialVenues]);
   
   // Modal states for old actions
   const [isAccessoryOpen, setIsAccessoryOpen] = useState(false);
@@ -118,7 +128,7 @@ export default function OwnerVenuesClient({
     try {
       const [complexesRes, venuesRes] = await Promise.all([
         stadiumService.getMyComplexes(),
-        stadiumService.getMyStadiums()
+        stadiumService.getMyStadiums(currentStatus ? { status: currentStatus } : undefined)
       ]);
       setComplexes(complexesRes);
       setVenues(venuesRes);
@@ -127,7 +137,21 @@ export default function OwnerVenuesClient({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentStatus]);
+
+  useEffect(() => {
+    fetchTreeData();
+  }, [currentStatus, fetchTreeData]);
+
+  const handleStatusChange = (status: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (status) {
+      params.set('status', status);
+    } else {
+      params.delete('status');
+    }
+    router.push(`/owner/venues?${params.toString()}`);
+  };
 
   const toggleComplex = (complexId: number) => {
     setCollapsedComplexes(prev => ({ ...prev, [complexId]: !prev[complexId] }));
@@ -225,15 +249,26 @@ export default function OwnerVenuesClient({
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white">Sơ đồ sân của tôi</h1>
           <p className="text-slate-500 text-sm mt-1">Quản lý phân cấp 3 tầng: Tổ hợp → Khu sân → Sân lẻ</p>
         </div>
-        <Button onClick={() => router.push("/owner/venues/new")} className="shadow-lg shadow-primary/10">
+        <Button onClick={() => router.push("/owner/venues/new")} className="shadow-lg shadow-primary/10 shrink-0">
           <Plus className="mr-2 h-5 w-5" />
           Đăng ký Tổ hợp mới
         </Button>
+      </div>
+
+      <div className="mb-8 flex justify-between items-center gap-4 flex-wrap">
+        <Tabs value={currentStatus || "ALL"} onValueChange={(val) => handleStatusChange(val === "ALL" ? "" : val)}>
+          <TabsList className="bg-slate-100 dark:bg-muted p-1">
+            <TabsTrigger value="ALL">Tất cả</TabsTrigger>
+            <TabsTrigger value="ACTIVE">Đang hoạt động</TabsTrigger>
+            <TabsTrigger value="PENDING">Đang chờ duyệt</TabsTrigger>
+            <TabsTrigger value="SUSPENDED">Tạm dừng</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {loading ? (

@@ -138,7 +138,6 @@ public class StadiumServiceImpl implements StadiumService {
             // Exclude CLOSED (deleted) stadiums
             predicates.add(cb.notEqual(root.get("stadiumStatus"), StadiumStatus.CLOSED));
             
-            
             // Keyword search on name
             if (org.springframework.util.StringUtils.hasText(search)) {
                 predicates.add(cb.like(cb.lower(root.get("stadiumName")), "%" + search.trim().toLowerCase() + "%"));
@@ -149,24 +148,51 @@ public class StadiumServiceImpl implements StadiumService {
                 predicates.add(cb.equal(root.get("sportType").get("sportTypeId"), sportTypeId));
             }
             
-            // Filter by status (AVAILABLE, MAINTENANCE)
+            // Filter by status (ACTIVE, PENDING, SUSPENDED, or fallback to AVAILABLE, MAINTENANCE)
             if (org.springframework.util.StringUtils.hasText(status)) {
-                try {
-                    StadiumStatus statusEnum = StadiumStatus.valueOf(status.toUpperCase());
-                    predicates.add(cb.equal(root.get("stadiumStatus"), statusEnum));
-                } catch (IllegalArgumentException e) {
-                    // Ignore invalid status enum
+                String upperStatus = status.trim().toUpperCase();
+                if ("ACTIVE".equals(upperStatus)) {
+                    predicates.add(cb.equal(root.get("approvedStatus"), ApprovedStatus.APPROVED));
+                    predicates.add(cb.equal(root.get("stadiumStatus"), StadiumStatus.AVAILABLE));
+                } else if ("PENDING".equals(upperStatus)) {
+                    predicates.add(cb.equal(root.get("approvedStatus"), ApprovedStatus.PENDING));
+                } else if ("SUSPENDED".equals(upperStatus)) {
+                    predicates.add(cb.equal(root.get("stadiumStatus"), StadiumStatus.MAINTENANCE));
+                } else {
+                    try {
+                        StadiumStatus statusEnum = StadiumStatus.valueOf(upperStatus);
+                        predicates.add(cb.equal(root.get("stadiumStatus"), statusEnum));
+                    } catch (IllegalArgumentException e) {
+                        // Ignore invalid status enum
+                    }
                 }
             }
             
             return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
         };
 
-        List<Stadium> stadiums = stadiumRepository.findAll(spec);
-        // Batch — tối đa 2 query bất kể danh sách dài bao nhiêu, thay vì gọi isStadiumUnderMaintenanceNow
-        // (1-2 query/lần) lặp lại cho từng sân.
-        java.util.Map<Integer, Boolean> maintenanceByStadiumId = maintenanceScheduleService.isUnderMaintenanceNow(stadiums);
-        return stadiums.stream()
+        List<Stadium> matchedStadiums = stadiumRepository.findAll(spec);
+        java.util.Set<Stadium> finalStadiums = new java.util.LinkedHashSet<>(matchedStadiums);
+        
+        // Ensure for any COURT in the list, its parent FACILITY is also included
+        for (Stadium stadium : matchedStadiums) {
+            if (stadium.getNodeType() == StadiumNodeType.COURT && stadium.getParentStadium() != null) {
+                finalStadiums.add(stadium.getParentStadium());
+            }
+        }
+        
+        // If status is PENDING, courts are auto-approved, so we should also include courts of pending facilities
+        if (org.springframework.util.StringUtils.hasText(status) && "PENDING".equalsIgnoreCase(status.trim())) {
+            for (Stadium stadium : new java.util.ArrayList<>(finalStadiums)) {
+                if (stadium.getNodeType() == StadiumNodeType.FACILITY && stadium.getChildCourts() != null) {
+                    finalStadiums.addAll(stadium.getChildCourts());
+                }
+            }
+        }
+
+        List<Stadium> resultList = new java.util.ArrayList<>(finalStadiums);
+        java.util.Map<Integer, Boolean> maintenanceByStadiumId = maintenanceScheduleService.isUnderMaintenanceNow(resultList);
+        return resultList.stream()
                 .map(stadium -> {
                     StadiumResponse response = stadiumMapper.toResponse(stadium);
                     response.setUnderMaintenanceToday(maintenanceByStadiumId.getOrDefault(stadium.getStadiumId(), false));

@@ -4,7 +4,13 @@ import { stadiumService } from "@/lib/services/stadium";
 import { ComplexResponse, StadiumResponse } from "@/types/stadium";
 import OwnerVenuesClient from "./components/OwnerVenuesClient";
 
-export default async function VenueManagementPage() {
+interface PageProps {
+  searchParams: {
+    status?: string;
+  };
+}
+
+export default async function VenueManagementPage({ searchParams }: PageProps) {
   const session = await getServerSession(authOptions);
   const token = session?.accessToken;
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -12,10 +18,12 @@ export default async function VenueManagementPage() {
   let initialComplexes: ComplexResponse[] = [];
   let initialVenues: StadiumResponse[] = [];
 
+  const statusFilter = searchParams.status;
+
   try {
     const [complexesRes, venuesRes] = await Promise.all([
       stadiumService.getMyComplexes({ headers }),
-      stadiumService.getMyStadiums(undefined, { headers })
+      stadiumService.getMyStadiums(statusFilter ? { status: statusFilter } : undefined, { headers })
     ]);
     initialComplexes = complexesRes;
     initialVenues = venuesRes;
