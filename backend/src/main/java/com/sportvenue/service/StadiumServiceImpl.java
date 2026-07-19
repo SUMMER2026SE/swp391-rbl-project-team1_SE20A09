@@ -148,49 +148,104 @@ public class StadiumServiceImpl implements StadiumService {
                 predicates.add(cb.equal(root.get("sportType").get("sportTypeId"), sportTypeId));
             }
             
-            // Filter by status (ACTIVE, PENDING, SUSPENDED, or fallback to AVAILABLE, MAINTENANCE)
-            if (org.springframework.util.StringUtils.hasText(status)) {
-                String upperStatus = status.trim().toUpperCase();
-                if ("ACTIVE".equals(upperStatus)) {
-                    predicates.add(cb.equal(root.get("approvedStatus"), ApprovedStatus.APPROVED));
-                    predicates.add(cb.equal(root.get("stadiumStatus"), StadiumStatus.AVAILABLE));
-                } else if ("PENDING".equals(upperStatus)) {
-                    predicates.add(cb.equal(root.get("approvedStatus"), ApprovedStatus.PENDING));
-                } else if ("SUSPENDED".equals(upperStatus)) {
-                    predicates.add(cb.equal(root.get("stadiumStatus"), StadiumStatus.MAINTENANCE));
-                } else {
-                    try {
-                        StadiumStatus statusEnum = StadiumStatus.valueOf(upperStatus);
-                        predicates.add(cb.equal(root.get("stadiumStatus"), statusEnum));
-                    } catch (IllegalArgumentException e) {
-                        // Ignore invalid status enum
-                    }
-                }
-            }
-            
             return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
         };
 
         List<Stadium> matchedStadiums = stadiumRepository.findAll(spec);
-        java.util.Set<Stadium> finalStadiums = new java.util.LinkedHashSet<>(matchedStadiums);
-        
-        // Ensure for any COURT in the list, its parent FACILITY is also included
-        for (Stadium stadium : matchedStadiums) {
-            if (stadium.getNodeType() == StadiumNodeType.COURT && stadium.getParentStadium() != null) {
-                finalStadiums.add(stadium.getParentStadium());
-            }
-        }
-        
-        // If status is PENDING, courts are auto-approved, so we should also include courts of pending facilities
-        if (org.springframework.util.StringUtils.hasText(status) && "PENDING".equalsIgnoreCase(status.trim())) {
-            for (Stadium stadium : new java.util.ArrayList<>(finalStadiums)) {
-                if (stadium.getNodeType() == StadiumNodeType.FACILITY && stadium.getChildCourts() != null) {
-                    finalStadiums.addAll(stadium.getChildCourts());
+        List<Stadium> resultList;
+
+        if (org.springframework.util.StringUtils.hasText(status)) {
+            String upperStatus = status.trim().toUpperCase();
+            java.util.Set<Stadium> filteredSet = new java.util.LinkedHashSet<>();
+            
+            if ("ACTIVE".equals(upperStatus)) {
+                for (Stadium s : matchedStadiums) {
+                    if (s.getNodeType() == StadiumNodeType.FACILITY) {
+                        if (s.getApprovedStatus() == ApprovedStatus.APPROVED && s.getStadiumStatus() == StadiumStatus.AVAILABLE) {
+                            filteredSet.add(s);
+                        }
+                    } else if (s.getNodeType() == StadiumNodeType.COURT) {
+                        Stadium parent = s.getParentStadium();
+                        if (s.getApprovedStatus() == ApprovedStatus.APPROVED && s.getStadiumStatus() == StadiumStatus.AVAILABLE) {
+                            if (parent != null && parent.getApprovedStatus() == ApprovedStatus.APPROVED && parent.getStadiumStatus() == StadiumStatus.AVAILABLE) {
+                                filteredSet.add(s);
+                                filteredSet.add(parent);
+                            }
+                        }
+                    }
+                }
+            } else if ("PENDING".equals(upperStatus)) {
+                for (Stadium s : matchedStadiums) {
+                    if (s.getNodeType() == StadiumNodeType.FACILITY) {
+                        if (s.getApprovedStatus() == ApprovedStatus.PENDING) {
+                            filteredSet.add(s);
+                            if (s.getChildCourts() != null) {
+                                for (Stadium court : s.getChildCourts()) {
+                                    if (court.getStadiumStatus() != StadiumStatus.CLOSED) {
+                                        filteredSet.add(court);
+                                    }
+                                }
+                            }
+                        }
+                    } else if (s.getNodeType() == StadiumNodeType.COURT) {
+                        Stadium parent = s.getParentStadium();
+                        if (parent != null && parent.getApprovedStatus() == ApprovedStatus.PENDING) {
+                            filteredSet.add(s);
+                            filteredSet.add(parent);
+                        }
+                    }
+                }
+            } else if ("SUSPENDED".equals(upperStatus)) {
+                for (Stadium s : matchedStadiums) {
+                    if (s.getNodeType() == StadiumNodeType.FACILITY) {
+                        if (s.getStadiumStatus() == StadiumStatus.MAINTENANCE) {
+                            filteredSet.add(s);
+                            if (s.getChildCourts() != null) {
+                                for (Stadium court : s.getChildCourts()) {
+                                    if (court.getStadiumStatus() != StadiumStatus.CLOSED) {
+                                        filteredSet.add(court);
+                                    }
+                                }
+                            }
+                        }
+                    } else if (s.getNodeType() == StadiumNodeType.COURT) {
+                        Stadium parent = s.getParentStadium();
+                        if (s.getStadiumStatus() == StadiumStatus.MAINTENANCE) {
+                            filteredSet.add(s);
+                            if (parent != null && parent.getStadiumStatus() != StadiumStatus.CLOSED) {
+                                filteredSet.add(parent);
+                            }
+                        } else if (parent != null && parent.getStadiumStatus() == StadiumStatus.MAINTENANCE) {
+                            filteredSet.add(s);
+                            filteredSet.add(parent);
+                        }
+                    }
+                }
+            } else {
+                try {
+                    StadiumStatus statusEnum = StadiumStatus.valueOf(upperStatus);
+                    for (Stadium s : matchedStadiums) {
+                        if (s.getStadiumStatus() == statusEnum) {
+                            filteredSet.add(s);
+                            if (s.getNodeType() == StadiumNodeType.COURT && s.getParentStadium() != null) {
+                                filteredSet.add(s.getParentStadium());
+                            }
+                        }
+                    }
+                } catch (IllegalArgumentException e) {
+                    // Ignore invalid status enum
                 }
             }
+            resultList = new java.util.ArrayList<>(filteredSet);
+        } else {
+            java.util.Set<Stadium> finalStadiums = new java.util.LinkedHashSet<>(matchedStadiums);
+            for (Stadium stadium : matchedStadiums) {
+                if (stadium.getNodeType() == StadiumNodeType.COURT && stadium.getParentStadium() != null) {
+                    finalStadiums.add(stadium.getParentStadium());
+                }
+            }
+            resultList = new java.util.ArrayList<>(finalStadiums);
         }
-
-        List<Stadium> resultList = new java.util.ArrayList<>(finalStadiums);
         java.util.Map<Integer, Boolean> maintenanceByStadiumId = maintenanceScheduleService.isUnderMaintenanceNow(resultList);
         return resultList.stream()
                 .map(stadium -> {

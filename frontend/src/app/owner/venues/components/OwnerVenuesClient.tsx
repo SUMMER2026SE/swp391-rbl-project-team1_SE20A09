@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -79,6 +79,8 @@ export default function OwnerVenuesClient({
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentStatus = searchParams.get('status') || '';
+  
+  const [isPending, startTransition] = useTransition();
 
   const [complexes, setComplexes] = useState<ComplexResponse[]>(initialComplexes);
   const [venues, setVenues] = useState<StadiumResponse[]>(initialVenues);
@@ -123,8 +125,8 @@ export default function OwnerVenuesClient({
     execute: executeConfirm 
   } = useConfirm()
 
-  const fetchTreeData = useCallback(async () => {
-    setLoading(true);
+  const fetchTreeData = useCallback(async (showFullLoader = false) => {
+    if (showFullLoader) setLoading(true);
     try {
       const [complexesRes, venuesRes] = await Promise.all([
         stadiumService.getMyComplexes(),
@@ -135,22 +137,24 @@ export default function OwnerVenuesClient({
     } catch (error) {
       toast.error("Không thể tải danh sách tổ hợp và sân.");
     } finally {
-      setLoading(false);
+      if (showFullLoader) setLoading(false);
     }
   }, [currentStatus]);
 
   useEffect(() => {
-    fetchTreeData();
+    fetchTreeData(false);
   }, [currentStatus, fetchTreeData]);
 
   const handleStatusChange = (status: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (status) {
-      params.set('status', status);
-    } else {
-      params.delete('status');
-    }
-    router.push(`/owner/venues?${params.toString()}`);
+    startTransition(() => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (status) {
+        params.set('status', status);
+      } else {
+        params.delete('status');
+      }
+      router.push(`/owner/venues?${params.toString()}`);
+    });
   };
 
   const toggleComplex = (complexId: number) => {
@@ -247,6 +251,22 @@ export default function OwnerVenuesClient({
     }
   };
 
+  const renderedComplexes = complexes.filter((complex) => {
+    if (!currentStatus) return true;
+
+    let complexMatches = false;
+    if (currentStatus === 'PENDING') {
+      complexMatches = complex.approvedStatus === 'PENDING';
+    } else if (currentStatus === 'SUSPENDED') {
+      complexMatches = complex.complexStatus === 'MAINTENANCE';
+    } else if (currentStatus === 'ACTIVE') {
+      complexMatches = complex.approvedStatus === 'APPROVED' && complex.complexStatus === 'AVAILABLE';
+    }
+
+    const complexFacilities = venues.filter(v => v.nodeType === 'FACILITY' && v.complexId === complex.complexId);
+    return complexMatches || complexFacilities.length > 0;
+  });
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -271,7 +291,8 @@ export default function OwnerVenuesClient({
         </Tabs>
       </div>
 
-      {loading ? (
+      <div className={`transition-opacity duration-200 ${isPending ? "opacity-60 pointer-events-none" : ""}`}>
+        {loading ? (
         <div className="flex justify-center items-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -281,9 +302,14 @@ export default function OwnerVenuesClient({
           <p className="text-lg font-bold mb-4">Bạn chưa đăng ký tổ hợp sân nào.</p>
           <Button onClick={() => router.push("/owner/venues/new")}>Đăng ký ngay</Button>
         </div>
+      ) : renderedComplexes.length === 0 ? (
+        <div className="text-center py-20 text-muted-foreground bg-white dark:bg-card/50 rounded-3xl border border-dashed p-6 shadow-sm">
+          <Building2 className="h-16 w-16 mx-auto mb-4 text-slate-300" />
+          <p className="text-lg font-bold mb-4">Không tìm thấy tổ hợp nào khớp với bộ lọc.</p>
+        </div>
       ) : (
         <div className="space-y-6">
-          {complexes.map((complex) => {
+          {renderedComplexes.map((complex) => {
             const isComplexCollapsed = collapsedComplexes[complex.complexId];
             const complexFacilities = venues.filter(v => v.nodeType === 'FACILITY' && v.complexId === complex.complexId);
 
@@ -415,6 +441,8 @@ export default function OwnerVenuesClient({
                                       <span className="text-xs text-muted-foreground">
                                         ({facility.openTime?.substring(0, 5)} - {facility.closeTime?.substring(0, 5)})
                                       </span>
+                                      {getApprovedStatusBadge(facility.approvedStatus)}
+                                      {getStatusBadge(facility.stadiumStatus)}
                                       {facility.stadiumStatus === 'AVAILABLE' && facility.underMaintenanceToday && (
                                         <Badge className="bg-red-100 text-red-700 hover:bg-red-100 text-[10px] font-semibold">
                                           Đang bảo trì hôm nay
@@ -620,6 +648,7 @@ export default function OwnerVenuesClient({
           })}
         </div>
       )}
+      </div>
 
       {selectedVenueForAccessory && (
         <AccessoryManagerDialog
