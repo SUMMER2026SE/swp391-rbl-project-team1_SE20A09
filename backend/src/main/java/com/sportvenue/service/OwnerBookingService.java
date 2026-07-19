@@ -21,6 +21,11 @@ import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.TimeSlotRepository;
+import com.sportvenue.repository.AccessoryRepository;
+import com.sportvenue.repository.BookingAccessoryRepository;
+import com.sportvenue.entity.Accessory;
+import com.sportvenue.entity.BookingAccessory;
+import com.sportvenue.dto.request.AccessoryItem;
 import com.sportvenue.util.StadiumUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +39,7 @@ import java.time.LocalDate;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import com.sportvenue.dto.response.WeeklySlotResponse;
@@ -54,6 +60,8 @@ public class OwnerBookingService {
     private final TimeSlotRepository timeSlotRepository;
     private final BookingService bookingService;
     private final PaymentRepository paymentRepository;
+    private final AccessoryRepository accessoryRepository;
+    private final BookingAccessoryRepository bookingAccessoryRepository;
 
     @Transactional(readOnly = true)
     public WeeklySlotResponse getOwnerWeeklySlots(Integer userId, Integer stadiumId, LocalDate weekStart) {
@@ -70,8 +78,13 @@ public class OwnerBookingService {
             Booking booking = byDateAndSlot.get(day.getDate() + ":" + slot.getSlotId());
             if (booking != null) {
                 slot.setBookingId(booking.getBookingId());
-                slot.setCustomerId(booking.getUser().getUserId());
-                slot.setCustomerDisplayName(abbreviateCustomerName(booking.getUser()));
+                // Walk-in bookings have user = null
+                if (booking.getUser() != null) {
+                    slot.setCustomerId(booking.getUser().getUserId());
+                    slot.setCustomerDisplayName(abbreviateCustomerName(booking.getUser()));
+                } else {
+                    slot.setCustomerDisplayName("Khách vãng lai");
+                }
             }
         }));
         return response;
@@ -232,6 +245,29 @@ public class OwnerBookingService {
         }
 
         BigDecimal totalPrice = slot.getPricePerSlot();
+        
+        // Process accessories
+        List<BookingAccessory> bookingAccessories = new ArrayList<>();
+        if (request.getAccessories() != null && !request.getAccessories().isEmpty()) {
+            for (AccessoryItem item : request.getAccessories()) {
+                Accessory acc = accessoryRepository.findById(item.getAccessoryId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phụ kiện với ID " + item.getAccessoryId()));
+                
+                if (!Boolean.TRUE.equals(acc.getIsAvailable())) {
+                    throw new BadRequestException("Phụ kiện #" + acc.getAccessoryId() + " hiện không khả dụng");
+                }
+                
+                BigDecimal lineTotal = acc.getPricePerUnit().multiply(BigDecimal.valueOf(item.getQuantity()));
+                totalPrice = totalPrice.add(lineTotal);
+                
+                bookingAccessories.add(BookingAccessory.builder()
+                        .accessoryId(acc.getAccessoryId())
+                        .quantity(item.getQuantity())
+                        .unitPrice(acc.getPricePerUnit())
+                        .build());
+            }
+        }
+
         // Không tính serviceFee cho Walk-in (hoặc tính = 0)
         BigDecimal serviceFee = BigDecimal.ZERO;
 
@@ -248,7 +284,17 @@ public class OwnerBookingService {
                 .build();
         
         Booking saved = bookingRepository.save(booking);
-        slot.setSlotStatus(SlotStatus.BOOKED);
+        // KHÔNG thay đổi SlotStatus của TimeSlot entity vĩnh viễn.
+        // getWeeklySlots() detect trạng thái BOOKED qua Booking records (CONFIRMED),
+        // đó là thiết kế gốc. Nếu đổi sang BOOKED thì slot bị loại khỏi query
+        // findByStadiumStadiumIdAndSlotStatus(AVAILABLE) và không hiện trên weekly grid.
+        
+        if (!bookingAccessories.isEmpty()) {
+            for (BookingAccessory ba : bookingAccessories) {
+                ba.setBooking(saved);
+            }
+            bookingAccessoryRepository.saveAll(bookingAccessories);
+        }
         
         // Tạo Payment
         Payment payment = Payment.builder()
@@ -261,7 +307,7 @@ public class OwnerBookingService {
                 .build();
         paymentRepository.save(payment);
         
-        log.info("🛒 Đã tạo Walk-in Booking #{} cho sân {}", saved.getBookingId(), stadium.getStadiumId());
+        log.info("🛒 Đã tạo Walk-in Booking #{} cho sân {} kèm {} phụ kiện", saved.getBookingId(), stadium.getStadiumId(), bookingAccessories.size());
         
         return toBookingResponse(saved);
     }
@@ -314,7 +360,7 @@ public class OwnerBookingService {
                         .stadiumName(stadium.getStadiumName())
                         .complexName(StadiumUtils.resolveComplexName(stadium))
                         .address(StadiumUtils.resolveAddress(stadium))
-                        .sportType(stadium.getSportType().getSportName())
+                        .sportType(resolveSportName(stadium))
                         .build())
                 .slot(BookingResponse.SlotInfo.builder()
                         .slotId(slot.getSlotId())
@@ -353,5 +399,24 @@ public class OwnerBookingService {
             return phone;
         }
         return phone.substring(0, phone.length() - 4) + "****";
+    }
+
+    /**
+     * Resolve sport name theo cấu trúc cây sân (COURT → FACILITY → Complex).
+     * Sân con (COURT/FACILITY) trong khu tổ hợp có thể kế thừa sport type từ sân cha.
+     */
+    private String resolveSportName(Stadium stadium) {
+        if (stadium == null) {
+            return "Khác";
+        }
+        if (stadium.getSportType() != null) {
+            return stadium.getSportType().getSportName();
+        }
+        // COURT kế thừa từ FACILITY cha
+        if (stadium.getParentStadium() != null
+                && stadium.getParentStadium().getSportType() != null) {
+            return stadium.getParentStadium().getSportType().getSportName();
+        }
+        return "Khác";
     }
 }

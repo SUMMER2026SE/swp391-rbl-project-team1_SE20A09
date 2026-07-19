@@ -78,12 +78,14 @@ interface TimeSlotManagerProps {
   stadiumId: number
   openTime: string // HH:mm:ss
   closeTime: string // HH:mm:ss
+  stadiumName?: string
 }
 
 export function TimeSlotManager({
   stadiumId,
   openTime,
   closeTime,
+  stadiumName,
 }: TimeSlotManagerProps) {
   const router = useRouter()
   const [viewMode, setViewMode] = React.useState<"weekly" | "list">("weekly")
@@ -598,6 +600,7 @@ export function TimeSlotManager({
                                 >
                                   <Edit3 className="w-4 h-4 text-slate-500" />
                                 </Button>
+                                {/* Temporarily hidden Tạm đóng button because of Maintenance module 
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -609,6 +612,7 @@ export function TimeSlotManager({
                                     checked={slot.slotStatus === "AVAILABLE"}
                                   />
                                 </Button>
+                                */}
                                 <Button
                                   className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"
                                   variant="ghost"
@@ -784,6 +788,7 @@ export function TimeSlotManager({
           startTime={walkInSlot.slot.startTime}
           endTime={walkInSlot.slot.endTime}
           price={walkInSlot.slot.price}
+          stadiumName={stadiumName}
         />
       )}
     </div>
@@ -843,6 +848,7 @@ function OwnerSlotBlock({ slot, onChoice, onBooked }: OwnerSlotBlockProps) {
           >
             <Edit3 className="w-3.5 h-3.5" />
           </Button>
+          {/* Temporarily hidden Tạm đóng button
           <Button
             variant="ghost"
             size="icon"
@@ -852,6 +858,7 @@ function OwnerSlotBlock({ slot, onChoice, onBooked }: OwnerSlotBlockProps) {
           >
             <Power className={`w-3.5 h-3.5 ${isAvailable ? 'text-amber-600' : 'text-emerald-600'}`} />
           </Button>
+          */}
           <Button
             variant="ghost"
             size="icon"

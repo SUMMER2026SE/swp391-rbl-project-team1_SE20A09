@@ -345,6 +345,7 @@ export type CreateWalkInBookingPayload = {
   stadiumId: number;
   slotId: number;
   reservationDate: string;
+  accessories?: AccessoryItemPayload[];
 };
 
 /**
