@@ -129,32 +129,42 @@ public class StadiumServiceImpl implements StadiumService {
         Owner owner = ownerRepository.findByUserUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Owner profile not found for user ID: " + userId));
 
-        org.springframework.data.jpa.domain.Specification<Stadium> spec = (root, query, cb) -> {
-            java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
-            
-            // Must belong to this owner
-            predicates.add(cb.equal(root.get("owner").get("ownerId"), owner.getOwnerId()));
+        List<Stadium> matchedStadiums;
 
-            // Exclude CLOSED (deleted) stadiums
-            predicates.add(cb.notEqual(root.get("stadiumStatus"), StadiumStatus.CLOSED));
-            
-            // Keyword search on name
-            if (org.springframework.util.StringUtils.hasText(search)) {
-                predicates.add(cb.like(cb.lower(root.get("stadiumName")), "%" + search.trim().toLowerCase() + "%"));
-            }
-            
-            // Filter by sport type
-            if (sportTypeId != null) {
-                predicates.add(cb.equal(root.get("sportType").get("sportTypeId"), sportTypeId));
-            }
-            
-            return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
-        };
+        boolean hasStatusFilter = org.springframework.util.StringUtils.hasText(status);
+        boolean hasOtherFilters = org.springframework.util.StringUtils.hasText(search) || sportTypeId != null;
 
-        List<Stadium> matchedStadiums = stadiumRepository.findAll(spec);
-        List<Stadium> resultList;
+        if (hasStatusFilter && !hasOtherFilters) {
+            // Khi chỉ có status filter: dùng query tối ưu với JOIN FETCH để tránh N+1
+            // khi các method filter duyệt parentStadium / childCourts (đều là LAZY).
+            matchedStadiums = stadiumRepository.findAllByOwnerForTree(owner.getOwnerId());
+        } else {
+            // Trường hợp còn lại (no filter hoặc có keyword/sportType): dùng Specification
+            org.springframework.data.jpa.domain.Specification<Stadium> spec = (root, query, cb) -> {
+                java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
 
-        resultList = filterStadiumsByStatus(matchedStadiums, status);
+                // Must belong to this owner
+                predicates.add(cb.equal(root.get("owner").get("ownerId"), owner.getOwnerId()));
+
+                // Exclude CLOSED (deleted) stadiums
+                predicates.add(cb.notEqual(root.get("stadiumStatus"), StadiumStatus.CLOSED));
+
+                // Keyword search on name
+                if (org.springframework.util.StringUtils.hasText(search)) {
+                    predicates.add(cb.like(cb.lower(root.get("stadiumName")), "%" + search.trim().toLowerCase() + "%"));
+                }
+
+                // Filter by sport type
+                if (sportTypeId != null) {
+                    predicates.add(cb.equal(root.get("sportType").get("sportTypeId"), sportTypeId));
+                }
+
+                return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+            };
+            matchedStadiums = stadiumRepository.findAll(spec);
+        }
+
+        List<Stadium> resultList = filterStadiumsByStatus(matchedStadiums, status);
         java.util.Map<Integer, Boolean> maintenanceByStadiumId = maintenanceScheduleService.isUnderMaintenanceNow(resultList);
         return resultList.stream()
                 .map(stadium -> {

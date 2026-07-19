@@ -86,12 +86,14 @@ export default function OwnerVenuesClient({
   const [venues, setVenues] = useState<StadiumResponse[]>(initialVenues);
   const [loading, setLoading] = useState(false);
 
-  // Sync state when initial props update via SSR query-param change
+  // Sync state when initial props update via SSR query-param change.
+  // fetchTreeData is NOT called here — router.push in handleStatusChange already
+  // triggers a Server Component re-render which supplies fresh initialComplexes/initialVenues.
   useEffect(() => {
     setComplexes(initialComplexes);
     setVenues(initialVenues);
   }, [initialComplexes, initialVenues]);
-  
+
   // Modal states for old actions
   const [isAccessoryOpen, setIsAccessoryOpen] = useState(false);
   const [selectedVenueForAccessory, setSelectedVenueForAccessory] = useState<VenueModalData | null>(null);
@@ -140,10 +142,6 @@ export default function OwnerVenuesClient({
       if (showFullLoader) setLoading(false);
     }
   }, [currentStatus]);
-
-  useEffect(() => {
-    fetchTreeData(false);
-  }, [currentStatus, fetchTreeData]);
 
   const handleStatusChange = (status: string) => {
     startTransition(() => {
