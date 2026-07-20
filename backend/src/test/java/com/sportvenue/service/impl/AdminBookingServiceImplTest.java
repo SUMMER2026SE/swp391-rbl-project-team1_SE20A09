@@ -9,6 +9,8 @@ import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.repository.BookingRepository;
+import com.sportvenue.repository.PaymentRepository;
+import com.sportvenue.repository.WalletTransactionRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -50,6 +52,12 @@ class AdminBookingServiceImplTest {
     private BookingRepository bookingRepository;
 
     @Mock
+    private PaymentRepository paymentRepository;
+
+    @Mock
+    private WalletTransactionRepository walletTransactionRepository;
+
+    @Mock
     private EntityManager entityManager;
 
     @InjectMocks
@@ -81,55 +89,11 @@ class AdminBookingServiceImplTest {
         Page<Booking> page = new PageImpl<>(List.of(booking));
         when(bookingRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
 
-        // Mock criteria API for stats
-        CriteriaBuilder cb = mock(CriteriaBuilder.class);
-        CriteriaQuery<Object[]> query = mock(CriteriaQuery.class);
-        Root<Booking> root = mock(Root.class);
-        Path<Object> statusPath = mock(Path.class);
-        Path<Object> totalPricePath = mock(Path.class);
-        Path<Object> serviceFeePath = mock(Path.class);
-        
-        when(entityManager.getCriteriaBuilder()).thenReturn(cb);
-        when(cb.createQuery(Object[].class)).thenReturn(query);
-        when(query.from(Booking.class)).thenReturn(root);
-        
-        when(root.get("bookingStatus")).thenReturn(statusPath);
-        when(root.get("totalPrice")).thenReturn(totalPricePath);
-        when(root.get("serviceFee")).thenReturn(serviceFeePath);
-
-        Expression<BigDecimal> gmvExpression = mock(Expression.class);
-        Expression<BigDecimal> serviceFeeExpression = mock(Expression.class);
-        
-        // Mock Case expressions
-        CriteriaBuilder.Case selectCase1 = mock(CriteriaBuilder.Case.class);
-        CriteriaBuilder.Case selectCase2 = mock(CriteriaBuilder.Case.class);
-        when(cb.selectCase()).thenReturn(selectCase1, selectCase2);
-        
-        CriteriaBuilder.Case when1 = mock(CriteriaBuilder.Case.class);
-        when(selectCase1.when(any(), any())).thenReturn(when1);
-        when(when1.otherwise(any())).thenReturn(gmvExpression);
-        
-        CriteriaBuilder.Case when2 = mock(CriteriaBuilder.Case.class);
-        when(selectCase2.when(any(), any())).thenReturn(when2);
-        when(when2.otherwise(any())).thenReturn(serviceFeeExpression);
-        
-        Expression<BigDecimal> sum1 = mock(Expression.class);
-        Expression<BigDecimal> sum2 = mock(Expression.class);
-        when(cb.sum(gmvExpression)).thenReturn(sum1);
-        when(cb.sum(serviceFeeExpression)).thenReturn(sum2);
-        
-        CriteriaBuilder.Coalesce coalesce1 = mock(CriteriaBuilder.Coalesce.class);
-        CriteriaBuilder.Coalesce coalesce2 = mock(CriteriaBuilder.Coalesce.class);
-        when(cb.coalesce(any(), any())).thenReturn(coalesce1, coalesce2);
-        
-        Expression<Long> countExpr = mock(Expression.class);
-        when(cb.count(root)).thenReturn(countExpr);
-
-        TypedQuery<Object[]> typedQuery = mock(TypedQuery.class);
-        when(entityManager.createQuery(query)).thenReturn(typedQuery);
-        
-        Object[] statsResult = new Object[]{ 1L, new BigDecimal("150.00"), new BigDecimal("15.00") };
-        when(typedQuery.getSingleResult()).thenReturn(statsResult);
+        // Mock repositories for stats
+        when(paymentRepository.sumPlatformGrossByDateRange(any(), any())).thenReturn(new BigDecimal("150.00"));
+        when(paymentRepository.sumPlatformRefundByDateRange(any(), any())).thenReturn(BigDecimal.ZERO);
+        when(walletTransactionRepository.sumPlatformFeeByTypeAndDateRange(any(), any(), any())).thenReturn(new BigDecimal("15.00"));
+        when(bookingRepository.count()).thenReturn(1L);
 
         // Act
         AdminBookingListResponse response = adminBookingService.getAdminBookings(
