@@ -30,6 +30,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * Dispatcher trung tâm — 1 lần gọi Groq (JSON mode) mỗi lượt chat, parse ra
@@ -57,6 +58,7 @@ public class AiChatServiceImpl implements AiChatService {
     private final AiUsageLogRepository aiUsageLogRepository;
     private final ParamNormalizer paramNormalizer;
     private final IntentValidator intentValidator;
+    private final AiConversationContextService conversationContextService;
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @Value("${app.ai.model:llama-3.3-70b-versatile}")
@@ -72,7 +74,11 @@ public class AiChatServiceImpl implements AiChatService {
     // — README.md trong thư mục đó giải thích lý do từng đoạn tồn tại. Sửa câu chữ prompt thì
     // sửa file .md, không sửa ở đây.
     private static final String CUSTOMER_SYSTEM_PROMPT = PromptLoader.load("prompts/customer/system-prompt.md");
-    private static final String FEW_SHOT_EXAMPLES = PromptLoader.load("prompts/customer/few-shot-examples.md");
+    private static final String FEW_SHOT_BASE = PromptLoader.load("prompts/customer/few-shot-base.md");
+    private static final String FEW_SHOT_BOOKING = PromptLoader.load("prompts/customer/few-shot-booking.md");
+    private static final String FEW_SHOT_CANCEL = PromptLoader.load("prompts/customer/few-shot-cancel.md");
+    private static final String FEW_SHOT_MATCH = PromptLoader.load("prompts/customer/few-shot-match.md");
+    private static final String FEW_SHOT_FAQ = PromptLoader.load("prompts/customer/few-shot-faq.md");
     private static final String FAQ_PROMPT = PromptLoader.load("prompts/customer/faq.md");
     private static final String GUEST_SYSTEM_PROMPT_SUFFIX = PromptLoader.load("prompts/customer/guest-suffix.md");
     private static final String LOGGED_IN_SYSTEM_PROMPT_SUFFIX = PromptLoader.load("prompts/customer/logged-in-suffix.md");
@@ -89,19 +95,155 @@ public class AiChatServiceImpl implements AiChatService {
 
     @Override
     public AiChatTurnResponse handleChat(AiChatTurnRequest request, UserPrincipal userPrincipal, String conversationKey) {
+        // BUG B DEBUG: Log server time và request info
         Integer userId = userPrincipal != null ? userPrincipal.getUserId() : null;
-        String systemPrompt = buildSystemPrompt(userId);
+        LocalDate serverDate = LocalDate.now(clock);
+        LocalTime serverTime = LocalTime.now(clock);
+        log.info("========================================");
+        log.info("BUG B DEBUG: Server current date={}, time={}", serverDate, serverTime);
+        log.info("BUG B DEBUG: Raw user message='{}'", request.getMessage());
+        log.info("BUG B DEBUG: conversationKey='{}', userId={}", conversationKey, userId);
+        log.info("========================================");
+        String systemPrompt = buildSystemPrompt(userId, request.getMessage());
+
+        // GUEST FIX: If LLM returns create_booking for a guest, override to need_more_info
+        // This catches cases where the LLM doesn't follow the guest-suffix.md rule correctly
+        final boolean isGuest = (userId == null);
+
+        // BUG B DEBUG: Log system prompt content (especially current date context)
+        log.info("BUG B DEBUG: System prompt content:\n{}", systemPrompt);
+        log.info("BUG B DEBUG: ---END SYSTEM PROMPT---");
+
+        // FAST PATH: Nếu đang ở bước chờ xác nhận (Cancel Confirm), BỎ QUA GỌI LLM hoàn toàn
+        if (conversationContextService.isAwaitingCancelConfirmation(conversationKey)) {
+            log.info("FAST PATH: Bỏ qua LLM do đang chờ xác nhận hủy đơn (isAwaitingCancelConfirmation=true)");
+            long handlerStartTime = System.currentTimeMillis();
+            AiChatTurnResponse response = cancelBookingHandler.handle(null, request.getMessage(), userId, conversationKey);
+            long processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
+            
+            // Tạo mock object để ghi log
+            ExtractedIntentResult dummyIntent = ExtractedIntentResult.unknown();
+            dummyIntent.setIntent("cancel_booking_fast_path");
+            IntentParseResult dummyParse = new IntentParseResult(dummyIntent, true, "FAST_PATH", null);
+            GroqClient.GroqResult dummyGroq = new GroqClient.GroqResult("FAST_PATH_BYPASS", 0, 0, 0);
+            
+            saveUsageLog(userId, dummyParse, dummyGroq, request.getMessage(), response, 0, processingTimeHandlerMs);
+            return response;
+        }
+
+        // FAST PATH: Nếu đang chờ Booking Confirm (Có draft booking)
+        if (conversationContextService.isAwaitingBookingConfirmation(conversationKey)) {
+            String msgLower = request.getMessage().toLowerCase(Locale.ROOT).trim();
+            if (isLikelyConfirmMessage(msgLower) || msgLower.equals("không") || msgLower.equals("cancel") || msgLower.equals("hủy")) {
+                log.info("FAST PATH: Bỏ qua LLM do đang chờ xác nhận đặt sân (isAwaitingBookingConfirmation=true)");
+                long handlerStartTime = System.currentTimeMillis();
+                AiChatTurnResponse response = bookingHandler.handleConfirmation(request.getMessage(), userId, conversationKey);
+                long processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
+                
+                ExtractedIntentResult dummyIntent = ExtractedIntentResult.unknown();
+                dummyIntent.setIntent("create_booking_fast_path");
+                IntentParseResult dummyParse = new IntentParseResult(dummyIntent, true, "FAST_PATH", null);
+                GroqClient.GroqResult dummyGroq = new GroqClient.GroqResult("FAST_PATH_BYPASS", 0, 0, 0);
+                
+                saveUsageLog(userId, dummyParse, dummyGroq, request.getMessage(), response, 0, processingTimeHandlerMs);
+                return response;
+            }
+        }
+
+        // FAST PATH: Regex bắt index sân tường minh (sân số N, sân thứ N, sân đầu tiên)
+        // Chỉ chạy nếu đã có context hiển thị sân/đơn trước đó
+        String rawMessage = request.getMessage().toLowerCase(Locale.ROOT).trim();
+        java.util.regex.Matcher indexMatcher = java.util.regex.Pattern.compile("^(sân|đơn|kèo)\\s+(số\\s+|thứ\\s+)?(\\d+|đầu\\s*tiên)$").matcher(rawMessage);
+        if (indexMatcher.matches()) {
+            String type = indexMatcher.group(1);
+            String numberStr = indexMatcher.group(3);
+            int targetIndex = -1;
+            if (numberStr.equals("đầu tiên") || numberStr.equals("đầu tiên")) {
+                targetIndex = 0;
+            } else {
+                try {
+                    targetIndex = Integer.parseInt(numberStr) - 1; // 1-based to 0-based
+                } catch (Exception ignored) {}
+            }
+            if (targetIndex >= 0) {
+                // Xác định context hiện tại có gì
+                List<Integer> lastShownStadiums = conversationContextService.getLastShownStadiumIds(conversationKey);
+                List<Integer> lastShownBookings = conversationContextService.getLastShownBookingIds(conversationKey);
+                
+                String fastPathIntent = null;
+                com.fasterxml.jackson.databind.node.ObjectNode dummyParams = objectMapper.createObjectNode();
+                dummyParams.put("targetIndex", targetIndex);
+
+                if ("đơn".equals(type) && lastShownBookings != null && !lastShownBookings.isEmpty()) {
+                    fastPathIntent = "cancel_booking";
+                } else if (("sân".equals(type) || "kèo".equals(type)) && lastShownStadiums != null && !lastShownStadiums.isEmpty()) {
+                    fastPathIntent = "search_stadiums";
+                }
+                
+                if (fastPathIntent != null) {
+                    log.info("FAST PATH: Bỏ qua LLM do bắt được index tường minh '{}' -> index={}", rawMessage, targetIndex);
+                    ExtractedIntentResult dummyIntent = ExtractedIntentResult.unknown();
+                    dummyIntent.setIntent(fastPathIntent);
+                    dummyIntent.setParams(dummyParams);
+                    dummyIntent.setConfidence(1.0);
+                    
+                    long handlerStartTime = System.currentTimeMillis();
+                    AiChatTurnResponse response = dispatch(dummyIntent, request.getMessage(), conversationKey, userId, request.getUserLat(), request.getUserLng());
+                    long processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
+                    
+                    IntentParseResult dummyParse = new IntentParseResult(dummyIntent, true, "FAST_PATH", null);
+                    GroqClient.GroqResult dummyGroq = new GroqClient.GroqResult("FAST_PATH_BYPASS", 0, 0, 0);
+                    saveUsageLog(userId, dummyParse, dummyGroq, request.getMessage(), response, 0, processingTimeHandlerMs);
+                    return response;
+                }
+            }
+        }
+
+        // FAST PATH: Regex bắt mã ID tường minh (#12345, mã 12345)
+        java.util.regex.Matcher idMatcher = java.util.regex.Pattern.compile("^(#|mã\\s+)?(\\d{3,6})$").matcher(rawMessage);
+        if (idMatcher.matches()) {
+            int id = Integer.parseInt(idMatcher.group(2));
+            List<Integer> lastShownBookings = conversationContextService.getLastShownBookingIds(conversationKey);
+            
+            String fastPathIntent = null;
+            com.fasterxml.jackson.databind.node.ObjectNode dummyParams = objectMapper.createObjectNode();
+            
+            if (lastShownBookings != null && !lastShownBookings.isEmpty()) {
+                fastPathIntent = "cancel_booking";
+                dummyParams.put("bookingId", id);
+            }
+            
+            if (fastPathIntent != null) {
+                log.info("FAST PATH: Bỏ qua LLM do bắt được ID tường minh '{}' -> id={}", rawMessage, id);
+                ExtractedIntentResult dummyIntent = ExtractedIntentResult.unknown();
+                dummyIntent.setIntent(fastPathIntent);
+                dummyIntent.setParams(dummyParams);
+                dummyIntent.setConfidence(1.0);
+                
+                long handlerStartTime = System.currentTimeMillis();
+                AiChatTurnResponse response = dispatch(dummyIntent, request.getMessage(), conversationKey, userId, request.getUserLat(), request.getUserLng());
+                long processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
+                
+                IntentParseResult dummyParse = new IntentParseResult(dummyIntent, true, "FAST_PATH", null);
+                GroqClient.GroqResult dummyGroq = new GroqClient.GroqResult("FAST_PATH_BYPASS", 0, 0, 0);
+                saveUsageLog(userId, dummyParse, dummyGroq, request.getMessage(), response, 0, processingTimeHandlerMs);
+                return response;
+            }
+        }
+
         List<GroqClient.ChatMessage> history = toGroqHistory(request.getHistory());
 
         GroqClient.GroqResult result;
         long startTime = System.currentTimeMillis();
         try {
             result = groqClient.chatJson(model, systemPrompt, history, request.getMessage());
-            log.debug("Groq raw JSON cho message '{}': {}", request.getMessage(), result.text());
+            // BUG B DEBUG: Log raw LLM response
+            log.info("BUG B DEBUG: LLM raw JSON response:\n{}", result.text());
+            log.info("BUG B DEBUG: ---END LLM RESPONSE---");
         } catch (LlmGatewayException e) {
             log.error("Lỗi gọi Groq gateway (kind={}): {}", e.getKind(), e.getMessage());
-            String errorMessage = e.getKind() == LlmGatewayException.Kind.RATE_LIMITED 
-                    ? "Hệ thống trợ lý AI hiện đang quá tải do có quá nhiều yêu cầu. Vui lòng thử lại sau ít phút!" 
+            String errorMessage = e.getKind() == LlmGatewayException.Kind.RATE_LIMITED
+                    ? "Hệ thống trợ lý AI hiện đang quá tải do có quá nhiều yêu cầu. Vui lòng thử lại sau ít phút!"
                     : "Hệ thống AI đang tạm gián đoạn kết nối. Vui lòng thử lại sau.";
             return AiChatTurnResponse.messageOnly(errorMessage, "unknown");
         }
@@ -109,9 +251,26 @@ public class AiChatServiceImpl implements AiChatService {
 
         IntentParseResult parseResult = parseAndValidateIntent(result, request.getMessage());
 
+        // GUEST FIX: If LLM returns create_booking for a guest, override to search_stadiums
+        // (Guests can search stadiums, but to actually book they need to login.
+        // The guest-suffix.md tells the LLM to return need_more_info, but the LLM sometimes
+        // returns create_booking instead. This server-side fix ensures guests can still search.)
+        if (isGuest && "create_booking".equals(parseResult.intentResult().getIntent())) {
+            log.info("GUEST FIX: Overriding create_booking to search_stadiums for guest user");
+            parseResult.intentResult().setIntent("search_stadiums");
+            parseResult.intentResult().setMessage("Bạn cần đăng nhập để đặt sân. Trước tiên, để mình tìm các sân phù hợp cho bạn nhé.");
+        }
+
+        // BUG B DEBUG: Log parsed intent result
+        log.info("BUG B DEBUG: Parsed intent='{}', params={}", parseResult.intentResult().getIntent(), parseResult.intentResult().getParams());
+
         long handlerStartTime = System.currentTimeMillis();
-        AiChatTurnResponse response = dispatch(parseResult.intentResult(), conversationKey, userId, request.getUserLat(), request.getUserLng());
+        AiChatTurnResponse response = dispatch(parseResult.intentResult(), request.getMessage(), conversationKey, userId, request.getUserLat(), request.getUserLng());
         long processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
+
+        // BUG B DEBUG: Log final response
+        log.info("BUG B DEBUG: Final response intent='{}', message='{}'", response.getIntent(), response.getMessage());
+        log.info("========================================");
 
         saveUsageLog(userId, parseResult, result, request.getMessage(), response, latencyMs, processingTimeHandlerMs);
 
@@ -127,6 +286,15 @@ public class AiChatServiceImpl implements AiChatService {
         try {
             intentResult = objectMapper.readValue(result.text(), ExtractedIntentResult.class);
             log.info("Intent nhận diện: '{}' -> '{}', confidence: {}", userMessage, intentResult.getIntent(), intentResult.getConfidence());
+            // Explicit debug for confirmation keywords
+            String msgLower = userMessage.toLowerCase(Locale.ROOT).trim();
+            if (msgLower.equals("có") || msgLower.equals("có") || msgLower.contains("đồng ý") || msgLower.contains("xác nhận")) {
+                log.info("=== CONFIRM KEYWORD DETECTED ===");
+                log.info("RAW LLM JSON: {}", result.text());
+                log.info("Parsed intent: '{}', confidence: {}, params: {}",
+                    intentResult.getIntent(), intentResult.getConfidence(), intentResult.getParams());
+                log.info("=== END CONFIRM DEBUG ===");
+            }
 
             // Normalize params
             intentResult = paramNormalizer.normalize(intentResult);
@@ -170,6 +338,7 @@ public class AiChatServiceImpl implements AiChatService {
     private void saveUsageLog(Integer userId, IntentParseResult parseResult, GroqClient.GroqResult result,
                               String userMessage, AiChatTurnResponse response, long latencyMs, long processingTimeHandlerMs) {
         try {
+            log.info("[TOKEN MEASUREMENT] Input Tokens: {}, Output Tokens: {}", result.inputTokens(), result.outputTokens());
             AiUsageLog usageLog = AiUsageLog.builder()
                     .userId(userId)
                     .feature(response.getIntent())
@@ -181,7 +350,7 @@ public class AiChatServiceImpl implements AiChatService {
                     .rawLlmResponse(result.text())
                     .parsedIntent(parseResult.intentResult().getIntent())
                     .actionResult(objectMapper.writeValueAsString(response))
-                    .promptVersion("1.0")
+                    .promptVersion("1.1") // Version updated for dynamic prompts
                     .confidence(parseResult.intentResult().getConfidence())
                     .ruleOverride(parseResult.ruleOverride())
                     .validationResult(parseResult.validationStatus())
@@ -195,20 +364,40 @@ public class AiChatServiceImpl implements AiChatService {
         }
     }
 
-    private AiChatTurnResponse dispatch(ExtractedIntentResult result, String conversationKey, Integer userId,
+    private AiChatTurnResponse dispatch(ExtractedIntentResult result, String rawUserMessage, String conversationKey, Integer userId,
                                         Double userLat, Double userLng) {
         String intent = result.getIntent();
         String message = result.getMessage();
+
+        // CRITICAL FIX: Nếu đang trong confirm flow của cancel, LUÔN route vào CancelBookingHandler
+        // bất kể LLM trả về intent gì (LLM có thể hiểu sai "có" thành need_more_info)
+        if (conversationContextService.isAwaitingCancelConfirmation(conversationKey)) {
+            log.info("FORCE ROUTE to cancel_booking handler: isAwaitingCancelConfirmation=true (LLM intent was '{}')", intent);
+            return cancelBookingHandler.handle(result.getParams(), rawUserMessage, userId, conversationKey);
+        }
+
+        // DEFENSIVE FIX: Nếu LLM trả về need_more_info/nhầm intent MÀ message là confirm keyword,
+        // thử lấy pending booking từ lastShownBookings (Redis có thể chưa kịp persist)
+        // Trường hợp: "Có" nhưng isAwaitingCancelConfirmation=false do Redis race condition
+        if (isLikelyConfirmMessage(rawUserMessage) && !conversationKeyServiceHasValidState(conversationKey)) {
+            log.info("DEFENSIVE: Message looks like confirmation but Redis state missing. Attempting to resolve from lastShownBookings.");
+            Optional<Integer> lastBookingId = conversationContextService.resolveLastBookingId(conversationKey);
+            if (lastBookingId.isPresent()) {
+                log.info("DEFENSIVE: Found last booking ID {} in context. Forcing cancel confirmation flow.", lastBookingId.get());
+                return cancelBookingHandler.handleConfirmation(rawUserMessage, userId, conversationKey, lastBookingId.get());
+            }
+        }
+
         return switch (intent) {
             case "search_stadiums" -> stadiumSearchHandler.handle(result.getParams(), message, conversationKey, userLat, userLng);
             case "get_slots" -> slotAvailabilityHandler.handle(result.getParams(), message, conversationKey);
             case "find_match" -> matchRequestHandler.handle(result.getParams(), message, conversationKey);
             case "get_policy" -> policyHandler.handle(result.getParams(), message);
-            case "create_booking" -> bookingHandler.handle(result.getParams(), message, conversationKey, userId);
+            case "create_booking" -> bookingHandler.handleWithRawMessage(result.getParams(), message, conversationKey, userId, rawUserMessage);
             case "join_match" -> joinMatchHandler.handle(result.getParams(), message, conversationKey, userId);
             case "my_bookings" -> myBookingsHandler.handle(result.getParams(), message, userId);
             case "booking_status" -> bookingStatusHandler.handle(result.getParams(), message, userId);
-            case "cancel_booking" -> cancelBookingHandler.handle(result.getParams(), message, userId);
+            case "cancel_booking" -> cancelBookingHandler.handle(result.getParams(), rawUserMessage, userId, conversationKey);
             case "get_price" -> getPriceHandler.handle(result.getParams(), message);
             case "recommend_time" -> recommendTimeHandler.handle(result.getParams(), message);
             case "need_more_info", "out_of_scope" ->
@@ -217,16 +406,59 @@ public class AiChatServiceImpl implements AiChatService {
         };
     }
 
+    /**
+     * Kiểm tra message có phải là confirm keyword (cứng, không cần LLM).
+     * Dùng để defensive check khi LLM nhầm intent.
+     */
+    private boolean isLikelyConfirmMessage(String message) {
+        if (message == null) return false;
+        String msg = message.toLowerCase().trim();
+        return msg.equals("có") || msg.equals("đồng ý") || msg.equals("ok")
+                || msg.equals("ừ") || msg.equals("được") || msg.equals("hủy luôn")
+                || msg.equals("confirm") || msg.equals("yes") || msg.equals("y")
+                || msg.startsWith("có") || msg.startsWith("đồng ý") || msg.startsWith("hủy luôn")
+                || msg.startsWith("xác nhận");
+    }
+
+    /**
+     * Kiểm tra xem conversationContextService có state hợp lệ cho cancel flow không.
+     * Nếu isAwaitingCancelConfirmation=true → có state (không cần fallback)
+     * Nếu isAwaitingCancelConfirmation=false nhưng có lastShownBookings → vẫn có thể dùng được
+     */
+    private boolean conversationKeyServiceHasValidState(String conversationKey) {
+        if (conversationKey == null) return false;
+        // Nếu đang await confirm → có state
+        if (conversationContextService.isAwaitingCancelConfirmation(conversationKey)) {
+            return true;
+        }
+        // Nếu có lastShownBookings → có state
+        List<Integer> lastBookings = conversationContextService.getLastShownBookingIds(conversationKey);
+        return lastBookings != null && !lastBookings.isEmpty();
+    }
+
     private boolean applyRuleBasedOverrides(ExtractedIntentResult intentResult, String message) {
         String msgLower = message.toLowerCase(Locale.ROOT);
         boolean overridden = false;
-        
+
         if ("search_stadiums".equals(intentResult.getIntent()) || "get_slots".equals(intentResult.getIntent())) {
+            // Chỉ override sang create_booking khi:
+            // 1. Có keyword "đặt" VÀ
+            // 2. Có thời gian VÀ
+            // 3. CÓ tên sân cụ thể (keyword trong params hoặc chứa tên sân trong message)
+            // VD: "đặt sân Mỹ Đình 14h" -> create_booking (có tên sân cụ thể)
+            // VD: "đặt sân bóng đá ở Đà Nẵng 19h" -> KHÔNG override (không có tên sân cụ thể)
             boolean hasBookingAction = msgLower.contains("đặt") || msgLower.contains("book") || msgLower.contains("giữ chỗ");
             boolean hasTime = msgLower.matches(".*\\d+(h|:).*") || msgLower.contains("giờ") || msgLower.contains("chiều") || msgLower.contains("sáng") || msgLower.contains("tối") || msgLower.contains("mai");
 
-            if (hasBookingAction && hasTime) {
-                log.warn("Rule-based check: Ghi đè intent từ {} thành create_booking do phát hiện keyword đặt sân + thời gian.", intentResult.getIntent());
+            // Check nếu có tên sân cụ thể trong params (keyword thường là tên sân)
+            boolean hasSpecificStadium = false;
+            if (intentResult.getParams() != null && intentResult.getParams().isObject()) {
+                hasSpecificStadium = intentResult.getParams().hasNonNull("keyword") &&
+                        !intentResult.getParams().get("keyword").asText().isBlank();
+            }
+
+            if (hasBookingAction && hasTime && hasSpecificStadium) {
+                log.warn("Rule-based check: Ghi đè intent từ {} thành create_booking do phát hiện keyword đặt sân + thời gian + tên sân cụ thể.", intentResult.getIntent());
                 intentResult.setIntent("create_booking");
                 overridden = true;
 
@@ -263,21 +495,71 @@ public class AiChatServiceImpl implements AiChatService {
     }
 
     private List<GroqClient.ChatMessage> toGroqHistory(List<AiChatTurnRequest.ChatMessage> history) {
-        if (history == null) {
+        if (history == null || history.isEmpty()) {
             return List.of();
         }
+        
+        // GIỚI HẠN LỊCH SỬ CHAT: Chỉ lấy 4 tin nhắn gần nhất (khoảng 2 lượt) để tránh cạn token nhanh
+        int MAX_HISTORY = 4;
+        int startIndex = Math.max(0, history.size() - MAX_HISTORY);
+        List<AiChatTurnRequest.ChatMessage> trimmedHistory = history.subList(startIndex, history.size());
+
         List<GroqClient.ChatMessage> converted = new ArrayList<>();
-        for (AiChatTurnRequest.ChatMessage turn : history) {
+        for (AiChatTurnRequest.ChatMessage turn : trimmedHistory) {
             converted.add(new GroqClient.ChatMessage(turn.getRole(), turn.getContent()));
         }
         return converted;
     }
 
-    private String buildSystemPrompt(Integer userId) {
+    private String preClassifyIntent(String message) {
+        if (message == null) return "all";
+        String msgLower = message.toLowerCase(Locale.ROOT);
+
+        if (msgLower.contains("hủy")) {
+            return "cancel";
+        }
+        if (msgLower.contains("kèo") || msgLower.contains("tham gia") || msgLower.contains("xin slot") || msgLower.contains("đăng ký")) {
+            return "match";
+        }
+        // FAQ check before booking - chính sách/khiếu nại/liên hệ cần ưu tiên
+        if (msgLower.contains("giá") || msgLower.contains("bao nhiêu") || msgLower.contains("rẻ") || msgLower.contains("vắng")
+                || msgLower.contains("chính sách") || msgLower.contains("khiếu nại") || msgLower.contains("liên hệ") || msgLower.contains("hỗ trợ") || msgLower.contains("complaint")) {
+            return "faq";
+        }
+        if (msgLower.contains("đặt") || msgLower.contains("tìm") || msgLower.contains("sân") || msgLower.contains("giờ")) {
+            return "booking";
+        }
+        return "all"; // Fallback: load everything
+    }
+
+    private String buildSystemPrompt(Integer userId, String rawMessage) {
         String roleSuffix = userId != null ? LOGGED_IN_SYSTEM_PROMPT_SUFFIX : GUEST_SYSTEM_PROMPT_SUFFIX;
-        // Nối rõ ràng bằng " " thay vì dựa vào khoảng trắng đầu/cuối ẩn trong từng file .md
-        // (PromptLoader.load() đã strip() từng đoạn).
-        return String.join("\n\n", CUSTOMER_SYSTEM_PROMPT, FEW_SHOT_EXAMPLES, FAQ_PROMPT, buildCurrentTimeContext(), roleSuffix);
+        
+        // Phân loại intent trước để thu gọn Few-Shot
+        String intentCategory = preClassifyIntent(rawMessage);
+        log.info("[TOKEN MEASUREMENT] Pre-classified intent category: {}", intentCategory);
+        
+        String dynamicFewShot = FEW_SHOT_BASE;
+        switch (intentCategory) {
+            case "cancel":
+                dynamicFewShot += "\n\n" + FEW_SHOT_CANCEL;
+                break;
+            case "match":
+                dynamicFewShot += "\n\n" + FEW_SHOT_MATCH;
+                break;
+            case "faq":
+                dynamicFewShot += "\n\n" + FEW_SHOT_FAQ;
+                break;
+            case "booking":
+                dynamicFewShot += "\n\n" + FEW_SHOT_BOOKING;
+                break;
+            default:
+                dynamicFewShot += "\n\n" + FEW_SHOT_BOOKING + "\n\n" + FEW_SHOT_CANCEL + "\n\n" + FEW_SHOT_MATCH + "\n\n" + FEW_SHOT_FAQ;
+                break;
+        }
+
+        // Nối rõ ràng bằng "\n\n"
+        return String.join("\n\n", CUSTOMER_SYSTEM_PROMPT, dynamicFewShot, FAQ_PROMPT, buildCurrentTimeContext(), roleSuffix);
     }
 
     /**
