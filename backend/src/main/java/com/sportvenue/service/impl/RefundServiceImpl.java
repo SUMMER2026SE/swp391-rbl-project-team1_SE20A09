@@ -312,6 +312,7 @@ public class RefundServiceImpl implements RefundService {
         booking.setPaymentStatus(PaymentStatus.REFUNDED);
         if (reason != null && !reason.isBlank()) {
             booking.setNote("Lý do hủy hoàn tiền: " + reason.trim());
+            booking.setCancelReason(reason.trim());
         }
         bookingRepository.save(booking);
 

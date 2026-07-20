@@ -675,23 +675,33 @@ export default function BookingDetailPage() {
               )}
               {booking.status === 'cancelled' && (
                 <>
-                  <Button 
-                    variant="outline" 
-                    className="rounded-2xl flex-1 font-bold h-12 bg-transparent text-white border-white/20 hover:bg-white/10"
-                    onClick={() => setComplaintOpen(true)}
-                  >
-                    <AlertCircle className="h-4 w-4 mr-2 text-red-400" />
-                    Gửi khiếu nại
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="rounded-2xl flex-1 font-bold h-12 bg-transparent text-white border-white/20 hover:bg-white/10"
-                    onClick={() => setReportOpen(true)}
-                    disabled={!booking.ownerUserId}
-                  >
-                    <AlertTriangle className="h-4 w-4 mr-2 text-amber-400" />
-                    Báo cáo hành vi
-                  </Button>
+                  {/* Chỉ hiện khiếu nại/báo cáo khi đơn có cancelReason (huỷ thủ công) HOẶC đã từng
+                      thực sự thu tiền rồi hoàn (paymentStatus=refunded) — tức có giao dịch thật.
+                      cancelReason có thể NULL ngay cả khi huỷ thủ công nếu người hủy để trống lý do
+                      (vd Owner hủy/hoàn tiền không bắt buộc nhập lý do), nên không thể chỉ dựa vào
+                      cancelReason một mình. Chỉ khi CẢ HAI đều rỗng — auto-cancel do hết hạn giữ chỗ,
+                      chưa từng thanh toán — thì mới thực sự chưa có gì để khiếu nại. */}
+                  {(booking.cancelReason != null || booking.paymentStatus.toLowerCase() === 'refunded') && (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="rounded-2xl flex-1 font-bold h-12 bg-transparent text-white border-white/20 hover:bg-white/10"
+                        onClick={() => setComplaintOpen(true)}
+                      >
+                        <AlertCircle className="h-4 w-4 mr-2 text-red-400" />
+                        Gửi khiếu nại
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="rounded-2xl flex-1 font-bold h-12 bg-transparent text-white border-white/20 hover:bg-white/10"
+                        onClick={() => setReportOpen(true)}
+                        disabled={!booking.ownerUserId}
+                      >
+                        <AlertTriangle className="h-4 w-4 mr-2 text-amber-400" />
+                        Báo cáo hành vi
+                      </Button>
+                    </>
+                  )}
                   <Button asChild variant="secondary" className="rounded-2xl flex-1 font-bold h-12">
                     <Link href="/search">Đặt sân khác</Link>
                   </Button>

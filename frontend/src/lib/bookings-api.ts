@@ -151,6 +151,8 @@ export type BookingDetailItem = {
   refundPercent: number | null;
   createdAt: string;
   note: string | null;
+  /** Lý do hủy đơn — null nếu bị hệ thống tự hủy do hết hạn giữ chỗ (chưa từng có tương tác/thanh toán thật). */
+  cancelReason: string | null;
   ownerUserId?: number;
   stadiumId?: number;
   accessories?: {
@@ -183,6 +185,7 @@ export async function fetchBookingDetail(id: string | number): Promise<BookingDe
     refundPercent: typeof data.refundPercent === "number" ? data.refundPercent : (data.refundPercent != null ? Number(data.refundPercent) : null),
     createdAt: data.createdAt || "Chưa rõ",
     note: data.note || null,
+    cancelReason: data.cancelReason ?? null,
     ownerUserId: data.stadium?.ownerUserId,
     stadiumId: data.stadium?.stadiumId,
     accessories: data.accessories?.map((a: any) => ({

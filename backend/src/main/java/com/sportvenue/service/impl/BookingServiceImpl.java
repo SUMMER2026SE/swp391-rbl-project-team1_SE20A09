@@ -1309,6 +1309,7 @@ public class BookingServiceImpl implements BookingService {
                 .refundedAmount(refundedAmount)
                 .refundPercent(refundPercent)
                 .note(booking.getNote())
+                .cancelReason(booking.getCancelReason())
                 .expiredAt(booking.getExpiredAt())
                 .createdAt(booking.getBookingDate())
                 .build();
