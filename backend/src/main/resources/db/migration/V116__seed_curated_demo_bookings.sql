@@ -684,3 +684,232 @@ SELECT booking_id, 'VNPAY', total_price, 'SUCCESS',
     to_char(NOW() - INTERVAL '1 day', 'YYYYMMDDHH24MISS')
 FROM ins_booking;
 
+-- ══════════════════════════════════════════════════════════════════════════
+-- DEMO-25..31 — bổ sung cho Track 2 (Ví + Huỷ/Hoàn tiền): 3 booking "sẵn
+-- sàng bấm huỷ trực tiếp" đúng 3 mốc tiering 100%/50%/0% (giờ chơi tính động
+-- theo NOW(), không phụ thuộc ngày chạy demo), 2 booking sẵn sàng cho Owner
+-- bấm "Hoàn tiền" trực tiếp (1 bình thường, 1 ứng viên OWNER_FAULT), và 2
+-- booking lịch sử đã huỷ 0% để làm nốt 2 trạng thái refund-exception còn
+-- thiếu (APPROVED_ADMIN, REJECTED_OWNER) ở V117.
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- DEMO-25: Cung Thể thao Tiên Sơn / Sân 2 (Badminton) — CONFIRMED/PAID, giờ chơi
+-- ~30h nữa (>24h) — bấm "Huỷ" trực tiếp trong demo sẽ ra đúng hoàn 100%.
+DO $$
+DECLARE
+    v_target TIMESTAMP := NOW() + INTERVAL '30 hours';
+    v_hour INT := LEAST(GREATEST(EXTRACT(HOUR FROM NOW() + INTERVAL '30 hours')::INT, 6), 21);
+    v_stadium_id INT;
+    v_slot_id INT;
+    v_booking_id INT;
+    v_total NUMERIC := 100000.00;
+    v_fee NUMERIC := 10000.00;
+BEGIN
+    SELECT s.stadium_id INTO v_stadium_id FROM stadiums s
+    JOIN stadiums fac ON fac.stadium_id = s.parent_stadium_id
+    JOIN sport_types sp ON sp.sport_type_id = fac.sport_type_id
+    JOIN stadium_complexes sc ON sc.complex_id = s.complex_id
+    WHERE sc.name = 'Cung Thể thao Tiên Sơn' AND sp.sport_name = 'Badminton' AND s.stadium_name = 'Sân 2';
+
+    SELECT slot_id INTO v_slot_id FROM time_slots WHERE stadium_id = v_stadium_id AND start_time = make_time(v_hour, 0, 0);
+
+    INSERT INTO bookings (user_id, stadium_id, slot_id, total_price, service_fee, booking_status, payment_status, booking_date, reservation_date, note)
+    VALUES ((SELECT user_id FROM users WHERE email = 'customer2@sportvenue.com'), v_stadium_id, v_slot_id, v_total, v_fee,
+        'CONFIRMED', 'PAID', NOW() - INTERVAL '3 hours', v_target::date,
+        '[DEMO-25] Sẵn sàng demo huỷ trực tiếp — giờ chơi >24h nữa, phải hoàn 100%.')
+    RETURNING booking_id INTO v_booking_id;
+
+    INSERT INTO payments (booking_id, payment_method, amount, payment_status, paid_at, transaction_code, gateway_transaction_no, gateway_pay_date)
+    VALUES (v_booking_id, 'VNPAY', v_total, 'SUCCESS', NOW() - INTERVAL '3 hours' + INTERVAL '2 minutes',
+        'VNP' || v_booking_id || to_char(NOW(), 'YYYYMMDDHH24MISS'), (10000000 + v_booking_id)::text, to_char(NOW(), 'YYYYMMDDHH24MISS'));
+END $$;
+
+-- DEMO-26: Nhà thi đấu đa năng Quận 7 / Sân 2 (Badminton) — CONFIRMED/PAID, giờ
+-- chơi ~18h nữa (12-24h) — bấm "Huỷ" trực tiếp sẽ ra đúng hoàn 50%.
+DO $$
+DECLARE
+    v_target TIMESTAMP := NOW() + INTERVAL '18 hours';
+    v_hour INT := LEAST(GREATEST(EXTRACT(HOUR FROM NOW() + INTERVAL '18 hours')::INT, 6), 21);
+    v_stadium_id INT;
+    v_slot_id INT;
+    v_booking_id INT;
+    v_total NUMERIC := 115000.00;
+    v_fee NUMERIC := 10000.00;
+BEGIN
+    SELECT s.stadium_id INTO v_stadium_id FROM stadiums s
+    JOIN stadiums fac ON fac.stadium_id = s.parent_stadium_id
+    JOIN sport_types sp ON sp.sport_type_id = fac.sport_type_id
+    JOIN stadium_complexes sc ON sc.complex_id = s.complex_id
+    WHERE sc.name = 'Nhà thi đấu đa năng Quận 7' AND sp.sport_name = 'Badminton' AND s.stadium_name = 'Sân 2';
+
+    SELECT slot_id INTO v_slot_id FROM time_slots WHERE stadium_id = v_stadium_id AND start_time = make_time(v_hour, 0, 0);
+
+    INSERT INTO bookings (user_id, stadium_id, slot_id, total_price, service_fee, booking_status, payment_status, booking_date, reservation_date, note)
+    VALUES ((SELECT user_id FROM users WHERE email = 'customer3@sportvenue.com'), v_stadium_id, v_slot_id, v_total, v_fee,
+        'CONFIRMED', 'PAID', NOW() - INTERVAL '2 hours', v_target::date,
+        '[DEMO-26] Sẵn sàng demo huỷ trực tiếp — giờ chơi trong khoảng 12-24h nữa, phải hoàn 50%.')
+    RETURNING booking_id INTO v_booking_id;
+
+    INSERT INTO payments (booking_id, payment_method, amount, payment_status, paid_at, transaction_code, gateway_transaction_no, gateway_pay_date)
+    VALUES (v_booking_id, 'VNPAY', v_total, 'SUCCESS', NOW() - INTERVAL '2 hours' + INTERVAL '2 minutes',
+        'VNP' || v_booking_id || to_char(NOW(), 'YYYYMMDDHH24MISS'), (10000000 + v_booking_id)::text, to_char(NOW(), 'YYYYMMDDHH24MISS'));
+END $$;
+
+-- DEMO-27: Sân vận động Thanh Khê / Sân 2 (Football) — CONFIRMED/PAID, giờ chơi
+-- ~6h nữa (<12h) — bấm "Huỷ" trực tiếp sẽ ra đúng hoàn 0%, dùng luôn để demo nộp
+-- Refund Exception Request ngay sau đó (Track 2 mục 2).
+DO $$
+DECLARE
+    v_target TIMESTAMP := NOW() + INTERVAL '6 hours';
+    v_hour INT := LEAST(GREATEST(EXTRACT(HOUR FROM NOW() + INTERVAL '6 hours')::INT, 6), 21);
+    v_stadium_id INT;
+    v_slot_id INT;
+    v_booking_id INT;
+    v_total NUMERIC := 273000.00;
+    v_fee NUMERIC := 13000.00;
+BEGIN
+    SELECT s.stadium_id INTO v_stadium_id FROM stadiums s
+    JOIN stadiums fac ON fac.stadium_id = s.parent_stadium_id
+    JOIN sport_types sp ON sp.sport_type_id = fac.sport_type_id
+    JOIN stadium_complexes sc ON sc.complex_id = s.complex_id
+    WHERE sc.name = 'Sân vận động Thanh Khê' AND sp.sport_name = 'Football' AND s.stadium_name = 'Sân 2';
+
+    SELECT slot_id INTO v_slot_id FROM time_slots WHERE stadium_id = v_stadium_id AND start_time = make_time(v_hour, 0, 0);
+
+    INSERT INTO bookings (user_id, stadium_id, slot_id, total_price, service_fee, booking_status, payment_status, booking_date, reservation_date, note)
+    VALUES ((SELECT user_id FROM users WHERE email = 'customer4@sportvenue.com'), v_stadium_id, v_slot_id, v_total, v_fee,
+        'CONFIRMED', 'PAID', NOW() - INTERVAL '1 hour', v_target::date,
+        '[DEMO-27] Sẵn sàng demo huỷ trực tiếp — giờ chơi <12h nữa, phải hoàn 0%. Dùng để demo nộp Refund Exception Request ngay sau khi huỷ.')
+    RETURNING booking_id INTO v_booking_id;
+
+    INSERT INTO payments (booking_id, payment_method, amount, payment_status, paid_at, transaction_code, gateway_transaction_no, gateway_pay_date)
+    VALUES (v_booking_id, 'VNPAY', v_total, 'SUCCESS', NOW() - INTERVAL '1 hour' + INTERVAL '2 minutes',
+        'VNP' || v_booking_id || to_char(NOW(), 'YYYYMMDDHH24MISS'), (10000000 + v_booking_id)::text, to_char(NOW(), 'YYYYMMDDHH24MISS'));
+END $$;
+
+-- DEMO-28: Sân vận động Chi Lăng / Sân 2 (Football) — CONFIRMED/PAID, chưa huỷ,
+-- sẵn sàng cho Owner bấm "Hoàn tiền" (refund/preview → refund) trực tiếp, ca
+-- bình thường (không lỗi chủ sân).
+DO $$
+DECLARE
+    v_target TIMESTAMP := NOW() + INTERVAL '20 hours';
+    v_hour INT := LEAST(GREATEST(EXTRACT(HOUR FROM NOW() + INTERVAL '20 hours')::INT, 6), 21);
+    v_stadium_id INT;
+    v_slot_id INT;
+    v_booking_id INT;
+    v_total NUMERIC := 336000.00;
+    v_fee NUMERIC := 16000.00;
+BEGIN
+    SELECT s.stadium_id INTO v_stadium_id FROM stadiums s
+    JOIN stadiums fac ON fac.stadium_id = s.parent_stadium_id
+    JOIN sport_types sp ON sp.sport_type_id = fac.sport_type_id
+    JOIN stadium_complexes sc ON sc.complex_id = s.complex_id
+    WHERE sc.name = 'Sân vận động Chi Lăng' AND sp.sport_name = 'Football' AND s.stadium_name = 'Sân 2';
+
+    SELECT slot_id INTO v_slot_id FROM time_slots WHERE stadium_id = v_stadium_id AND start_time = make_time(v_hour, 0, 0);
+
+    INSERT INTO bookings (user_id, stadium_id, slot_id, total_price, service_fee, booking_status, payment_status, booking_date, reservation_date, note)
+    VALUES ((SELECT user_id FROM users WHERE email = 'customer5@sportvenue.com'), v_stadium_id, v_slot_id, v_total, v_fee,
+        'CONFIRMED', 'PAID', NOW() - INTERVAL '4 hours', v_target::date,
+        '[DEMO-28] Sẵn sàng cho Owner bấm Hoàn tiền trực tiếp (ca bình thường, không lỗi chủ sân).')
+    RETURNING booking_id INTO v_booking_id;
+
+    INSERT INTO payments (booking_id, payment_method, amount, payment_status, paid_at, transaction_code, gateway_transaction_no, gateway_pay_date)
+    VALUES (v_booking_id, 'VNPAY', v_total, 'SUCCESS', NOW() - INTERVAL '4 hours' + INTERVAL '2 minutes',
+        'VNP' || v_booking_id || to_char(NOW(), 'YYYYMMDDHH24MISS'), (10000000 + v_booking_id)::text, to_char(NOW(), 'YYYYMMDDHH24MISS'));
+END $$;
+
+-- DEMO-29: Cung thể thao Quần Ngựa / Sân 1 (Badminton) — CONFIRMED/PAID, chưa
+-- huỷ, sẵn sàng cho Owner bấm "Hoàn tiền" chọn OWNER_FAULT (kèm proofUrl) trực
+-- tiếp — demo nhánh Platform hoàn lại phí dịch vụ.
+DO $$
+DECLARE
+    v_target TIMESTAMP := NOW() + INTERVAL '15 hours';
+    v_hour INT := LEAST(GREATEST(EXTRACT(HOUR FROM NOW() + INTERVAL '15 hours')::INT, 6), 21);
+    v_stadium_id INT;
+    v_slot_id INT;
+    v_booking_id INT;
+    v_total NUMERIC := 90000.00;
+    v_fee NUMERIC := 10000.00;
+BEGIN
+    SELECT s.stadium_id INTO v_stadium_id FROM stadiums s
+    JOIN stadiums fac ON fac.stadium_id = s.parent_stadium_id
+    JOIN sport_types sp ON sp.sport_type_id = fac.sport_type_id
+    JOIN stadium_complexes sc ON sc.complex_id = s.complex_id
+    WHERE sc.name = 'Cung thể thao Quần Ngựa' AND sp.sport_name = 'Badminton' AND s.stadium_name = 'Sân 1';
+
+    SELECT slot_id INTO v_slot_id FROM time_slots WHERE stadium_id = v_stadium_id AND start_time = make_time(v_hour, 0, 0);
+
+    INSERT INTO bookings (user_id, stadium_id, slot_id, total_price, service_fee, booking_status, payment_status, booking_date, reservation_date, note)
+    VALUES ((SELECT user_id FROM users WHERE email = 'customer@sportvenue.com'), v_stadium_id, v_slot_id, v_total, v_fee,
+        'CONFIRMED', 'PAID', NOW() - INTERVAL '5 hours', v_target::date,
+        '[DEMO-29] Sẵn sàng cho Owner bấm Hoàn tiền chọn OWNER_FAULT trực tiếp (vd sân ngập nước) — demo Platform hoàn phí dịch vụ.')
+    RETURNING booking_id INTO v_booking_id;
+
+    INSERT INTO payments (booking_id, payment_method, amount, payment_status, paid_at, transaction_code, gateway_transaction_no, gateway_pay_date)
+    VALUES (v_booking_id, 'VNPAY', v_total, 'SUCCESS', NOW() - INTERVAL '5 hours' + INTERVAL '2 minutes',
+        'VNP' || v_booking_id || to_char(NOW(), 'YYYYMMDDHH24MISS'), (10000000 + v_booking_id)::text, to_char(NOW(), 'YYYYMMDDHH24MISS'));
+END $$;
+
+-- DEMO-30: Nhà thi đấu Quân khu 7 / Sân 2 (Basketball) — CANCELLED/REFUNDED
+-- (0%, đã huỷ sát giờ trong quá khứ) — làm nền cho refund-exception-request
+-- trạng thái APPROVED_ADMIN ở V117 (đã có kết quả, không cần chờ demo trực tiếp).
+WITH ins_booking AS (
+    INSERT INTO bookings (
+        user_id, stadium_id, slot_id, total_price, service_fee, booking_status, payment_status,
+        booking_date, reservation_date, note, cancel_reason
+    ) VALUES (
+        (SELECT user_id FROM users WHERE email = 'customer2@sportvenue.com'),
+        (SELECT s.stadium_id FROM stadiums s
+        JOIN stadiums fac ON fac.stadium_id = s.parent_stadium_id
+        JOIN sport_types sp ON sp.sport_type_id = fac.sport_type_id
+        JOIN stadium_complexes sc ON sc.complex_id = s.complex_id
+        WHERE sc.name = 'Nhà thi đấu Quân khu 7' AND sp.sport_name = 'Basketball' AND s.stadium_name = 'Sân 2'),
+        (SELECT slot_id FROM time_slots WHERE stadium_id = (SELECT s.stadium_id FROM stadiums s
+        JOIN stadiums fac ON fac.stadium_id = s.parent_stadium_id
+        JOIN sport_types sp ON sp.sport_type_id = fac.sport_type_id
+        JOIN stadium_complexes sc ON sc.complex_id = s.complex_id
+        WHERE sc.name = 'Nhà thi đấu Quân khu 7' AND sp.sport_name = 'Basketball' AND s.stadium_name = 'Sân 2') AND start_time = '19:00:00'),
+        195000.00, 10000.00, 'CANCELLED', 'REFUNDED',
+        NOW() - INTERVAL '30 hours', CURRENT_DATE - 1, '[DEMO-30] Lý do hủy hoàn tiền: Khách hủy sát giờ (<12h trước giờ chơi) — hoàn 0%. Đã nộp Refund Exception, Admin duyệt 50%.', 'Khách hủy sát giờ (<12h trước giờ chơi)'
+    ) RETURNING booking_id, total_price
+)
+INSERT INTO payments (booking_id, payment_method, amount, payment_status, paid_at, transaction_code, gateway_transaction_no, gateway_pay_date)
+SELECT booking_id, 'VNPAY', total_price, 'SUCCESS',
+    NOW() - INTERVAL '30 hours',
+    'VNP' || booking_id || to_char(NOW() - INTERVAL '30 hours', 'YYYYMMDDHH24MISS'),
+    (10000000 + booking_id)::text,
+    to_char(NOW() - INTERVAL '30 hours', 'YYYYMMDDHH24MISS')
+FROM ins_booking;
+
+-- DEMO-31: Trung tâm Huấn luyện Thể thao Quốc gia Đà Nẵng / Sân 1 (Tennis) —
+-- CANCELLED/REFUNDED (0%, đã huỷ sát giờ trong quá khứ) — làm nền cho
+-- refund-exception-request trạng thái REJECTED_OWNER (kết thúc, không escalate).
+WITH ins_booking AS (
+    INSERT INTO bookings (
+        user_id, stadium_id, slot_id, total_price, service_fee, booking_status, payment_status,
+        booking_date, reservation_date, note, cancel_reason
+    ) VALUES (
+        (SELECT user_id FROM users WHERE email = 'customer3@sportvenue.com'),
+        (SELECT s.stadium_id FROM stadiums s
+        JOIN stadiums fac ON fac.stadium_id = s.parent_stadium_id
+        JOIN sport_types sp ON sp.sport_type_id = fac.sport_type_id
+        JOIN stadium_complexes sc ON sc.complex_id = s.complex_id
+        WHERE sc.name = 'Trung tâm Huấn luyện Thể thao Quốc gia Đà Nẵng' AND sp.sport_name = 'Tennis' AND s.stadium_name = 'Sân 1'),
+        (SELECT slot_id FROM time_slots WHERE stadium_id = (SELECT s.stadium_id FROM stadiums s
+        JOIN stadiums fac ON fac.stadium_id = s.parent_stadium_id
+        JOIN sport_types sp ON sp.sport_type_id = fac.sport_type_id
+        JOIN stadium_complexes sc ON sc.complex_id = s.complex_id
+        WHERE sc.name = 'Trung tâm Huấn luyện Thể thao Quốc gia Đà Nẵng' AND sp.sport_name = 'Tennis' AND s.stadium_name = 'Sân 1') AND start_time = '20:00:00'),
+        242000.00, 12000.00, 'CANCELLED', 'REFUNDED',
+        NOW() - INTERVAL '40 hours', CURRENT_DATE - 1, '[DEMO-31] Lý do hủy hoàn tiền: Khách hủy sát giờ (<12h trước giờ chơi) — hoàn 0%. Đã nộp Refund Exception, Owner từ chối (không đủ căn cứ).', 'Khách hủy sát giờ (<12h trước giờ chơi)'
+    ) RETURNING booking_id, total_price
+)
+INSERT INTO payments (booking_id, payment_method, amount, payment_status, paid_at, transaction_code, gateway_transaction_no, gateway_pay_date)
+SELECT booking_id, 'VNPAY', total_price, 'SUCCESS',
+    NOW() - INTERVAL '40 hours',
+    'VNP' || booking_id || to_char(NOW() - INTERVAL '40 hours', 'YYYYMMDDHH24MISS'),
+    (10000000 + booking_id)::text,
+    to_char(NOW() - INTERVAL '40 hours', 'YYYYMMDDHH24MISS')
+FROM ins_booking;
+
