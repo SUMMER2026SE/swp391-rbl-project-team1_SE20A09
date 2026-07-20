@@ -137,5 +137,66 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
 
     @Query("SELECT p FROM Payment p WHERE p.booking.bookingId IN :bookingIds AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS AND p.amount > 0")
     List<Payment> findSuccessPaymentsByBookingIds(@Param("bookingIds") List<Integer> bookingIds);
+
+    // ── Unified Financial Aggregates (Nguồn sự thật: Payment table) ────────────────────────
+
+    /**
+     * Tổng Gross của Owner theo khoảng thời gian (paidAt).
+     * Gross = tất cả payment SUCCESS có amount > 0 thuộc booking của các sân Owner sở hữu.
+     * Bao gồm cả walk-in (CASH) và online (VNPay/Wallet).
+     */
+    @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p " +
+           "JOIN p.booking b JOIN b.stadium s " +
+           "WHERE s.owner.ownerId = :ownerId " +
+           "AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
+           "AND p.amount > 0 " +
+           "AND (:start IS NULL OR p.paidAt >= :start) " +
+           "AND (:end IS NULL OR p.paidAt <= :end)")
+    java.math.BigDecimal sumOwnerGrossByDateRange(
+            @Param("ownerId") Integer ownerId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
+
+    /**
+     * Tổng Refund của Owner theo khoảng thời gian (paidAt).
+     * Refund = tất cả payment SUCCESS có amount < 0 thuộc booking của Owner.
+     * Trả về giá trị dương (ABS).
+     */
+    @Query("SELECT COALESCE(SUM(ABS(p.amount)), 0) FROM Payment p " +
+           "JOIN p.booking b JOIN b.stadium s " +
+           "WHERE s.owner.ownerId = :ownerId " +
+           "AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
+           "AND p.amount < 0 " +
+           "AND (:start IS NULL OR p.paidAt >= :start) " +
+           "AND (:end IS NULL OR p.paidAt <= :end)")
+    java.math.BigDecimal sumOwnerRefundByDateRange(
+            @Param("ownerId") Integer ownerId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
+
+    /**
+     * Tổng Gross toàn hệ thống (Admin) theo khoảng thời gian.
+     */
+    @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p " +
+           "WHERE p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
+           "AND p.amount > 0 " +
+           "AND (:start IS NULL OR p.paidAt >= :start) " +
+           "AND (:end IS NULL OR p.paidAt <= :end)")
+    java.math.BigDecimal sumPlatformGrossByDateRange(
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
+
+    /**
+     * Tổng Refund toàn hệ thống (Admin) theo khoảng thời gian.
+     * Trả về giá trị dương (ABS).
+     */
+    @Query("SELECT COALESCE(SUM(ABS(p.amount)), 0) FROM Payment p " +
+           "WHERE p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
+           "AND p.amount < 0 " +
+           "AND (:start IS NULL OR p.paidAt >= :start) " +
+           "AND (:end IS NULL OR p.paidAt <= :end)")
+    java.math.BigDecimal sumPlatformRefundByDateRange(
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
 }
 

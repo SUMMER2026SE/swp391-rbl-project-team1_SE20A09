@@ -53,8 +53,14 @@ export interface AdminBookingResponse {
 
 interface AdminBookingStatsResponse {
   totalBookings: number;
+  /** Gross = Payment amount > 0, SUCCESS */
   totalGMV: number;
+  /** Refund = Payment amount < 0, SUCCESS (giá trị dương) */
+  totalRefund: number;
+  /** Fee = Platform Wallet SERVICE_FEE_CREDIT */
   totalServiceFee: number;
+  /** Net = Gross - Refund - Fee */
+  totalNet: number;
 }
 
 interface PageResponse<T> {
@@ -166,56 +172,75 @@ export default function AdminBookingsPage() {
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Quản lý Đặt sân</h1>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4">
-          <div className="p-3 bg-blue-50 rounded-lg text-blue-600 shrink-0">
-            <CalendarDays className="h-6 w-6" />
+      {/* Statistics Cards — Nguồn sự thật: Payment + Platform Wallet Ledger */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Card 1: Tổng đơn */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex items-center gap-3">
+          <div className="p-2.5 bg-blue-50 rounded-lg text-blue-600 shrink-0">
+            <CalendarDays className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tổng đơn đặt sân</p>
-            <h3 className="text-2xl font-bold text-slate-900 mt-1">
-              {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
-              ) : (
-                data?.stats?.totalBookings ?? 0
-              )}
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Tổng đơn</p>
+            <h3 className="text-xl font-bold text-slate-900 mt-0.5">
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : (data?.stats?.totalBookings ?? 0)}
             </h3>
-            <p className="text-[11px] text-slate-400 mt-1">Tất cả trạng thái (gồm đơn hủy)</p>
+            <p className="text-[10px] text-slate-400">Tất cả trạng thái</p>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4">
-          <div className="p-3 bg-emerald-50 rounded-lg text-emerald-600 shrink-0">
-            <DollarSign className="h-6 w-6" />
+        {/* Card 2: Gross */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex items-center gap-3">
+          <div className="p-2.5 bg-emerald-50 rounded-lg text-emerald-600 shrink-0">
+            <DollarSign className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tổng GMV</p>
-            <h3 className="text-2xl font-bold text-slate-900 mt-1">
-              {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
-              ) : (
-                formatVND(data?.stats?.totalGMV ?? 0)
-              )}
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Gross (Doanh thu)</p>
+            <h3 className="text-xl font-bold text-emerald-700 mt-0.5">
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : formatVND(data?.stats?.totalGMV ?? 0)}
             </h3>
-            <p className="text-[11px] text-slate-400 mt-1">Đơn Chờ duyệt/Xác nhận/Hoàn thành</p>
+            <p className="text-[10px] text-slate-400">Tiền thực thu (Payment)</p>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4">
-          <div className="p-3 bg-indigo-50 rounded-lg text-indigo-600 shrink-0">
-            <Activity className="h-6 w-6" />
+        {/* Card 3: Refund */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex items-center gap-3">
+          <div className="p-2.5 bg-rose-50 rounded-lg text-rose-600 shrink-0">
+            <Activity className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Phí dịch vụ Platform</p>
-            <h3 className="text-2xl font-bold text-slate-900 mt-1">
-              {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
-              ) : (
-                formatVND(data?.stats?.totalServiceFee ?? 0)
-              )}
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Hoàn tiền</p>
+            <h3 className="text-xl font-bold text-rose-600 mt-0.5">
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : formatVND(data?.stats?.totalRefund ?? 0)}
             </h3>
-            <p className="text-[11px] text-slate-400 mt-1">Chỉ tính các đơn Hoàn thành</p>
+            <p className="text-[10px] text-slate-400">Tiền đã hoàn (Payment âm)</p>
+          </div>
+        </div>
+
+        {/* Card 4: Fee */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex items-center gap-3">
+          <div className="p-2.5 bg-indigo-50 rounded-lg text-indigo-600 shrink-0">
+            <Calendar className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Phí Platform</p>
+            <h3 className="text-xl font-bold text-indigo-700 mt-0.5">
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : formatVND(data?.stats?.totalServiceFee ?? 0)}
+            </h3>
+            <p className="text-[10px] text-slate-400">Wallet ledger (thực thu)</p>
+          </div>
+        </div>
+
+        {/* Card 5: Net */}
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-xl shadow-sm border border-slate-700 flex items-center gap-3">
+          <div className="p-2.5 bg-white/10 rounded-lg text-white shrink-0">
+            <DollarSign className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider">Net (Thực lãi)</p>
+            <h3 className="text-xl font-bold text-white mt-0.5">
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin text-white/50" /> : formatVND(data?.stats?.totalNet ?? 0)}
+            </h3>
+            <p className="text-[10px] text-slate-400">Gross − Refund − Fee</p>
           </div>
         </div>
       </div>

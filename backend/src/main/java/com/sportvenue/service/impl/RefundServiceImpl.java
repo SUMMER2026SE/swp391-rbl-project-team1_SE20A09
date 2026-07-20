@@ -61,6 +61,7 @@ public class RefundServiceImpl implements RefundService {
     private final CustomerNotificationService customerNotificationService;
     private final AfterCommitExecutor afterCommitExecutor;
     private final WalletService walletService;
+    private final com.sportvenue.repository.WalletTransactionRepository walletTransactionRepository;
 
     @Override
     public RefundResponse processRefund(Integer bookingId, RefundRequest request, String ownerEmail) {
@@ -590,37 +591,39 @@ public class RefundServiceImpl implements RefundService {
     @Override
     public com.sportvenue.dto.response.OwnerBookingsSummaryResponse getOwnerBookingsSummary(
             String ownerEmail, BookingStatus status) {
-        List<Booking> bookings = bookingRepository.findAllByOwnerEmailAndStatus(ownerEmail, status);
+        // ── Nguồn sự thật đã chốt ──────────────────────────────────────────────────────
+        // Gross & Refund  → Payment table (tiền thực tế đã thu/đã hoàn qua cổng/cash)
+        // Fee             → Owner Wallet ledger (SERVICE_FEE_DEBIT) — không tự tính
+        //                   từ Booking.serviceFee vì đơn DEPOSITED chưa thu đủ tiền
+        //                   nhưng phí đã bị ghi vào Booking, dẫn đến Fee bị thổi phồng.
+        // Net             → Gross - Refund - Fee (tính sau)
+        // Không còn vòng lặp Booking — mọi thứ lấy từ aggregate query trực tiếp.
+        // ───────────────────────────────────────────────────────────────────────────────
 
-        List<Integer> bookingIds = bookings.stream().map(Booking::getBookingId).toList();
-        java.util.Map<Integer, BigDecimal> refundMap = buildRefundMap(bookingIds);
-        java.util.Map<Integer, BigDecimal> successPaymentMap = buildSuccessPaymentMap(bookingIds);
+        Owner owner = ownerRepository.findByUserEmail(ownerEmail)
+                .orElseThrow(() -> new com.sportvenue.exception.ResourceNotFoundException(
+                        "Không tìm thấy owner profile: " + ownerEmail));
+        Integer ownerId = owner.getOwnerId();
 
-        BigDecimal grossAmount = BigDecimal.ZERO;
-        BigDecimal refundedAmount = BigDecimal.ZERO;
-        BigDecimal serviceFeeTotal = BigDecimal.ZERO;
+        // Gross = tổng payment SUCCESS, amount > 0, thuộc booking của owner
+        BigDecimal grossAmount = paymentRepository.sumOwnerGrossByDateRange(ownerId, null, null);
+        if (grossAmount == null) grossAmount = BigDecimal.ZERO;
 
-        for (Booking b : bookings) {
-            BigDecimal refundAmt = refundMap.getOrDefault(b.getBookingId(), BigDecimal.ZERO);
-            BigDecimal successPaid = successPaymentMap.getOrDefault(b.getBookingId(), BigDecimal.ZERO);
+        // Refund = tổng payment SUCCESS, amount < 0, thuộc booking của owner (giá trị dương)
+        BigDecimal refundedAmount = paymentRepository.sumOwnerRefundByDateRange(ownerId, null, null);
+        if (refundedAmount == null) refundedAmount = BigDecimal.ZERO;
 
-            BigDecimal bookingAmt = b.getTotalPrice();
-            if (b.getBookingStatus() == BookingStatus.CANCELLED) {
-                bookingAmt = successPaid;
-            }
-
-            boolean isPaidType = b.getPaymentStatus() == PaymentStatus.PAID
-                    || b.getPaymentStatus() == PaymentStatus.REFUNDED;
-
-            refundedAmount = refundedAmount.add(refundAmt);
-            if (isPaidType) {
-                grossAmount = grossAmount.add(bookingAmt);
-                BigDecimal fee = b.getServiceFee() != null ? b.getServiceFee() : BigDecimal.ZERO;
-                serviceFeeTotal = serviceFeeTotal.add(fee);
-            }
-        }
+        // Fee = tổng SERVICE_FEE_DEBIT trong Owner Wallet ledger (đã xảy ra thực tế)
+        BigDecimal serviceFeeTotal = walletTransactionRepository.sumOwnerFeeByTypeAndDateRange(
+                ownerId,
+                com.sportvenue.entity.enums.WalletTransactionType.SERVICE_FEE_DEBIT,
+                null, null);
+        if (serviceFeeTotal == null) serviceFeeTotal = BigDecimal.ZERO;
 
         BigDecimal netAmount = grossAmount.subtract(refundedAmount).subtract(serviceFeeTotal);
+
+        log.info("Owner {} summary — Gross={}, Refund={}, Fee={}, Net={}",
+                ownerEmail, grossAmount, refundedAmount, serviceFeeTotal, netAmount);
 
         return com.sportvenue.dto.response.OwnerBookingsSummaryResponse.builder()
                 .grossAmount(grossAmount)
