@@ -118,6 +118,23 @@ function BookingManagementPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
 
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+  const [filterStadiumId, setFilterStadiumId] = useState("all");
+  const [ownerStadiums, setOwnerStadiums] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function fetchStadiums() {
+      try {
+        const data = await get<any>('/stadiums/my');
+        setOwnerStadiums(data || []);
+      } catch (err) {
+        console.error("Error fetching stadiums:", err);
+      }
+    }
+    fetchStadiums();
+  }, []);
+
   // Tổng Gross/Refund/Fee/Net trên TOÀN BỘ booking (không phụ thuộc phân trang) — lấy từ backend
   // thay vì tự cộng dồn bookingList (chỉ có 1 trang), tránh bug tổng bị lệch khi tạo đơn mới.
   const [summary, setSummary] = useState<{
@@ -133,6 +150,9 @@ function BookingManagementPage() {
       if (activeTab !== "all") {
         query.set("status", activeTab.toUpperCase());
       }
+      if (filterStartDate) query.set("startDate", filterStartDate);
+      if (filterEndDate) query.set("endDate", filterEndDate);
+      if (filterStadiumId !== "all") query.set("stadiumId", filterStadiumId);
       const data = await get<any>(`/owner/bookings/summary?${query.toString()}`);
       setSummary({
         grossAmount: Number(data?.grossAmount) || 0,
@@ -143,7 +163,7 @@ function BookingManagementPage() {
     } catch (error: any) {
       console.error("Error fetching bookings summary:", error);
     }
-  }, [activeTab]);
+  }, [activeTab, filterStartDate, filterEndDate, filterStadiumId]);
 
   useEffect(() => {
     fetchSummary();
@@ -160,6 +180,9 @@ function BookingManagementPage() {
       if (activeTab !== "all") {
         query.set("status", activeTab.toUpperCase());
       }
+      if (filterStartDate) query.set("startDate", filterStartDate);
+      if (filterEndDate) query.set("endDate", filterEndDate);
+      if (filterStadiumId !== "all") query.set("stadiumId", filterStadiumId);
       const data = await get<any>(
         `/owner/bookings?${query.toString()}`
       );
@@ -180,7 +203,7 @@ function BookingManagementPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeTab, page]);
+  }, [activeTab, page, filterStartDate, filterEndDate, filterStadiumId]);
 
   useEffect(() => {
     fetchBookings();
@@ -659,7 +682,8 @@ function BookingManagementPage() {
                 <input
                   type="date"
                   className="w-full border rounded-lg px-3 py-2 bg-background focus:ring-1 focus:ring-primary focus:outline-none"
-                  placeholder="Từ ngày"
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
                 />
               </div>
               <div className="flex-1 min-w-[200px]">
@@ -667,24 +691,50 @@ function BookingManagementPage() {
                 <input
                   type="date"
                   className="w-full border rounded-lg px-3 py-2 bg-background focus:ring-1 focus:ring-primary focus:outline-none"
-                  placeholder="Đến ngày"
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
                 />
               </div>
               <div className="w-full md:w-56">
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Sân thể thao</label>
-                <Select defaultValue="all">
+                <Select value={filterStadiumId} onValueChange={setFilterStadiumId}>
                   <SelectTrigger className="w-full h-[42px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Tất cả các sân</SelectItem>
-                    <SelectItem value="san1">Sân Bóng Đá Thủ Đức</SelectItem>
-                    <SelectItem value="san2">Sân Cầu Lông Bình Thạnh</SelectItem>
+                    {ownerStadiums.map((stadium) => (
+                      <SelectItem key={stadium.stadiumId} value={stadium.stadiumId.toString()}>
+                        {stadium.stadiumName}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-end">
-                <Button variant="outline" className="h-[42px] px-6 font-semibold shadow-sm hover:bg-muted">Lọc kết quả</Button>
+              <div className="flex items-end gap-2">
+                <Button 
+                  variant="outline" 
+                  className="h-[42px] px-6 font-semibold shadow-sm hover:bg-muted"
+                  onClick={() => {
+                    fetchBookings();
+                    fetchSummary();
+                  }}
+                >
+                  Lọc kết quả
+                </Button>
+                {(filterStartDate || filterEndDate || filterStadiumId !== "all") && (
+                  <Button 
+                    variant="ghost" 
+                    className="h-[42px] px-4 text-rose-500 hover:text-rose-600"
+                    onClick={() => {
+                      setFilterStartDate("");
+                      setFilterEndDate("");
+                      setFilterStadiumId("all");
+                    }}
+                  >
+                    Xóa lọc
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>

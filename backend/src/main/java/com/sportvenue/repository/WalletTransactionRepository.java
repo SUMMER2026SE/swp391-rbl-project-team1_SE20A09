@@ -50,6 +50,7 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
             FROM WalletTransaction wt
             LEFT JOIN wt.booking b
             WHERE wt.wallet.owner.ownerId = :ownerId
+            AND (:stadiumId IS NULL OR b.stadium.stadiumId = :stadiumId)
             AND wt.transactionType = :type
             AND wt.createdAt >= :start
             AND wt.createdAt <= :end
@@ -57,6 +58,7 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
             """)
     BigDecimal sumOwnerFeeByTypeDateRangeAndStatuses(
             @Param("ownerId") Integer ownerId,
+            @Param("stadiumId") Integer stadiumId,
             @Param("type") WalletTransactionType type,
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end,

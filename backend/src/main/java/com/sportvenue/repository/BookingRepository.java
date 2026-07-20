@@ -276,6 +276,24 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
             @Param("status") BookingStatus status,
             Pageable pageable);
 
+    /** Lấy booking thuộc các sân của Owner, có phân trang và filter. */
+    @EntityGraph(attributePaths = {"user", "stadium", "slot"})
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.stadium.owner.user.email = :email
+            AND (:stadiumId IS NULL OR b.stadium.stadiumId = :stadiumId)
+            AND (:status IS NULL OR b.bookingStatus = :status)
+            AND b.reservationDate BETWEEN :startDate AND :endDate
+            ORDER BY b.bookingDate DESC
+            """)
+    Page<Booking> findByOwnerEmailAndFilters(
+            @Param("email") String email,
+            @Param("stadiumId") Integer stadiumId,
+            @Param("startDate") java.time.LocalDate startDate,
+            @Param("endDate") java.time.LocalDate endDate,
+            @Param("status") BookingStatus status,
+            Pageable pageable);
+
     /** Lấy booking thuộc các sân của Owner, có phân trang và filter trạng thái. */
     @EntityGraph(attributePaths = {"user", "stadium", "slot"})
     @Query("""

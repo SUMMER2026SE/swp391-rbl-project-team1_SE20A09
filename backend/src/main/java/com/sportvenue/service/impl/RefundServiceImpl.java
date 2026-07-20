@@ -492,12 +492,15 @@ public class RefundServiceImpl implements RefundService {
     @Transactional(readOnly = true)
     @Override
     public Page<OwnerBookingResponse> getOwnerBookings(
-            String ownerEmail, BookingStatus status, Pageable pageable) {
-        log.info("Fetching bookings for owner: {}, status: {}, page: {}",
-                ownerEmail, status, pageable.getPageNumber());
+            String ownerEmail, Integer stadiumId, java.time.LocalDate startDate, java.time.LocalDate endDate, BookingStatus status, Pageable pageable) {
+        log.info("Fetching bookings for owner: {}, stadiumId: {}, start: {}, end: {}, status: {}, page: {}",
+                ownerEmail, stadiumId, startDate, endDate, status, pageable.getPageNumber());
 
-        Page<Booking> bookings = bookingRepository.findByOwnerEmailAndStatus(
-                ownerEmail, status, pageable);
+        java.time.LocalDate effectiveStart = startDate != null ? startDate : java.time.LocalDate.of(2000, 1, 1);
+        java.time.LocalDate effectiveEnd = endDate != null ? endDate : java.time.LocalDate.of(2100, 1, 1);
+
+        Page<Booking> bookings = bookingRepository.findByOwnerEmailAndFilters(
+                ownerEmail, stadiumId, effectiveStart, effectiveEnd, status, pageable);
 
         List<Integer> bookingIds = bookings.getContent().stream()
                 .map(Booking::getBookingId).toList();
@@ -590,7 +593,7 @@ public class RefundServiceImpl implements RefundService {
     @Transactional(readOnly = true)
     @Override
     public com.sportvenue.dto.response.OwnerBookingsSummaryResponse getOwnerBookingsSummary(
-            String ownerEmail, BookingStatus status) {
+            String ownerEmail, Integer stadiumId, java.time.LocalDate startDate, java.time.LocalDate endDate, BookingStatus status) {
         // ── Nguồn sự thật đã chốt ──────────────────────────────────────────────────────
         // Gross & Refund  → Payment table (tiền thực tế đã thu/đã hoàn qua cổng/cash)
         // Fee             → Owner Wallet ledger (SERVICE_FEE_DEBIT) — không tự tính
@@ -606,8 +609,8 @@ public class RefundServiceImpl implements RefundService {
         Integer ownerId = owner.getOwnerId();
 
         // Avoid passing null to JPQL queries to prevent PostgreSQL parameter type inference errors
-        LocalDateTime minDate = LocalDateTime.of(2000, 1, 1, 0, 0);
-        LocalDateTime maxDate = LocalDateTime.of(2100, 1, 1, 0, 0);
+        LocalDateTime minDate = startDate != null ? startDate.atStartOfDay() : LocalDateTime.of(2000, 1, 1, 0, 0);
+        LocalDateTime maxDate = endDate != null ? endDate.atTime(23, 59, 59) : LocalDateTime.of(2100, 1, 1, 0, 0);
         
         // Use a list of statuses to avoid (:status IS NULL OR ...) which crashes PostgreSQL
         java.util.List<BookingStatus> statuses = (status != null) 
@@ -615,16 +618,16 @@ public class RefundServiceImpl implements RefundService {
                 : java.util.Arrays.asList(BookingStatus.values());
 
         // Gross = tổng payment SUCCESS, amount > 0, thuộc booking của owner
-        BigDecimal grossAmount = paymentRepository.sumOwnerGrossByDateRangeAndStatuses(ownerId, minDate, maxDate, statuses);
+        BigDecimal grossAmount = paymentRepository.sumOwnerGrossByDateRangeAndStatuses(ownerId, stadiumId, minDate, maxDate, statuses);
         if (grossAmount == null) grossAmount = BigDecimal.ZERO;
 
         // Refund = tổng payment SUCCESS, amount < 0, thuộc booking của owner (giá trị dương)
-        BigDecimal refundedAmount = paymentRepository.sumOwnerRefundByDateRangeAndStatuses(ownerId, minDate, maxDate, statuses);
+        BigDecimal refundedAmount = paymentRepository.sumOwnerRefundByDateRangeAndStatuses(ownerId, stadiumId, minDate, maxDate, statuses);
         if (refundedAmount == null) refundedAmount = BigDecimal.ZERO;
 
         // Fee = tổng SERVICE_FEE_DEBIT trong Owner Wallet ledger (đã xảy ra thực tế)
         BigDecimal serviceFeeTotal = walletTransactionRepository.sumOwnerFeeByTypeDateRangeAndStatuses(
-                ownerId,
+                ownerId, stadiumId,
                 com.sportvenue.entity.enums.WalletTransactionType.SERVICE_FEE_DEBIT,
                 minDate, maxDate, statuses);
         if (serviceFeeTotal == null) serviceFeeTotal = BigDecimal.ZERO;

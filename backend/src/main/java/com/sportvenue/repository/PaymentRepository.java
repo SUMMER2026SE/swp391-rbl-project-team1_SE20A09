@@ -148,6 +148,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
     @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p " +
            "JOIN p.booking b JOIN b.stadium s " +
            "WHERE s.owner.ownerId = :ownerId " +
+           "AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId) " +
            "AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
            "AND p.amount > 0 " +
            "AND p.paidAt >= :start " +
@@ -155,6 +156,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
            "AND b.bookingStatus IN :statuses")
     java.math.BigDecimal sumOwnerGrossByDateRangeAndStatuses(
             @Param("ownerId") Integer ownerId,
+            @Param("stadiumId") Integer stadiumId,
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end,
             @Param("statuses") java.util.List<com.sportvenue.entity.enums.BookingStatus> statuses);
@@ -167,6 +169,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
     @Query("SELECT COALESCE(SUM(ABS(p.amount)), 0) FROM Payment p " +
            "JOIN p.booking b JOIN b.stadium s " +
            "WHERE s.owner.ownerId = :ownerId " +
+           "AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId) " +
            "AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
            "AND p.amount < 0 " +
            "AND p.paidAt >= :start " +
@@ -174,6 +177,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
            "AND b.bookingStatus IN :statuses")
     java.math.BigDecimal sumOwnerRefundByDateRangeAndStatuses(
             @Param("ownerId") Integer ownerId,
+            @Param("stadiumId") Integer stadiumId,
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end,
             @Param("statuses") java.util.List<com.sportvenue.entity.enums.BookingStatus> statuses);
