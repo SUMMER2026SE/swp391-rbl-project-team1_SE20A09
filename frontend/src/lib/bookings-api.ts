@@ -1,4 +1,4 @@
-import { get, post, put, publicApi } from "@/lib/api";
+import { get, post, put, del, publicApi } from "@/lib/api";
 
 export type BookingHistoryItem = {
   id: string;
@@ -151,8 +151,15 @@ export type BookingDetailItem = {
   refundPercent: number | null;
   createdAt: string;
   note: string | null;
+  /** Lý do hủy đơn — null nếu bị hệ thống tự hủy do hết hạn giữ chỗ (chưa từng có tương tác/thanh toán thật). */
+  cancelReason: string | null;
   ownerUserId?: number;
   stadiumId?: number;
+  accessories?: {
+    accessoryName: string;
+    quantity: number;
+    unitPrice: number;
+  }[];
 };
 
 export async function fetchBookingDetail(id: string | number): Promise<BookingDetailItem> {
@@ -178,8 +185,14 @@ export async function fetchBookingDetail(id: string | number): Promise<BookingDe
     refundPercent: typeof data.refundPercent === "number" ? data.refundPercent : (data.refundPercent != null ? Number(data.refundPercent) : null),
     createdAt: data.createdAt || "Chưa rõ",
     note: data.note || null,
+    cancelReason: data.cancelReason ?? null,
     ownerUserId: data.stadium?.ownerUserId,
     stadiumId: data.stadium?.stadiumId,
+    accessories: data.accessories?.map((a: any) => ({
+      accessoryName: a.accessoryName,
+      quantity: Number(a.quantity),
+      unitPrice: Number(a.unitPrice),
+    })) || [],
   };
 }
 
@@ -265,6 +278,8 @@ export type WeeklySlotItem = {
   bookingId?: number;
   customerId?: number;
   customerDisplayName?: string;
+  /** true nếu booking chiếm slot này là walk-in (khách đặt tại quầy) — cho phép Owner void. */
+  isWalkIn?: boolean;
 };
 
 /** Một ngày trong weekly grid — kèm tên thứ tiếng Việt. */
@@ -331,6 +346,28 @@ export async function createBooking(
 
 export type BookingDetailResponse = CreateBookingResponse;
 
+export type CreateWalkInBookingPayload = {
+  stadiumId: number;
+  slotId: number;
+  reservationDate: string;
+  accessories?: AccessoryItemPayload[];
+};
+
+/**
+ * Tạo đơn đặt sân tại quầy (Owner) - Tự động confirmed và paid (tiền mặt).
+ */
+export async function createWalkInBooking(payload: CreateWalkInBookingPayload): Promise<BookingDetailResponse> {
+  return post<BookingDetailResponse>("/owner/bookings/walk-in", payload);
+}
+
+/**
+ * Hủy một đơn walk-in tạo nhầm (Owner) — chỉ áp dụng cho đơn walk-in đang CONFIRMED.
+ * Giải phóng lại khung giờ về AVAILABLE.
+ */
+export async function voidWalkInBooking(bookingId: number): Promise<BookingDetailResponse> {
+  return del<BookingDetailResponse>(`/owner/bookings/walk-in/${bookingId}`);
+}
+
 // ── UC-CUS-03: Cancel booking ───────────────────────────────────────────────
 
 /**
@@ -368,6 +405,8 @@ export type RefundPreviewResponse = {
   paymentStatus: string;
   processedAt: string;
   reason: string;
+  /** Giải thích chính sách hoàn tiền áp dụng — vd cọc không hoàn, hủy sớm >24h... */
+  cancellationPolicyDescription?: string | null;
 };
 
 /**

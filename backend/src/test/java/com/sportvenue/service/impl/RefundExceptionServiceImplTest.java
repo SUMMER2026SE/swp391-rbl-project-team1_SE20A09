@@ -16,6 +16,7 @@ import com.sportvenue.entity.enums.PaymentMethod;
 import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.entity.enums.RefundExceptionStatus;
 import com.sportvenue.entity.enums.TransactionStatus;
+import com.sportvenue.entity.enums.WalletTransactionType;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ForbiddenException;
 import com.sportvenue.repository.BookingRepository;
@@ -23,7 +24,7 @@ import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.repository.RefundExceptionRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.NotificationService;
-import com.sportvenue.service.PaymentService;
+import com.sportvenue.service.WalletService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -54,8 +55,8 @@ class RefundExceptionServiceImplTest {
     @Mock private PaymentRepository paymentRepository;
     @Mock private UserRepository userRepository;
     @Mock private NotificationService notificationService;
-    @Mock private PaymentService paymentService;
     @Mock private TransactionTemplate transactionTemplate;
+    @Mock private WalletService walletService;
 
     @InjectMocks
     private RefundExceptionServiceImpl service;
@@ -330,7 +331,7 @@ class RefundExceptionServiceImplTest {
         });
         when(paymentRepository.findById(99)).thenReturn(Optional.of(
                 Payment.builder().paymentId(99).paymentStatus(TransactionStatus.PENDING).build()));
-        when(bookingRepository.findById(100)).thenReturn(Optional.of(cancelledBooking));
+        when(bookingRepository.findByIdForUpdate(100)).thenReturn(Optional.of(cancelledBooking));
 
         OwnerReviewRequest req = new OwnerReviewRequest();
         req.setApproved(true);
@@ -341,7 +342,20 @@ class RefundExceptionServiceImplTest {
 
         assertEquals(RefundExceptionStatus.APPROVED_OWNER, res.getStatus());
         assertEquals(100, res.getRefundPercent());
-        verify(paymentService).processRefund(any(), any(), any());
+        verify(walletService).recordOwnerTransaction(
+                eq(owner.getOwnerId()),
+                eq(new BigDecimal("-150000")),
+                eq(cancelledBooking.getBookingId()),
+                eq(WalletTransactionType.REFUND_DEBIT),
+                anyString()
+        );
+        verify(walletService).recordCustomerTransaction(
+                eq(customer.getUserId()),
+                eq(new BigDecimal("150000")),
+                eq(cancelledBooking.getBookingId()),
+                eq(WalletTransactionType.CUSTOMER_REFUND_CREDIT),
+                anyString()
+        );
     }
 
     @Test
@@ -386,7 +400,7 @@ class RefundExceptionServiceImplTest {
 
         assertEquals(RefundExceptionStatus.REJECTED_OWNER, res.getStatus());
         assertTrue(res.isCanEscalate());
-        verify(paymentService, never()).processRefund(any(), any(), any());
+        verify(walletService, never()).recordCustomerTransaction(any(), any(), any(), any(), any());
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -431,7 +445,7 @@ class RefundExceptionServiceImplTest {
     }
 
     // ═══════════════════════════════════════════════════════════
-    // adminDecide — gateway resilience
+    // adminDecide — refund credit vào Ví Customer
     // ═══════════════════════════════════════════════════════════
 
     @Test
@@ -448,7 +462,7 @@ class RefundExceptionServiceImplTest {
         });
         when(paymentRepository.findById(88)).thenReturn(Optional.of(
                 Payment.builder().paymentId(88).paymentStatus(TransactionStatus.PENDING).build()));
-        when(bookingRepository.findById(100)).thenReturn(Optional.of(cancelledBooking));
+        when(bookingRepository.findByIdForUpdate(100)).thenReturn(Optional.of(cancelledBooking));
 
         AdminDecisionRequest req = new AdminDecisionRequest();
         req.setApproved(true);
@@ -457,37 +471,20 @@ class RefundExceptionServiceImplTest {
         RefundExceptionResponse res = service.adminDecide("admin@test.com", 1, req);
 
         assertEquals(RefundExceptionStatus.APPROVED_ADMIN, res.getStatus());
-        verify(paymentService).processRefund(any(), eq(new BigDecimal("75000")), any());
-    }
-
-    @Test
-    @DisplayName("adminDecide: gateway throw → Payment=FAILED, status giữ APPROVED_ADMIN, throw 400")
-    void adminDecide_gatewayFails_paymentFailedStatusPreserved() {
-        RefundExceptionRequest request = buildRequest(RefundExceptionStatus.PENDING_ADMIN);
-        request.setRefundPercent(100);
-        when(refundExceptionRepository.findById(1)).thenReturn(Optional.of(request));
-        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(successPayment));
-
-        Payment pendingPayment = Payment.builder().paymentId(77)
-                .amount(new BigDecimal("-150000")).paymentStatus(TransactionStatus.PENDING).build();
-        when(paymentRepository.save(any())).thenReturn(pendingPayment);
-        when(paymentRepository.findById(77)).thenReturn(Optional.of(pendingPayment));
-
-        doThrow(new RuntimeException("Gateway timeout")).when(paymentService)
-                .processRefund(any(), any(), any());
-
-        AdminDecisionRequest req = new AdminDecisionRequest();
-        req.setApproved(true);
-        req.setRefundPercent(100);
-
-        // Phải throw BadRequestException về client (không nuốt lỗi)
-        assertThrows(BadRequestException.class,
-                () -> service.adminDecide("admin@test.com", 1, req));
-
-        // Payment phải được set FAILED (không rollback, không mất dấu vết)
-        verify(transactionTemplate, atLeastOnce()).execute(any());
-        // Status request giữ APPROVED_ADMIN (không rollback về PENDING_ADMIN)
-        assertEquals(RefundExceptionStatus.APPROVED_ADMIN, request.getStatus());
+        verify(walletService).recordOwnerTransaction(
+                eq(owner.getOwnerId()),
+                eq(new BigDecimal("-75000")),
+                eq(cancelledBooking.getBookingId()),
+                eq(WalletTransactionType.REFUND_DEBIT),
+                anyString()
+        );
+        verify(walletService).recordCustomerTransaction(
+                eq(customer.getUserId()),
+                eq(new BigDecimal("75000")),
+                eq(cancelledBooking.getBookingId()),
+                eq(WalletTransactionType.CUSTOMER_REFUND_CREDIT),
+                anyString()
+        );
     }
 
     @Test
@@ -511,7 +508,7 @@ class RefundExceptionServiceImplTest {
         });
         when(paymentRepository.findById(91)).thenReturn(Optional.of(
                 Payment.builder().paymentId(91).paymentStatus(TransactionStatus.PENDING).build()));
-        when(bookingRepository.findById(100)).thenReturn(Optional.of(cancelledBooking));
+        when(bookingRepository.findByIdForUpdate(100)).thenReturn(Optional.of(cancelledBooking));
 
         AdminDecisionRequest req = new AdminDecisionRequest();
         req.setApproved(true);
@@ -519,8 +516,21 @@ class RefundExceptionServiceImplTest {
 
         service.adminDecide("admin@test.com", 1, req);
 
-        // Desired = 150000 (100%), đã hoàn 75000 trước đó -> chỉ gọi gateway với phần còn lại 75000
-        verify(paymentService).processRefund(any(), eq(new BigDecimal("75000")), any());
+        // Desired = 150000 (100%), đã hoàn 75000 trước đó -> chỉ credit ví với phần còn lại 75000
+        verify(walletService).recordOwnerTransaction(
+                eq(owner.getOwnerId()),
+                eq(new BigDecimal("-75000")),
+                eq(cancelledBooking.getBookingId()),
+                eq(WalletTransactionType.REFUND_DEBIT),
+                anyString()
+        );
+        verify(walletService).recordCustomerTransaction(
+                eq(customer.getUserId()),
+                eq(new BigDecimal("75000")),
+                eq(cancelledBooking.getBookingId()),
+                eq(WalletTransactionType.CUSTOMER_REFUND_CREDIT),
+                anyString()
+        );
     }
 
     // ═══════════════════════════════════════════════════════════

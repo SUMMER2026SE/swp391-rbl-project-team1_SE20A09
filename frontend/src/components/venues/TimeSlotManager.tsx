@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { toast } from "sonner"
-import { Plus, Loader2, Trash2, Zap, Clock, CalendarDays, Edit3, ChevronLeft, ChevronRight, Grid, List, Power } from "lucide-react"
+import { Plus, Loader2, Trash2, Zap, Clock, CalendarDays, Edit3, ChevronLeft, ChevronRight, Grid, List, Power, UserPlus } from "lucide-react"
 import {
   getStadiumTimeSlots,
   createTimeSlot,
@@ -26,7 +26,7 @@ import {
   createOrUpdateException,
   deleteException,
 } from "@/lib/api/timeSlot"
-import { getOwnerWeeklySlots, WeeklySlotsResponse, WeeklySlotItem } from "@/lib/bookings-api"
+import { getOwnerWeeklySlots, WeeklySlotsResponse, WeeklySlotItem, voidWalkInBooking } from "@/lib/bookings-api"
 import { chatUrl, createContextualConversation } from "@/lib/contextual-chat"
 import { useRouter } from "next/navigation"
 import { TimeSlot, CreateTimeSlotRequest } from "@/types/timeSlot"
@@ -35,6 +35,7 @@ import { useConfirm } from "@/hooks/useConfirm"
 import { EditTimeSlotDialog } from "./EditTimeSlotDialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import WeeklyAgendaGrid from "./WeeklyAgendaGrid"
+import { WalkInBookingDialog } from "@/components/bookings/WalkInBookingDialog"
 
 // ── Date management helpers ──────────────────────────────────────────────────
 function mondayOfThisWeek(): string {
@@ -77,12 +78,14 @@ interface TimeSlotManagerProps {
   stadiumId: number
   openTime: string // HH:mm:ss
   closeTime: string // HH:mm:ss
+  stadiumName?: string
 }
 
 export function TimeSlotManager({
   stadiumId,
   openTime,
   closeTime,
+  stadiumName,
 }: TimeSlotManagerProps) {
   const router = useRouter()
   const [viewMode, setViewMode] = React.useState<"weekly" | "list">("weekly")
@@ -103,12 +106,15 @@ export function TimeSlotManager({
   const [selectedSlotForChoice, setSelectedSlotForChoice] = React.useState<{
     slot: WeeklySlotItem
     date: string
-    action: "edit" | "toggle" | "delete"
+    action: "edit" | "toggle" | "delete" | "walk_in"
   } | null>(null)
   const [isChoiceOpen, setIsChoiceOpen] = React.useState<boolean>(false)
   const [selectedDate, setSelectedDate] = React.useState<string | undefined>(undefined)
   const [selectedBooking, setSelectedBooking] = React.useState<{ slot: WeeklySlotItem; date: string } | null>(null)
   const [openingBookingChat, setOpeningBookingChat] = React.useState(false)
+
+  // Walk-in booking state
+  const [walkInSlot, setWalkInSlot] = React.useState<{ slot: WeeklySlotItem; date: string } | null>(null)
 
   const handleMessageCustomer = async () => {
     const selected = selectedBooking
@@ -124,6 +130,21 @@ export function TimeSlotManager({
       router.push(chatUrl(conversationId))
     } catch { toast.error('Không thể bắt đầu cuộc trò chuyện') }
     finally { setOpeningBookingChat(false) }
+  }
+
+  const handleVoidWalkIn = (bookingId: number) => {
+    setSelectedBooking(null)
+    confirm({
+      title: "Hủy đơn vãng lai",
+      description: "Đơn tại quầy này sẽ bị hủy và khung giờ được giải phóng lại — dùng khi tạo nhầm sân/giờ. Hành động không thể hoàn tác.",
+      confirmText: "Hủy đơn",
+      variant: "destructive",
+      onConfirm: async () => {
+        await voidWalkInBooking(bookingId)
+        toast.success("Đã hủy đơn vãng lai, khung giờ đã được giải phóng")
+        loadData()
+      }
+    })
   }
 
   // Custom confirm hook
@@ -268,6 +289,8 @@ export function TimeSlotManager({
       } catch (error) {
         toast.error("Không thể xóa khung giờ")
       }
+    } else if (action === "walk_in") {
+      setWalkInSlot({ slot, date })
     }
   }
 
@@ -592,6 +615,7 @@ export function TimeSlotManager({
                                 >
                                   <Edit3 className="w-4 h-4 text-slate-500" />
                                 </Button>
+                                {/* Temporarily hidden Tạm đóng button because of Maintenance module 
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -603,6 +627,7 @@ export function TimeSlotManager({
                                     checked={slot.slotStatus === "AVAILABLE"}
                                   />
                                 </Button>
+                                */}
                                 <Button
                                   className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"
                                   variant="ghost"
@@ -750,19 +775,54 @@ export function TimeSlotManager({
           {selectedBooking && (
             <div className="space-y-3 text-sm">
               <div className="rounded-lg bg-slate-50 p-3 space-y-1">
-                <p><strong>Khách hàng:</strong> {selectedBooking.slot.customerDisplayName || 'Khách hàng'}</p>
+                <p className="flex items-center gap-2">
+                  <strong>Khách hàng:</strong> {selectedBooking.slot.customerDisplayName || 'Khách hàng'}
+                  {selectedBooking.slot.isWalkIn && (
+                    <Badge variant="outline" className="text-[10px] text-blue-600 border-blue-200 bg-blue-50">
+                      Tại quầy
+                    </Badge>
+                  )}
+                </p>
                 <p><strong>Ngày:</strong> {formatDayShort(selectedBooking.date)}</p>
                 <p><strong>Khung giờ:</strong> {selectedBooking.slot.startTime} - {selectedBooking.slot.endTime}</p>
                 <p><strong>Mã booking:</strong> #{selectedBooking.slot.bookingId}</p>
               </div>
-              <Button className="w-full" onClick={handleMessageCustomer}
-                disabled={!selectedBooking.slot.customerId || openingBookingChat}>
-                {openingBookingChat ? 'Đang mở...' : 'Nhắn tin cho khách hàng'}
-              </Button>
+              {selectedBooking.slot.isWalkIn ? (
+                <Button
+                  className="w-full"
+                  variant="destructive"
+                  onClick={() => selectedBooking.slot.bookingId && handleVoidWalkIn(selectedBooking.slot.bookingId)}
+                >
+                  Hủy đơn vãng lai (tạo nhầm)
+                </Button>
+              ) : (
+                <Button className="w-full" onClick={handleMessageCustomer}
+                  disabled={!selectedBooking.slot.customerId || openingBookingChat}>
+                  {openingBookingChat ? 'Đang mở...' : 'Nhắn tin cho khách hàng'}
+                </Button>
+              )}
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {walkInSlot && (
+        <WalkInBookingDialog
+          isOpen={!!walkInSlot}
+          onClose={() => setWalkInSlot(null)}
+          onSuccess={() => {
+            setWalkInSlot(null)
+            loadData()
+          }}
+          stadiumId={stadiumId}
+          slotId={walkInSlot.slot.slotId}
+          date={walkInSlot.date}
+          startTime={walkInSlot.slot.startTime}
+          endTime={walkInSlot.slot.endTime}
+          price={walkInSlot.slot.price}
+          stadiumName={stadiumName}
+        />
+      )}
     </div>
   )
 }
@@ -771,7 +831,7 @@ export function TimeSlotManager({
 
 interface OwnerSlotBlockProps {
   slot: WeeklySlotItem
-  onChoice: (action: "edit" | "toggle" | "delete") => void
+  onChoice: (action: "edit" | "toggle" | "delete" | "walk_in") => void
   onBooked: () => void
 }
 
@@ -820,6 +880,7 @@ function OwnerSlotBlock({ slot, onChoice, onBooked }: OwnerSlotBlockProps) {
           >
             <Edit3 className="w-3.5 h-3.5" />
           </Button>
+          {/* Temporarily hidden Tạm đóng button
           <Button
             variant="ghost"
             size="icon"
@@ -829,6 +890,7 @@ function OwnerSlotBlock({ slot, onChoice, onBooked }: OwnerSlotBlockProps) {
           >
             <Power className={`w-3.5 h-3.5 ${isAvailable ? 'text-amber-600' : 'text-emerald-600'}`} />
           </Button>
+          */}
           <Button
             variant="ghost"
             size="icon"
@@ -838,6 +900,17 @@ function OwnerSlotBlock({ slot, onChoice, onBooked }: OwnerSlotBlockProps) {
           >
             <Trash2 className="w-3.5 h-3.5" />
           </Button>
+          {isAvailable && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => { e.stopPropagation(); onChoice("walk_in") }}
+              className="h-7 w-7 bg-white/90 hover:bg-blue-50 text-slate-700 hover:text-blue-600 rounded-full transition-all"
+              title="Tạo đơn tại quầy"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+            </Button>
+          )}
         </div>
       </div>
     )

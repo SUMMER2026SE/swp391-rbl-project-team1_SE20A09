@@ -121,6 +121,50 @@ public interface BookingService {
     BookingDetailResponse confirmCashPaymentReceived(UserPrincipal principal, Integer bookingId);
 
     /**
+     * UC-OWN: Owner xác nhận ĐÃ THU phần còn lại của đơn đặt cọc (30%) khi khách tới sân —
+     * chuyển {@code paymentStatus} {@code DEPOSITED} → {@code PAID}, tạo thêm 1 {@code Payment}
+     * (CASH, SUCCESS) cho phần chênh lệch còn lại.
+     *
+     * <p>Idempotent: nếu đã {@code PAID} thì trả về trạng thái hiện tại thay vì lỗi.</p>
+     *
+     * @throws com.sportvenue.exception.ResourceNotFoundException nếu booking không tồn tại.
+     * @throws com.sportvenue.exception.ForbiddenException nếu principal không phải Owner của sân này.
+     * @throws com.sportvenue.exception.BadRequestException nếu booking đã hủy hoặc paymentStatus
+     *         không phải {@code DEPOSITED}/{@code PAID}.
+     */
+    BookingDetailResponse confirmRemainingPaymentReceived(UserPrincipal principal, Integer bookingId);
+
+    /**
+     * UC-CUS: Customer tự thanh toán đơn đặt sân bằng Ví nội bộ — thành công tức thời (giống
+     * VNPay), không qua {@code AWAITING_CASH_PAYMENT} vì tiền đã trừ ví ngay. Hỗ trợ cả 2 lựa
+     * chọn {@code paymentOption}: {@code FULL} (100% tổng đơn → {@code PAID}) và {@code DEPOSIT}
+     * (30% tổng đơn → {@code DEPOSITED}), mirror đúng 2 lựa chọn mà VNPay đã hỗ trợ.
+     *
+     * <p>Idempotent: nếu đã {@code PAID} thì trả về trạng thái hiện tại thay vì lỗi.</p>
+     *
+     * @throws com.sportvenue.exception.ResourceNotFoundException nếu booking không tồn tại.
+     * @throws com.sportvenue.exception.ForbiddenException nếu booking không thuộc về customer này.
+     * @throws com.sportvenue.exception.BadRequestException nếu booking không ở trạng thái
+     *         {@code PENDING_PAYMENT}, đã hết hạn giữ chỗ, hoặc số dư ví không đủ.
+     */
+    BookingDetailResponse payWithWallet(UserPrincipal principal, Integer bookingId, String paymentOption);
+
+    /**
+     * UC-CUS: Customer tự thanh toán phần còn lại của đơn đặt cọc bằng Ví — thay thế cho việc
+     * phải đợi Owner xác nhận thu tiền mặt. Không trừ thêm phí dịch vụ (đã trừ lúc đặt cọc).
+     *
+     * <p>Idempotent: nếu đã {@code PAID} thì trả về trạng thái hiện tại thay vì lỗi — bắt buộc để
+     * tránh double-credit cho Owner khi đường này race với {@link #confirmRemainingPaymentReceived}
+     * (Owner tự xác nhận tiền mặt) trên cùng 1 booking {@code DEPOSITED}.</p>
+     *
+     * @throws com.sportvenue.exception.ResourceNotFoundException nếu booking không tồn tại.
+     * @throws com.sportvenue.exception.ForbiddenException nếu booking không thuộc về customer này.
+     * @throws com.sportvenue.exception.BadRequestException nếu booking đã hủy, không ở trạng thái
+     *         {@code DEPOSITED}, hoặc số dư ví không đủ.
+     */
+    BookingDetailResponse payRemainingWithWallet(UserPrincipal principal, Integer bookingId);
+
+    /**
     /**
      * UC-CUS-04: Xem chi tiết một đơn đặt sân theo ID.
      * Chỉ chủ booking mới được xem — trả 403 nếu userId không khớp.

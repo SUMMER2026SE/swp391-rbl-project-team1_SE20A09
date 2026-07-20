@@ -21,6 +21,9 @@ import com.sportvenue.service.NotificationService;
 import com.sportvenue.service.VnpayRefundGateway;
 import com.sportvenue.util.AfterCommitExecutor;
 import com.sportvenue.util.VNPayUtil;
+import com.sportvenue.entity.Owner;
+import com.sportvenue.service.WalletService;
+import com.sportvenue.entity.enums.WalletTransactionType;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,6 +67,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final CustomerNotificationService customerNotificationService;
     private final AfterCommitExecutor afterCommitExecutor;
     private final VnpayRefundGateway vnpayRefundGateway;
+    private final WalletService walletService;
 
     @Override
     @Transactional
@@ -104,7 +108,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         // 4. Sinh mã giao dịch — dùng làm vnp_TxnRef và làm transactionCode để tra cứu khi return
-        String txnRef = bookingId + "_" + System.currentTimeMillis();
+        String txnRef = bookingId + "_" + java.util.UUID.randomUUID().toString().substring(0, 8);
 
         // 5. VNPay yêu cầu amount * 100 (đơn vị nhỏ nhất)
         BigDecimal totalPrice = booking.getTotalPrice();
@@ -114,7 +118,7 @@ public class PaymentServiceImpl implements PaymentService {
         
         BigDecimal amountToPay = totalPrice;
         if ("DEPOSIT".equalsIgnoreCase(paymentOption)) {
-            amountToPay = totalPrice.multiply(new BigDecimal("0.3")).setScale(0, java.math.RoundingMode.CEILING);
+            amountToPay = com.sportvenue.util.BookingPricingUtils.calculateDepositAmount(totalPrice);
         }
         
         long amountVnp = amountToPay.multiply(BigDecimal.valueOf(100)).longValueExact();
@@ -158,7 +162,7 @@ public class PaymentServiceImpl implements PaymentService {
         params.put("vnp_OrderType", vnPayConfig.getOrderType());
         params.put("vnp_Locale", vnPayConfig.getLocale());
         params.put("vnp_ReturnUrl", vnPayConfig.getReturnUrl());
-        params.put("vnp_IpAddr", resolveClientIp(request));
+        params.put("vnp_IpAddr", VNPayUtil.resolveClientIp(request));
         params.put("vnp_CreateDate", createDate);
         params.put("vnp_ExpireDate", expireDate);
         return params;
@@ -304,6 +308,51 @@ public class PaymentServiceImpl implements PaymentService {
             }
             bookingRepository.save(booking);
 
+            // Ghi nhận vào ví nội bộ
+            Owner resolvedOwner = booking.getStadium() != null ? booking.getStadium().resolveOwner() : null;
+            if (resolvedOwner != null) {
+                BigDecimal totalAmount = payment.getAmount();
+                BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
+                if (booking.getPaymentStatus() == PaymentStatus.PAID) {
+                    BigDecimal ownerShare = totalAmount.subtract(serviceFee);
+                    walletService.recordOwnerTransaction(
+                            resolvedOwner.getOwnerId(),
+                            ownerShare,
+                            booking.getBookingId(),
+                            WalletTransactionType.BOOKING_CREDIT,
+                            "Doanh thu đặt sân (đã trừ phí dịch vụ)"
+                    );
+                    if (serviceFee.compareTo(BigDecimal.ZERO) > 0) {
+                        walletService.recordPlatformTransaction(
+                                serviceFee,
+                                booking.getBookingId(),
+                                WalletTransactionType.SERVICE_FEE_CREDIT,
+                                "Phí dịch vụ từ đơn đặt sân #" + booking.getBookingId()
+                        );
+                    }
+                } else if (booking.getPaymentStatus() == PaymentStatus.DEPOSITED) {
+                    // Trừ phí dịch vụ ngay lúc cọc (không đợi tới lúc thu nốt) — tiền cọc đã là
+                    // giao dịch thật qua VNPay, nên Platform cần được ghi nhận doanh thu ngay,
+                    // tránh trường hợp khách hủy trước khi thu nốt khiến Platform mất trắng phí.
+                    BigDecimal ownerShare = totalAmount.subtract(serviceFee);
+                    walletService.recordOwnerTransaction(
+                            resolvedOwner.getOwnerId(),
+                            ownerShare,
+                            booking.getBookingId(),
+                            WalletTransactionType.BOOKING_CREDIT,
+                            "Tiền đặt cọc đặt sân #" + booking.getBookingId() + " (đã trừ phí dịch vụ)"
+                    );
+                    if (serviceFee.compareTo(BigDecimal.ZERO) > 0) {
+                        walletService.recordPlatformTransaction(
+                                serviceFee,
+                                booking.getBookingId(),
+                                WalletTransactionType.SERVICE_FEE_CREDIT,
+                                "Phí dịch vụ từ đơn đặt cọc #" + booking.getBookingId()
+                        );
+                    }
+                }
+            }
+
             final Booking finalBookingForCallback = booking;
             try {
                 customerNotificationService.notifyPaymentReceived(finalBookingForCallback.getUser().getUserId(), payment);
@@ -332,22 +381,6 @@ public class PaymentServiceImpl implements PaymentService {
         }
         log.warn("VNPay thanh toán THẤT BẠI — txnRef={}, responseCode={}",
                 txnRef, responseCode);
-    }
-
-    /**
-     * Lấy IP client — thử X-Forwarded-For trước (khi qua proxy), fallback sang remoteAddr.
-     * Giá trị gửi cho VNPay không bắt buộc chính xác trong sandbox nhưng vẫn cần có.
-     */
-    private String resolveClientIp(HttpServletRequest request) {
-        try {
-            String ipAddress = request.getHeader("X-Forwarded-For");
-            if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
-                ipAddress = request.getRemoteAddr();
-            }
-            return ipAddress;
-        } catch (Exception ex) {
-            return "127.0.0.1";
-        }
     }
 
     @Override

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/landing/Footer";
 import { Button } from "@/components/ui/button";
@@ -9,13 +10,18 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { CreditCard, Banknote, Shield, Clock } from "lucide-react";
+import { CreditCard, Banknote, Shield, Clock, WalletCards, AlertCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import Image from "next/image";
 import { toast } from "sonner";
 import { calculatePlatformFee } from "@/lib/utils";
 import { createBooking } from "@/lib/bookings-api";
 import { initiateVnpayPayment } from "@/lib/payments-api";
+import { fetchCustomerWalletBalance, payBookingWithWallet } from "@/lib/wallet-api";
 import { post } from "@/lib/api";
+
+/** Tỉ lệ cọc — khớp với BookingPricingUtils.DEPOSIT_RATIO ở backend. */
+const DEPOSIT_RATIO = 0.3;
 
 interface BookingSummary {
   venueId: number;
@@ -54,6 +60,8 @@ function PaymentContent() {
   const [bookingId, setBookingId] = useState<number | null>(null);
   const [expiredAt, setExpiredAt] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [walletConfirmOpen, setWalletConfirmOpen] = useState(false);
 
   useEffect(() => {
     const data = sessionStorage.getItem("booking_summary");
@@ -64,6 +72,12 @@ function PaymentContent() {
         console.error("Failed to parse booking summary", err);
       }
     }
+  }, []);
+
+  useEffect(() => {
+    fetchCustomerWalletBalance()
+      .then((res) => setWalletBalance(res.balance))
+      .catch(() => setWalletBalance(null));
   }, []);
 
   // Countdown driven by expiredAt từ backend — KHÔNG dùng local timer cứng.
@@ -120,6 +134,10 @@ function PaymentContent() {
             ? "VNPay (Toàn bộ)"
             : paymentMethod === "vnpay_deposit"
             ? "VNPay (Cọc 30%)"
+            : paymentMethod === "wallet"
+            ? "Ví (Toàn bộ)"
+            : paymentMethod === "wallet_deposit"
+            ? "Ví (Cọc 30%)"
             : "Khác"
         }`,
         accessories: accessoriesPayload.length > 0 ? accessoriesPayload : undefined,
@@ -143,6 +161,16 @@ function PaymentContent() {
         } else {
           toast.error("Không tạo được URL thanh toán VNPay.");
         }
+      } else if (paymentMethod === "wallet" || paymentMethod === "wallet_deposit") {
+        const option = paymentMethod === "wallet_deposit" ? "DEPOSIT" : "FULL";
+        await payBookingWithWallet(newBookingId, option);
+        toast.success(
+          option === "DEPOSIT"
+            ? "Đặt cọc bằng Ví thành công!"
+            : "Thanh toán bằng Ví thành công!"
+        );
+        sessionStorage.removeItem("booking_summary");
+        router.push(`/booking/${newBookingId}`);
       } else {
         await post(`/bookings/${newBookingId}/confirm-payment`, {});
         toast.success("Đặt sân thành công! Vui lòng thanh toán tiền mặt tại sân khi đến chơi.");
@@ -173,6 +201,10 @@ function PaymentContent() {
       </div>
     );
   }
+
+  const depositAmount = Math.ceil(activeSummary.total * DEPOSIT_RATIO);
+  const walletSufficientForFull = walletBalance !== null && walletBalance >= activeSummary.total;
+  const walletSufficientForDeposit = walletBalance !== null && walletBalance >= depositAmount;
 
   return (
     <div className="min-h-screen bg-background flex flex-col justify-between">
@@ -317,6 +349,76 @@ function PaymentContent() {
                     <span className="text-[10px] font-bold text-white">VNPAY</span>
                   </div>
                 </div>
+
+                <div
+                  className={`flex items-center space-x-4 p-4 border-2 rounded-lg transition-all ${
+                    walletSufficientForFull ? "cursor-pointer" : "cursor-not-allowed opacity-60"
+                  } ${
+                    paymentMethod === "wallet"
+                      ? "border-emerald-600 bg-emerald-50/20"
+                      : "border-border hover:border-gray-300"
+                  }`}
+                  onClick={() => walletSufficientForFull && setPaymentMethod("wallet")}
+                >
+                  <RadioGroupItem value="wallet" id="wallet" disabled={!walletSufficientForFull} />
+                  <WalletCards className="h-6 w-6 text-indigo-600" />
+                  <Label htmlFor="wallet" className="flex-1 cursor-pointer">
+                    <div className="font-semibold text-gray-800">Ví — Thanh toán toàn bộ</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {walletBalance === null ? (
+                        "Đang tải số dư ví..."
+                      ) : walletSufficientForFull ? (
+                        `Số dư: ${walletBalance.toLocaleString("vi-VN")}đ — đủ để thanh toán`
+                      ) : (
+                        <>
+                          Số dư không đủ (thiếu {(activeSummary.total - walletBalance).toLocaleString("vi-VN")}đ) —{" "}
+                          <Link
+                            href="/wallet"
+                            className="text-indigo-600 underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Nạp thêm
+                          </Link>
+                        </>
+                      )}
+                    </div>
+                  </Label>
+                </div>
+
+                <div
+                  className={`flex items-center space-x-4 p-4 border-2 rounded-lg transition-all ${
+                    walletSufficientForDeposit ? "cursor-pointer" : "cursor-not-allowed opacity-60"
+                  } ${
+                    paymentMethod === "wallet_deposit"
+                      ? "border-emerald-600 bg-emerald-50/20"
+                      : "border-border hover:border-gray-300"
+                  }`}
+                  onClick={() => walletSufficientForDeposit && setPaymentMethod("wallet_deposit")}
+                >
+                  <RadioGroupItem value="wallet_deposit" id="wallet_deposit" disabled={!walletSufficientForDeposit} />
+                  <WalletCards className="h-6 w-6 text-indigo-600" />
+                  <Label htmlFor="wallet_deposit" className="flex-1 cursor-pointer">
+                    <div className="font-semibold text-gray-800">Ví — Thanh toán cọc 30%</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {walletBalance === null ? (
+                        "Đang tải số dư ví..."
+                      ) : walletSufficientForDeposit ? (
+                        `Cần ${depositAmount.toLocaleString("vi-VN")}đ — số dư đủ`
+                      ) : (
+                        <>
+                          Số dư không đủ (thiếu {(depositAmount - walletBalance).toLocaleString("vi-VN")}đ) —{" "}
+                          <Link
+                            href="/wallet"
+                            className="text-indigo-600 underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Nạp thêm
+                          </Link>
+                        </>
+                      )}
+                    </div>
+                  </Label>
+                </div>
               </RadioGroup>
             </CardContent>
           </Card>
@@ -324,13 +426,25 @@ function PaymentContent() {
           <Button
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-6 rounded-lg text-lg shadow-sm transition-all"
             size="lg"
-            onClick={handlePaymentSubmit}
-            disabled={isSubmitting}
+            onClick={() => {
+              if (paymentMethod === "wallet" || paymentMethod === "wallet_deposit") {
+                setWalletConfirmOpen(true);
+              } else {
+                handlePaymentSubmit();
+              }
+            }}
+            disabled={
+              isSubmitting ||
+              (paymentMethod === "wallet" && !walletSufficientForFull) ||
+              (paymentMethod === "wallet_deposit" && !walletSufficientForDeposit)
+            }
           >
             {isSubmitting
               ? "Đang xử lý..."
               : paymentMethod === "vnpay" || paymentMethod === "vnpay_deposit"
               ? "Thanh toán qua VNPay"
+              : paymentMethod === "wallet" || paymentMethod === "wallet_deposit"
+              ? "Thanh toán bằng Ví"
               : "Hoàn tất đặt sân"}
           </Button>
 
@@ -341,6 +455,47 @@ function PaymentContent() {
           </div>
         </div>
       </div>
+
+      {/* Wallet Payment Confirmation Dialog */}
+      <Dialog open={walletConfirmOpen} onOpenChange={setWalletConfirmOpen}>
+        <DialogContent className="rounded-3xl sm:max-w-md p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">Xác nhận thanh toán</DialogTitle>
+            <DialogDescription className="text-slate-500 font-medium">
+              Bạn có chắc chắn muốn thanh toán đơn đặt sân này bằng Ví nội bộ?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="flex justify-between items-center text-sm border-b border-slate-100 pb-3">
+              <span className="text-slate-500">Số tiền thanh toán:</span>
+              <span className="font-bold text-slate-800 text-base">
+                {paymentMethod === "wallet_deposit"
+                  ? `${depositAmount.toLocaleString("vi-VN")}đ (Cọc 30%)`
+                  : `${activeSummary.total.toLocaleString("vi-VN")}đ (Toàn bộ)`}
+              </span>
+            </div>
+            <div className="mt-3 text-xs text-amber-600 bg-amber-50 rounded-xl p-3 flex gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>Tiền sẽ được trừ trực tiếp từ Ví của bạn để hoàn tất giao dịch đặt sân.</span>
+            </div>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="ghost" onClick={() => setWalletConfirmOpen(false)} className="rounded-xl flex-1">
+              Quay lại
+            </Button>
+            <Button 
+              onClick={async () => {
+                setWalletConfirmOpen(false);
+                await handlePaymentSubmit();
+              }} 
+              disabled={isSubmitting} 
+              className="rounded-xl flex-1 bg-emerald-600 hover:bg-emerald-700 font-bold"
+            >
+              {isSubmitting ? "Đang xử lý..." : "Xác nhận"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Footer />
     </div>

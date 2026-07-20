@@ -17,6 +17,7 @@ import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.entity.enums.PaymentStatus;
 import com.sportvenue.entity.enums.SlotStatus;
+import com.sportvenue.entity.enums.WalletTransactionType;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.DuplicateResourceException;
 import com.sportvenue.exception.ForbiddenException;
@@ -32,6 +33,7 @@ import com.sportvenue.repository.TimeSlotExceptionRepository;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.AdminDashboardService;
 import com.sportvenue.service.MaintenanceScheduleService;
+import com.sportvenue.service.WalletService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,7 +49,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.support.TransactionCallback;
-import com.sportvenue.service.PaymentService;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -65,7 +66,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -89,13 +92,13 @@ class BookingServiceImplTest {
     @Mock private BookingAccessoryRepository bookingAccessoryRepository;
     @Mock private TimeSlotExceptionRepository timeSlotExceptionRepository;
     @Mock private com.sportvenue.service.MaintenanceScheduleService maintenanceScheduleService;
-    @Mock private PaymentService paymentService;
     @Mock private TransactionTemplate transactionTemplate;
 
     @Mock private com.sportvenue.service.EmailService emailService;
     @Mock private com.sportvenue.service.NotificationService notificationService;
     @Mock private com.sportvenue.util.AfterCommitExecutor afterCommitExecutor;
     @Mock private AdminDashboardService adminDashboardService;
+    @Mock private WalletService walletService;
 
     @InjectMocks private BookingServiceImpl bookingService;
 
@@ -679,6 +682,62 @@ class BookingServiceImplTest {
         assertEquals("Customer cancelled due to rain", booking.getCancelReason());
         assertNull(booking.getExpiredAt());
         verify(bookingRepository, times(1)).save(booking);
+        verify(walletService).recordCustomerTransaction(
+                eq(customer.getUserId()),
+                eq(new BigDecimal("150000")),
+                eq(booking.getBookingId()),
+                eq(com.sportvenue.entity.enums.WalletTransactionType.CUSTOMER_REFUND_CREDIT),
+                any());
+    }
+
+    @Test
+    @DisplayName("cancelBooking: customer tự hủy đơn đã thanh toán -> phải khấu trừ ví Owner (tránh Platform thất thoát tiền)")
+    void cancelBooking_customerCancels_debitsOwnerWallet() {
+        User ownerUser = User.builder().userId(99).role(Role.builder().roleName("Owner").build()).build();
+        Owner owner = Owner.builder().ownerId(5).user(ownerUser).build();
+        stadium.setOwner(owner);
+
+        Booking booking = Booking.builder()
+                .bookingId(105)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("150000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .reservationDate(futureDate())
+                .build();
+
+        com.sportvenue.entity.Payment originalPayment = com.sportvenue.entity.Payment.builder()
+                .paymentId(1)
+                .booking(booking)
+                .amount(new BigDecimal("150000"))
+                .transactionCode("TXN123")
+                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.SUCCESS)
+                .build();
+
+        when(bookingRepository.findDetailById(105)).thenReturn(Optional.of(booking));
+        when(bookingRepository.findById(105)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentRepository.findSuccessPaymentsByBookingId(105)).thenReturn(List.of(originalPayment));
+        when(paymentRepository.save(any(com.sportvenue.entity.Payment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        bookingService.cancelBooking(principal, 105, "Customer cancelled due to rain");
+
+        // Khách được hoàn 150000 vào ví -> Owner PHẢI bị trừ đúng số đó khỏi ví nội bộ, nếu không
+        // Platform tự bỏ tiền trả khách mà không đòi lại được từ Owner.
+        verify(walletService).recordOwnerTransaction(
+                eq(owner.getOwnerId()),
+                eq(new BigDecimal("-150000")),
+                eq(105),
+                eq(WalletTransactionType.REFUND_DEBIT),
+                anyString());
+        verify(walletService).recordCustomerTransaction(
+                eq(customer.getUserId()),
+                eq(new BigDecimal("150000")),
+                eq(105),
+                eq(WalletTransactionType.CUSTOMER_REFUND_CREDIT),
+                anyString());
     }
 
     @Test
@@ -732,7 +791,7 @@ class BookingServiceImplTest {
         assertNotNull(response);
         assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
         assertEquals(PaymentStatus.REFUNDED, booking.getPaymentStatus());
-        verify(paymentService, never()).processRefund(any(), any(), any());
+        verify(walletService, never()).recordCustomerTransaction(any(), any(), any(), any(), any());
         verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(
                 p -> p.getAmount().compareTo(BigDecimal.ZERO) == 0));
         assertEquals(0, BigDecimal.ZERO.compareTo(response.getRefundedAmount()),
@@ -776,7 +835,7 @@ class BookingServiceImplTest {
 
         assertEquals(BookingStatus.CANCELLED, booking.getBookingStatus());
         assertEquals(PaymentStatus.REFUNDED, booking.getPaymentStatus());
-        verify(paymentService, never()).processRefund(any(), any(), any());
+        verify(walletService, never()).recordCustomerTransaction(any(), any(), any(), any(), any());
         verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(
                 p -> p.getAmount().compareTo(BigDecimal.ZERO) == 0));
     }
@@ -892,48 +951,6 @@ class BookingServiceImplTest {
         assertThrows(ForbiddenException.class,
                 () -> bookingService.cancelBooking(ownerPrincipal, 102, "Owner tries again with deposit"));
         verify(bookingRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("cancelBooking: gateway fails -> throws exception and keeps booking intact")
-    void cancelBooking_gatewayFails_keepsBookingIntact() {
-        // Arrange
-        Booking booking = Booking.builder()
-                .bookingId(100)
-                .user(customer)
-                .stadium(stadium)
-                .slot(slot)
-                .totalPrice(new BigDecimal("150000"))
-                .bookingStatus(BookingStatus.CONFIRMED)
-                .paymentStatus(PaymentStatus.PAID)
-                .reservationDate(futureDate())
-                .build();
-        
-        com.sportvenue.entity.Payment originalPayment = com.sportvenue.entity.Payment.builder()
-                .paymentId(1)
-                .booking(booking)
-                .amount(new BigDecimal("150000"))
-                .transactionCode("TXN123")
-                .paymentStatus(com.sportvenue.entity.enums.TransactionStatus.SUCCESS)
-                .build();
-
-        when(bookingRepository.findDetailById(100)).thenReturn(Optional.of(booking));
-        when(paymentRepository.findSuccessPaymentsByBookingId(100)).thenReturn(List.of(originalPayment));
-        when(paymentRepository.save(any(com.sportvenue.entity.Payment.class))).thenAnswer(inv -> inv.getArgument(0));
-        
-        org.mockito.Mockito.doThrow(new RuntimeException("Gateway error"))
-                .when(paymentService).processRefund(any(), any(), any());
-
-        // Act & Assert
-        BadRequestException ex = assertThrows(BadRequestException.class, 
-                () -> bookingService.cancelBooking(principal, 100, "Customer cancelled"));
-        
-        assertTrue(ex.getMessage().contains("Giao dịch hủy đơn thất bại"));
-        // Confirm booking state is untouched
-        assertEquals(BookingStatus.CONFIRMED, booking.getBookingStatus());
-        assertEquals(PaymentStatus.PAID, booking.getPaymentStatus());
-        // verify save on booking was NEVER called in Tx1 (since it was paid) and Tx2 didn't happen for success
-        verify(bookingRepository, never()).save(booking);
     }
 
     @Test
@@ -1361,6 +1378,337 @@ class BookingServiceImplTest {
         assertThrows(BadRequestException.class,
                 () -> bookingService.confirmCashPaymentReceived(ownerPrincipal, 205));
         verify(bookingRepository, never()).save(any());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // confirmRemainingPaymentReceived — Owner xác nhận đã thu nốt tiền mặt tại sân
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("confirmRemainingPaymentReceived: Owner đúng sân + DEPOSITED → PAID, KHÔNG cộng ví Owner "
+            + "(Owner đã cầm tiền mặt trực tiếp, tránh nhận tiền 2 lần)")
+    void confirmRemainingPaymentReceived_happyPath_doesNotCreditOwnerWallet() {
+        User ownerUser = User.builder().userId(99).role(Role.builder().roleName("Owner").build()).build();
+        Owner owner = Owner.builder().ownerId(5).user(ownerUser).build();
+        stadium.setOwner(owner);
+        UserPrincipal ownerPrincipal = new UserPrincipal(ownerUser);
+
+        Booking booking = Booking.builder()
+                .bookingId(220)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("270000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.DEPOSITED)
+                .build();
+
+        Payment depositPayment = Payment.builder()
+                .paymentId(1)
+                .booking(booking)
+                .amount(new BigDecimal("81000"))
+                .paymentMethod(com.sportvenue.entity.enums.PaymentMethod.VNPAY)
+                .paymentStatus(TransactionStatus.SUCCESS)
+                .build();
+
+        when(bookingRepository.findByIdForUpdate(220)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentRepository.findSuccessPaymentsByBookingId(220)).thenReturn(List.of(depositPayment));
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        BookingDetailResponse response = bookingService.confirmRemainingPaymentReceived(ownerPrincipal, 220);
+
+        assertEquals(PaymentStatus.PAID, booking.getPaymentStatus());
+        assertEquals(220, response.getBookingId());
+        verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(p ->
+                p.getPaymentMethod() == com.sportvenue.entity.enums.PaymentMethod.CASH
+                        && p.getAmount().compareTo(new BigDecimal("189000")) == 0
+                        && p.getPaymentStatus() == TransactionStatus.SUCCESS));
+        // Owner đã thu 189000 tiền mặt trực tiếp từ khách -> KHÔNG được cộng thêm vào ví nội bộ,
+        // nếu không Owner coi như "nhận tiền 2 lần" (offline + ảo trong ví).
+        verify(walletService, never()).recordOwnerTransaction(any(), any(), any(), any(), any());
+        verify(walletService, never()).recordCustomerTransaction(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("confirmRemainingPaymentReceived: gọi lại trên đơn đã PAID → idempotent, không tạo thêm Payment")
+    void confirmRemainingPaymentReceived_alreadyPaid_isIdempotent() {
+        User ownerUser = User.builder().userId(99).role(Role.builder().roleName("Owner").build()).build();
+        Owner owner = Owner.builder().ownerId(5).user(ownerUser).build();
+        stadium.setOwner(owner);
+        UserPrincipal ownerPrincipal = new UserPrincipal(ownerUser);
+
+        Booking booking = Booking.builder()
+                .bookingId(221)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("270000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .build();
+
+        when(bookingRepository.findByIdForUpdate(221)).thenReturn(Optional.of(booking));
+
+        BookingDetailResponse response = bookingService.confirmRemainingPaymentReceived(ownerPrincipal, 221);
+
+        assertEquals(221, response.getBookingId());
+        verify(paymentRepository, never()).save(any());
+        verify(bookingRepository, never()).save(any());
+        verify(walletService, never()).recordOwnerTransaction(any(), any(), any(), any(), any());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // payWithWallet — Customer tự thanh toán bằng Ví (FULL / DEPOSIT)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("payWithWallet: FULL, đủ số dư → PAID, debit ví Customer, credit Owner+Platform")
+    void payWithWallet_full_sufficientBalance_success() {
+        User ownerUser = User.builder().userId(99).role(Role.builder().roleName("Owner").build()).build();
+        Owner owner = Owner.builder().ownerId(5).user(ownerUser).build();
+        stadium.setOwner(owner);
+
+        Booking booking = Booking.builder()
+                .bookingId(300)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("270000"))
+                .serviceFee(new BigDecimal("20000"))
+                .bookingStatus(BookingStatus.PENDING_PAYMENT)
+                .paymentStatus(PaymentStatus.UNPAID)
+                .build();
+
+        when(bookingRepository.findByIdForUpdate(300)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        BookingDetailResponse response = bookingService.payWithWallet(principal, 300, "FULL");
+
+        assertEquals(BookingStatus.CONFIRMED, booking.getBookingStatus());
+        assertEquals(PaymentStatus.PAID, booking.getPaymentStatus());
+        assertEquals(300, response.getBookingId());
+        verify(walletService).debitCustomerWalletForPayment(
+                eq(customer.getUserId()), eq(new BigDecimal("270000")), eq(300), anyString());
+        verify(walletService).recordOwnerTransaction(
+                eq(owner.getOwnerId()), eq(new BigDecimal("250000")), eq(300),
+                eq(WalletTransactionType.BOOKING_CREDIT), anyString());
+        verify(walletService).recordPlatformTransaction(
+                eq(new BigDecimal("20000")), eq(300),
+                eq(WalletTransactionType.SERVICE_FEE_CREDIT), anyString());
+        verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(p ->
+                p.getPaymentMethod() == com.sportvenue.entity.enums.PaymentMethod.WALLET
+                        && p.getAmount().compareTo(new BigDecimal("270000")) == 0
+                        && p.getPaymentStatus() == TransactionStatus.SUCCESS));
+    }
+
+    @Test
+    @DisplayName("payWithWallet: DEPOSIT, đủ số dư → DEPOSITED, debit đúng 30%, credit Owner+Platform trừ phí ngay")
+    void payWithWallet_deposit_sufficientBalance_success() {
+        User ownerUser = User.builder().userId(99).role(Role.builder().roleName("Owner").build()).build();
+        Owner owner = Owner.builder().ownerId(5).user(ownerUser).build();
+        stadium.setOwner(owner);
+
+        Booking booking = Booking.builder()
+                .bookingId(301)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("270000"))
+                .serviceFee(new BigDecimal("20000"))
+                .bookingStatus(BookingStatus.PENDING_PAYMENT)
+                .paymentStatus(PaymentStatus.UNPAID)
+                .build();
+
+        when(bookingRepository.findByIdForUpdate(301)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        BookingDetailResponse response = bookingService.payWithWallet(principal, 301, "DEPOSIT");
+
+        assertEquals(BookingStatus.CONFIRMED, booking.getBookingStatus());
+        assertEquals(PaymentStatus.DEPOSITED, booking.getPaymentStatus());
+        assertEquals(301, response.getBookingId());
+        // 270000 * 0.3 = 81000 (đúng số nguyên, không cần làm tròn)
+        verify(walletService).debitCustomerWalletForPayment(
+                eq(customer.getUserId()), eq(new BigDecimal("81000")), eq(301), anyString());
+        verify(walletService).recordOwnerTransaction(
+                eq(owner.getOwnerId()), eq(new BigDecimal("61000")), eq(301),
+                eq(WalletTransactionType.BOOKING_CREDIT), anyString());
+        verify(walletService).recordPlatformTransaction(
+                eq(new BigDecimal("20000")), eq(301),
+                eq(WalletTransactionType.SERVICE_FEE_CREDIT), anyString());
+    }
+
+    @Test
+    @DisplayName("payWithWallet: số dư không đủ → BadRequestException lan truyền, KHÔNG đổi trạng thái booking")
+    void payWithWallet_insufficientBalance_propagatesBadRequest_bookingUnchanged() {
+        Booking booking = Booking.builder()
+                .bookingId(302)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("270000"))
+                .bookingStatus(BookingStatus.PENDING_PAYMENT)
+                .paymentStatus(PaymentStatus.UNPAID)
+                .build();
+
+        when(bookingRepository.findByIdForUpdate(302)).thenReturn(Optional.of(booking));
+        doThrow(new BadRequestException("Số dư ví không đủ, vui lòng nạp thêm hoặc chọn phương thức khác"))
+                .when(walletService).debitCustomerWalletForPayment(any(), any(), any(), any());
+
+        assertThrows(BadRequestException.class, () -> bookingService.payWithWallet(principal, 302, "FULL"));
+
+        assertEquals(BookingStatus.PENDING_PAYMENT, booking.getBookingStatus());
+        assertEquals(PaymentStatus.UNPAID, booking.getPaymentStatus());
+        verify(bookingRepository, never()).save(any());
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("payWithWallet: đơn đã PAID → idempotent, không debit ví lần nữa")
+    void payWithWallet_alreadyPaid_isIdempotent() {
+        Booking booking = Booking.builder()
+                .bookingId(303)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("270000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .build();
+
+        when(bookingRepository.findByIdForUpdate(303)).thenReturn(Optional.of(booking));
+
+        BookingDetailResponse response = bookingService.payWithWallet(principal, 303, "FULL");
+
+        assertEquals(303, response.getBookingId());
+        verify(walletService, never()).debitCustomerWalletForPayment(any(), any(), any(), any());
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("payWithWallet: booking không thuộc về Customer gọi → ForbiddenException")
+    void payWithWallet_notOwnBooking_throwsForbidden() {
+        User otherCustomer = User.builder().userId(88).role(Role.builder().roleName("Customer").build()).build();
+        Booking booking = Booking.builder()
+                .bookingId(304)
+                .user(otherCustomer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("270000"))
+                .bookingStatus(BookingStatus.PENDING_PAYMENT)
+                .paymentStatus(PaymentStatus.UNPAID)
+                .build();
+
+        when(bookingRepository.findByIdForUpdate(304)).thenReturn(Optional.of(booking));
+
+        assertThrows(ForbiddenException.class, () -> bookingService.payWithWallet(principal, 304, "FULL"));
+        verify(walletService, never()).debitCustomerWalletForPayment(any(), any(), any(), any());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // payRemainingWithWallet — Customer tự trả nốt phần còn lại của đơn đặt cọc
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("payRemainingWithWallet: đủ số dư → PAID, debit đúng phần còn lại, không trừ phí lần 2")
+    void payRemainingWithWallet_sufficientBalance_success() {
+        User ownerUser = User.builder().userId(99).role(Role.builder().roleName("Owner").build()).build();
+        Owner owner = Owner.builder().ownerId(5).user(ownerUser).build();
+        stadium.setOwner(owner);
+
+        Booking booking = Booking.builder()
+                .bookingId(310)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("270000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.DEPOSITED)
+                .build();
+
+        Payment depositPayment = Payment.builder()
+                .paymentId(1)
+                .booking(booking)
+                .amount(new BigDecimal("81000"))
+                .paymentMethod(com.sportvenue.entity.enums.PaymentMethod.WALLET)
+                .paymentStatus(TransactionStatus.SUCCESS)
+                .build();
+
+        when(bookingRepository.findByIdForUpdate(310)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentRepository.findSuccessPaymentsByBookingId(310)).thenReturn(List.of(depositPayment));
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        BookingDetailResponse response = bookingService.payRemainingWithWallet(principal, 310);
+
+        assertEquals(PaymentStatus.PAID, booking.getPaymentStatus());
+        assertEquals(310, response.getBookingId());
+        verify(walletService).debitCustomerWalletForPayment(
+                eq(customer.getUserId()), eq(new BigDecimal("189000")), eq(310), anyString());
+        verify(walletService).recordOwnerTransaction(
+                eq(owner.getOwnerId()), eq(new BigDecimal("189000")), eq(310),
+                eq(WalletTransactionType.BOOKING_CREDIT), anyString());
+        verify(walletService, never()).recordPlatformTransaction(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("payRemainingWithWallet: đơn đã PAID (race với confirmRemainingPaymentReceived) → idempotent, KHÔNG debit ví")
+    void payRemainingWithWallet_alreadyPaid_isIdempotent_noDoubleDebit() {
+        Booking booking = Booking.builder()
+                .bookingId(311)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("270000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.PAID)
+                .build();
+
+        when(bookingRepository.findByIdForUpdate(311)).thenReturn(Optional.of(booking));
+
+        BookingDetailResponse response = bookingService.payRemainingWithWallet(principal, 311);
+
+        assertEquals(311, response.getBookingId());
+        verify(walletService, never()).debitCustomerWalletForPayment(any(), any(), any(), any());
+        verify(walletService, never()).recordOwnerTransaction(any(), any(), any(), any(), any());
+        verify(bookingRepository, never()).save(any());
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("payRemainingWithWallet: số dư không đủ → BadRequestException lan truyền, KHÔNG đổi trạng thái booking")
+    void payRemainingWithWallet_insufficientBalance_propagatesBadRequest_bookingUnchanged() {
+        Booking booking = Booking.builder()
+                .bookingId(312)
+                .user(customer)
+                .stadium(stadium)
+                .slot(slot)
+                .totalPrice(new BigDecimal("270000"))
+                .bookingStatus(BookingStatus.CONFIRMED)
+                .paymentStatus(PaymentStatus.DEPOSITED)
+                .build();
+
+        Payment depositPayment = Payment.builder()
+                .paymentId(1)
+                .booking(booking)
+                .amount(new BigDecimal("81000"))
+                .paymentMethod(com.sportvenue.entity.enums.PaymentMethod.WALLET)
+                .paymentStatus(TransactionStatus.SUCCESS)
+                .build();
+
+        when(bookingRepository.findByIdForUpdate(312)).thenReturn(Optional.of(booking));
+        when(paymentRepository.findSuccessPaymentsByBookingId(312)).thenReturn(List.of(depositPayment));
+        doThrow(new BadRequestException("Số dư ví không đủ, vui lòng nạp thêm hoặc chọn phương thức khác"))
+                .when(walletService).debitCustomerWalletForPayment(any(), any(), any(), any());
+
+        assertThrows(BadRequestException.class, () -> bookingService.payRemainingWithWallet(principal, 312));
+
+        assertEquals(PaymentStatus.DEPOSITED, booking.getPaymentStatus());
+        verify(bookingRepository, never()).save(any());
+        verify(paymentRepository, never()).save(any());
     }
 
 }

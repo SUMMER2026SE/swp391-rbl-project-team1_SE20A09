@@ -20,8 +20,10 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -113,5 +115,51 @@ public class OwnerBookingController {
             @PathVariable Integer bookingId) {
 
         return ResponseEntity.ok(bookingService.confirmCashPaymentReceived(userPrincipal, bookingId));
+    }
+
+    /**
+     * Owner xác nhận ĐÃ THU phần còn lại của đơn đặt cọc khi khách tới sân.
+     * Idempotent — gọi lại trên đơn đã {@code PAID} trả về trạng thái hiện tại, không lỗi.
+     */
+    @PutMapping("/{bookingId}/confirm-remaining-payment")
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(summary = "Xác nhận đã thu nốt phần còn lại đơn đặt cọc",
+               description = "Owner xác nhận đã thu đủ phần còn lại tại sân cho đơn đang đặt cọc — "
+                       + "chuyển paymentStatus DEPOSITED sang PAID.")
+    public ResponseEntity<BookingDetailResponse> confirmRemainingPayment(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable Integer bookingId) {
+
+        return ResponseEntity.ok(bookingService.confirmRemainingPaymentReceived(userPrincipal, bookingId));
+    }
+
+    /**
+     * Tạo Walk-in booking (Khách đặt tại sân).
+     */
+    @PostMapping("/walk-in")
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(summary = "Tạo đơn đặt sân tại quầy",
+               description = "Owner tạo đơn cho khách vãng lai (không qua app). Đơn được tự động CONFIRMED và PAID.")
+    public ResponseEntity<BookingResponse> createWalkInBooking(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @Valid @RequestBody com.sportvenue.dto.request.CreateWalkInBookingRequest request) {
+
+        return ResponseEntity.ok(ownerBookingService.createWalkInBooking(userPrincipal.getUser().getUserId(), request));
+    }
+
+    /**
+     * Void (hủy) một đơn walk-in tạo nhầm.
+     * Chỉ owner sở hữu sân mới được thao tác. Slot được giải phóng về AVAILABLE.
+     */
+    @DeleteMapping("/walk-in/{bookingId}")
+    @PreAuthorize("hasRole('Owner')")
+    @Operation(summary = "Hủy đơn vãng lai tạo nhầm",
+               description = "Owner hủy một walk-in booking đang CONFIRMED do nhập nhầm. Slot sẽ được giải phóng lại.")
+    public ResponseEntity<BookingResponse> voidWalkInBooking(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable Integer bookingId) {
+
+        return ResponseEntity.ok(
+                ownerBookingService.voidWalkInBooking(userPrincipal.getUser().getUserId(), bookingId));
     }
 }

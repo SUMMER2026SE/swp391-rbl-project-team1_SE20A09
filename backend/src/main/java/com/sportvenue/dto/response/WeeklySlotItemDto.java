@@ -43,4 +43,7 @@ public class WeeklySlotItemDto {
     private Integer customerId;
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private String customerDisplayName;
+    /** true nếu booking chiếm slot này là walk-in (khách đặt tại quầy) — cho phép Owner void. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Boolean isWalkIn;
 }

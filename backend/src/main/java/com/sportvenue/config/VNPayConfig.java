@@ -37,6 +37,14 @@ public class VNPayConfig {
     private String frontendReturnUrl;
 
     /**
+     * FE URL mà BE redirect browser sang sau khi xử lý callback nạp tiền vào ví (khác trang kết
+     * quả thanh toán booking vì không có bookingId để hiển thị).
+     * VD: http://localhost:3000/wallet.
+     */
+    @Value("${vnpay.frontend-wallet-return-url:http://localhost:3000/wallet}")
+    private String frontendWalletReturnUrl;
+
+    /**
      * IPN URL — VNPay gọi server-to-server để xác nhận thanh toán.
      * Dev local: cần ngrok tunnel. VD: https://xxxx.ngrok.io/api/v1/payments/vnpay-ipn.
      */

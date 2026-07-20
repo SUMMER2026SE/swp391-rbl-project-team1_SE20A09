@@ -14,7 +14,7 @@ import {
   TrendingUp,
   CalendarRange,
   X,
-  HelpCircle
+  HelpCircle,
 } from "lucide-react";
 
 interface AdminSidebarProps {

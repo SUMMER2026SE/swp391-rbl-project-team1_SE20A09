@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -13,14 +14,27 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
-
 /**
  * Repository cho Stadium entity.
  * Stub — các thành viên (đặc biệt Huy, An, Hào) mở rộng thêm query khi cần.
  */
 @Repository
 public interface StadiumRepository extends JpaRepository<Stadium, Integer>, JpaSpecificationExecutor<Stadium> {
+
+    /**
+     * Dùng cho trang quản lý Owner: tải cả cả FACILITY lẫn COURT của owner,
+     * kèm eager-fetch parentStadium và childCourts để tránh N+1 query
+     * khi filterPendingStadiums / filterSuspendedStadiums duyệt hierarchy.
+     * Các field còn lại (sportType, images) đi kèm qua EntityGraph riêng.
+     */
+    @Query("""
+            SELECT DISTINCT s FROM Stadium s
+            LEFT JOIN FETCH s.parentStadium p
+            LEFT JOIN FETCH s.childCourts
+            WHERE s.owner.ownerId = :ownerId
+            AND s.stadiumStatus != com.sportvenue.entity.enums.StadiumStatus.CLOSED
+            """)
+    List<Stadium> findAllByOwnerForTree(@Param("ownerId") Integer ownerId);
 
     /** Lấy danh sách sân theo chủ sân — dùng cho trang quản lý của Owner. */
     @EntityGraph(attributePaths = {"sportType", "images"})

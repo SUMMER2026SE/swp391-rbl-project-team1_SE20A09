@@ -212,7 +212,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
             JOIN b.stadium s
             WHERE s.owner.user.email = :ownerEmail
             AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId)
-            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
+            AND (b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED OR (b.isWalkIn = true AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED))
             AND b.reservationDate BETWEEN :startDate AND :endDate
             GROUP BY b.reservationDate
             ORDER BY b.reservationDate ASC
@@ -237,7 +237,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
             JOIN b.stadium s
             WHERE s.owner.user.email = :ownerEmail
             AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId)
-            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
+            AND (b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED OR (b.isWalkIn = true AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED))
             AND b.reservationDate BETWEEN :startDate AND :endDate
             GROUP BY s.stadiumId, s.stadiumName
             ORDER BY COALESCE(SUM(
@@ -263,7 +263,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
             FROM Booking b
             JOIN b.stadium s
             WHERE s.owner.user.email = :ownerEmail
-            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED
+            AND (b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED OR (b.isWalkIn = true AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED))
             AND b.reservationDate BETWEEN :startDate AND :endDate
             """)
     BigDecimal sumOwnerCurrentMonthNetRevenue(
@@ -302,6 +302,15 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
             @Param("email") String email,
             @Param("status") BookingStatus status,
             Pageable pageable);
+
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.stadium.owner.user.email = :email
+            AND (:status IS NULL OR b.bookingStatus = :status)
+            """)
+    List<Booking> findAllByOwnerEmailAndStatus(
+            @Param("email") String email,
+            @Param("status") BookingStatus status);
 
     /** Lấy danh sách đặt sân của tất cả các sân thuộc Owner có phân trang và filter status */
     @EntityGraph(attributePaths = {"user", "stadium", "stadium.sportType", "slot"})

@@ -774,4 +774,37 @@ class StadiumServiceImplTest {
         assertEquals(30, response.getStadiumId());
         assertEquals("Sân số 1", response.getStadiumName());
     }
+
+    @Test
+    void getMyStadiums_FiltersStatusAndIncludesHierarchy() {
+        Owner owner = approvedOwner();
+        when(ownerRepository.findByUserUserId(1)).thenReturn(Optional.of(owner));
+        
+        Stadium parent = Stadium.builder()
+                .stadiumId(20)
+                .nodeType(StadiumNodeType.FACILITY)
+                .stadiumStatus(StadiumStatus.AVAILABLE)
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .build();
+        Stadium court = Stadium.builder()
+                .stadiumId(30)
+                .nodeType(StadiumNodeType.COURT)
+                .parentStadium(parent)
+                .stadiumStatus(StadiumStatus.MAINTENANCE)
+                .approvedStatus(ApprovedStatus.APPROVED)
+                .build();
+                
+        when(stadiumRepository.findAllByOwnerForTree(owner.getOwnerId()))
+                .thenReturn(List.of(court));
+                
+        when(stadiumMapper.toResponse(parent)).thenReturn(StadiumResponse.builder().stadiumId(20).build());
+        when(stadiumMapper.toResponse(court)).thenReturn(StadiumResponse.builder().stadiumId(30).build());
+        when(maintenanceScheduleService.isUnderMaintenanceNow(any())).thenReturn(java.util.Collections.emptyMap());
+
+        List<StadiumResponse> results = stadiumService.getMyStadiums(1, null, null, "SUSPENDED");
+        
+        assertEquals(2, results.size());
+        org.junit.jupiter.api.Assertions.assertTrue(results.stream().anyMatch(r -> r.getStadiumId() == 20));
+        org.junit.jupiter.api.Assertions.assertTrue(results.stream().anyMatch(r -> r.getStadiumId() == 30));
+    }
 }

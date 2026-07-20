@@ -35,6 +35,12 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import io.github.bucket4j.Bucket;
+import io.github.bucket4j.BucketConfiguration;
+import io.github.bucket4j.distributed.proxy.ProxyManager;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import com.sportvenue.exception.BadRequestException;
 
 /**
  * UC-CUS-01: Booking controller cho Customer — single booking flow.
@@ -57,6 +63,7 @@ public class BookingController {
     private final PaymentService paymentService;
     private final IdempotencyService idempotencyService;
     private final RefundService refundService;
+    private final ProxyManager<byte[]> proxyManager;
 
     @PostMapping("/api/v1/bookings")
     @PreAuthorize("hasRole('Customer')")
@@ -304,5 +311,63 @@ public class BookingController {
             @RequestParam(name = "paymentOption", defaultValue = "FULL") String paymentOption,
             jakarta.servlet.http.HttpServletRequest request) {
         return ResponseEntity.ok(paymentService.createVnpayPaymentUrl(userPrincipal, bookingId, paymentOption, request));
+    }
+
+    /**
+     * UC-CUS: Customer thanh toán đơn đặt sân bằng Ví nội bộ — thành công tức thời, không cần
+     * gateway. Chỉ cho trả đủ 100% số tiền đang cần thanh toán ở bước hiện tại (FULL hoặc DEPOSIT),
+     * không có chuyện trả 1 phần ví + 1 phần khác.
+     */
+    @PostMapping("/api/v1/bookings/{id}/pay-with-wallet")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Thanh toán đơn đặt sân bằng Ví",
+            description = "Trừ tiền từ Ví nội bộ của Customer cho đơn PENDING_PAYMENT — thành công tức thời "
+                    + "(giống VNPay), không qua bước chờ như CASH. paymentOption=FULL (100% tổng đơn) hoặc "
+                    + "DEPOSIT (30% tổng đơn). Trả 400 nếu số dư ví không đủ.")
+    public ResponseEntity<BookingDetailResponse> payBookingWithWallet(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable("id") Integer bookingId,
+            @RequestParam(name = "paymentOption", defaultValue = "FULL") String paymentOption) {
+        
+        String rateLimitKey = "rate_limit:pay_with_wallet:" + userPrincipal.getUserId();
+        BucketConfiguration bucketConfig = BucketConfiguration.builder()
+                .addLimit(limit -> limit.capacity(5).refillGreedy(5, Duration.ofMinutes(1)))
+                .build();
+        Bucket bucket = proxyManager.builder().build(rateLimitKey.getBytes(StandardCharsets.UTF_8), bucketConfig);
+        if (!bucket.tryConsume(1)) {
+            log.warn("Rate limit exceeded for pay-with-wallet: userId={}, bookingId={}", userPrincipal.getUserId(), bookingId);
+            throw new BadRequestException("Bạn thao tác quá nhanh. Vui lòng thử lại sau 1 phút.");
+        }
+
+        return ResponseEntity.ok(bookingService.payWithWallet(userPrincipal, bookingId, paymentOption));
+    }
+
+    /**
+     * UC-CUS: Customer tự thanh toán phần còn lại của đơn đặt cọc bằng Ví — thay thế cho việc
+     * phải đợi Owner xác nhận thu tiền mặt tại sân.
+     */
+    @PostMapping("/api/v1/bookings/{id}/pay-remaining-with-wallet")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Thanh toán nốt phần còn lại bằng Ví",
+            description = "Trừ tiền từ Ví nội bộ của Customer cho phần còn lại của đơn đang DEPOSITED — "
+                    + "không trừ thêm phí dịch vụ (đã trừ lúc đặt cọc). Trả 400 nếu số dư ví không đủ "
+                    + "hoặc booking không ở trạng thái DEPOSITED.")
+    public ResponseEntity<BookingDetailResponse> payRemainingWithWallet(
+            @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @PathVariable("id") Integer bookingId) {
+
+        String rateLimitKey = "rate_limit:pay_remaining_with_wallet:" + userPrincipal.getUserId();
+        BucketConfiguration bucketConfig = BucketConfiguration.builder()
+                .addLimit(limit -> limit.capacity(5).refillGreedy(5, Duration.ofMinutes(1)))
+                .build();
+        Bucket bucket = proxyManager.builder().build(rateLimitKey.getBytes(StandardCharsets.UTF_8), bucketConfig);
+        if (!bucket.tryConsume(1)) {
+            log.warn("Rate limit exceeded for pay-remaining-with-wallet: userId={}, bookingId={}", userPrincipal.getUserId(), bookingId);
+            throw new BadRequestException("Bạn thao tác quá nhanh. Vui lòng thử lại sau 1 phút.");
+        }
+
+        return ResponseEntity.ok(bookingService.payRemainingWithWallet(userPrincipal, bookingId));
     }
 }

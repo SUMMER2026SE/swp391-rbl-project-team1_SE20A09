@@ -108,15 +108,22 @@ export function CancelBookingDialog({
           ) : preview ? (
             <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 flex gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>
-                {preview.refundAmount > 0
-                  ? `Bạn sẽ được hoàn lại: ${preview.refundAmount.toLocaleString("vi-VN")} VND (${preview.refundPercentage}% số tiền thực thu).`
-                  : "Đơn hủy sát giờ hoặc chưa thanh toán, sẽ không được hoàn tiền."}
-              </span>
+              <div className="space-y-1">
+                <span>
+                  {preview.refundAmount > 0
+                    ? `Bạn sẽ được hoàn lại: ${preview.refundAmount.toLocaleString("vi-VN")} VND (${preview.refundPercentage}% số tiền thực thu).`
+                    : "Đơn này sẽ không được hoàn tiền."}
+                </span>
+                {preview.cancellationPolicyDescription && (
+                  <p className="text-[11px] font-normal text-amber-600/90 italic">
+                    {preview.cancellationPolicyDescription}
+                  </p>
+                )}
+              </div>
             </div>
           ) : (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
-              Nếu bạn đã thanh toán, chính sách hoàn tiền của sân sẽ được áp dụng.
+              Đơn này chưa ghi nhận thanh toán qua cổng (vd đang chờ thu tiền mặt tại sân) — hủy sẽ không phát sinh hoàn tiền.
             </p>
           )}
         </div>

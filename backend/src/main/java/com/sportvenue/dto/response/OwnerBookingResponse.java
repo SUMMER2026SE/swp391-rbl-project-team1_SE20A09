@@ -23,10 +23,13 @@ public class OwnerBookingResponse {
     private BigDecimal amount;
     private BigDecimal refundAmount;
     private BigDecimal serviceFee;
+    /** Số tiền thực tế đã thu qua cổng (VNPay/cash) tính đến hiện tại — full nếu PAID, một phần nếu DEPOSITED. */
+    private BigDecimal paidAmount;
     private String paymentStatus;
     private String status;
     private String notes;
     private String playTimeRaw;
+    private Boolean isWalkIn;
 
     @Data
     @Builder

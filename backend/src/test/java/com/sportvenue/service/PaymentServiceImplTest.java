@@ -8,6 +8,7 @@ import com.sportvenue.entity.enums.TransactionStatus;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.PaymentRepository;
 import com.sportvenue.service.impl.PaymentServiceImpl;
+import com.sportvenue.service.WalletService;
 import com.sportvenue.util.VNPayUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,7 @@ class PaymentServiceImplTest {
     @Mock private VNPayConfig vnPayConfig;
     @Mock private AdminDashboardService adminDashboardService;
     @Mock private VnpayRefundGateway vnpayRefundGateway;
+    @Mock private WalletService walletService;
 
     @InjectMocks
     private PaymentServiceImpl paymentService;

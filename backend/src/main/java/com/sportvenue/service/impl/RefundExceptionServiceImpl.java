@@ -24,7 +24,6 @@ import com.sportvenue.repository.RefundExceptionRepository;
 import com.sportvenue.repository.UserRepository;
 import com.sportvenue.service.CustomerNotificationService;
 import com.sportvenue.service.NotificationService;
-import com.sportvenue.service.PaymentService;
 import com.sportvenue.service.RefundExceptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +36,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
+import com.sportvenue.entity.Owner;
+import com.sportvenue.service.WalletService;
+import com.sportvenue.entity.enums.WalletTransactionType;
 import java.util.Optional;
 
 @Service
@@ -58,8 +60,8 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final CustomerNotificationService customerNotificationService;
-    private final PaymentService paymentService;
     private final TransactionTemplate transactionTemplate;
+    private final WalletService walletService;
 
     // ─────────────────────────────────────────────────────────
     // PUBLIC METHODS
@@ -121,22 +123,24 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
             throw new BadRequestException("Đơn này đã có yêu cầu ngoại lệ đang được xử lý.");
         }
         // 5. Phải từng có 1 giao dịch thanh toán THẬT qua cổng thanh toán
-        Payment originalPayment = paymentRepository.findSuccessPaymentsByBookingId(req.getBookingId())
-                .stream().findFirst().orElse(null);
-        if (originalPayment == null) {
+        // SUM toàn bộ payment SUCCESS (không chỉ lấy 1 dòng) — đơn cọc đã thu nốt có 2 dòng (VNPay
+        // cọc + CASH còn lại), .findFirst() sẽ hiểu nhầm đơn đã thanh toán đủ thành đơn đặt cọc.
+        List<Payment> successPayments = paymentRepository.findSuccessPaymentsByBookingId(req.getBookingId());
+        if (successPayments.isEmpty()) {
             throw new BadRequestException("Đơn này chưa từng thanh toán qua cổng thanh toán — không có gì để hoàn.");
         }
+        BigDecimal totalPaid = RefundServiceImpl.sumPaidAmount(successPayments);
         // 5.5 Chặn đơn đặt cọc — Chỉ áp dụng yêu cầu ngoại lệ cho đơn thanh toán toàn bộ (100%)
         BigDecimal totalPrice = booking.getTotalPrice() != null ? booking.getTotalPrice() : BigDecimal.ZERO;
         BigDecimal serviceFee = booking.getServiceFee() != null ? booking.getServiceFee() : BigDecimal.ZERO;
         BigDecimal baseCourtPrice = totalPrice.subtract(serviceFee);
-        if (originalPayment.getAmount().compareTo(baseCourtPrice) < 0) {
+        if (totalPaid.compareTo(baseCourtPrice) < 0) {
             throw new BadRequestException("Yêu cầu ngoại lệ không áp dụng cho đơn đặt cọc (chỉ áp dụng cho đơn thanh toán toàn bộ).");
         }
         // 6. [Guard] Chỉ áp dụng cho booking đã hoàn 0% hoặc một phần
         existingRefund.ifPresent(refund -> {
             if (refund.getPaymentStatus() != TransactionStatus.FAILED
-                    && refund.getAmount().abs().compareTo(originalPayment.getAmount()) >= 0) {
+                    && refund.getAmount().abs().compareTo(totalPaid) >= 0) {
                 throw new BadRequestException("Booking đã được hoàn tiền toàn bộ — không đủ điều kiện xin ngoại lệ.");
             }
         });
@@ -339,13 +343,17 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
      */
     private Payment createPendingRefundRecord(RefundExceptionRequest request) {
         Integer bookingId = request.getBooking().getBookingId();
-        Payment originalPayment = paymentRepository
-                .findSuccessPaymentsByBookingId(bookingId)
-                .stream().findFirst()
-                .orElseThrow(() -> new BadRequestException("Không tìm thấy giao dịch gốc cho booking #" + bookingId));
+        // SUM toàn bộ payment SUCCESS làm cơ sở tính hoàn (đơn cọc đã thu nốt có 2 dòng: VNPay cọc +
+        // CASH còn lại) — pickReferencePayment chỉ dùng để lấy phương thức/mã giao dịch tham chiếu.
+        List<Payment> successPayments = paymentRepository.findSuccessPaymentsByBookingId(bookingId);
+        if (successPayments.isEmpty()) {
+            throw new BadRequestException("Không tìm thấy giao dịch gốc cho booking #" + bookingId);
+        }
+        Payment originalPayment = RefundServiceImpl.pickReferencePayment(successPayments);
+        BigDecimal totalPaid = RefundServiceImpl.sumPaidAmount(successPayments);
 
         BigDecimal serviceFee = request.getBooking().getServiceFee() != null ? request.getBooking().getServiceFee() : BigDecimal.ZERO;
-        BigDecimal baseAmount = originalPayment.getAmount().subtract(serviceFee);
+        BigDecimal baseAmount = totalPaid.subtract(serviceFee);
         if (baseAmount.compareTo(BigDecimal.ZERO) < 0) {
             baseAmount = BigDecimal.ZERO;
         }
@@ -391,65 +399,66 @@ public class RefundExceptionServiceImpl implements RefundExceptionService {
     }
 
     /**
-     * Phase 2: Gọi gateway và cập nhật trạng thái Payment trong transaction riêng.
-     * Không có @Transactional bao ngoài — exception propagate về controller → client nhận 400.
-     * Gateway lỗi: Payment=FAILED, request status giữ nguyên APPROVED_* → Admin có thể audit/retry.
+     * Phase 2: Credit tiền hoàn vào Ví Customer + cập nhật trạng thái Payment — không còn gọi
+     * gateway VNPay nên không còn network call nào để chờ; toàn bộ cập nhật Payment + Booking +
+     * Owner wallet + Customer wallet chạy chung 1 transaction ACID duy nhất (không có @Transactional
+     * bao ngoài — exception propagate về controller → client nhận 400, rollback theo).
      *
      * <p>Chính sách phí dịch vụ FORCE_MAJEURE: hoàn refundPercent × (originalPayment.getAmount() - serviceFee)
      * (KHÔNG bao gồm phí dịch vụ, để giữ tính công bằng tài chính với Owner và đồng nhất với khách tự hủy standard).</p>
      */
     private void executeGatewayRefund(RefundExceptionRequest request, Payment pendingRefundPayment) {
-        Payment originalPayment = paymentRepository
-                .findSuccessPaymentsByBookingId(request.getBooking().getBookingId())
-                .stream().findFirst()
-                .orElseThrow(() -> new BadRequestException("Không tìm thấy giao dịch gốc."));
-
-        BigDecimal refundAmount = pendingRefundPayment.getAmount().abs();
-
-        boolean gatewaySuccess;
-        if (refundAmount.compareTo(BigDecimal.ZERO) == 0) {
-            // Top-up = 0đ (vd Admin duyệt đúng bằng % Owner đã duyệt trước) -> không có gì thêm
-            // để hoàn, không gọi gateway (gateway thật/mock đều từ chối yêu cầu hoàn 0đ).
-            gatewaySuccess = true;
-        } else {
-            gatewaySuccess = false;
-            try {
-                paymentService.processRefund(originalPayment, refundAmount,
-                        "Ngoại lệ bất khả kháng — Yêu cầu #" + request.getRequestId());
-                gatewaySuccess = true;
-            } catch (Exception e) {
-                log.error("[RefundException] Gateway failed for requestId={}, bookingId={}",
-                        request.getRequestId(), request.getBooking().getBookingId(), e);
-            }
+        List<Payment> successPayments = paymentRepository
+                .findSuccessPaymentsByBookingId(request.getBooking().getBookingId());
+        if (successPayments.isEmpty()) {
+            throw new BadRequestException("Không tìm thấy giao dịch gốc.");
         }
 
-        final boolean success = gatewaySuccess;
-        final Integer bookingId = request.getBooking().getBookingId();
-        final Integer paymentId = pendingRefundPayment.getPaymentId();
+        BigDecimal refundAmount = pendingRefundPayment.getAmount().abs();
+        Integer bookingId = request.getBooking().getBookingId();
+        Integer paymentId = pendingRefundPayment.getPaymentId();
 
         transactionTemplate.execute(status -> {
             Payment saved = paymentRepository.findById(paymentId).orElse(null);
             if (saved != null) {
-                saved.setPaymentStatus(success ? TransactionStatus.SUCCESS : TransactionStatus.FAILED);
+                saved.setPaymentStatus(TransactionStatus.SUCCESS);
                 paymentRepository.save(saved);
             }
-            if (success) {
-                Booking booking = bookingRepository.findById(bookingId).orElse(null);
-                if (booking != null) {
-                    booking.setPaymentStatus(PaymentStatus.REFUNDED);
-                    bookingRepository.save(booking);
+
+            Booking booking = bookingRepository.findByIdForUpdate(bookingId).orElse(null);
+            if (booking != null) {
+                booking.setPaymentStatus(PaymentStatus.REFUNDED);
+                bookingRepository.save(booking);
+
+                // Top-up = 0đ (vd Admin duyệt đúng bằng % Owner đã duyệt trước) -> không có gì
+                // thêm để hoàn, bỏ qua cả 2 bước debit Owner và credit Customer.
+                if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
+                    // Khấu trừ ví Owner số tiền thực hoàn (chính sách FORCE_MAJEURE luôn giữ lại phí dịch vụ nên platform không đổi)
+                    Owner resolvedOwner = booking.getStadium() != null ? booking.getStadium().resolveOwner() : null;
+                    if (resolvedOwner != null) {
+                        walletService.recordOwnerTransaction(
+                                resolvedOwner.getOwnerId(),
+                                refundAmount.negate(),
+                                booking.getBookingId(),
+                                WalletTransactionType.REFUND_DEBIT,
+                                "Hoàn tiền do sự kiện bất khả kháng (Force Majeure)"
+                        );
+                    }
+
+                    // Credit ví Customer — thay cho gọi gateway VNPay.
+                    walletService.recordCustomerTransaction(
+                            booking.getUser().getUserId(),
+                            refundAmount,
+                            booking.getBookingId(),
+                            WalletTransactionType.CUSTOMER_REFUND_CREDIT,
+                            "Hoàn tiền ngoại lệ bất khả kháng đơn đặt sân #" + booking.getBookingId()
+                    );
                 }
             }
             return null;
         });
 
-        if (!gatewaySuccess) {
-            throw new BadRequestException(
-                    "Yêu cầu đã được duyệt nhưng hoàn tiền thực tế thất bại do lỗi cổng thanh toán. "
-                    + "Admin vui lòng kiểm tra Payment #" + paymentId + " và retry thủ công.");
-        }
-
-        log.info("[RefundException] Phase2: Gateway refund SUCCESS for requestId={}, amount={}",
+        log.info("[RefundException] Phase2: Refund vào ví Customer SUCCESS for requestId={}, amount={}",
                 request.getRequestId(), refundAmount);
     }
 

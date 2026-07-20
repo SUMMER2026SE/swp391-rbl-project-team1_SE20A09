@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 
 /**
  * UC-CUS-01: Response trả về sau khi tạo booking đơn lẻ — chứa đầy đủ
@@ -45,6 +46,9 @@ public class BookingDetailResponse {
     @Schema(description = "Phí dịch vụ nền tảng đã gồm trong totalPrice", example = "20000.00")
     private BigDecimal serviceFee;
 
+    @Schema(description = "Danh sách phụ kiện đặt kèm")
+    private List<AccessoryInfo> accessories;
+
     @Schema(description = "Số tiền THỰC TẾ đã thanh toán qua cổng — bằng totalPrice nếu trả đủ, "
             + "chỉ bằng 30% totalPrice nếu đặt cọc. Null nếu chưa thanh toán.", example = "519750.00")
     private BigDecimal paidAmount;
@@ -63,6 +67,11 @@ public class BookingDetailResponse {
 
     @Schema(description = "Ghi chú của khách (nếu có)")
     private String note;
+
+    @Schema(description = "Lý do hủy đơn — NULL nếu đơn bị hệ thống tự hủy do hết hạn giữ chỗ "
+            + "(BookingExpiryScheduler không set field này), có giá trị nếu khách/chủ sân chủ động hủy.",
+            example = "Khách đổi lịch")
+    private String cancelReason;
 
     @Schema(description = "Thời điểm tạo đơn đặt")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
@@ -100,5 +109,15 @@ public class BookingDetailResponse {
         private String address;
         private String sportType;
         private String imageUrl;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AccessoryInfo {
+        private String accessoryName;
+        private Integer quantity;
+        private BigDecimal unitPrice;
     }
 }

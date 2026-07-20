@@ -43,6 +43,9 @@ public class BookingResponse {
      */
     private String recurringGroupId;
 
+    /** Đánh dấu đơn đặt tại quầy. */
+    private Boolean isWalkIn;
+
     /** Thông tin khách hàng (nested DTO). */
     @Getter
     @Setter

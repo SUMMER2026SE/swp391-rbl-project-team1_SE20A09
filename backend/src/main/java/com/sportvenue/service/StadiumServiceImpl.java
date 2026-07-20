@@ -129,50 +129,160 @@ public class StadiumServiceImpl implements StadiumService {
         Owner owner = ownerRepository.findByUserUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Owner profile not found for user ID: " + userId));
 
-        org.springframework.data.jpa.domain.Specification<Stadium> spec = (root, query, cb) -> {
-            java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
-            
-            // Must belong to this owner
-            predicates.add(cb.equal(root.get("owner").get("ownerId"), owner.getOwnerId()));
+        List<Stadium> matchedStadiums;
 
-            // Exclude CLOSED (deleted) stadiums
-            predicates.add(cb.notEqual(root.get("stadiumStatus"), StadiumStatus.CLOSED));
-            
-            
-            // Keyword search on name
-            if (org.springframework.util.StringUtils.hasText(search)) {
-                predicates.add(cb.like(cb.lower(root.get("stadiumName")), "%" + search.trim().toLowerCase() + "%"));
-            }
-            
-            // Filter by sport type
-            if (sportTypeId != null) {
-                predicates.add(cb.equal(root.get("sportType").get("sportTypeId"), sportTypeId));
-            }
-            
-            // Filter by status (AVAILABLE, MAINTENANCE)
-            if (org.springframework.util.StringUtils.hasText(status)) {
-                try {
-                    StadiumStatus statusEnum = StadiumStatus.valueOf(status.toUpperCase());
-                    predicates.add(cb.equal(root.get("stadiumStatus"), statusEnum));
-                } catch (IllegalArgumentException e) {
-                    // Ignore invalid status enum
+        boolean hasStatusFilter = org.springframework.util.StringUtils.hasText(status);
+        boolean hasOtherFilters = org.springframework.util.StringUtils.hasText(search) || sportTypeId != null;
+
+        if (hasStatusFilter && !hasOtherFilters) {
+            // Khi chỉ có status filter: dùng query tối ưu với JOIN FETCH để tránh N+1
+            // khi các method filter duyệt parentStadium / childCourts (đều là LAZY).
+            matchedStadiums = stadiumRepository.findAllByOwnerForTree(owner.getOwnerId());
+        } else {
+            // Trường hợp còn lại (no filter hoặc có keyword/sportType): dùng Specification
+            org.springframework.data.jpa.domain.Specification<Stadium> spec = (root, query, cb) -> {
+                java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
+
+                // Must belong to this owner
+                predicates.add(cb.equal(root.get("owner").get("ownerId"), owner.getOwnerId()));
+
+                // Exclude CLOSED (deleted) stadiums
+                predicates.add(cb.notEqual(root.get("stadiumStatus"), StadiumStatus.CLOSED));
+
+                // Keyword search on name
+                if (org.springframework.util.StringUtils.hasText(search)) {
+                    predicates.add(cb.like(cb.lower(root.get("stadiumName")), "%" + search.trim().toLowerCase() + "%"));
                 }
-            }
-            
-            return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
-        };
 
-        List<Stadium> stadiums = stadiumRepository.findAll(spec);
-        // Batch — tối đa 2 query bất kể danh sách dài bao nhiêu, thay vì gọi isStadiumUnderMaintenanceNow
-        // (1-2 query/lần) lặp lại cho từng sân.
-        java.util.Map<Integer, Boolean> maintenanceByStadiumId = maintenanceScheduleService.isUnderMaintenanceNow(stadiums);
-        return stadiums.stream()
+                // Filter by sport type
+                if (sportTypeId != null) {
+                    predicates.add(cb.equal(root.get("sportType").get("sportTypeId"), sportTypeId));
+                }
+
+                return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+            };
+            matchedStadiums = stadiumRepository.findAll(spec);
+        }
+
+        List<Stadium> resultList = filterStadiumsByStatus(matchedStadiums, status);
+        java.util.Map<Integer, Boolean> maintenanceByStadiumId = maintenanceScheduleService.isUnderMaintenanceNow(resultList);
+        return resultList.stream()
                 .map(stadium -> {
                     StadiumResponse response = stadiumMapper.toResponse(stadium);
                     response.setUnderMaintenanceToday(maintenanceByStadiumId.getOrDefault(stadium.getStadiumId(), false));
                     return response;
                 })
                 .toList();
+    }
+
+    private List<Stadium> filterStadiumsByStatus(List<Stadium> matchedStadiums, String status) {
+        if (!org.springframework.util.StringUtils.hasText(status)) {
+            java.util.Set<Stadium> finalStadiums = new java.util.LinkedHashSet<>(matchedStadiums);
+            for (Stadium stadium : matchedStadiums) {
+                if (stadium.getNodeType() == StadiumNodeType.COURT && stadium.getParentStadium() != null) {
+                    finalStadiums.add(stadium.getParentStadium());
+                }
+            }
+            return new java.util.ArrayList<>(finalStadiums);
+        }
+
+        String upperStatus = status.trim().toUpperCase();
+        java.util.Set<Stadium> filteredSet = new java.util.LinkedHashSet<>();
+        if ("ACTIVE".equals(upperStatus)) {
+            filterActiveStadiums(matchedStadiums, filteredSet);
+        } else if ("PENDING".equals(upperStatus)) {
+            filterPendingStadiums(matchedStadiums, filteredSet);
+        } else if ("SUSPENDED".equals(upperStatus)) {
+            filterSuspendedStadiums(matchedStadiums, filteredSet);
+        } else {
+            filterByEnumStatus(matchedStadiums, filteredSet, upperStatus);
+        }
+        return new java.util.ArrayList<>(filteredSet);
+    }
+
+    private void filterActiveStadiums(List<Stadium> matchedStadiums, java.util.Set<Stadium> filteredSet) {
+        for (Stadium s : matchedStadiums) {
+            if (s.getNodeType() == StadiumNodeType.FACILITY) {
+                if (s.getApprovedStatus() == ApprovedStatus.APPROVED && s.getStadiumStatus() == StadiumStatus.AVAILABLE) {
+                    filteredSet.add(s);
+                }
+            } else if (s.getNodeType() == StadiumNodeType.COURT) {
+                Stadium parent = s.getParentStadium();
+                if (s.getApprovedStatus() == ApprovedStatus.APPROVED && s.getStadiumStatus() == StadiumStatus.AVAILABLE) {
+                    if (parent != null && parent.getApprovedStatus() == ApprovedStatus.APPROVED && parent.getStadiumStatus() == StadiumStatus.AVAILABLE) {
+                        filteredSet.add(s);
+                        filteredSet.add(parent);
+                    }
+                }
+            }
+        }
+    }
+
+    private void filterPendingStadiums(List<Stadium> matchedStadiums, java.util.Set<Stadium> filteredSet) {
+        for (Stadium s : matchedStadiums) {
+            if (s.getNodeType() == StadiumNodeType.FACILITY) {
+                if (s.getApprovedStatus() == ApprovedStatus.PENDING) {
+                    filteredSet.add(s);
+                    if (s.getChildCourts() != null) {
+                        for (Stadium court : s.getChildCourts()) {
+                            if (court.getStadiumStatus() != StadiumStatus.CLOSED) {
+                                filteredSet.add(court);
+                            }
+                        }
+                    }
+                }
+            } else if (s.getNodeType() == StadiumNodeType.COURT) {
+                Stadium parent = s.getParentStadium();
+                if (parent != null && parent.getApprovedStatus() == ApprovedStatus.PENDING) {
+                    filteredSet.add(s);
+                    filteredSet.add(parent);
+                }
+            }
+        }
+    }
+
+    private void filterSuspendedStadiums(List<Stadium> matchedStadiums, java.util.Set<Stadium> filteredSet) {
+        for (Stadium s : matchedStadiums) {
+            if (s.getNodeType() == StadiumNodeType.FACILITY) {
+                if (s.getStadiumStatus() == StadiumStatus.MAINTENANCE) {
+                    filteredSet.add(s);
+                    if (s.getChildCourts() != null) {
+                        for (Stadium court : s.getChildCourts()) {
+                            if (court.getStadiumStatus() != StadiumStatus.CLOSED) {
+                                filteredSet.add(court);
+                            }
+                        }
+                    }
+                }
+            } else if (s.getNodeType() == StadiumNodeType.COURT) {
+                Stadium parent = s.getParentStadium();
+                if (s.getStadiumStatus() == StadiumStatus.MAINTENANCE) {
+                    filteredSet.add(s);
+                    if (parent != null && parent.getStadiumStatus() != StadiumStatus.CLOSED) {
+                        filteredSet.add(parent);
+                    }
+                } else if (parent != null && parent.getStadiumStatus() == StadiumStatus.MAINTENANCE) {
+                    filteredSet.add(s);
+                    filteredSet.add(parent);
+                }
+            }
+        }
+    }
+
+    private void filterByEnumStatus(List<Stadium> matchedStadiums, java.util.Set<Stadium> filteredSet, String upperStatus) {
+        try {
+            StadiumStatus statusEnum = StadiumStatus.valueOf(upperStatus);
+            for (Stadium s : matchedStadiums) {
+                if (s.getStadiumStatus() == statusEnum) {
+                    filteredSet.add(s);
+                    if (s.getNodeType() == StadiumNodeType.COURT && s.getParentStadium() != null) {
+                        filteredSet.add(s.getParentStadium());
+                    }
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            // Ignore invalid status enum
+        }
     }
 
     @Override
@@ -547,21 +657,28 @@ public class StadiumServiceImpl implements StadiumService {
         for (Booking booking : futureBookings) {
             booking.setBookingStatus(BookingStatus.CANCELLED);
             booking.setNote("Sân bị đóng cửa vĩnh viễn bởi chủ sân.");
+            booking.setCancelReason("Sân bị đóng cửa vĩnh viễn bởi chủ sân.");
             if (booking.getSlot() != null) {
                 booking.getSlot().setSlotStatus(com.sportvenue.entity.enums.SlotStatus.AVAILABLE);
             }
-            if (booking.getPaymentStatus() == com.sportvenue.entity.enums.PaymentStatus.PAID) {
+            // Walk-in bookings (user = null) thu tiền mặt trực tiếp — không đánh dấu REFUNDED.
+            // Chỉ đánh dấu REFUNDED cho đơn online đã thanh toán qua app.
+            if (booking.getUser() != null
+                    && booking.getPaymentStatus() == com.sportvenue.entity.enums.PaymentStatus.PAID) {
                 booking.setPaymentStatus(com.sportvenue.entity.enums.PaymentStatus.REFUNDED);
             }
             bookingRepository.save(booking);
 
-            notificationService.createNotification(
-                    booking.getUser().getUserId(),
-                    "Đơn đặt sân bị hủy",
-                    String.format("Đơn đặt sân %s của bạn đã bị hủy do sân ngừng hoạt động vĩnh viễn. Vui lòng liên hệ để được hoàn tiền nếu có.", stadium.getStadiumName()),
-                    com.sportvenue.entity.enums.NotificationType.BOOKING,
-                    booking.getBookingId().toString()
-            );
+            // Walk-in booking không có user → không gửi notification
+            if (booking.getUser() != null) {
+                notificationService.createNotification(
+                        booking.getUser().getUserId(),
+                        "Đơn đặt sân bị hủy",
+                        String.format("Đơn đặt sân %s của bạn đã bị hủy do sân ngừng hoạt động vĩnh viễn. Vui lòng liên hệ để được hoàn tiền nếu có.", stadium.getStadiumName()),
+                        com.sportvenue.entity.enums.NotificationType.BOOKING,
+                        booking.getBookingId().toString()
+                );
+            }
         }
     }
 

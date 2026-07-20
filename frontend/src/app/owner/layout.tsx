@@ -69,6 +69,7 @@ export default function OwnerLayout({
     if (path.startsWith("/owner/venues")) return { title: "Sân của tôi", subtitle: "Quản lý danh sách sân thể thao" };
     if (path.startsWith("/owner/bookings")) return { title: "Lịch đặt", subtitle: "Quản lý lịch đặt sân" };
     if (path.startsWith("/owner/revenue")) return { title: "Doanh thu", subtitle: "Thống kê doanh thu" };
+    if (path.startsWith("/owner/wallet")) return { title: "Ví của tôi", subtitle: "Quản lý ví và giao dịch" };
     if (path.startsWith("/owner/refund-exceptions")) return { title: "Ngoại lệ hoàn tiền", subtitle: "Duyệt yêu cầu hoàn tiền bất khả kháng" };
     if (path.startsWith("/owner/complaints")) return { title: "Khiếu nại", subtitle: "Quản lý khiếu nại khách hàng" };
     if (path.startsWith("/owner/reports")) return { title: "Báo cáo của tôi", subtitle: "Các báo cáo hành vi bạn đã gửi" };

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Clock, Calendar, Star, MessageSquare, AlertCircle, AlertTriangle, Loader2, Info, HelpCircle, ExternalLink } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Calendar, Star, MessageSquare, AlertCircle, AlertTriangle, Loader2, Info, HelpCircle, ExternalLink, WalletCards } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { post, get, put } from '@/lib/api';
 import { fetchBookingDetail, type BookingDetailItem } from '@/lib/bookings-api';
 import { initiateVnpayPayment } from '@/lib/payments-api';
+import { payRemainingWithWallet } from '@/lib/wallet-api';
 import { toast } from 'sonner';
 import Image from "next/image";
 import { useParams, useRouter } from 'next/navigation';
@@ -73,6 +74,22 @@ function getPaymentStatusBadge(status: string, refundedAmount?: number | null) {
   );
 }
 
+/** Giải thích chính sách hoàn tiền đã áp dụng — suy ra từ dữ liệu đã có, không gọi thêm API. */
+function getCancellationPolicyText(booking: BookingDetailItem): string | null {
+  if (booking.refundedAmount === null || booking.refundPercent === null) return null;
+  const wasDeposit = booking.paidAmount !== null && booking.paidAmount < booking.totalPrice;
+  if (wasDeposit && booking.refundPercent === 0) {
+    return "Đơn đặt cọc (30%): khách tự hủy mất toàn bộ tiền cọc — đây là chi phí giữ chỗ theo chính sách đặt cọc, không phải lỗi hệ thống.";
+  }
+  if (booking.refundPercent === 100) {
+    return "Hủy trước giờ chơi ≥ 24 giờ (hoặc do lỗi từ phía sân): hoàn lại toàn bộ giá trị sân.";
+  }
+  if (booking.refundPercent === 50) {
+    return "Hủy trước giờ chơi từ 12 đến dưới 24 giờ: hoàn lại 50% giá trị sân, phí dịch vụ không hoàn.";
+  }
+  return "Hủy quá sát giờ chơi (< 12 giờ) nên không được hoàn tiền theo chính sách.";
+}
+
 export default function BookingDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -85,11 +102,13 @@ export default function BookingDetailPage() {
   const [complaintText, setComplaintText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [payingRemaining, setPayingRemaining] = useState(false);
   const [chatStarting, setChatStarting] = useState(false);
   
   const [exceptionRequest, setExceptionRequest] = useState<any | null>(null);
   const [exceptionDialogOpen, setExceptionDialogOpen] = useState(false);
   const [escalating, setEscalating] = useState(false);
+  const [payRemainingConfirmOpen, setPayRemainingConfirmOpen] = useState(false);
 
   const handleMessageOwner = async () => {
     if (!booking?.ownerUserId) return toast.error('Không tìm thấy tài khoản chủ sân');
@@ -158,6 +177,22 @@ export default function BookingDetailPage() {
     } catch (err: any) {
       toast.error(err.message || 'Không thể tạo liên kết thanh toán VNPay');
       setPaying(false);
+    }
+  };
+
+  const handlePayRemainingWithWallet = async () => {
+    if (!booking) return;
+    if (payingRemaining) return;
+    try {
+      setPayingRemaining(true);
+      await payRemainingWithWallet(parseInt(booking.id, 10));
+      toast.success("Đã thanh toán nốt phần còn lại bằng Ví thành công!");
+      const updated = await fetchBookingDetail(booking.id);
+      setBooking(updated);
+    } catch (err: any) {
+      toast.error(err.message || "Không thể thanh toán bằng Ví");
+    } finally {
+      setPayingRemaining(false);
     }
   };
 
@@ -343,16 +378,39 @@ export default function BookingDetailPage() {
                 <h3 className="text-lg font-bold text-slate-900 mb-6">Thanh toán</h3>
                 
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500 font-medium">Giá sân</span>
-                    <span className="font-bold text-slate-700">
-                      {Math.max(0, booking.totalPrice - booking.serviceFee).toLocaleString('vi-VN')}đ
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500 font-medium">Phí dịch vụ</span>
-                    <span className="font-bold text-slate-700">{booking.serviceFee.toLocaleString('vi-VN')}đ</span>
-                  </div>
+                  {(() => {
+                    const accessoriesTotal = booking.accessories?.reduce((sum, a) => sum + (a.quantity * a.unitPrice), 0) || 0;
+                    const courtPrice = Math.max(0, booking.totalPrice - booking.serviceFee - accessoriesTotal);
+                    return (
+                      <>
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-slate-500 font-medium">Giá sân</span>
+                          <span className="font-bold text-slate-700">
+                            {courtPrice.toLocaleString('vi-VN')}đ
+                          </span>
+                        </div>
+                        {booking.accessories && booking.accessories.length > 0 && (
+                          <div className="space-y-2 border-t border-b border-dashed border-slate-100 py-2 my-1">
+                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Phụ kiện đặt kèm</p>
+                            {booking.accessories.map((a, idx) => (
+                              <div key={idx} className="flex justify-between items-center text-sm">
+                                <span className="text-slate-500 text-xs">
+                                  {a.accessoryName} <span className="text-slate-400">({a.quantity} x {a.unitPrice.toLocaleString('vi-VN')}đ)</span>
+                                </span>
+                                <span className="font-semibold text-slate-600 text-xs">
+                                  {(a.quantity * a.unitPrice).toLocaleString('vi-VN')}đ
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-slate-500 font-medium">Phí dịch vụ</span>
+                          <span className="font-bold text-slate-700">{booking.serviceFee.toLocaleString('vi-VN')}đ</span>
+                        </div>
+                      </>
+                    );
+                  })()}
                   
                   <Separator className="bg-slate-100" />
                   
@@ -392,15 +450,28 @@ export default function BookingDetailPage() {
                   {booking.paymentStatus === 'refunded' && (
                     <>
                       <Separator className="bg-slate-100" />
-                      <div className="flex justify-between items-center text-sm bg-blue-50/60 -mx-2 px-2 py-2 rounded-xl">
-                        <span className="text-blue-700 font-semibold">
-                          {booking.refundedAmount === 0 ? "Số tiền hoàn" : "Đã hoàn tiền"}
-                        </span>
-                        <span className="font-bold text-blue-700">
-                          {booking.refundedAmount !== null
-                            ? `${booking.refundedAmount.toLocaleString('vi-VN')}đ${booking.refundPercent !== null ? ` (${booking.refundPercent}%)` : ''}`
-                            : 'Đang xử lý...'}
-                        </span>
+                      <div className="flex flex-col gap-2 bg-blue-50/60 -mx-2 px-3 py-2.5 rounded-xl">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-blue-700 font-semibold">
+                            {booking.refundedAmount === 0 ? "Số tiền hoàn" : "Đã hoàn tiền"}
+                          </span>
+                          <span className="font-bold text-blue-700">
+                            {booking.refundedAmount !== null
+                              ? `${booking.refundedAmount.toLocaleString('vi-VN')}đ${booking.refundPercent !== null ? ` (${booking.refundPercent}%)` : ''}`
+                              : 'Đang xử lý...'}
+                          </span>
+                        </div>
+                        {getCancellationPolicyText(booking) && (
+                          <p className="text-[11px] text-blue-600/80 italic border-t border-blue-100/50 pt-1.5">
+                            {getCancellationPolicyText(booking)}
+                          </p>
+                        )}
+                        {booking.refundedAmount !== null && booking.refundedAmount > 0 && (
+                          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-blue-600/80 border-t border-blue-100/50 pt-1.5">
+                            <WalletCards className="h-3 w-3 shrink-0" />
+                            Số tiền hoàn đã được cộng vào Ví của bạn.
+                          </div>
+                        )}
                       </div>
                     </>
                   )}
@@ -427,6 +498,16 @@ export default function BookingDetailPage() {
                       Thanh toán cọc 30%
                     </Button>
                   </div>
+                )}
+                {booking.paymentStatus === 'deposited' && booking.status !== 'cancelled' && (
+                  <Button
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl h-11 gap-2 disabled:opacity-60"
+                    onClick={() => setPayRemainingConfirmOpen(true)}
+                    disabled={payingRemaining}
+                  >
+                    <WalletCards className="h-4 w-4" />
+                    {payingRemaining ? "Đang xử lý..." : "Thanh toán nốt bằng Ví"}
+                  </Button>
                 )}
                 <p className="text-[10px] text-slate-400 text-center">
                   Đặt lúc: {booking.createdAt}
@@ -594,23 +675,33 @@ export default function BookingDetailPage() {
               )}
               {booking.status === 'cancelled' && (
                 <>
-                  <Button 
-                    variant="outline" 
-                    className="rounded-2xl flex-1 font-bold h-12 bg-transparent text-white border-white/20 hover:bg-white/10"
-                    onClick={() => setComplaintOpen(true)}
-                  >
-                    <AlertCircle className="h-4 w-4 mr-2 text-red-400" />
-                    Gửi khiếu nại
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="rounded-2xl flex-1 font-bold h-12 bg-transparent text-white border-white/20 hover:bg-white/10"
-                    onClick={() => setReportOpen(true)}
-                    disabled={!booking.ownerUserId}
-                  >
-                    <AlertTriangle className="h-4 w-4 mr-2 text-amber-400" />
-                    Báo cáo hành vi
-                  </Button>
+                  {/* Chỉ hiện khiếu nại/báo cáo khi đơn có cancelReason (huỷ thủ công) HOẶC đã từng
+                      thực sự thu tiền rồi hoàn (paymentStatus=refunded) — tức có giao dịch thật.
+                      cancelReason có thể NULL ngay cả khi huỷ thủ công nếu người hủy để trống lý do
+                      (vd Owner hủy/hoàn tiền không bắt buộc nhập lý do), nên không thể chỉ dựa vào
+                      cancelReason một mình. Chỉ khi CẢ HAI đều rỗng — auto-cancel do hết hạn giữ chỗ,
+                      chưa từng thanh toán — thì mới thực sự chưa có gì để khiếu nại. */}
+                  {(booking.cancelReason != null || booking.paymentStatus.toLowerCase() === 'refunded') && (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="rounded-2xl flex-1 font-bold h-12 bg-transparent text-white border-white/20 hover:bg-white/10"
+                        onClick={() => setComplaintOpen(true)}
+                      >
+                        <AlertCircle className="h-4 w-4 mr-2 text-red-400" />
+                        Gửi khiếu nại
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="rounded-2xl flex-1 font-bold h-12 bg-transparent text-white border-white/20 hover:bg-white/10"
+                        onClick={() => setReportOpen(true)}
+                        disabled={!booking.ownerUserId}
+                      >
+                        <AlertTriangle className="h-4 w-4 mr-2 text-amber-400" />
+                        Báo cáo hành vi
+                      </Button>
+                    </>
+                  )}
                   <Button asChild variant="secondary" className="rounded-2xl flex-1 font-bold h-12">
                     <Link href="/search">Đặt sân khác</Link>
                   </Button>
@@ -672,6 +763,47 @@ export default function BookingDetailPage() {
           }
         }}
       />
+
+      {/* Pay Remaining Confirmation Dialog */}
+      <Dialog open={payRemainingConfirmOpen} onOpenChange={setPayRemainingConfirmOpen}>
+        <DialogContent className="rounded-3xl sm:max-w-md p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">Xác nhận thanh toán</DialogTitle>
+            <DialogDescription className="text-slate-500 font-medium">
+              Bạn có chắc chắn muốn thanh toán nốt phần còn lại bằng Ví nội bộ của mình?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="flex justify-between items-center text-sm border-b border-slate-100 pb-3">
+              <span className="text-slate-500">Số tiền thanh toán:</span>
+              <span className="font-bold text-slate-800 text-base">
+                {booking && (booking.totalPrice - (booking.paidAmount || 0)).toLocaleString('vi-VN')}đ
+              </span>
+            </div>
+            {booking && (
+              <div className="mt-3 text-xs text-amber-600 bg-amber-50 rounded-xl p-3 flex gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>Tiền sẽ được trừ trực tiếp từ Ví của bạn và chuyển trạng thái đơn sang ĐÃ THANH TOÁN.</span>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="ghost" onClick={() => setPayRemainingConfirmOpen(false)} className="rounded-xl flex-1">
+              Quay lại
+            </Button>
+            <Button 
+              onClick={async () => {
+                await handlePayRemainingWithWallet();
+                setPayRemainingConfirmOpen(false);
+              }} 
+              disabled={payingRemaining} 
+              className="rounded-xl flex-1 bg-emerald-600 hover:bg-emerald-700 font-bold"
+            >
+              {payingRemaining ? "Đang xử lý..." : "Xác nhận"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

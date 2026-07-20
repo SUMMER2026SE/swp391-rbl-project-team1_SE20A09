@@ -1,5 +1,6 @@
 package com.sportvenue.util;
 
+import jakarta.servlet.http.HttpServletRequest;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.UnsupportedEncodingException;
@@ -157,6 +158,22 @@ public final class VNPayUtil {
             return Integer.parseInt(orderInfo.substring(hashIdx + 1).trim());
         } catch (NumberFormatException ex) {
             return null;
+        }
+    }
+
+    /**
+     * Lấy IP client — thử X-Forwarded-For trước (khi qua proxy), fallback sang remoteAddr.
+     * Giá trị gửi cho VNPay không bắt buộc chính xác trong sandbox nhưng vẫn cần có.
+     */
+    public static String resolveClientIp(HttpServletRequest request) {
+        try {
+            String ipAddress = request.getHeader("X-Forwarded-For");
+            if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
+                ipAddress = request.getRemoteAddr();
+            }
+            return ipAddress;
+        } catch (Exception ex) {
+            return "127.0.0.1";
         }
     }
 }
