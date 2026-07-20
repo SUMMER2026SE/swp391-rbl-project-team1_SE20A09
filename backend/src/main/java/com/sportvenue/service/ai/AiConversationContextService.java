@@ -292,7 +292,9 @@ public class AiConversationContextService {
     }
 
     public void clearBookingDraft(String conversationKey) {
-        if (conversationKey == null) return;
+        if (conversationKey == null) {
+            return;
+        }
         ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
         ctx.setBookingDraft(null);
         save(conversationKey, ctx);

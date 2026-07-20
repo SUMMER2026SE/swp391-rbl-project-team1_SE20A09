@@ -435,5 +435,5 @@ public class CancelBookingHandler {
             String errorMessage,
             List<Booking> bookings,
             String confirmMessage
-    ) {}
+    ) { }
 }

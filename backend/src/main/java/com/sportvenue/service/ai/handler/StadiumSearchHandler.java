@@ -94,14 +94,7 @@ public class StadiumSearchHandler {
         }
 
         if (isGpsSearch(args)) {
-            if (userLat == null || userLng == null) {
-                return AiChatTurnResponse.builder()
-                        .intent("need_more_info")
-                        .message("Để tìm sân gần bạn nhất, mình cần quyền truy cập vị trí của bạn. " +
-                                "Vui lòng cho phép trình duyệt chia sẻ vị trí và thử lại nhé!")
-                        .build();
-            }
-            return handleGpsSearch(args, llmMessage, conversationKey, userLat, userLng);
+            return resolveGpsSearch(args, llmMessage, conversationKey, userLat, userLng);
         }
 
         // --- MERGE FROM CONTEXT ---
@@ -147,25 +140,10 @@ public class StadiumSearchHandler {
         // BUG B FIX: Nếu không tìm thấy sân VÀ date chưa được extract từ LLM,
         // thử parse relative date từ raw message và tìm lại
         if (stadiums.isEmpty() && targetDateStr == null && llmMessage != null) {
-            LocalDate parsedDate = relativeDateParser.parse(llmMessage);
-            if (parsedDate != null) {
-                // Rebuild search request with parsed date
-                StadiumSearchRequest.StadiumSearchRequestBuilder retryBuilder = StadiumSearchRequest.builder();
-                applyFilters(retryBuilder, args, context);
-                retryBuilder.targetDate(parsedDate);
-                retryBuilder.page(0);
-                retryBuilder.size(AI_SEARCH_RESULT_LIMIT);
-
-                StadiumSearchRequest retryRequest = retryBuilder.build();
-                PageResponse<StadiumResponse> retryResult = publicStadiumService.searchStadiums(retryRequest);
-                stadiums = getStadiumsWithFallback(retryResult.getContent(), retryRequest);
-
-                if (!stadiums.isEmpty()) {
-                    // Update context with parsed date
-                    String parsedDateStr = parsedDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
-                    conversationContextService.saveCurrentFilters(conversationKey, context.sportName, context.district, context.province, parsedDateStr, startTimeStr);
-                    relaxationNote = "Đã tìm thấy sân cho ngày " + parsedDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) + " (mình hiểu '" + extractDateHint(llmMessage) + "' là ngày này):";
-                }
+            RetryWithDateResult retry = retryWithParsedDate(args, llmMessage, context, startTimeStr, conversationKey);
+            if (!retry.stadiums().isEmpty()) {
+                stadiums = retry.stadiums();
+                relaxationNote = retry.relaxationNote();
             }
         }
 
@@ -186,6 +164,51 @@ public class StadiumSearchHandler {
                 .intent("search_stadiums")
                 .stadiums(stadiums)
                 .build();
+    }
+
+    private AiChatTurnResponse resolveGpsSearch(JsonNode args, String llmMessage, String conversationKey,
+                                                 Double userLat, Double userLng) {
+        if (userLat == null || userLng == null) {
+            return AiChatTurnResponse.builder()
+                    .intent("need_more_info")
+                    .message("Để tìm sân gần bạn nhất, mình cần quyền truy cập vị trí của bạn. " +
+                            "Vui lòng cho phép trình duyệt chia sẻ vị trí và thử lại nhé!")
+                    .build();
+        }
+        return handleGpsSearch(args, llmMessage, conversationKey, userLat, userLng);
+    }
+
+    private record RetryWithDateResult(List<StadiumResponse> stadiums, String relaxationNote) { }
+
+    /** BUG B FIX: Không tìm thấy sân + date chưa được LLM extract → thử parse relative date từ raw message và tìm lại. */
+    private RetryWithDateResult retryWithParsedDate(JsonNode args, String llmMessage, SearchContextHolder context,
+                                                      String startTimeStr, String conversationKey) {
+        LocalDate parsedDate = relativeDateParser.parse(llmMessage);
+        if (parsedDate == null) {
+            return new RetryWithDateResult(List.of(), null);
+        }
+
+        // Rebuild search request with parsed date
+        StadiumSearchRequest.StadiumSearchRequestBuilder retryBuilder = StadiumSearchRequest.builder();
+        applyFilters(retryBuilder, args, context);
+        retryBuilder.targetDate(parsedDate);
+        retryBuilder.page(0);
+        retryBuilder.size(AI_SEARCH_RESULT_LIMIT);
+
+        StadiumSearchRequest retryRequest = retryBuilder.build();
+        PageResponse<StadiumResponse> retryResult = publicStadiumService.searchStadiums(retryRequest);
+        List<StadiumResponse> stadiums = getStadiumsWithFallback(retryResult.getContent(), retryRequest);
+
+        if (stadiums.isEmpty()) {
+            return new RetryWithDateResult(stadiums, null);
+        }
+
+        // Update context with parsed date
+        String parsedDateStr = parsedDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        conversationContextService.saveCurrentFilters(conversationKey, context.sportName, context.district, context.province, parsedDateStr, startTimeStr);
+        String note = "Đã tìm thấy sân cho ngày " + parsedDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                + " (mình hiểu '" + extractDateHint(llmMessage) + "' là ngày này):";
+        return new RetryWithDateResult(stadiums, note);
     }
 
     private boolean isGpsSearch(JsonNode args) {

@@ -103,121 +103,9 @@ public class AiChatServiceImpl implements AiChatService {
         // This catches cases where the LLM doesn't follow the guest-suffix.md rule correctly
         final boolean isGuest = (userId == null);
 
-        // FAST PATH: Nếu đang ở bước chờ xác nhận (Cancel Confirm), BỎ QUA GỌI LLM hoàn toàn
-        if (conversationContextService.isAwaitingCancelConfirmation(conversationKey)) {
-            log.info("FAST PATH: Bỏ qua LLM do đang chờ xác nhận hủy đơn (isAwaitingCancelConfirmation=true)");
-            long handlerStartTime = System.currentTimeMillis();
-            AiChatTurnResponse response = cancelBookingHandler.handle(null, request.getMessage(), userId, conversationKey);
-            long processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
-            
-            // Tạo mock object để ghi log
-            ExtractedIntentResult dummyIntent = ExtractedIntentResult.unknown();
-            dummyIntent.setIntent("cancel_booking_fast_path");
-            IntentParseResult dummyParse = new IntentParseResult(dummyIntent, true, "FAST_PATH", null);
-            GroqClient.GroqResult dummyGroq = new GroqClient.GroqResult("FAST_PATH_BYPASS", 0, 0, 0);
-            
-            saveUsageLog(userId, dummyParse, dummyGroq, request.getMessage(), response, 0, processingTimeHandlerMs);
-            return response;
-        }
-
-        // FAST PATH: Nếu đang chờ Booking Confirm (Có draft booking)
-        if (conversationContextService.isAwaitingBookingConfirmation(conversationKey)) {
-            String msgLower = request.getMessage().toLowerCase(Locale.ROOT).trim();
-            if (isLikelyConfirmMessage(msgLower) || msgLower.equals("không") || msgLower.equals("cancel") || msgLower.equals("hủy")) {
-                log.info("FAST PATH: Bỏ qua LLM do đang chờ xác nhận đặt sân (isAwaitingBookingConfirmation=true)");
-                long handlerStartTime = System.currentTimeMillis();
-                AiChatTurnResponse response = bookingHandler.handleConfirmation(request.getMessage(), userId, conversationKey);
-                long processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
-                
-                ExtractedIntentResult dummyIntent = ExtractedIntentResult.unknown();
-                dummyIntent.setIntent("create_booking_fast_path");
-                IntentParseResult dummyParse = new IntentParseResult(dummyIntent, true, "FAST_PATH", null);
-                GroqClient.GroqResult dummyGroq = new GroqClient.GroqResult("FAST_PATH_BYPASS", 0, 0, 0);
-                
-                saveUsageLog(userId, dummyParse, dummyGroq, request.getMessage(), response, 0, processingTimeHandlerMs);
-                return response;
-            }
-        }
-
-        // FAST PATH: Regex bắt index sân tường minh (sân số N, sân thứ N, sân đầu tiên)
-        // Chỉ chạy nếu đã có context hiển thị sân/đơn trước đó
-        String rawMessage = request.getMessage().toLowerCase(Locale.ROOT).trim();
-        java.util.regex.Matcher indexMatcher = java.util.regex.Pattern.compile("^(sân|đơn|kèo)\\s+(số\\s+|thứ\\s+)?(\\d+|đầu\\s*tiên)$").matcher(rawMessage);
-        if (indexMatcher.matches()) {
-            String type = indexMatcher.group(1);
-            String numberStr = indexMatcher.group(3);
-            int targetIndex = -1;
-            if (numberStr.equals("đầu tiên") || numberStr.equals("đầu tiên")) {
-                targetIndex = 0;
-            } else {
-                try {
-                    targetIndex = Integer.parseInt(numberStr) - 1; // 1-based to 0-based
-                } catch (Exception ignored) {}
-            }
-            if (targetIndex >= 0) {
-                // Xác định context hiện tại có gì
-                List<Integer> lastShownStadiums = conversationContextService.getLastShownStadiumIds(conversationKey);
-                List<Integer> lastShownBookings = conversationContextService.getLastShownBookingIds(conversationKey);
-                
-                String fastPathIntent = null;
-                com.fasterxml.jackson.databind.node.ObjectNode dummyParams = objectMapper.createObjectNode();
-                dummyParams.put("targetIndex", targetIndex);
-
-                if ("đơn".equals(type) && lastShownBookings != null && !lastShownBookings.isEmpty()) {
-                    fastPathIntent = "cancel_booking";
-                } else if (("sân".equals(type) || "kèo".equals(type)) && lastShownStadiums != null && !lastShownStadiums.isEmpty()) {
-                    fastPathIntent = "search_stadiums";
-                }
-                
-                if (fastPathIntent != null) {
-                    log.info("FAST PATH: Bỏ qua LLM do bắt được index tường minh '{}' -> index={}", rawMessage, targetIndex);
-                    ExtractedIntentResult dummyIntent = ExtractedIntentResult.unknown();
-                    dummyIntent.setIntent(fastPathIntent);
-                    dummyIntent.setParams(dummyParams);
-                    dummyIntent.setConfidence(1.0);
-                    
-                    long handlerStartTime = System.currentTimeMillis();
-                    AiChatTurnResponse response = dispatch(dummyIntent, request.getMessage(), conversationKey, userId, request.getUserLat(), request.getUserLng());
-                    long processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
-                    
-                    IntentParseResult dummyParse = new IntentParseResult(dummyIntent, true, "FAST_PATH", null);
-                    GroqClient.GroqResult dummyGroq = new GroqClient.GroqResult("FAST_PATH_BYPASS", 0, 0, 0);
-                    saveUsageLog(userId, dummyParse, dummyGroq, request.getMessage(), response, 0, processingTimeHandlerMs);
-                    return response;
-                }
-            }
-        }
-
-        // FAST PATH: Regex bắt mã ID tường minh (#12345, mã 12345)
-        java.util.regex.Matcher idMatcher = java.util.regex.Pattern.compile("^(#|mã\\s+)?(\\d{3,6})$").matcher(rawMessage);
-        if (idMatcher.matches()) {
-            int id = Integer.parseInt(idMatcher.group(2));
-            List<Integer> lastShownBookings = conversationContextService.getLastShownBookingIds(conversationKey);
-            
-            String fastPathIntent = null;
-            com.fasterxml.jackson.databind.node.ObjectNode dummyParams = objectMapper.createObjectNode();
-            
-            if (lastShownBookings != null && !lastShownBookings.isEmpty()) {
-                fastPathIntent = "cancel_booking";
-                dummyParams.put("bookingId", id);
-            }
-            
-            if (fastPathIntent != null) {
-                log.info("FAST PATH: Bỏ qua LLM do bắt được ID tường minh '{}' -> id={}", rawMessage, id);
-                ExtractedIntentResult dummyIntent = ExtractedIntentResult.unknown();
-                dummyIntent.setIntent(fastPathIntent);
-                dummyIntent.setParams(dummyParams);
-                dummyIntent.setConfidence(1.0);
-                
-                long handlerStartTime = System.currentTimeMillis();
-                AiChatTurnResponse response = dispatch(dummyIntent, request.getMessage(), conversationKey, userId, request.getUserLat(), request.getUserLng());
-                long processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
-                
-                IntentParseResult dummyParse = new IntentParseResult(dummyIntent, true, "FAST_PATH", null);
-                GroqClient.GroqResult dummyGroq = new GroqClient.GroqResult("FAST_PATH_BYPASS", 0, 0, 0);
-                saveUsageLog(userId, dummyParse, dummyGroq, request.getMessage(), response, 0, processingTimeHandlerMs);
-                return response;
-            }
+        AiChatTurnResponse fastPathResponse = tryFastPaths(request, userId, conversationKey);
+        if (fastPathResponse != null) {
+            return fastPathResponse;
         }
 
         List<GroqClient.ChatMessage> history = toGroqHistory(request.getHistory());
@@ -256,6 +144,156 @@ public class AiChatServiceImpl implements AiChatService {
 
         saveUsageLog(userId, parseResult, result, request.getMessage(), response, latencyMs, processingTimeHandlerMs);
 
+        return response;
+    }
+
+    /**
+     * Thử lần lượt các fast-path bắt cứng bằng regex/state (bỏ qua gọi LLM hoàn toàn) — trả về
+     * response nếu match, null nếu không path nào áp dụng (đi tiếp luồng gọi LLM bình thường).
+     */
+    private AiChatTurnResponse tryFastPaths(AiChatTurnRequest request, Integer userId, String conversationKey) {
+        AiChatTurnResponse response = tryCancelConfirmFastPath(request, userId, conversationKey);
+        if (response != null) {
+            return response;
+        }
+        response = tryBookingConfirmFastPath(request, userId, conversationKey);
+        if (response != null) {
+            return response;
+        }
+        response = tryIndexFastPath(request, conversationKey, userId);
+        if (response != null) {
+            return response;
+        }
+        return tryIdFastPath(request, conversationKey, userId);
+    }
+
+    /** FAST PATH: Nếu đang ở bước chờ xác nhận (Cancel Confirm), BỎ QUA GỌI LLM hoàn toàn. */
+    private AiChatTurnResponse tryCancelConfirmFastPath(AiChatTurnRequest request, Integer userId, String conversationKey) {
+        if (!conversationContextService.isAwaitingCancelConfirmation(conversationKey)) {
+            return null;
+        }
+        log.info("FAST PATH: Bỏ qua LLM do đang chờ xác nhận hủy đơn (isAwaitingCancelConfirmation=true)");
+        long handlerStartTime = System.currentTimeMillis();
+        AiChatTurnResponse response = cancelBookingHandler.handle(null, request.getMessage(), userId, conversationKey);
+        long processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
+
+        // Tạo mock object để ghi log
+        ExtractedIntentResult dummyIntent = ExtractedIntentResult.unknown();
+        dummyIntent.setIntent("cancel_booking_fast_path");
+        IntentParseResult dummyParse = new IntentParseResult(dummyIntent, true, "FAST_PATH", null);
+        GroqClient.GroqResult dummyGroq = new GroqClient.GroqResult("FAST_PATH_BYPASS", 0, 0, 0);
+
+        saveUsageLog(userId, dummyParse, dummyGroq, request.getMessage(), response, 0, processingTimeHandlerMs);
+        return response;
+    }
+
+    /** FAST PATH: Nếu đang chờ Booking Confirm (có draft booking) và message là confirm/cancel keyword. */
+    private AiChatTurnResponse tryBookingConfirmFastPath(AiChatTurnRequest request, Integer userId, String conversationKey) {
+        if (!conversationContextService.isAwaitingBookingConfirmation(conversationKey)) {
+            return null;
+        }
+        String msgLower = request.getMessage().toLowerCase(Locale.ROOT).trim();
+        if (!isLikelyConfirmMessage(msgLower) && !msgLower.equals("không") && !msgLower.equals("cancel") && !msgLower.equals("hủy")) {
+            return null;
+        }
+        log.info("FAST PATH: Bỏ qua LLM do đang chờ xác nhận đặt sân (isAwaitingBookingConfirmation=true)");
+        long handlerStartTime = System.currentTimeMillis();
+        AiChatTurnResponse response = bookingHandler.handleConfirmation(request.getMessage(), userId, conversationKey);
+        long processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
+
+        ExtractedIntentResult dummyIntent = ExtractedIntentResult.unknown();
+        dummyIntent.setIntent("create_booking_fast_path");
+        IntentParseResult dummyParse = new IntentParseResult(dummyIntent, true, "FAST_PATH", null);
+        GroqClient.GroqResult dummyGroq = new GroqClient.GroqResult("FAST_PATH_BYPASS", 0, 0, 0);
+
+        saveUsageLog(userId, dummyParse, dummyGroq, request.getMessage(), response, 0, processingTimeHandlerMs);
+        return response;
+    }
+
+    /** FAST PATH: Regex bắt index sân/đơn/kèo tường minh (sân số N, sân thứ N, sân đầu tiên). */
+    private AiChatTurnResponse tryIndexFastPath(AiChatTurnRequest request, String conversationKey, Integer userId) {
+        String rawMessage = request.getMessage().toLowerCase(Locale.ROOT).trim();
+        java.util.regex.Matcher indexMatcher = java.util.regex.Pattern
+                .compile("^(sân|đơn|kèo)\\s+(số\\s+|thứ\\s+)?(\\d+|đầu\\s*tiên)$").matcher(rawMessage);
+        if (!indexMatcher.matches()) {
+            return null;
+        }
+        String type = indexMatcher.group(1);
+        String numberStr = indexMatcher.group(3);
+        int targetIndex = -1;
+        if (numberStr.equals("đầu tiên")) {
+            targetIndex = 0;
+        } else {
+            try {
+                targetIndex = Integer.parseInt(numberStr) - 1; // 1-based to 0-based
+            } catch (NumberFormatException ignored) {
+                // targetIndex vẫn -1, bị bỏ qua bên dưới
+            }
+        }
+        if (targetIndex < 0) {
+            return null;
+        }
+
+        // Xác định context hiện tại có gì
+        List<Integer> lastShownStadiums = conversationContextService.getLastShownStadiumIds(conversationKey);
+        List<Integer> lastShownBookings = conversationContextService.getLastShownBookingIds(conversationKey);
+
+        String fastPathIntent = null;
+        if ("đơn".equals(type) && lastShownBookings != null && !lastShownBookings.isEmpty()) {
+            fastPathIntent = "cancel_booking";
+        } else if (("sân".equals(type) || "kèo".equals(type)) && lastShownStadiums != null && !lastShownStadiums.isEmpty()) {
+            fastPathIntent = "search_stadiums";
+        }
+        if (fastPathIntent == null) {
+            return null;
+        }
+
+        log.info("FAST PATH: Bỏ qua LLM do bắt được index tường minh '{}' -> index={}", rawMessage, targetIndex);
+        com.fasterxml.jackson.databind.node.ObjectNode dummyParams = objectMapper.createObjectNode();
+        dummyParams.put("targetIndex", targetIndex);
+        ExtractedIntentResult dummyIntent = ExtractedIntentResult.unknown();
+        dummyIntent.setIntent(fastPathIntent);
+        dummyIntent.setParams(dummyParams);
+        dummyIntent.setConfidence(1.0);
+
+        long handlerStartTime = System.currentTimeMillis();
+        AiChatTurnResponse response = dispatch(dummyIntent, request.getMessage(), conversationKey, userId, request.getUserLat(), request.getUserLng());
+        long processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
+
+        IntentParseResult dummyParse = new IntentParseResult(dummyIntent, true, "FAST_PATH", null);
+        GroqClient.GroqResult dummyGroq = new GroqClient.GroqResult("FAST_PATH_BYPASS", 0, 0, 0);
+        saveUsageLog(userId, dummyParse, dummyGroq, request.getMessage(), response, 0, processingTimeHandlerMs);
+        return response;
+    }
+
+    /** FAST PATH: Regex bắt mã ID tường minh (#12345, mã 12345) khi đã có danh sách booking vừa show. */
+    private AiChatTurnResponse tryIdFastPath(AiChatTurnRequest request, String conversationKey, Integer userId) {
+        String rawMessage = request.getMessage().toLowerCase(Locale.ROOT).trim();
+        java.util.regex.Matcher idMatcher = java.util.regex.Pattern.compile("^(#|mã\\s+)?(\\d{3,6})$").matcher(rawMessage);
+        if (!idMatcher.matches()) {
+            return null;
+        }
+        int id = Integer.parseInt(idMatcher.group(2));
+        List<Integer> lastShownBookings = conversationContextService.getLastShownBookingIds(conversationKey);
+        if (lastShownBookings == null || lastShownBookings.isEmpty()) {
+            return null;
+        }
+
+        log.info("FAST PATH: Bỏ qua LLM do bắt được ID tường minh '{}' -> id={}", rawMessage, id);
+        com.fasterxml.jackson.databind.node.ObjectNode dummyParams = objectMapper.createObjectNode();
+        dummyParams.put("bookingId", id);
+        ExtractedIntentResult dummyIntent = ExtractedIntentResult.unknown();
+        dummyIntent.setIntent("cancel_booking");
+        dummyIntent.setParams(dummyParams);
+        dummyIntent.setConfidence(1.0);
+
+        long handlerStartTime = System.currentTimeMillis();
+        AiChatTurnResponse response = dispatch(dummyIntent, request.getMessage(), conversationKey, userId, request.getUserLat(), request.getUserLng());
+        long processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
+
+        IntentParseResult dummyParse = new IntentParseResult(dummyIntent, true, "FAST_PATH", null);
+        GroqClient.GroqResult dummyGroq = new GroqClient.GroqResult("FAST_PATH_BYPASS", 0, 0, 0);
+        saveUsageLog(userId, dummyParse, dummyGroq, request.getMessage(), response, 0, processingTimeHandlerMs);
         return response;
     }
 
@@ -388,7 +426,9 @@ public class AiChatServiceImpl implements AiChatService {
      * Dùng để defensive check khi LLM nhầm intent.
      */
     private boolean isLikelyConfirmMessage(String message) {
-        if (message == null) return false;
+        if (message == null) {
+            return false;
+        }
         String msg = message.toLowerCase().trim();
         return msg.equals("có") || msg.equals("đồng ý") || msg.equals("ok")
                 || msg.equals("ừ") || msg.equals("được") || msg.equals("hủy luôn")
@@ -403,7 +443,9 @@ public class AiChatServiceImpl implements AiChatService {
      * Nếu isAwaitingCancelConfirmation=false nhưng có lastShownBookings → vẫn có thể dùng được
      */
     private boolean conversationKeyServiceHasValidState(String conversationKey) {
-        if (conversationKey == null) return false;
+        if (conversationKey == null) {
+            return false;
+        }
         // Nếu đang await confirm → có state
         if (conversationContextService.isAwaitingCancelConfirmation(conversationKey)) {
             return true;
@@ -477,8 +519,8 @@ public class AiChatServiceImpl implements AiChatService {
         }
         
         // GIỚI HẠN LỊCH SỬ CHAT: Chỉ lấy 4 tin nhắn gần nhất (khoảng 2 lượt) để tránh cạn token nhanh
-        int MAX_HISTORY = 4;
-        int startIndex = Math.max(0, history.size() - MAX_HISTORY);
+        int maxHistory = 4;
+        int startIndex = Math.max(0, history.size() - maxHistory);
         List<AiChatTurnRequest.ChatMessage> trimmedHistory = history.subList(startIndex, history.size());
 
         List<GroqClient.ChatMessage> converted = new ArrayList<>();
@@ -489,7 +531,9 @@ public class AiChatServiceImpl implements AiChatService {
     }
 
     private String preClassifyIntent(String message) {
-        if (message == null) return "all";
+        if (message == null) {
+            return "all";
+        }
         String msgLower = message.toLowerCase(Locale.ROOT);
 
         if (msgLower.contains("hủy")) {

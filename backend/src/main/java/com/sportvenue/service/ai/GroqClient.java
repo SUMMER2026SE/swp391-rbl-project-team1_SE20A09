@@ -77,21 +77,9 @@ public class GroqClient {
         int maxTotalRetries = totalKeys * MAX_RETRIES_PER_KEY;
         int attempt = 0;
         String lastUsedKey = null;
-        RestClientException lastException = null;
 
         while (attempt < maxTotalRetries) {
-            // Get next available key
-            String apiKey = keyPoolManager.getNextAvailableKey();
-            if (apiKey == null) {
-                throw new LlmGatewayException(LlmGatewayException.Kind.RATE_LIMITED,
-                        "Không có API key nào khả dụng");
-            }
-
-            // Log key switch if different from last used
-            if (lastUsedKey != null && !lastUsedKey.equals(apiKey)) {
-                log.info("Switching from key ***{} to key ***{} due to rate limit",
-                        maskKey(lastUsedKey), maskKey(apiKey));
-            }
+            String apiKey = resolveNextKey(lastUsedKey);
             lastUsedKey = apiKey;
 
             RestClient restClient = restClientBuilder
@@ -115,44 +103,62 @@ public class GroqClient {
                 );
 
             } catch (LlmGatewayException e) {
-                if (e.getKind() == LlmGatewayException.Kind.RATE_LIMITED) {
-                    // Mark current key as rate limited and retry with next key
-                    Long retryAfter = extractRetryAfter(e);
-                    keyPoolManager.markRateLimited(apiKey, retryAfter);
-
-                    attempt++;
-                    log.warn("Rate limited on key ***{}, trying next key (attempt {}/{})",
-                            maskKey(apiKey), attempt, maxTotalRetries);
-
-                    if (attempt >= maxTotalRetries) {
-                        log.error("All API keys rate limited after {} attempts", maxTotalRetries);
-                        throw e;
-                    }
-                    continue;
+                if (e.getKind() != LlmGatewayException.Kind.RATE_LIMITED) {
+                    throw e;
                 }
-                throw e;
+                attempt = handleRateLimited(e, apiKey, attempt, maxTotalRetries);
             } catch (RestClientException e) {
-                lastException = e;
-                attempt++;
-                log.warn("Groq request failed with key ***{} (attempt {}/{}): {}",
-                        maskKey(apiKey), attempt, maxTotalRetries, e.getMessage());
-
-                if (attempt >= maxTotalRetries) {
-                    throw new LlmGatewayException(LlmGatewayException.Kind.TIMEOUT,
-                            "Không gọi được Groq API sau " + maxTotalRetries + " lần thử: " + e.getMessage(), e);
-                }
-                // Small delay between keys
-                try {
-                    Thread.sleep(RETRY_DELAY_MS);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    throw new LlmGatewayException(LlmGatewayException.Kind.UNKNOWN, "Interrupted", ie);
-                }
+                attempt = handleRestClientFailure(e, apiKey, attempt, maxTotalRetries);
             }
         }
 
         throw new LlmGatewayException(LlmGatewayException.Kind.UNKNOWN,
                 "Groq request failed after " + maxTotalRetries + " attempts");
+    }
+
+    /** Lấy key tiếp theo còn khả dụng từ pool, log nếu vừa chuyển sang key khác do rate limit. */
+    private String resolveNextKey(String lastUsedKey) {
+        String apiKey = keyPoolManager.getNextAvailableKey();
+        if (apiKey == null) {
+            throw new LlmGatewayException(LlmGatewayException.Kind.RATE_LIMITED, "Không có API key nào khả dụng");
+        }
+        if (lastUsedKey != null && !lastUsedKey.equals(apiKey)) {
+            log.info("Switching from key ***{} to key ***{} due to rate limit", maskKey(lastUsedKey), maskKey(apiKey));
+        }
+        return apiKey;
+    }
+
+    /** Đánh dấu key hiện tại bị rate limit; trả về attempt kế tiếp, throw nếu đã hết lượt thử. */
+    private int handleRateLimited(LlmGatewayException e, String apiKey, int attempt, int maxTotalRetries) {
+        Long retryAfter = extractRetryAfter(e);
+        keyPoolManager.markRateLimited(apiKey, retryAfter);
+
+        int nextAttempt = attempt + 1;
+        log.warn("Rate limited on key ***{}, trying next key (attempt {}/{})", maskKey(apiKey), nextAttempt, maxTotalRetries);
+
+        if (nextAttempt >= maxTotalRetries) {
+            log.error("All API keys rate limited after {} attempts", maxTotalRetries);
+            throw e;
+        }
+        return nextAttempt;
+    }
+
+    /** Request lỗi không phải rate limit — chờ 1 khoảng ngắn rồi thử key kế tiếp, throw nếu đã hết lượt thử. */
+    private int handleRestClientFailure(RestClientException e, String apiKey, int attempt, int maxTotalRetries) {
+        int nextAttempt = attempt + 1;
+        log.warn("Groq request failed with key ***{} (attempt {}/{}): {}", maskKey(apiKey), nextAttempt, maxTotalRetries, e.getMessage());
+
+        if (nextAttempt >= maxTotalRetries) {
+            throw new LlmGatewayException(LlmGatewayException.Kind.TIMEOUT,
+                    "Không gọi được Groq API sau " + maxTotalRetries + " lần thử: " + e.getMessage(), e);
+        }
+        try {
+            Thread.sleep(RETRY_DELAY_MS);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new LlmGatewayException(LlmGatewayException.Kind.UNKNOWN, "Interrupted", ie);
+        }
+        return nextAttempt;
     }
 
     private ChatCompletionResponse doRequest(RestClient restClient, JsonChatRequest requestBody) {

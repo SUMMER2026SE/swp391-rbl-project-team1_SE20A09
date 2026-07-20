@@ -4,11 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.sportvenue.dto.response.AiChatTurnResponse;
 import com.sportvenue.dto.response.DraftBookingResponse;
 import com.sportvenue.dto.response.TimeSlotResponse;
-import com.sportvenue.entity.SportType;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.enums.StadiumNodeType;
 import com.sportvenue.entity.enums.StadiumStatus;
-import com.sportvenue.dto.response.StadiumResponse;
 import com.sportvenue.repository.SportTypeRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.UserRepository;
@@ -18,7 +16,6 @@ import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.ai.AiConversationContextService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -121,47 +118,11 @@ public class BookingHandler {
 
         // Nếu không resolve được stadiumId từ context, thử fallback search
         if (stadiumId == null) {
-            if (args.hasNonNull("targetIndex")) {
-                List<Integer> lastShown = conversationContextService.getLastShownStadiumIds(conversationKey);
-                int targetIndex = args.get("targetIndex").asInt();
-
-                // Check if it's a venueId (number in list)
-                if (lastShown != null && lastShown.contains(targetIndex)) {
-                    stadiumId = targetIndex;
-                }
-                // Check if it's a valid position index
-                else if (lastShown != null && targetIndex >= 0 && targetIndex < lastShown.size()) {
-                    stadiumId = lastShown.get(targetIndex);
-                }
-                // Ambiguous - user gave a number but it doesn't match anything meaningful
-                else {
-                    String clarificationMsg = buildClarificationMessage(targetIndex, lastShown);
-                    return AiChatTurnResponse.builder()
-                            .message(clarificationMsg)
-                            .intent("need_more_info")
-                            .build();
-                }
-            } else {
-                // Thử fallback search nếu có đủ thông tin để tìm sân
-                SearchFallbackResult fallback = searchStadiumsFallback(args, conversationKey);
-
-                if (fallback.needsUserSelection()) {
-                    // Nhiều sân → hiển thị danh sách cho user chọn
-                    return buildStadiumSelectionResponse(fallback.foundStadiums(), conversationKey, llmMessage);
-                } else if (fallback.singleStadiumId() != null) {
-                    // Đúng 1 sân → tiếp tục với sân này
-                    stadiumId = fallback.singleStadiumId();
-                } else if (fallback.searchErrorMessage() != null) {
-                    // Không tìm được sân nào → báo lỗi cụ thể, không dùng generic message
-                    return AiChatTurnResponse.builder()
-                            .message(fallback.searchErrorMessage())
-                            .intent("search_stadiums")  // Trả intent search_stadiums để FE hiển thị kết quả search
-                            .build();
-                } else {
-                    // Không có đủ thông tin để search → hỏi user
-                    return errorResponse("Chưa xác định được sân bạn muốn đặt. Bạn muốn đặt sân nào? (Vd: sân bóng đá Thủ Đức)");
-                }
+            StadiumIdResolution resolution = resolveStadiumIdFallback(args, conversationKey, llmMessage);
+            if (resolution.earlyResponse() != null) {
+                return resolution.earlyResponse();
             }
+            stadiumId = resolution.stadiumId();
         }
         if (stadiumId <= 0) {
             return errorResponse("ID sân không hợp lệ. Hãy tìm sân trước để lấy đúng sân bạn muốn đặt.");
@@ -183,7 +144,6 @@ public class BookingHandler {
         LocalDate requestedDate = resolveDateWithValidation(args, rawUserMessage, conversationKey);
 
         conversationContextService.saveCurrentFilters(conversationKey, null, null, null, requestedDate.toString(), null);
-        conversationContextService.saveCurrentFilters(conversationKey, null, null, null, requestedDate.toString(), null);
 
         if (requestedDate.isBefore(LocalDate.now(clock))) {
             return errorResponse("Không thể đặt sân cho ngày trong quá khứ.");
@@ -199,18 +159,7 @@ public class BookingHandler {
         TimeSlotResponse targetSlot = resolveSlot(args, conversationKey, slots);
 
         if (targetSlot == null) {
-            if (args.hasNonNull("slotIndex") && conversationContextService.resolveSlotIdByIndex(conversationKey, args.get("slotIndex").asInt()).isEmpty()) {
-                return systemBugResponse("Không thể xác định được khung giờ từ lịch sử chat. Vui lòng hỏi lại giờ trống.");
-            }
-
-            // Lưu pending state
-            java.util.Map<String, Object> data = new java.util.HashMap<>();
-            data.put("stadiumId", stadiumId);
-            data.put("date", requestedDate.toString());
-            conversationContextService.savePendingAction(conversationKey,
-                    new AiConversationContextService.PendingAction("create_booking", data, "slot"));
-
-            return errorResponse("Chưa xác định được khung giờ bạn muốn đặt. Bạn muốn đặt lúc mấy giờ? (Vd: 2h chiều thứ 7)");
+            return handleMissingSlot(args, conversationKey, stadiumId, requestedDate);
         }
 
         AiChatTurnResponse availabilityResponse = checkSlotAvailability(targetSlot, slots, requestedDate, conversationKey, stadiumId);
@@ -230,6 +179,83 @@ public class BookingHandler {
         }
 
         return createConfirmBookingResponse(stadium, requestedDate, targetSlot, conversationKey);
+    }
+
+    /** Kết quả resolve stadiumId từ targetIndex/fallback search — hoặc 1 response để trả ngay. */
+    private record StadiumIdResolution(Integer stadiumId, AiChatTurnResponse earlyResponse) {
+        static StadiumIdResolution of(int id) {
+            return new StadiumIdResolution(id, null);
+        }
+
+        static StadiumIdResolution earlyReturn(AiChatTurnResponse response) {
+            return new StadiumIdResolution(null, response);
+        }
+    }
+
+    /**
+     * Thử resolve stadiumId khi resolveStadiumId() không tìm được trực tiếp — ưu tiên targetIndex
+     * từ context đã hiển thị, nếu không có thì fallback search theo params đã trích xuất.
+     */
+    private StadiumIdResolution resolveStadiumIdFallback(JsonNode args, String conversationKey, String llmMessage) {
+        if (args.hasNonNull("targetIndex")) {
+            List<Integer> lastShown = conversationContextService.getLastShownStadiumIds(conversationKey);
+            int targetIndex = args.get("targetIndex").asInt();
+
+            // Check if it's a venueId (number in list)
+            if (lastShown != null && lastShown.contains(targetIndex)) {
+                return StadiumIdResolution.of(targetIndex);
+            }
+            // Check if it's a valid position index
+            if (lastShown != null && targetIndex >= 0 && targetIndex < lastShown.size()) {
+                return StadiumIdResolution.of(lastShown.get(targetIndex));
+            }
+            // Ambiguous - user gave a number but it doesn't match anything meaningful
+            String clarificationMsg = buildClarificationMessage(targetIndex, lastShown);
+            return StadiumIdResolution.earlyReturn(AiChatTurnResponse.builder()
+                    .message(clarificationMsg)
+                    .intent("need_more_info")
+                    .build());
+        }
+
+        // Thử fallback search nếu có đủ thông tin để tìm sân
+        SearchFallbackResult fallback = searchStadiumsFallback(args, conversationKey);
+
+        if (fallback.needsUserSelection()) {
+            // Nhiều sân → hiển thị danh sách cho user chọn
+            return StadiumIdResolution.earlyReturn(
+                    buildStadiumSelectionResponse(fallback.foundStadiums(), conversationKey, llmMessage));
+        }
+        if (fallback.singleStadiumId() != null) {
+            // Đúng 1 sân → tiếp tục với sân này
+            return StadiumIdResolution.of(fallback.singleStadiumId());
+        }
+        if (fallback.searchErrorMessage() != null) {
+            // Không tìm được sân nào → báo lỗi cụ thể, không dùng generic message
+            return StadiumIdResolution.earlyReturn(AiChatTurnResponse.builder()
+                    .message(fallback.searchErrorMessage())
+                    .intent("search_stadiums")  // Trả intent search_stadiums để FE hiển thị kết quả search
+                    .build());
+        }
+        // Không có đủ thông tin để search → hỏi user
+        return StadiumIdResolution.earlyReturn(
+                errorResponse("Chưa xác định được sân bạn muốn đặt. Bạn muốn đặt sân nào? (Vd: sân bóng đá Thủ Đức)"));
+    }
+
+    /** Không resolve được slot — báo lỗi bug context nếu slotIndex đã stale, lưu pending state rồi hỏi lại giờ. */
+    private AiChatTurnResponse handleMissingSlot(JsonNode args, String conversationKey, Integer stadiumId, LocalDate requestedDate) {
+        if (args.hasNonNull("slotIndex")
+                && conversationContextService.resolveSlotIdByIndex(conversationKey, args.get("slotIndex").asInt()).isEmpty()) {
+            return systemBugResponse("Không thể xác định được khung giờ từ lịch sử chat. Vui lòng hỏi lại giờ trống.");
+        }
+
+        // Lưu pending state
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("stadiumId", stadiumId);
+        data.put("date", requestedDate.toString());
+        conversationContextService.savePendingAction(conversationKey,
+                new AiConversationContextService.PendingAction("create_booking", data, "slot"));
+
+        return errorResponse("Chưa xác định được khung giờ bạn muốn đặt. Bạn muốn đặt lúc mấy giờ? (Vd: 2h chiều thứ 7)");
     }
 
     private void mergePendingState(JsonNode args, String conversationKey) {
@@ -378,54 +404,15 @@ public class BookingHandler {
         }
 
         // Parse date và time
-        LocalDate targetDate = null;
-        LocalTime targetStartTime = null;
-        LocalTime targetEndTime = null;
-
-        if (args.hasNonNull("date")) {
-            try {
-                targetDate = LocalDate.parse(args.get("date").asText());
-            } catch (Exception e) {
-                log.warn("Fallback search: invalid date format {}", args.get("date").asText());
-            }
-        }
-
-        if (args.hasNonNull("startTime")) {
-            try {
-                targetStartTime = LocalTime.parse(args.get("startTime").asText());
-            } catch (Exception e) {
-                log.warn("Fallback search: invalid startTime format {}", args.get("startTime").asText());
-            }
-        }
-
-        if (args.hasNonNull("endTime")) {
-            try {
-                targetEndTime = LocalTime.parse(args.get("endTime").asText());
-            } catch (Exception e) {
-                log.warn("Fallback search: invalid endTime format {}", args.get("endTime").asText());
-            }
-        }
+        ParsedSearchDateTime parsedDateTime = parseFallbackDateTime(args);
+        LocalDate targetDate = parsedDateTime.date();
+        LocalTime targetStartTime = parsedDateTime.startTime();
+        LocalTime targetEndTime = parsedDateTime.endTime();
 
         // Tìm sân theo sportType (ưu tiên) hoặc keyword
         List<Stadium> foundStadiums;
         try {
-            if (sportTypeId != null) {
-                foundStadiums = stadiumRepository.findCourtsForAiToolByIds(
-                        stadiumRepository.findBySportTypeSportTypeIdAndStadiumStatus(
-                                sportTypeId, StadiumStatus.AVAILABLE, org.springframework.data.domain.Pageable.unpaged()).getContent()
-                                .stream().map(Stadium::getStadiumId).toList()
-                        );
-            } else if (keyword != null && !keyword.isBlank()) {
-                // Tìm theo keyword (tên sân, tên facility)
-                foundStadiums = stadiumRepository.findCourtsByParentFacilityNameKeyword(keyword);
-                if (foundStadiums.isEmpty()) {
-                    // Thử search theo tên court
-                    foundStadiums = stadiumRepository.searchByKeyword(keyword, org.springframework.data.domain.Pageable.ofSize(10))
-                            .getContent();
-                }
-            } else {
-                foundStadiums = List.of();
-            }
+            foundStadiums = findStadiumsForFallback(sportTypeId, keyword);
         } catch (Exception e) {
             log.error("Fallback search: error searching stadiums", e);
             return SearchFallbackResult.error("Đã xảy ra lỗi khi tìm sân. Vui lòng thử lại sau.");
@@ -469,6 +456,62 @@ public class BookingHandler {
 
         // Nhiều hơn 1 sân → cho user chọn
         return SearchFallbackResult.multiple(foundStadiums);
+    }
+
+    private record ParsedSearchDateTime(LocalDate date, LocalTime startTime, LocalTime endTime) { }
+
+    /** Parse date/startTime/endTime từ args cho fallback search — parse lỗi thì bỏ qua field đó, không fail cả request. */
+    private ParsedSearchDateTime parseFallbackDateTime(JsonNode args) {
+        LocalDate targetDate = null;
+        LocalTime targetStartTime = null;
+        LocalTime targetEndTime = null;
+
+        if (args.hasNonNull("date")) {
+            try {
+                targetDate = LocalDate.parse(args.get("date").asText());
+            } catch (Exception e) {
+                log.warn("Fallback search: invalid date format {}", args.get("date").asText());
+            }
+        }
+
+        if (args.hasNonNull("startTime")) {
+            try {
+                targetStartTime = LocalTime.parse(args.get("startTime").asText());
+            } catch (Exception e) {
+                log.warn("Fallback search: invalid startTime format {}", args.get("startTime").asText());
+            }
+        }
+
+        if (args.hasNonNull("endTime")) {
+            try {
+                targetEndTime = LocalTime.parse(args.get("endTime").asText());
+            } catch (Exception e) {
+                log.warn("Fallback search: invalid endTime format {}", args.get("endTime").asText());
+            }
+        }
+
+        return new ParsedSearchDateTime(targetDate, targetStartTime, targetEndTime);
+    }
+
+    /** Tìm sân theo sportType (ưu tiên) hoặc keyword — dùng cho fallback search. */
+    private List<Stadium> findStadiumsForFallback(Integer sportTypeId, String keyword) {
+        if (sportTypeId != null) {
+            return stadiumRepository.findCourtsForAiToolByIds(
+                    stadiumRepository.findBySportTypeSportTypeIdAndStadiumStatus(
+                            sportTypeId, StadiumStatus.AVAILABLE, org.springframework.data.domain.Pageable.unpaged()).getContent()
+                            .stream().map(Stadium::getStadiumId).toList()
+                    );
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            // Tìm theo keyword (tên sân, tên facility)
+            List<Stadium> found = stadiumRepository.findCourtsByParentFacilityNameKeyword(keyword);
+            if (found.isEmpty()) {
+                // Thử search theo tên court
+                found = stadiumRepository.searchByKeyword(keyword, org.springframework.data.domain.Pageable.ofSize(10)).getContent();
+            }
+            return found;
+        }
+        return List.of();
     }
 
     /**
@@ -529,7 +572,9 @@ public class BookingHandler {
                     .filter(s -> Boolean.TRUE.equals(s.getAvailable()))
                     .anyMatch(s -> {
                         LocalTime slotStart = s.getStartTime();
-                        if (slotStart == null) return false;
+                        if (slotStart == null) {
+                            return false;
+                        }
                         // Cho phép ±30 phút
                         return !slotStart.isBefore(reqStartTime.minusMinutes(30)) &&
                                 !slotStart.isAfter(reqStartTime.plusMinutes(30));
@@ -577,7 +622,9 @@ public class BookingHandler {
      * Normalize sport name (đá banh → Bóng đá, bóng rổ → Bóng rổ, etc).
      */
     private String normalizeSportName(String input) {
-        if (input == null) return null;
+        if (input == null) {
+            return null;
+        }
         String lower = input.toLowerCase(java.util.Locale.ROOT).trim();
 
         if (lower.contains("đá banh") || lower.contains("bóng đá") || lower.contains("football") || lower.contains("futsal")) {
@@ -611,7 +658,9 @@ public class BookingHandler {
      * Tìm sportTypeId bằng keyword fallback.
      */
     private Integer findSportTypeIdByKeyword(String keyword) {
-        if (keyword == null) return null;
+        if (keyword == null) {
+            return null;
+        }
         String lower = keyword.toLowerCase(java.util.Locale.ROOT);
 
         if (lower.contains("bong da") || lower.contains("da bong") || lower.contains("football") || lower.contains("soccer") || lower.contains("futsal")) {
@@ -704,7 +753,7 @@ public class BookingHandler {
                 .build();
     }
 
-    private record StadiumWithSlotInfo(Stadium stadium, long availableCount) {}
+    private record StadiumWithSlotInfo(Stadium stadium, long availableCount) { }
 
     private String formatStadiumName(Stadium stadium) {
         if (stadium.getParentStadium() != null && stadium.getParentStadium().getStadiumName() != null) {
@@ -735,7 +784,9 @@ public class BookingHandler {
         if (args.hasNonNull("date")) {
             try {
                 return LocalDate.parse(args.get("date").asText());
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+                // fall through to context/default date below
+            }
         }
 
         return LocalDate.now(clock);

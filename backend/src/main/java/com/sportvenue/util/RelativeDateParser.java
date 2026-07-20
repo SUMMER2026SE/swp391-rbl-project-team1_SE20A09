@@ -53,30 +53,15 @@ public class RelativeDateParser {
         }
 
         String msg = message.toLowerCase().trim();
-        LocalDate today = LocalDate.now(clock);
 
-        // "thứ X tuần này" hoặc "chủ nhật tuần này"
-        Matcher m1 = THU_X_TUAN_NAY.matcher(msg);
-        if (m1.find()) {
-            if (msg.contains("chủ nhật") || msg.contains("cn")) {
-                return getNextDateOfDayOfWeek(DayOfWeek.SUNDAY, false);
-            }
-            int dayOfWeek = extractDayOfWeek(m1);
-            if (dayOfWeek > 0) {
-                return getNextDateOfDayOfWeek(DayOfWeek.of(dayOfWeek), false);
-            }
+        LocalDate thisWeek = parseThuTuanNay(msg);
+        if (thisWeek != null) {
+            return thisWeek;
         }
 
-        // "thứ X tuần sau"
-        Matcher m2 = THU_X_TUAN_SAU.matcher(msg);
-        if (m2.find()) {
-            if (msg.contains("chủ nhật") || msg.contains("cn")) {
-                return getNextDateOfDayOfWeek(DayOfWeek.SUNDAY, true);
-            }
-            int dayOfWeek = extractDayOfWeek(m2);
-            if (dayOfWeek > 0) {
-                return getNextDateOfDayOfWeek(DayOfWeek.of(dayOfWeek), true);
-            }
+        LocalDate nextWeek = parseThuTuanSau(msg);
+        if (nextWeek != null) {
+            return nextWeek;
         }
 
         // "ngày mai"
@@ -94,39 +79,83 @@ public class RelativeDateParser {
             return LocalDate.now(clock);
         }
 
-        // "thứ X" standalone — "thứ 2".."thứ 7" là Monday..Saturday (ISO = X-1), "thứ 8" là cách nói
-        // colloquial cho Chủ nhật (ISO = 7). Phải trừ 1 giống hệt extractDayOfWeek() ở trên, nếu
-        // không "thứ 4" (Wednesday) sẽ bị resolve nhầm thành DayOfWeek.of(4) = Thursday.
-        Matcher m6 = Pattern.compile("thứ\\s*(\\d+)").matcher(msg);
-        if (m6.find()) {
-            int rawNum = Integer.parseInt(m6.group(1));
-            if (rawNum >= 2 && rawNum <= 8) {
-                int isoDayOfWeek = rawNum == 8 ? 7 : rawNum - 1;
-                if (!msg.contains("tuần sau")) {
-                    return getNextDateOfDayOfWeek(DayOfWeek.of(isoDayOfWeek), false);
-                }
-            }
+        LocalDate standaloneWeekday = parseStandaloneWeekday(msg);
+        if (standaloneWeekday != null) {
+            return standaloneWeekday;
         }
 
-        // "cuối tuần"
-        if (CUOI_TUAN.matcher(msg).find()) {
-            LocalDate todayDow = LocalDate.now(clock);
-            DayOfWeek dow = todayDow.getDayOfWeek();
+        return parseCuoiTuan(msg);
+    }
 
-            if (dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY) {
-                return todayDow;
-            } else if (dow == DayOfWeek.FRIDAY) {
-                return todayDow.plusDays(1);
-            } else {
-                LocalDate result = todayDow.plusDays((DayOfWeek.SATURDAY.getValue() - dow.getValue() + 7) % 7);
-                if (result.equals(todayDow)) {
-                    result = result.plusDays(7);
-                }
-                return result;
-            }
+    /** "thứ X tuần này" hoặc "chủ nhật tuần này". */
+    private LocalDate parseThuTuanNay(String msg) {
+        Matcher m1 = THU_X_TUAN_NAY.matcher(msg);
+        if (!m1.find()) {
+            return null;
         }
-
+        if (msg.contains("chủ nhật") || msg.contains("cn")) {
+            return getNextDateOfDayOfWeek(DayOfWeek.SUNDAY, false);
+        }
+        int dayOfWeek = extractDayOfWeek(m1);
+        if (dayOfWeek > 0) {
+            return getNextDateOfDayOfWeek(DayOfWeek.of(dayOfWeek), false);
+        }
         return null;
+    }
+
+    /** "thứ X tuần sau" hoặc "chủ nhật tuần sau". */
+    private LocalDate parseThuTuanSau(String msg) {
+        Matcher m2 = THU_X_TUAN_SAU.matcher(msg);
+        if (!m2.find()) {
+            return null;
+        }
+        if (msg.contains("chủ nhật") || msg.contains("cn")) {
+            return getNextDateOfDayOfWeek(DayOfWeek.SUNDAY, true);
+        }
+        int dayOfWeek = extractDayOfWeek(m2);
+        if (dayOfWeek > 0) {
+            return getNextDateOfDayOfWeek(DayOfWeek.of(dayOfWeek), true);
+        }
+        return null;
+    }
+
+    /**
+     * "thứ X" standalone — "thứ 2".."thứ 7" là Monday..Saturday (ISO = X-1), "thứ 8" là cách nói
+     * colloquial cho Chủ nhật (ISO = 7). Phải trừ 1 giống hệt extractDayOfWeek() ở trên, nếu không
+     * "thứ 4" (Wednesday) sẽ bị resolve nhầm thành DayOfWeek.of(4) = Thursday.
+     */
+    private LocalDate parseStandaloneWeekday(String msg) {
+        Matcher m6 = Pattern.compile("thứ\\s*(\\d+)").matcher(msg);
+        if (!m6.find()) {
+            return null;
+        }
+        int rawNum = Integer.parseInt(m6.group(1));
+        if (rawNum < 2 || rawNum > 8 || msg.contains("tuần sau")) {
+            return null;
+        }
+        int isoDayOfWeek = rawNum == 8 ? 7 : rawNum - 1;
+        return getNextDateOfDayOfWeek(DayOfWeek.of(isoDayOfWeek), false);
+    }
+
+    /** "cuối tuần". */
+    private LocalDate parseCuoiTuan(String msg) {
+        if (!CUOI_TUAN.matcher(msg).find()) {
+            return null;
+        }
+        LocalDate todayDow = LocalDate.now(clock);
+        DayOfWeek dow = todayDow.getDayOfWeek();
+
+        if (dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY) {
+            return todayDow;
+        }
+        if (dow == DayOfWeek.FRIDAY) {
+            return todayDow.plusDays(1);
+        }
+        LocalDate result = todayDow.plusDays((DayOfWeek.SATURDAY.getValue() - dow.getValue() + 7) % 7);
+        if (result.equals(todayDow)) {
+            result = result.plusDays(7);
+        }
+        return result;
     }
 
     private int extractDayOfWeek(Matcher m) {
@@ -135,7 +164,9 @@ public class RelativeDateParser {
             if (group != null && !group.isBlank()) {
                 try {
                     int num = Integer.parseInt(group.trim());
-                    if (num == 8) return 7;
+                    if (num == 8) {
+                        return 7;
+                    }
                     return num - 1;
                 } catch (NumberFormatException e) {
                     if ("cn".equalsIgnoreCase(group.trim())) {
@@ -156,15 +187,21 @@ public class RelativeDateParser {
         if (nextWeek) {
             if (targetValue == 7) {
                 daysUntil = (7 - todayValue + 7) % 7;
-                if (daysUntil == 0) daysUntil = 7;
+                if (daysUntil == 0) {
+                    daysUntil = 7;
+                }
             } else {
                 daysUntil = (targetValue - todayValue + 7) % 7;
-                if (daysUntil == 0) daysUntil = 7;
+                if (daysUntil == 0) {
+                    daysUntil = 7;
+                }
             }
             daysUntil += 7;
         } else {
             daysUntil = (targetValue - todayValue + 7) % 7;
-            if (daysUntil == 0) daysUntil = 7;
+            if (daysUntil == 0) {
+                daysUntil = 7;
+            }
         }
 
         return today.plusDays(daysUntil);
