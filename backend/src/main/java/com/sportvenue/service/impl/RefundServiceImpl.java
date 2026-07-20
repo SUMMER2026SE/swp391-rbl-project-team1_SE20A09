@@ -227,6 +227,9 @@ public class RefundServiceImpl implements RefundService {
         if (booking.getBookingStatus() == BookingStatus.CANCELLED) {
             throw new BadRequestException("Đơn đặt sân này đã ở trạng thái Hủy (CANCELLED)");
         }
+        if (Boolean.TRUE.equals(booking.getIsWalkIn())) {
+            throw new BadRequestException("Không thể hoàn/hủy cho đơn khách vãng lai thanh toán tại sân");
+        }
         if (booking.getBookingStatus() == BookingStatus.COMPLETED) {
             throw new BadRequestException("Không thể hủy đơn đặt sân đã hoàn thành (COMPLETED)");
         }
@@ -500,13 +503,20 @@ public class RefundServiceImpl implements RefundService {
         java.util.Map<Integer, BigDecimal> successPaymentMap = buildSuccessPaymentMap(bookingIds);
 
         return bookings.map(b -> {
-            String customerName = b.getUser().getFirstName() + " " + b.getUser().getLastName();
-            OwnerBookingResponse.CustomerInfo customerInfo = OwnerBookingResponse.CustomerInfo.builder()
-                    .userId(b.getUser().getUserId())
-                    .name(customerName)
-                    .phone(b.getUser().getPhoneNumber())
-                    .email(b.getUser().getEmail())
-                    .build();
+            OwnerBookingResponse.CustomerInfo customerInfo = null;
+            if (b.getUser() != null) {
+                String customerName = b.getUser().getFirstName() + " " + b.getUser().getLastName();
+                customerInfo = OwnerBookingResponse.CustomerInfo.builder()
+                        .userId(b.getUser().getUserId())
+                        .name(customerName)
+                        .phone(b.getUser().getPhoneNumber())
+                        .email(b.getUser().getEmail())
+                        .build();
+            } else {
+                customerInfo = OwnerBookingResponse.CustomerInfo.builder()
+                        .name("Khách vãng lai")
+                        .build();
+            }
 
             String startTimeStr = b.getSlot().getStartTime().toString();
             String endTimeStr = b.getSlot().getEndTime().toString();
@@ -540,6 +550,7 @@ public class RefundServiceImpl implements RefundService {
                     .status(b.getBookingStatus().name().toLowerCase())
                     .notes(b.getNote() != null ? b.getNote() : "")
                     .playTimeRaw(playTime(b).toString())
+                    .isWalkIn(b.getIsWalkIn())
                     .build();
         });
     }

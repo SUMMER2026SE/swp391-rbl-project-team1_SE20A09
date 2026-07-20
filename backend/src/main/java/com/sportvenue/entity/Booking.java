@@ -50,9 +50,9 @@ public class Booking implements Serializable {
     @Column(name = "booking_id")
     private Integer bookingId;
 
-    /** Khách hàng đặt sân. */
+    /** Khách hàng đặt sân. Nullable for Walk-in bookings. */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id")
     private User user;
 
     /** Sân được đặt. */
@@ -144,4 +144,9 @@ public class Booking implements Serializable {
      */
     @Column(name = "review_reminder_sent_at")
     private LocalDateTime reviewReminderSentAt;
+
+    /** Đánh dấu đơn đặt trực tiếp tại sân (không qua app). */
+    @Column(name = "is_walk_in", nullable = false)
+    @Builder.Default
+    private Boolean isWalkIn = false;
 }

@@ -660,18 +660,24 @@ public class StadiumServiceImpl implements StadiumService {
             if (booking.getSlot() != null) {
                 booking.getSlot().setSlotStatus(com.sportvenue.entity.enums.SlotStatus.AVAILABLE);
             }
-            if (booking.getPaymentStatus() == com.sportvenue.entity.enums.PaymentStatus.PAID) {
+            // Walk-in bookings (user = null) thu tiền mặt trực tiếp — không đánh dấu REFUNDED.
+            // Chỉ đánh dấu REFUNDED cho đơn online đã thanh toán qua app.
+            if (booking.getUser() != null
+                    && booking.getPaymentStatus() == com.sportvenue.entity.enums.PaymentStatus.PAID) {
                 booking.setPaymentStatus(com.sportvenue.entity.enums.PaymentStatus.REFUNDED);
             }
             bookingRepository.save(booking);
 
-            notificationService.createNotification(
-                    booking.getUser().getUserId(),
-                    "Đơn đặt sân bị hủy",
-                    String.format("Đơn đặt sân %s của bạn đã bị hủy do sân ngừng hoạt động vĩnh viễn. Vui lòng liên hệ để được hoàn tiền nếu có.", stadium.getStadiumName()),
-                    com.sportvenue.entity.enums.NotificationType.BOOKING,
-                    booking.getBookingId().toString()
-            );
+            // Walk-in booking không có user → không gửi notification
+            if (booking.getUser() != null) {
+                notificationService.createNotification(
+                        booking.getUser().getUserId(),
+                        "Đơn đặt sân bị hủy",
+                        String.format("Đơn đặt sân %s của bạn đã bị hủy do sân ngừng hoạt động vĩnh viễn. Vui lòng liên hệ để được hoàn tiền nếu có.", stadium.getStadiumName()),
+                        com.sportvenue.entity.enums.NotificationType.BOOKING,
+                        booking.getBookingId().toString()
+                );
+            }
         }
     }
 
