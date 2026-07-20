@@ -605,19 +605,28 @@ public class RefundServiceImpl implements RefundService {
                         "Không tìm thấy owner profile: " + ownerEmail));
         Integer ownerId = owner.getOwnerId();
 
+        // Avoid passing null to JPQL queries to prevent PostgreSQL parameter type inference errors
+        LocalDateTime minDate = LocalDateTime.of(2000, 1, 1, 0, 0);
+        LocalDateTime maxDate = LocalDateTime.of(2100, 1, 1, 0, 0);
+        
+        // Use a list of statuses to avoid (:status IS NULL OR ...) which crashes PostgreSQL
+        java.util.List<BookingStatus> statuses = (status != null) 
+                ? java.util.List.of(status) 
+                : java.util.Arrays.asList(BookingStatus.values());
+
         // Gross = tổng payment SUCCESS, amount > 0, thuộc booking của owner
-        BigDecimal grossAmount = paymentRepository.sumOwnerGrossByDateRange(ownerId, null, null);
+        BigDecimal grossAmount = paymentRepository.sumOwnerGrossByDateRangeAndStatuses(ownerId, minDate, maxDate, statuses);
         if (grossAmount == null) grossAmount = BigDecimal.ZERO;
 
         // Refund = tổng payment SUCCESS, amount < 0, thuộc booking của owner (giá trị dương)
-        BigDecimal refundedAmount = paymentRepository.sumOwnerRefundByDateRange(ownerId, null, null);
+        BigDecimal refundedAmount = paymentRepository.sumOwnerRefundByDateRangeAndStatuses(ownerId, minDate, maxDate, statuses);
         if (refundedAmount == null) refundedAmount = BigDecimal.ZERO;
 
         // Fee = tổng SERVICE_FEE_DEBIT trong Owner Wallet ledger (đã xảy ra thực tế)
-        BigDecimal serviceFeeTotal = walletTransactionRepository.sumOwnerFeeByTypeAndDateRange(
+        BigDecimal serviceFeeTotal = walletTransactionRepository.sumOwnerFeeByTypeDateRangeAndStatuses(
                 ownerId,
                 com.sportvenue.entity.enums.WalletTransactionType.SERVICE_FEE_DEBIT,
-                null, null);
+                minDate, maxDate, statuses);
         if (serviceFeeTotal == null) serviceFeeTotal = BigDecimal.ZERO;
 
         BigDecimal netAmount = grossAmount.subtract(refundedAmount).subtract(serviceFeeTotal);

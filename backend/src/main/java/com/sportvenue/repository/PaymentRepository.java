@@ -150,12 +150,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
            "WHERE s.owner.ownerId = :ownerId " +
            "AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
            "AND p.amount > 0 " +
-           "AND (:start IS NULL OR p.paidAt >= :start) " +
-           "AND (:end IS NULL OR p.paidAt <= :end)")
-    java.math.BigDecimal sumOwnerGrossByDateRange(
+           "AND p.paidAt >= :start " +
+           "AND p.paidAt <= :end " +
+           "AND b.bookingStatus IN :statuses")
+    java.math.BigDecimal sumOwnerGrossByDateRangeAndStatuses(
             @Param("ownerId") Integer ownerId,
             @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end);
+            @Param("end") LocalDateTime end,
+            @Param("statuses") java.util.List<com.sportvenue.entity.enums.BookingStatus> statuses);
 
     /**
      * Tổng Refund của Owner theo khoảng thời gian (paidAt).
@@ -167,12 +169,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
            "WHERE s.owner.ownerId = :ownerId " +
            "AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
            "AND p.amount < 0 " +
-           "AND (:start IS NULL OR p.paidAt >= :start) " +
-           "AND (:end IS NULL OR p.paidAt <= :end)")
-    java.math.BigDecimal sumOwnerRefundByDateRange(
+           "AND p.paidAt >= :start " +
+           "AND p.paidAt <= :end " +
+           "AND b.bookingStatus IN :statuses")
+    java.math.BigDecimal sumOwnerRefundByDateRangeAndStatuses(
             @Param("ownerId") Integer ownerId,
             @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end);
+            @Param("end") LocalDateTime end,
+            @Param("statuses") java.util.List<com.sportvenue.entity.enums.BookingStatus> statuses);
 
     /**
      * Tổng Gross toàn hệ thống (Admin) theo khoảng thời gian.

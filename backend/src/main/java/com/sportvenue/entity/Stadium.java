@@ -192,10 +192,10 @@ public class Stadium implements Serializable {
             return this.complex.getOwner();
         } else if (this.nodeType == StadiumNodeType.COURT && this.parentStadium != null) {
             StadiumComplex parentComplex = this.parentStadium.getComplex();
-            if (parentComplex == null) {
-                throw new IllegalStateException("Court thiếu complex reference ở parent Facility: " + this.stadiumId);
+            if (parentComplex != null) {
+                return parentComplex.getOwner();
             }
-            return parentComplex.getOwner();
+            return this.parentStadium.getOwner(); // Fallback if complex is missing
         }
         return this.owner; // Fallback cho dữ liệu cũ
     }

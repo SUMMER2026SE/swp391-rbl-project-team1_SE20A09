@@ -193,10 +193,9 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
     @Query("""
             SELECT b.reservationDate AS date,
                    COALESCE(SUM(
-                       CASE
-                           WHEN b.totalPrice > b.serviceFee THEN b.totalPrice - b.serviceFee
-                           ELSE 0
-                       END
+                       (SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.booking = b AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS AND p.amount > 0)
+                       - (SELECT COALESCE(SUM(ABS(p.amount)), 0) FROM Payment p WHERE p.booking = b AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS AND p.amount < 0)
+                       - (SELECT COALESCE(SUM(ABS(wt.amount)), 0) FROM WalletTransaction wt WHERE wt.booking = b AND wt.transactionType = com.sportvenue.entity.enums.WalletTransactionType.SERVICE_FEE_DEBIT)
                    ), 0) AS revenue
             FROM Booking b
             JOIN b.stadium s
@@ -218,10 +217,9 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
                    s.stadiumName AS stadiumName,
                    COUNT(DISTINCT b.bookingId) AS totalBookings,
                    COALESCE(SUM(
-                       CASE
-                           WHEN b.totalPrice > b.serviceFee THEN b.totalPrice - b.serviceFee
-                           ELSE 0
-                       END
+                       (SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.booking = b AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS AND p.amount > 0)
+                       - (SELECT COALESCE(SUM(ABS(p.amount)), 0) FROM Payment p WHERE p.booking = b AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS AND p.amount < 0)
+                       - (SELECT COALESCE(SUM(ABS(wt.amount)), 0) FROM WalletTransaction wt WHERE wt.booking = b AND wt.transactionType = com.sportvenue.entity.enums.WalletTransactionType.SERVICE_FEE_DEBIT)
                    ), 0) AS totalRevenue
             FROM Booking b
             JOIN b.stadium s
@@ -231,10 +229,9 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
             AND b.reservationDate BETWEEN :startDate AND :endDate
             GROUP BY s.stadiumId, s.stadiumName
             ORDER BY COALESCE(SUM(
-                       CASE
-                           WHEN b.totalPrice > b.serviceFee THEN b.totalPrice - b.serviceFee
-                           ELSE 0
-                       END
+                       (SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.booking = b AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS AND p.amount > 0)
+                       - (SELECT COALESCE(SUM(ABS(p.amount)), 0) FROM Payment p WHERE p.booking = b AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS AND p.amount < 0)
+                       - (SELECT COALESCE(SUM(ABS(wt.amount)), 0) FROM WalletTransaction wt WHERE wt.booking = b AND wt.transactionType = com.sportvenue.entity.enums.WalletTransactionType.SERVICE_FEE_DEBIT)
                    ), 0) DESC
             """)
     List<com.sportvenue.repository.projection.VenueRevenueProjection> getOwnerVenueNetRevenueBreakdown(
@@ -245,10 +242,9 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
 
     @Query("""
             SELECT COALESCE(SUM(
-                CASE
-                    WHEN b.totalPrice > b.serviceFee THEN b.totalPrice - b.serviceFee
-                    ELSE 0
-                END
+                (SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.booking = b AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS AND p.amount > 0)
+                - (SELECT COALESCE(SUM(ABS(p.amount)), 0) FROM Payment p WHERE p.booking = b AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS AND p.amount < 0)
+                - (SELECT COALESCE(SUM(ABS(wt.amount)), 0) FROM WalletTransaction wt WHERE wt.booking = b AND wt.transactionType = com.sportvenue.entity.enums.WalletTransactionType.SERVICE_FEE_DEBIT)
             ), 0)
             FROM Booking b
             JOIN b.stadium s

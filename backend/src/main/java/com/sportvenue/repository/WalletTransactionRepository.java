@@ -48,14 +48,17 @@ public interface WalletTransactionRepository extends JpaRepository<WalletTransac
     @Query("""
             SELECT COALESCE(SUM(ABS(wt.amount)), 0)
             FROM WalletTransaction wt
+            LEFT JOIN wt.booking b
             WHERE wt.wallet.owner.ownerId = :ownerId
             AND wt.transactionType = :type
-            AND (:start IS NULL OR wt.createdAt >= :start)
-            AND (:end IS NULL OR wt.createdAt <= :end)
+            AND wt.createdAt >= :start
+            AND wt.createdAt <= :end
+            AND b.bookingStatus IN :statuses
             """)
-    BigDecimal sumOwnerFeeByTypeAndDateRange(
+    BigDecimal sumOwnerFeeByTypeDateRangeAndStatuses(
             @Param("ownerId") Integer ownerId,
             @Param("type") WalletTransactionType type,
             @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end);
+            @Param("end") LocalDateTime end,
+            @Param("statuses") java.util.List<com.sportvenue.entity.enums.BookingStatus> statuses);
 }
