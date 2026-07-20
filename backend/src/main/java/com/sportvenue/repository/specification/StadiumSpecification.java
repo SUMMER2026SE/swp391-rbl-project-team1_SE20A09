@@ -105,6 +105,10 @@ public class StadiumSpecification {
         if (StringUtils.hasText(req.getDistrict())) {
             preds.add(cb.equal(cb.lower(root.get("complex").get("district")), req.getDistrict().toLowerCase()));
         }
+        // BUG 3 FIX: Lọc theo loại sân bóng đá (Sân 5 người, Sân 7 người, v.v.)
+        if (req.getFootballFieldType() != null) {
+            preds.add(cb.equal(root.get("footballFieldType"), req.getFootballFieldType()));
+        }
         if (req.getMinPrice() != null || req.getMaxPrice() != null) {
             Subquery<Integer> priceSubquery = query.subquery(Integer.class);
             Root<TimeSlot> priceSlotRoot = priceSubquery.from(TimeSlot.class);
@@ -132,15 +136,27 @@ public class StadiumSpecification {
             List.of(BookingStatus.PENDING_PAYMENT, BookingStatus.PENDING, BookingStatus.CONFIRMED);
 
     /**
-     * Sân phải có ít nhất 1 slot AVAILABLE khớp khoảng giờ yêu cầu; nếu có {@code targetDate},
+     * ISSUE 2 FIX: Sân phải có ít nhất 1 slot AVAILABLE khớp khoảng giờ yêu cầu; nếu có {@code targetDate},
      * slot đó còn phải CHƯA bị đặt trong ngày đó (đối chiếu bảng booking) — trước đây chỉ check
      * khung giờ mẫu tĩnh nên "tìm sân trống ngày X" vẫn trả sân đã kín lịch ngày X.
      * targetDate không kèm giờ cũng được hỗ trợ: chỉ cần còn bất kỳ slot nào trống ngày đó.
+     *
+     * FIX: Khi user chỉ cung cấp startTime (VD "19h") mà không có endTime,
+     * vẫn kiểm tra availability bằng cách giả định 1 giờ chơi (endTime = startTime + 1h).
      */
     private static void addTimeSlotPredicate(List<Predicate> preds, CriteriaBuilder cb, Root<Stadium> root, CriteriaQuery<?> query, StadiumSearchRequest req) {
-        boolean hasTimeRange = req.getStartTime() != null && req.getEndTime() != null;
-        if (!hasTimeRange && req.getTargetDate() == null) {
+        // ISSUE 2 FIX: Check availability if EITHER targetDate OR startTime is provided
+        if (req.getTargetDate() == null && req.getStartTime() == null) {
             return;
+        }
+
+        // Determine effective time range
+        var effectiveStartTime = req.getStartTime();
+        var effectiveEndTime = req.getEndTime();
+
+        // If only startTime is provided, assume 1-hour duration for availability check
+        if (effectiveStartTime != null && effectiveEndTime == null) {
+            effectiveEndTime = effectiveStartTime.plusHours(1);
         }
 
         Subquery<Integer> slotSubquery = query.subquery(Integer.class);
@@ -150,10 +166,11 @@ public class StadiumSpecification {
         List<Predicate> slotPreds = new ArrayList<>();
         slotPreds.add(cb.equal(slotRoot.get("stadium").get("stadiumId"), root.get("stadiumId")));
         slotPreds.add(cb.equal(slotRoot.get("slotStatus"), SlotStatus.AVAILABLE));
-        if (hasTimeRange) {
+        // ISSUE 2 FIX: Use effective times for overlap check
+        if (effectiveStartTime != null && effectiveEndTime != null) {
             slotPreds.add(cb.and(
-                    cb.lessThan(slotRoot.get("startTime"), req.getEndTime()),
-                    cb.greaterThan(slotRoot.get("endTime"), req.getStartTime())
+                    cb.lessThan(slotRoot.get("startTime"), effectiveEndTime),
+                    cb.greaterThan(slotRoot.get("endTime"), effectiveStartTime)
             ));
         }
 
