@@ -78,6 +78,7 @@ public class OwnerBookingService {
             Booking booking = byDateAndSlot.get(day.getDate() + ":" + slot.getSlotId());
             if (booking != null) {
                 slot.setBookingId(booking.getBookingId());
+                slot.setIsWalkIn(booking.getIsWalkIn());
                 // Walk-in bookings have user = null
                 if (booking.getUser() != null) {
                     slot.setCustomerId(booking.getUser().getUserId());

@@ -1,4 +1,4 @@
-import { get, post, put, publicApi } from "@/lib/api";
+import { get, post, put, del, publicApi } from "@/lib/api";
 
 export type BookingHistoryItem = {
   id: string;
@@ -275,6 +275,8 @@ export type WeeklySlotItem = {
   bookingId?: number;
   customerId?: number;
   customerDisplayName?: string;
+  /** true nếu booking chiếm slot này là walk-in (khách đặt tại quầy) — cho phép Owner void. */
+  isWalkIn?: boolean;
 };
 
 /** Một ngày trong weekly grid — kèm tên thứ tiếng Việt. */
@@ -353,6 +355,14 @@ export type CreateWalkInBookingPayload = {
  */
 export async function createWalkInBooking(payload: CreateWalkInBookingPayload): Promise<BookingDetailResponse> {
   return post<BookingDetailResponse>("/owner/bookings/walk-in", payload);
+}
+
+/**
+ * Hủy một đơn walk-in tạo nhầm (Owner) — chỉ áp dụng cho đơn walk-in đang CONFIRMED.
+ * Giải phóng lại khung giờ về AVAILABLE.
+ */
+export async function voidWalkInBooking(bookingId: number): Promise<BookingDetailResponse> {
+  return del<BookingDetailResponse>(`/owner/bookings/walk-in/${bookingId}`);
 }
 
 // ── UC-CUS-03: Cancel booking ───────────────────────────────────────────────

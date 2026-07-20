@@ -26,7 +26,7 @@ import {
   createOrUpdateException,
   deleteException,
 } from "@/lib/api/timeSlot"
-import { getOwnerWeeklySlots, WeeklySlotsResponse, WeeklySlotItem } from "@/lib/bookings-api"
+import { getOwnerWeeklySlots, WeeklySlotsResponse, WeeklySlotItem, voidWalkInBooking } from "@/lib/bookings-api"
 import { chatUrl, createContextualConversation } from "@/lib/contextual-chat"
 import { useRouter } from "next/navigation"
 import { TimeSlot, CreateTimeSlotRequest } from "@/types/timeSlot"
@@ -130,6 +130,21 @@ export function TimeSlotManager({
       router.push(chatUrl(conversationId))
     } catch { toast.error('Không thể bắt đầu cuộc trò chuyện') }
     finally { setOpeningBookingChat(false) }
+  }
+
+  const handleVoidWalkIn = (bookingId: number) => {
+    setSelectedBooking(null)
+    confirm({
+      title: "Hủy đơn vãng lai",
+      description: "Đơn tại quầy này sẽ bị hủy và khung giờ được giải phóng lại — dùng khi tạo nhầm sân/giờ. Hành động không thể hoàn tác.",
+      confirmText: "Hủy đơn",
+      variant: "destructive",
+      onConfirm: async () => {
+        await voidWalkInBooking(bookingId)
+        toast.success("Đã hủy đơn vãng lai, khung giờ đã được giải phóng")
+        loadData()
+      }
+    })
   }
 
   // Custom confirm hook
@@ -760,15 +775,32 @@ export function TimeSlotManager({
           {selectedBooking && (
             <div className="space-y-3 text-sm">
               <div className="rounded-lg bg-slate-50 p-3 space-y-1">
-                <p><strong>Khách hàng:</strong> {selectedBooking.slot.customerDisplayName || 'Khách hàng'}</p>
+                <p className="flex items-center gap-2">
+                  <strong>Khách hàng:</strong> {selectedBooking.slot.customerDisplayName || 'Khách hàng'}
+                  {selectedBooking.slot.isWalkIn && (
+                    <Badge variant="outline" className="text-[10px] text-blue-600 border-blue-200 bg-blue-50">
+                      Tại quầy
+                    </Badge>
+                  )}
+                </p>
                 <p><strong>Ngày:</strong> {formatDayShort(selectedBooking.date)}</p>
                 <p><strong>Khung giờ:</strong> {selectedBooking.slot.startTime} - {selectedBooking.slot.endTime}</p>
                 <p><strong>Mã booking:</strong> #{selectedBooking.slot.bookingId}</p>
               </div>
-              <Button className="w-full" onClick={handleMessageCustomer}
-                disabled={!selectedBooking.slot.customerId || openingBookingChat}>
-                {openingBookingChat ? 'Đang mở...' : 'Nhắn tin cho khách hàng'}
-              </Button>
+              {selectedBooking.slot.isWalkIn ? (
+                <Button
+                  className="w-full"
+                  variant="destructive"
+                  onClick={() => selectedBooking.slot.bookingId && handleVoidWalkIn(selectedBooking.slot.bookingId)}
+                >
+                  Hủy đơn vãng lai (tạo nhầm)
+                </Button>
+              ) : (
+                <Button className="w-full" onClick={handleMessageCustomer}
+                  disabled={!selectedBooking.slot.customerId || openingBookingChat}>
+                  {openingBookingChat ? 'Đang mở...' : 'Nhắn tin cho khách hàng'}
+                </Button>
+              )}
             </div>
           )}
         </DialogContent>
