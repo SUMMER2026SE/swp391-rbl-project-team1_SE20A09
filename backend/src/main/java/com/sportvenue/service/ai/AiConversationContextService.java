@@ -46,8 +46,13 @@ public class AiConversationContextService {
         private List<Integer> lastShownStadiumIds;
         private List<Integer> lastShownMatchIds;
         private List<Integer> lastShownSlotIds;
+        private List<Integer> lastShownBookingIds; // CancelBookingHandler: danh sách booking vừa show để user chọn
         private Integer currentStadiumId;
         private PendingAction pendingAction;
+
+        // Cancel booking flow state
+        private Boolean awaitingCancelConfirmation;
+        private Integer pendingCancelBookingId; // booking đang chờ user confirm
 
         // Expanded context
         private String currentIntent;
@@ -84,6 +89,68 @@ public class AiConversationContextService {
         }
         ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
         ctx.setLastShownSlotIds(slotIds);
+        save(conversationKey, ctx);
+    }
+
+    public void saveLastShownBookings(String conversationKey, List<Integer> bookingIds) {
+        if (conversationKey == null || bookingIds == null || bookingIds.isEmpty()) {
+            return;
+        }
+        ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
+        ctx.setLastShownBookingIds(bookingIds);
+        save(conversationKey, ctx);
+    }
+
+    public List<Integer> getLastShownBookingIds(String conversationKey) {
+        if (conversationKey == null) {
+            return null;
+        }
+        return load(conversationKey).map(ConversationContext::getLastShownBookingIds).orElse(null);
+    }
+
+    public Optional<Integer> resolveBookingIdByIndex(String conversationKey, int targetIndex) {
+        if (conversationKey == null) {
+            return Optional.empty();
+        }
+        return load(conversationKey)
+                .map(ConversationContext::getLastShownBookingIds)
+                .filter(ids -> ids != null && targetIndex >= 0 && targetIndex < ids.size())
+                .map(ids -> ids.get(targetIndex));
+    }
+
+    public Optional<Integer> resolveLastBookingId(String conversationKey) {
+        if (conversationKey == null) {
+            return Optional.empty();
+        }
+        return load(conversationKey)
+                .map(ConversationContext::getLastShownBookingIds)
+                .filter(ids -> ids != null && !ids.isEmpty())
+                .map(ids -> ids.get(ids.size() - 1)); // Last item = đơn cuối cùng
+    }
+
+    // Cancel booking flow methods
+    public boolean isAwaitingCancelConfirmation(String conversationKey) {
+        return load(conversationKey)
+                .map(ctx -> Boolean.TRUE.equals(ctx.getAwaitingCancelConfirmation()))
+                .orElse(false);
+    }
+
+    public void setAwaitingCancelConfirmation(String conversationKey, Integer bookingId) {
+        ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
+        ctx.setAwaitingCancelConfirmation(true);
+        ctx.setPendingCancelBookingId(bookingId);
+        save(conversationKey, ctx);
+    }
+
+    public Optional<Integer> getPendingCancelBookingId(String conversationKey) {
+        return load(conversationKey)
+                .map(ConversationContext::getPendingCancelBookingId);
+    }
+
+    public void clearAwaitingCancelConfirmation(String conversationKey) {
+        ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
+        ctx.setAwaitingCancelConfirmation(false);
+        ctx.setPendingCancelBookingId(null);
         save(conversationKey, ctx);
     }
 
@@ -189,6 +256,19 @@ public class AiConversationContextService {
         save(conversationKey, ctx);
     }
 
+    /**
+     * Get currentDate from conversation context as LocalDate.
+     */
+    public Optional<java.time.LocalDate> getCurrentDate(String conversationKey) {
+        if (conversationKey == null) {
+            return Optional.empty();
+        }
+        return load(conversationKey)
+                .map(ConversationContext::getCurrentDate)
+                .filter(dateStr -> dateStr != null && !dateStr.isBlank())
+                .map(java.time.LocalDate::parse);
+    }
+
     public Optional<ConversationContext> getContext(String conversationKey) {
         if (conversationKey == null) {
             return Optional.empty();
@@ -205,12 +285,25 @@ public class AiConversationContextService {
         save(conversationKey, ctx);
     }
 
+    public boolean isAwaitingBookingConfirmation(String conversationKey) {
+        return load(conversationKey)
+                .map(ctx -> ctx.getBookingDraft() != null && !ctx.getBookingDraft().isEmpty())
+                .orElse(false);
+    }
+
+    public void clearBookingDraft(String conversationKey) {
+        if (conversationKey == null) return;
+        ConversationContext ctx = load(conversationKey).orElse(new ConversationContext());
+        ctx.setBookingDraft(null);
+        save(conversationKey, ctx);
+    }
+
     private void save(String conversationKey, ConversationContext results) {
         try {
             String json = objectMapper.writeValueAsString(results);
             redisTemplate.opsForValue().set(KEY_PREFIX + conversationKey, json, TTL);
         } catch (Exception e) {
-            log.warn("Không lưu được context (bỏ qua, không ảnh hưởng luồng chat chính): {}", e.getMessage());
+            log.warn("Không lưu được context: {}", e.getMessage());
         }
     }
 
@@ -222,7 +315,7 @@ public class AiConversationContextService {
             }
             return Optional.ofNullable(objectMapper.readValue(json, ConversationContext.class));
         } catch (Exception e) {
-            log.warn("Không đọc được context (hoặc sai schema cũ), reset context: {}", e.getMessage());
+            log.warn("Không đọc được context: {}", e.getMessage());
             return Optional.empty();
         }
     }
