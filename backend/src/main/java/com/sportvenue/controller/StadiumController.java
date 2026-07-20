@@ -8,6 +8,8 @@ import com.sportvenue.dto.response.StadiumResponse;
 import com.sportvenue.security.RequireApprovedOwner;
 import com.sportvenue.security.UserPrincipal;
 import com.sportvenue.service.StadiumService;
+import com.sportvenue.validation.EnumConstraint;
+import com.sportvenue.entity.enums.OwnerStadiumFilterStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -17,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,6 +37,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Stadium", description = "Endpoints for managing sport venues (stadiums)")
 @Slf4j
+@Validated
 public class StadiumController {
 
     private final StadiumService stadiumService;
@@ -77,12 +81,12 @@ public class StadiumController {
     @GetMapping("/my")
     @PreAuthorize("hasRole('Owner')")
     @RequireApprovedOwner
-    @Operation(summary = "Get my stadiums", description = "Returns all stadiums owned by the authenticated owner.")
+    @Operation(summary = "Get my stadiums", description = "Returns all stadiums owned by the authenticated owner. Optional status filter values: ACTIVE, PENDING, SUSPENDED.")
     public ResponseEntity<List<StadiumResponse>> getMyStadiums(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Integer sportTypeId,
-            @RequestParam(required = false) String status) {
+            @RequestParam(required = false) @EnumConstraint(value = OwnerStadiumFilterStatus.class, message = "Trạng thái lọc không hợp lệ. Phải là một trong: ACTIVE, PENDING, SUSPENDED") String status) {
         List<StadiumResponse> stadiums = stadiumService.getMyStadiums(
                 userPrincipal.getUser().getUserId(), search, sportTypeId, status);
         return ResponseEntity.ok(stadiums);
