@@ -151,18 +151,24 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 
         // Gross: Payment amount > 0, SUCCESS
         BigDecimal totalGMV = paymentRepository.sumPlatformGrossByDateRange(startDt, endDt);
-        if (totalGMV == null) totalGMV = BigDecimal.ZERO;
+        if (totalGMV == null) {
+            totalGMV = BigDecimal.ZERO;
+        }
 
         // Refund: Payment amount < 0, SUCCESS (trả về giá trị dương)
         BigDecimal totalRefund = paymentRepository.sumPlatformRefundByDateRange(startDt, endDt);
-        if (totalRefund == null) totalRefund = BigDecimal.ZERO;
+        if (totalRefund == null) {
+            totalRefund = BigDecimal.ZERO;
+        }
 
         // Fee: Platform Wallet SERVICE_FEE_CREDIT — phí thực sự Platform thu được
         // (không dùng SERVICE_FEE_DEBIT từ Owner wallet để tránh double-counting khi
         //  nhiều owner — Platform wallet là đầu nhận duy nhất)
         BigDecimal totalServiceFee = walletTransactionRepository.sumPlatformFeeByTypeAndDateRange(
                 WalletTransactionType.SERVICE_FEE_CREDIT, startDt, endDt);
-        if (totalServiceFee == null) totalServiceFee = BigDecimal.ZERO;
+        if (totalServiceFee == null) {
+            totalServiceFee = BigDecimal.ZERO;
+        }
 
         BigDecimal totalNet = totalGMV.subtract(totalRefund).subtract(totalServiceFee);
 

@@ -619,18 +619,24 @@ public class RefundServiceImpl implements RefundService {
 
         // Gross = tổng payment SUCCESS, amount > 0, thuộc booking của owner
         BigDecimal grossAmount = paymentRepository.sumOwnerGrossByDateRangeAndStatuses(ownerId, stadiumId, minDate, maxDate, statuses);
-        if (grossAmount == null) grossAmount = BigDecimal.ZERO;
+        if (grossAmount == null) {
+            grossAmount = BigDecimal.ZERO;
+        }
 
         // Refund = tổng payment SUCCESS, amount < 0, thuộc booking của owner (giá trị dương)
         BigDecimal refundedAmount = paymentRepository.sumOwnerRefundByDateRangeAndStatuses(ownerId, stadiumId, minDate, maxDate, statuses);
-        if (refundedAmount == null) refundedAmount = BigDecimal.ZERO;
+        if (refundedAmount == null) {
+            refundedAmount = BigDecimal.ZERO;
+        }
 
         // Fee = tổng SERVICE_FEE_DEBIT trong Owner Wallet ledger (đã xảy ra thực tế)
         BigDecimal serviceFeeTotal = walletTransactionRepository.sumOwnerFeeByTypeDateRangeAndStatuses(
                 ownerId, stadiumId,
                 com.sportvenue.entity.enums.WalletTransactionType.SERVICE_FEE_DEBIT,
                 minDate, maxDate, statuses);
-        if (serviceFeeTotal == null) serviceFeeTotal = BigDecimal.ZERO;
+        if (serviceFeeTotal == null) {
+            serviceFeeTotal = BigDecimal.ZERO;
+        }
 
         BigDecimal netAmount = grossAmount.subtract(refundedAmount).subtract(serviceFeeTotal);
 
