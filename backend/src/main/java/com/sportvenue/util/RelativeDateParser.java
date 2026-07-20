@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
 @Component
 public class RelativeDateParser {
 
-    private final Clock clock;
+    private Clock clock;
     private static final ZoneId TZ = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private static final Pattern THU_X_TUAN_NAY = Pattern.compile(
@@ -24,7 +24,7 @@ public class RelativeDateParser {
             Pattern.CASE_INSENSITIVE);
 
     private static final Pattern NGAY_NAY = Pattern.compile(
-            "hôm\\s*nay|hôm\\s*nay", Pattern.CASE_INSENSITIVE);
+            "hôm\\s*nay", Pattern.CASE_INSENSITIVE);
 
     private static final Pattern NGAY_MAI = Pattern.compile(
             "ngày\\s*mai", Pattern.CASE_INSENSITIVE);
@@ -44,13 +44,7 @@ public class RelativeDateParser {
     }
 
     public void setClock(Clock clock) {
-        try {
-            java.lang.reflect.Field field = RelativeDateParser.class.getDeclaredField("clock");
-            field.setAccessible(true);
-            field.set(this, clock);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to set clock via reflection", e);
-        }
+        this.clock = clock;
     }
 
     public LocalDate parse(String message) {
@@ -100,13 +94,16 @@ public class RelativeDateParser {
             return LocalDate.now(clock);
         }
 
-        // "thứ X" standalone
+        // "thứ X" standalone — "thứ 2".."thứ 7" là Monday..Saturday (ISO = X-1), "thứ 8" là cách nói
+        // colloquial cho Chủ nhật (ISO = 7). Phải trừ 1 giống hệt extractDayOfWeek() ở trên, nếu
+        // không "thứ 4" (Wednesday) sẽ bị resolve nhầm thành DayOfWeek.of(4) = Thursday.
         Matcher m6 = Pattern.compile("thứ\\s*(\\d+)").matcher(msg);
         if (m6.find()) {
-            int dayOfWeek = Integer.parseInt(m6.group(1));
-            if (dayOfWeek >= 2 && dayOfWeek <= 8) {
+            int rawNum = Integer.parseInt(m6.group(1));
+            if (rawNum >= 2 && rawNum <= 8) {
+                int isoDayOfWeek = rawNum == 8 ? 7 : rawNum - 1;
                 if (!msg.contains("tuần sau")) {
-                    return getNextDateOfDayOfWeek(DayOfWeek.of(dayOfWeek == 8 ? 7 : dayOfWeek), false);
+                    return getNextDateOfDayOfWeek(DayOfWeek.of(isoDayOfWeek), false);
                 }
             }
         }

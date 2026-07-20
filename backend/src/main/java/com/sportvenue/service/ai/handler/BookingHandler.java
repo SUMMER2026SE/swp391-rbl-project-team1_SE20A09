@@ -897,7 +897,6 @@ public class BookingHandler {
     /**
      * Build clarification message when user provides ambiguous stadium identifier.
      */
-     */
     private String buildClarificationMessage(int targetIndex, List<Integer> lastShownStadiumIds) {
         if (lastShownStadiumIds == null || lastShownStadiumIds.isEmpty()) {
             return "Mình không tìm thấy sân bạn muốn chọn trong danh sách vừa hiển thị. Bạn muốn đặt sân nào? (Vd: sân bóng đá Thủ Đức)";

@@ -95,24 +95,13 @@ public class AiChatServiceImpl implements AiChatService {
 
     @Override
     public AiChatTurnResponse handleChat(AiChatTurnRequest request, UserPrincipal userPrincipal, String conversationKey) {
-        // BUG B DEBUG: Log server time và request info
         Integer userId = userPrincipal != null ? userPrincipal.getUserId() : null;
-        LocalDate serverDate = LocalDate.now(clock);
-        LocalTime serverTime = LocalTime.now(clock);
-        log.info("========================================");
-        log.info("BUG B DEBUG: Server current date={}, time={}", serverDate, serverTime);
-        log.info("BUG B DEBUG: Raw user message='{}'", request.getMessage());
-        log.info("BUG B DEBUG: conversationKey='{}', userId={}", conversationKey, userId);
-        log.info("========================================");
+        log.debug("handleChat: conversationKey='{}', userId={}, message='{}'", conversationKey, userId, request.getMessage());
         String systemPrompt = buildSystemPrompt(userId, request.getMessage());
 
         // GUEST FIX: If LLM returns create_booking for a guest, override to need_more_info
         // This catches cases where the LLM doesn't follow the guest-suffix.md rule correctly
         final boolean isGuest = (userId == null);
-
-        // BUG B DEBUG: Log system prompt content (especially current date context)
-        log.info("BUG B DEBUG: System prompt content:\n{}", systemPrompt);
-        log.info("BUG B DEBUG: ---END SYSTEM PROMPT---");
 
         // FAST PATH: Nếu đang ở bước chờ xác nhận (Cancel Confirm), BỎ QUA GỌI LLM hoàn toàn
         if (conversationContextService.isAwaitingCancelConfirmation(conversationKey)) {
@@ -237,9 +226,7 @@ public class AiChatServiceImpl implements AiChatService {
         long startTime = System.currentTimeMillis();
         try {
             result = groqClient.chatJson(model, systemPrompt, history, request.getMessage());
-            // BUG B DEBUG: Log raw LLM response
-            log.info("BUG B DEBUG: LLM raw JSON response:\n{}", result.text());
-            log.info("BUG B DEBUG: ---END LLM RESPONSE---");
+            log.debug("Groq raw JSON cho message '{}': {}", request.getMessage(), result.text());
         } catch (LlmGatewayException e) {
             log.error("Lỗi gọi Groq gateway (kind={}): {}", e.getKind(), e.getMessage());
             String errorMessage = e.getKind() == LlmGatewayException.Kind.RATE_LIMITED
@@ -261,16 +248,11 @@ public class AiChatServiceImpl implements AiChatService {
             parseResult.intentResult().setMessage("Bạn cần đăng nhập để đặt sân. Trước tiên, để mình tìm các sân phù hợp cho bạn nhé.");
         }
 
-        // BUG B DEBUG: Log parsed intent result
-        log.info("BUG B DEBUG: Parsed intent='{}', params={}", parseResult.intentResult().getIntent(), parseResult.intentResult().getParams());
-
         long handlerStartTime = System.currentTimeMillis();
         AiChatTurnResponse response = dispatch(parseResult.intentResult(), request.getMessage(), conversationKey, userId, request.getUserLat(), request.getUserLng());
         long processingTimeHandlerMs = System.currentTimeMillis() - handlerStartTime;
 
-        // BUG B DEBUG: Log final response
-        log.info("BUG B DEBUG: Final response intent='{}', message='{}'", response.getIntent(), response.getMessage());
-        log.info("========================================");
+        log.debug("Parsed intent='{}' -> response intent='{}'", parseResult.intentResult().getIntent(), response.getIntent());
 
         saveUsageLog(userId, parseResult, result, request.getMessage(), response, latencyMs, processingTimeHandlerMs);
 
@@ -286,15 +268,6 @@ public class AiChatServiceImpl implements AiChatService {
         try {
             intentResult = objectMapper.readValue(result.text(), ExtractedIntentResult.class);
             log.info("Intent nhận diện: '{}' -> '{}', confidence: {}", userMessage, intentResult.getIntent(), intentResult.getConfidence());
-            // Explicit debug for confirmation keywords
-            String msgLower = userMessage.toLowerCase(Locale.ROOT).trim();
-            if (msgLower.equals("có") || msgLower.equals("có") || msgLower.contains("đồng ý") || msgLower.contains("xác nhận")) {
-                log.info("=== CONFIRM KEYWORD DETECTED ===");
-                log.info("RAW LLM JSON: {}", result.text());
-                log.info("Parsed intent: '{}', confidence: {}, params: {}",
-                    intentResult.getIntent(), intentResult.getConfidence(), intentResult.getParams());
-                log.info("=== END CONFIRM DEBUG ===");
-            }
 
             // Normalize params
             intentResult = paramNormalizer.normalize(intentResult);
@@ -377,9 +350,13 @@ public class AiChatServiceImpl implements AiChatService {
         }
 
         // DEFENSIVE FIX: Nếu LLM trả về need_more_info/nhầm intent MÀ message là confirm keyword,
-        // thử lấy pending booking từ lastShownBookings (Redis có thể chưa kịp persist)
-        // Trường hợp: "Có" nhưng isAwaitingCancelConfirmation=false do Redis race condition
-        if (isLikelyConfirmMessage(rawUserMessage) && !conversationKeyServiceHasValidState(conversationKey)) {
+        // thử lấy pending booking từ lastShownBookings (Redis có thể chưa kịp persist).
+        // Trường hợp: "Có" nhưng isAwaitingCancelConfirmation=false do Redis race condition — ở đây
+        // flag đó đã chắc chắn false (nhánh isAwaitingCancelConfirmation=true đã return ở trên), nên
+        // conversationKeyServiceHasValidState() lúc này chỉ còn ý nghĩa "có lastShownBookings hay
+        // không". Trước đây bị phủ định (!) khiến điều kiện luôn kéo theo lastShownBookings rỗng —
+        // vô hiệu hóa chính nhánh fallback đang muốn dùng lastShownBookings để resolve.
+        if (isLikelyConfirmMessage(rawUserMessage) && conversationKeyServiceHasValidState(conversationKey)) {
             log.info("DEFENSIVE: Message looks like confirmation but Redis state missing. Attempting to resolve from lastShownBookings.");
             Optional<Integer> lastBookingId = conversationContextService.resolveLastBookingId(conversationKey);
             if (lastBookingId.isPresent()) {

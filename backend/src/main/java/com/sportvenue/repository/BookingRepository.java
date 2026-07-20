@@ -72,6 +72,16 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
             Integer userId, List<BookingStatus> statuses, Pageable pageable);
 
     /**
+     * Tra cứu 1 booking cụ thể theo bookingId, scoped theo userId + status — dùng cho lookup
+     * tường minh (VD: user gõ "hủy đơn #648") nên không được giới hạn bởi page size như
+     * {@link #findByUserUserIdAndBookingStatusInOrderByReservationDateDesc}, nếu không booking
+     * nằm ngoài top N gần nhất sẽ báo "không tìm thấy" dù vẫn thuộc về user và hủy được.
+     */
+    @EntityGraph(attributePaths = {"stadium", "stadium.sportType", "stadium.images", "slot"})
+    Optional<Booking> findByBookingIdAndUserUserIdAndBookingStatusIn(
+            Integer bookingId, Integer userId, List<BookingStatus> statuses);
+
+    /**
      * UC-CUS-01: Lịch sử đặt sân của customer hiện tại — hỗ trợ filter status tùy chọn.
      * Dùng cho {@code GET /api/v1/bookings/me}.
      *

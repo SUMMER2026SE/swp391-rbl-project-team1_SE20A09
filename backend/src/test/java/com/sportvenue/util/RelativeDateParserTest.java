@@ -128,4 +128,17 @@ class RelativeDateParserTest {
         assertEquals(LocalDate.of(2026, 7, 25), result,
             "thứ 7 tuần này from Saturday 2026-07-18 should be 2026-07-25");
     }
+
+    @Test
+    void testThu4Standalone_FromFriday_ShouldBe_2026_07_22() {
+        // Friday 2026-07-17, standalone "thứ 4" (no "tuần này/sau" qualifier) should be
+        // Wednesday 2026-07-22, NOT Thursday. "thứ 4" = Wednesday (ISO day 3), so the parser
+        // must subtract 1 from the raw number just like the qualified patterns do.
+        RelativeDateParser parser = new RelativeDateParser(FRIDAY_CLOCK);
+
+        LocalDate result = parser.parse("thứ 4");
+
+        assertEquals(LocalDate.of(2026, 7, 22), result,
+            "standalone 'thứ 4' from Friday 2026-07-17 should be Wednesday 2026-07-22");
+    }
 }

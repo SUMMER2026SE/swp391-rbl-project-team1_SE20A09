@@ -7,7 +7,6 @@ import com.sportvenue.entity.Booking;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.service.ai.AiConversationContextService;
-import com.sportvenue.service.ai.ParamNormalizer;
 import com.sportvenue.service.BookingService;
 import com.sportvenue.util.StadiumUtils;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +32,6 @@ public class CancelBookingHandler {
     private final BookingRepository bookingRepository;
     private final AiConversationContextService conversationContextService;
     private final BookingService bookingService;
-    private final ParamNormalizer paramNormalizer;
 
     public AiChatTurnResponse handle(JsonNode args, String message, Integer userId, String conversationKey) {
         if (userId == null) {
@@ -44,17 +42,10 @@ public class CancelBookingHandler {
         }
 
         // Check nếu user đang trong confirmation flow
-        log.info("=== CANCEL HANDLER DEBUG ===");
-        log.info("conversationKey='{}', message='{}'", conversationKey, message);
-        boolean awaiting = conversationContextService.isAwaitingCancelConfirmation(conversationKey);
-        log.info("isAwaitingCancelConfirmation={}", awaiting);
-        if (awaiting) {
+        if (conversationContextService.isAwaitingCancelConfirmation(conversationKey)) {
             Optional<Integer> pendingId = conversationContextService.getPendingCancelBookingId(conversationKey);
-            log.info("pendingCancelBookingId from Redis: {}", pendingId.orElse(null));
-            log.info("=== END DEBUG ===");
             return handleConfirmation(message, userId, conversationKey, pendingId.orElse(null));
         }
-        log.info("=== END DEBUG ===");
 
         // Resolve booking từ args
         ResolveResult resolved = resolveBookingId(args, message, userId, conversationKey);
@@ -64,9 +55,7 @@ public class CancelBookingHandler {
                 // Chỉ lưu danh sách để user chọn - KHÔNG set awaiting confirmation ở đây
                 // User phải nói rõ đơn nào trước (mã, tên, vị trí), rồi mới confirm
                 List<Integer> ids = resolved.bookings.stream().map(Booking::getBookingId).toList();
-                log.info("=== LIST CASE: Saving {} booking IDs to Redis ===", ids.size());
                 conversationContextService.saveLastShownBookings(conversationKey, ids);
-                log.info("=== LIST CASE: Saved to conversationKey='{}' ===", conversationKey);
 
                 List<BookingResponse> responses = resolved.bookings.stream().map(this::toBookingResponse).toList();
                 return AiChatTurnResponse.builder()
@@ -79,10 +68,7 @@ public class CancelBookingHandler {
                 // Một booking xác định được → hỏi xác nhận
                 List<Integer> ids = resolved.bookings.stream().map(Booking::getBookingId).toList();
                 conversationContextService.saveLastShownBookings(conversationKey, ids);
-                log.info("=== SAVE CONFIRM STATE ===");
-                log.info("Saving to conversationKey='{}', bookingId={}", conversationKey, resolved.bookingId);
                 conversationContextService.setAwaitingCancelConfirmation(conversationKey, resolved.bookingId);
-                log.info("=== END SAVE ===");
 
                 BookingResponse response = toBookingResponse(resolved.bookings.get(0));
                 return AiChatTurnResponse.builder()
@@ -135,7 +121,6 @@ public class CancelBookingHandler {
      * 6. Không resolve được → hiển thị list
      */
     private ResolveResult resolveBookingId(JsonNode args, String message, Integer userId, String conversationKey) {
-        log.info("MARKER_CANCEL_FIX_V2: resolveBookingId called with args={}, conversationKey={}", args, conversationKey);
         // 1. bookingId tường minh
         if (args != null && args.hasNonNull("bookingId")) {
             int bookingId = args.get("bookingId").asInt();
@@ -193,11 +178,9 @@ public class CancelBookingHandler {
     private ResolveResult findAndValidateBooking(int bookingId, Integer userId) {
         List<BookingStatus> cancellableStatuses = List.of(
                 BookingStatus.PENDING, BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED);
-        return bookingRepository.findByUserUserIdAndBookingStatusInOrderByReservationDateDesc(
-                        userId, cancellableStatuses, PageRequest.of(0, DEFAULT_PAGE_SIZE))
-                .stream()
-                .filter(b -> b.getBookingId().equals(bookingId))
-                .findFirst()
+        // Tra thẳng theo bookingId (không giới hạn bởi DEFAULT_PAGE_SIZE) — lookup tường minh phải
+        // tìm được cả những booking không nằm trong top 5 gần nhất.
+        return bookingRepository.findByBookingIdAndUserUserIdAndBookingStatusIn(bookingId, userId, cancellableStatuses)
                 .map(b -> new ResolveResult(Status.NEED_CONFIRMATION, bookingId, null, List.of(b), null))
                 .orElseGet(() -> new ResolveResult(Status.NOT_FOUND, null,
                         "Không tìm thấy đơn đặt sân #" + bookingId + " có thể hủy. Đơn có thể đã bị hủy hoặc không thuộc về bạn.",
@@ -209,10 +192,6 @@ public class CancelBookingHandler {
                 BookingStatus.PENDING, BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED);
         Page<Booking> allBookings = bookingRepository.findByUserUserIdAndBookingStatusInOrderByReservationDateDesc(
                 userId, cancellableStatuses, PageRequest.of(0, DEFAULT_PAGE_SIZE));
-
-        log.info("=== FIND BY KEYWORD DEBUG ===");
-        log.info("keyword='{}' (normalized)", keyword);
-        log.info("Total cancellable bookings: {}", allBookings.getTotalElements());
 
         List<Booking> matched = new java.util.ArrayList<>();
         for (Booking b : allBookings.getContent()) {
@@ -234,16 +213,10 @@ public class CancelBookingHandler {
                 }
             }
 
-            log.info("Booking #{}: stadium='{}', complex='{}'", b.getBookingId(), stadiumName, complexName);
-            log.info("  match={} (keyword '{}' vs combined '{}')",
-                match, keyword, combinedLower);
-
             if (match) {
                 matched.add(b);
             }
         }
-        log.info("Total matched: {}", matched.size());
-        log.info("=== END FIND BY KEYWORD ===");
 
         if (matched.isEmpty()) {
             return new ResolveResult(Status.NOT_FOUND, null,
@@ -318,36 +291,23 @@ public class CancelBookingHandler {
      * @param preResolvedBookingId Optional booking ID resolved from lastShownBookings (pass if Redis state missing)
      */
     public AiChatTurnResponse handleConfirmation(String message, Integer userId, String conversationKey, Integer preResolvedBookingId) {
-        log.info("=== ENTRY handleConfirmation ===");
-        log.info("RAW message parameter passed to handleConfirmation: '{}'", message);
-        
         String msgLower = message != null ? message.toLowerCase().trim() : "";
-        log.info("msgLower: '{}'", msgLower);
-        
+
         Optional<Integer> pendingId = conversationContextService.getPendingCancelBookingId(conversationKey);
-        log.info("pendingId from Redis: {}", pendingId.orElse(null));
-        log.info("preResolvedBookingId: {}", preResolvedBookingId);
 
         // DEFENSIVE: If Redis state missing but we have a preResolvedBookingId, use it
         Integer effectiveBookingId = pendingId.orElse(preResolvedBookingId);
         if (effectiveBookingId == null) {
-            log.info("BRANCH 1: effectiveBookingId == null. Showing list.");
             conversationContextService.clearAwaitingCancelConfirmation(conversationKey);
             return showListAndReturn(userId, conversationKey);
         }
 
-        boolean isConf = isConfirmation(msgLower);
-        log.info("isConfirmation('{}') returned: {}", msgLower, isConf);
-        if (isConf) {
-            log.info("BRANCH 2: isConfirmation == true. Executing cancel.");
+        if (isConfirmation(msgLower)) {
             conversationContextService.clearAwaitingCancelConfirmation(conversationKey);
             return executeCancel(effectiveBookingId, userId, message);
         }
 
-        boolean isCanc = isCancellation(msgLower);
-        log.info("isCancellation('{}') returned: {}", msgLower, isCanc);
-        if (isCanc) {
-            log.info("BRANCH 3: isCancellation == true. Cancelling operation.");
+        if (isCancellation(msgLower)) {
             conversationContextService.clearAwaitingCancelConfirmation(conversationKey);
             return AiChatTurnResponse.builder()
                     .intent("cancel_booking")
@@ -355,7 +315,6 @@ public class CancelBookingHandler {
                     .build();
         }
 
-        log.info("BRANCH 4: Fallback. returning need_more_info.");
         // Không phải confirm/cancel → hỏi lại
         return AiChatTurnResponse.builder()
                 .intent("need_more_info")
@@ -365,7 +324,7 @@ public class CancelBookingHandler {
     }
 
     private boolean isCancellation(String msg) {
-        return msg.equals("không") || msg.equals("không") || msg.equals("thôi") || msg.equals("bỏ")
+        return msg.equals("không") || msg.equals("thôi") || msg.equals("bỏ")
                 || msg.equals("no") || msg.equals("n") || msg.equals("hủy thao tác") || msg.equals("cancel");
     }
 
@@ -389,7 +348,7 @@ public class CancelBookingHandler {
             log.error("Lỗi khi hủy booking #{}: {}", bookingId, e.getMessage(), e);
             return AiChatTurnResponse.builder()
                     .intent("cancel_booking")
-                    .message("Xin lỗi, không thể hủy đơn #" + bookingId + " lúc này. Lỗi: " + e.getMessage() + ". Vui lòng thử lại sau hoặc liên hệ CSKH.")
+                    .message("Xin lỗi, không thể hủy đơn #" + bookingId + " lúc này. Vui lòng thử lại sau hoặc liên hệ CSKH.")
                     .bookingId(bookingId)
                     .build();
         }
