@@ -51,7 +51,10 @@ function AIAssistantPage() {
           </p>
         </div>
 
-        <Card className="flex-1 flex flex-col overflow-hidden border-border/80 shadow-sm rounded-xl">
+        <Card
+          className="chat-widget-container flex-1 flex flex-col overflow-hidden border-border/80 shadow-sm rounded-xl"
+          style={{ viewTransitionName: "chat-widget-container" }}
+        >
           {/* Header Card chứa nút Xóa Lịch sử */}
           <div className="px-6 py-3 border-b border-border/60 flex justify-between items-center bg-muted/10 shrink-0">
             <div className="flex items-center gap-2">
