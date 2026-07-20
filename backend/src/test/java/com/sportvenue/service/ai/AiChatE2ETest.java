@@ -29,6 +29,7 @@ import com.sportvenue.service.ai.handler.PolicyHandler;
 import com.sportvenue.service.ai.handler.RecommendTimeHandler;
 import com.sportvenue.service.ai.handler.SlotAvailabilityHandler;
 import com.sportvenue.service.ai.handler.StadiumSearchHandler;
+import com.sportvenue.util.RelativeDateParser;
 import com.sportvenue.util.location.VietnamLocationResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -115,9 +116,11 @@ class AiChatE2ETest {
         SlotAvailabilityHandler slotAvailabilityHandler = new SlotAvailabilityHandler(
                 stadiumRepository, bookingService, maintenanceScheduleService, conversationContextService);
 
+        RelativeDateParser dateParser = new RelativeDateParser();
         BookingHandler bookingHandler = new BookingHandler(
                 bookingService, stadiumRepository, userRepository,
-                bookingRepository, maintenanceScheduleService, conversationContextService);
+                bookingRepository, maintenanceScheduleService, conversationContextService,
+                sportTypeRepository, dateParser);
 
         java.time.Clock fixedClock = java.time.Clock.fixed(
                 java.time.Instant.parse("2026-07-15T01:00:00Z"),
@@ -126,6 +129,7 @@ class AiChatE2ETest {
         stadiumSearchHandler.setClock(fixedClock);
         slotAvailabilityHandler.setClock(fixedClock);
         bookingHandler.setClock(fixedClock);
+        dateParser.setClock(fixedClock);
 
         MatchRequestHandler matchRequestHandler = mock(MatchRequestHandler.class);
         PolicyHandler policyHandler = mock(PolicyHandler.class);
@@ -134,7 +138,7 @@ class AiChatE2ETest {
         aiChatService = new AiChatServiceImpl(groqClient, stadiumSearchHandler, slotAvailabilityHandler,
                 matchRequestHandler, policyHandler, bookingHandler, joinMatchHandler, myBookingsHandler,
                 bookingStatusHandler, cancelBookingHandler, getPriceHandler, recommendTimeHandler,
-                aiUsageLogRepository, paramNormalizer, intentValidator);
+                aiUsageLogRepository, paramNormalizer, intentValidator, conversationContextService);
         aiChatService.setClock(fixedClock);
     }
 
