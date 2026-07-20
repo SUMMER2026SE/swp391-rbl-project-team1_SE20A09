@@ -19,12 +19,12 @@ SELECT ss.stadium_id, unnest(
         WHEN 'Football' THEN ARRAY[
             'https://images.pexels.com/photos/1142948/pexels-photo-1142948.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
             'https://images.pexels.com/photos/39811/pexels-photo-39811.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
-            'https://images.pexels.com/photos/47730/soccer-football-field-sport-47730.jpeg?auto=compress&cs=tinysrgb&h=650&w=940'
+            'https://images.pexels.com/photos/186240/pexels-photo-186240.jpeg?auto=compress&cs=tinysrgb&h=650&w=940'
         ]
         WHEN 'Badminton' THEN ARRAY[
             'https://images.pexels.com/photos/3660204/pexels-photo-3660204.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
             'https://images.pexels.com/photos/8286363/pexels-photo-8286363.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
-            'https://images.pexels.com/photos/8286362/pexels-photo-8286362.jpeg?auto=compress&cs=tinysrgb&h=650&w=940'
+            'https://images.pexels.com/photos/8007094/pexels-photo-8007094.jpeg?auto=compress&cs=tinysrgb&h=650&w=940'
         ]
         WHEN 'Basketball' THEN ARRAY[
             'https://images.pexels.com/photos/5275524/pexels-photo-5275524.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
@@ -41,7 +41,7 @@ SELECT ss.stadium_id, unnest(
             'https://images.pexels.com/photos/1263426/pexels-photo-1263426.jpeg?auto=compress&cs=tinysrgb&h=650&w=940',
             'https://images.pexels.com/photos/36382714/pexels-photo-36382714.jpeg?auto=compress&cs=tinysrgb&h=650&w=940'
         ]
-        ELSE ARRAY['https://images.pexels.com/photos/5176497/pexels-photo-5176497.jpeg?auto=compress&cs=tinysrgb&h=650&w=940']
+        ELSE ARRAY['https://images.pexels.com/photos/46792/the-ball-stadion-football-the-pitch-46792.jpeg?auto=compress&cs=tinysrgb&h=650&w=940']
     END
 )
 FROM stadium_sport ss
@@ -183,7 +183,7 @@ SELECT b.booking_id, b.user_id, b.stadium_id, 4, 'Không gian thoáng mát, rổ
 
 -- Extra 11: Nhà thi đấu Tương Mai / Sân 1 (Volleyball) — 3 stars (has owner response)
 WITH target_stadium AS (
-    SELECT s.stadium_id, s.price_per_hour FROM stadiums s JOIN stadiums fac ON fac.stadium_id = s.parent_stadium_id JOIN sport_types sp ON sp.sport_type_id = fac.sport_type_id JOIN stadium_complexes sc ON sc.complex_id = s.complex_id WHERE sc.name = 'Nhà thi đấu Tương Mai' AND sp.sport_name = 'Basketball' AND s.stadium_name = 'Sân 1'
+    SELECT s.stadium_id, s.price_per_hour FROM stadiums s JOIN stadiums fac ON fac.stadium_id = s.parent_stadium_id JOIN sport_types sp ON sp.sport_type_id = fac.sport_type_id JOIN stadium_complexes sc ON sc.complex_id = s.complex_id WHERE sc.name = 'Nhà thi đấu Tương Mai' AND sp.sport_name = 'Volleyball' AND s.stadium_name = 'Sân 1'
 ), ins_booking AS (
     INSERT INTO bookings (user_id, stadium_id, slot_id, total_price, service_fee, booking_status, payment_status, booking_date, reservation_date, note)
     SELECT (SELECT user_id FROM users WHERE email = 'customer@sportvenue.com'), ts.stadium_id, (SELECT slot_id FROM time_slots WHERE stadium_id = ts.stadium_id AND start_time = '19:00:00'), ts.price_per_hour, ROUND(ts.price_per_hour * 0.05, 2), 'COMPLETED', 'PAID', NOW() - INTERVAL '9 days', CURRENT_DATE - 9, '[DEMO-EXTRA-11]' FROM target_stadium ts RETURNING booking_id, total_price

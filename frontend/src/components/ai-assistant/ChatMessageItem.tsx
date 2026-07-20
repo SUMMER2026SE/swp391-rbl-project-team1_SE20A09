@@ -195,7 +195,7 @@ export function ChatMessageItem({ msg, isLatest }: ChatMessageProps) {
             )}
 
             {/* Booking confirmation card */}
-            {msg.bookingId && (
+            {msg.intent === 'create_booking' && msg.bookingId && (
               <div className="w-full max-w-xs md:max-w-lg rounded-xl border border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-800 p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <CalendarCheck className="h-5 w-5 text-green-600 dark:text-green-400" />

@@ -13,6 +13,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
 import org.springframework.format.annotation.DateTimeFormat;
 
+import com.sportvenue.entity.enums.FootballFieldType;
 import com.sportvenue.entity.enums.StadiumStatus;
 
 import java.math.BigDecimal;
@@ -69,6 +70,13 @@ public class StadiumSearchRequest {
     // Sort (optional) — chỉ chấp nhận field trong whitelist ở PublicStadiumServiceImpl,
     // giá trị lạ bị bỏ qua (không ném lỗi) để giữ tương thích ngược.
     private String sortBy;
+
+    /**
+     * BUG 3 FIX: Lọc theo loại sân bóng đá (Sân 5 người, Sân 7 người, Sân 11 người, Futsal).
+     * Giá trị: FIVE_A_SIDE, SEVEN_A_SIDE, ELEVEN_A_SIDE, FUTSAL.
+     * Chỉ áp dụng khi sportName là "Bóng đá" (football).
+     */
+    private FootballFieldType footballFieldType;
 
     /** "ASC" (mặc định) hoặc "DESC". */
     private String sortDirection;

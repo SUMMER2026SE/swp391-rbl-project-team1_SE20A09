@@ -22,6 +22,25 @@ SELECT b.booking_id, b.user_id,
     NOW() - INTERVAL '20 hours', NOW() - INTERVAL '18 hours', NOW() - INTERVAL '20 hours' + INTERVAL '72 hours'
 FROM bookings b WHERE b.note LIKE '[DEMO-23]%';
 
+-- RER-3: Owner đã từ chối, Admin duyệt 50% (kết thúc — không cần chờ demo trực tiếp)
+INSERT INTO refund_exception_requests (booking_id, customer_id, reason, status, owner_note, admin_note, refund_percent, created_at, owner_reviewed_at, admin_reviewed_at, expires_at)
+SELECT b.booking_id, b.user_id,
+    'Người thân đột ngột nhập viện cấp cứu nên em phải hủy sát giờ, có giấy tờ bệnh viện xác nhận.',
+    'APPROVED_ADMIN',
+    'Lý do khá hợp lý nhưng sân đã sắp xếp lịch bù nên chỉ đề xuất hoàn 1 phần, chuyển Admin quyết định.',
+    'Đã xác minh giấy tờ, chấp nhận hoàn 50% theo chính sách trường hợp bất khả kháng.',
+    50, NOW() - INTERVAL '29 hours', NOW() - INTERVAL '28 hours', NOW() - INTERVAL '26 hours', NOW() - INTERVAL '29 hours' + INTERVAL '72 hours'
+FROM bookings b WHERE b.note LIKE '[DEMO-30]%';
+
+-- RER-4: Owner từ chối luôn, không escalate (kết thúc, REJECTED_OWNER)
+INSERT INTO refund_exception_requests (booking_id, customer_id, reason, status, owner_note, created_at, owner_reviewed_at, expires_at)
+SELECT b.booking_id, b.user_id,
+    'Em kẹt xe nghiêm trọng do tai nạn trên đường nên đến trễ, mong xem xét hoàn lại một phần.',
+    'REJECTED_OWNER',
+    'Kẹt xe không phải trường hợp bất khả kháng theo chính sách của sân, không đủ căn cứ để hoàn thêm.',
+    NOW() - INTERVAL '39 hours', NOW() - INTERVAL '37 hours', NOW() - INTERVAL '39 hours' + INTERVAL '72 hours'
+FROM bookings b WHERE b.note LIKE '[DEMO-31]%';
+
 -- ── 2. Complaints — đủ 6 trạng thái, mỗi cái gắn 1 booking COMPLETED khác nhau ──
 -- OPEN
 INSERT INTO complaints (booking_id, user_id, subject, content, status, created_at)

@@ -8,6 +8,7 @@ export interface MessageItem {
   id: string | number;
   type: string; // "user" | "assistant"
   content: string;
+  intent?: string | null; // Intent type (e.g. "create_booking", "cancel_booking")
   timestamp: string;
   stadiums?: StadiumResponse[] | null;
   slots?: TimeSlotResponse[] | null;
@@ -132,6 +133,7 @@ export function useAiChat() {
         id: "ai-" + Date.now(),
         type: "assistant",
         content: result.message || "",
+        intent: result.intent,
         timestamp: new Date().toLocaleTimeString("vi-VN", {
           hour: "2-digit",
           minute: "2-digit",

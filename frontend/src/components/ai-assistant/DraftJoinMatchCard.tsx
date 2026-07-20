@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { Users, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -18,18 +20,32 @@ interface DraftJoinMatchCardProps {
   };
 }
 
-export function DraftJoinMatchCard({ draftJoinMatch }: DraftJoinMatchCardProps) {
+export function DraftJoinMatchCard({
+  draftJoinMatch,
+}: DraftJoinMatchCardProps) {
+  const { data: session } = useSession();
   const [isJoining, setIsJoining] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
   const handleConfirmJoin = async () => {
+    if (!session?.user) {
+      signIn(undefined, {
+        callbackUrl: `/community?matchId=${draftJoinMatch.matchId}`,
+      });
+      return;
+    }
     setIsJoining(true);
     try {
-      await joinMatchRequest(draftJoinMatch.matchId, draftJoinMatch.userMessage);
+      await joinMatchRequest(
+        draftJoinMatch.matchId,
+        draftJoinMatch.userMessage,
+      );
       setIsSuccess(true);
       toast.success("Yêu cầu tham gia kèo của bạn đã được gửi thành công.");
     } catch (error: any) {
-      toast.error(error.response?.data?.message || "Đã xảy ra lỗi. Vui lòng thử lại sau.");
+      toast.error(
+        error.response?.data?.message || "Đã xảy ra lỗi. Vui lòng thử lại sau.",
+      );
     } finally {
       setIsJoining(false);
     }
@@ -47,8 +63,12 @@ export function DraftJoinMatchCard({ draftJoinMatch }: DraftJoinMatchCardProps) 
         <p className="text-xs text-blue-700 dark:text-blue-400 mb-3">
           Đang chờ chủ kèo xác nhận. Bạn sẽ được thông báo khi có kết quả.
         </p>
-        <Link href={`/community?matchId=${draftJoinMatch.matchId}`}>
-          <Button size="sm" variant="outline" className="w-full border-blue-300 text-blue-700 hover:bg-blue-100">
+        <Link href={`/community`}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full border-blue-300 text-blue-700 hover:bg-blue-100"
+          >
             Xem kèo của tôi
           </Button>
         </Link>
@@ -72,24 +92,30 @@ export function DraftJoinMatchCard({ draftJoinMatch }: DraftJoinMatchCardProps) 
           </div>
           <div className="flex justify-between">
             <span className="font-medium opacity-80">Sân:</span>
-            <span className="font-bold text-right">{draftJoinMatch.stadiumName}</span>
+            <span className="font-bold text-right">
+              {draftJoinMatch.stadiumName}
+            </span>
           </div>
           <div className="flex justify-between">
             <span className="font-medium opacity-80">Thời gian:</span>
-            <span className="font-bold">{draftJoinMatch.time}, {draftJoinMatch.playDate}</span>
+            <span className="font-bold">
+              {draftJoinMatch.time}, {draftJoinMatch.playDate}
+            </span>
           </div>
           {draftJoinMatch.userMessage && (
             <div className="flex flex-col mt-1 pt-1.5 border-t border-indigo-200/50 dark:border-indigo-800/50">
               <span className="font-medium opacity-80 mb-1">Lời nhắn:</span>
-              <span className="italic text-indigo-700 dark:text-indigo-300">"{draftJoinMatch.userMessage}"</span>
+              <span className="italic text-indigo-700 dark:text-indigo-300">
+                "{draftJoinMatch.userMessage}"
+              </span>
             </div>
           )}
         </div>
       </div>
-      <Button 
-        onClick={handleConfirmJoin} 
+      <Button
+        onClick={handleConfirmJoin}
         disabled={isJoining}
-        size="sm" 
+        size="sm"
         className="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-medium shadow-sm transition-all hover:shadow-md"
       >
         {isJoining ? (

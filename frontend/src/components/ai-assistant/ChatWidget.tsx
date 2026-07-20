@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Bot, Send, Trash2, X, MessageSquare } from "lucide-react";
+import { Bot, Send, Trash2, X, MessageSquare, Maximize2 } from "lucide-react";
 import { useAiChat } from "@/hooks/useAiChat";
 import { ChatMessageItem } from "@/components/ai-assistant/ChatMessageItem";
 import { SuggestionChips } from "@/components/ai-assistant/SuggestionChips";
@@ -29,8 +29,9 @@ function isHiddenRoute(pathname: string): boolean {
 
 export function ChatWidget() {
   const pathname = usePathname();
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  
+
   const {
     message,
     setMessage,
@@ -48,6 +49,17 @@ export function ChatWidget() {
     }
   }, [messages, isSearching, isOpen]);
 
+  // Handle expand to full page with view transition
+  const handleExpand = () => {
+    if (document.startViewTransition) {
+      document.startViewTransition(() => {
+        router.push("/ai-assistant");
+      });
+    } else {
+      router.push("/ai-assistant"); // Fallback for browsers without View Transitions API
+    }
+  };
+
   // Không hiển thị widget trên các trang thuộc danh sách loại trừ
   if (isHiddenRoute(pathname)) {
     return null;
@@ -62,13 +74,14 @@ export function ChatWidget() {
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end pointer-events-none">
-      {/* Panel Chat Widget (GPU-safe animation using transform & opacity) */}
+      {/* Panel Chat Widget - View Transition container */}
       <Card
-        className={`w-[360px] xs:w-[380px] max-w-[calc(100vw-32px)] h-[520px] max-h-[calc(100vh-120px)] flex flex-col overflow-hidden border-border/80 shadow-2xl rounded-2xl bg-background transition-all duration-300 ease-out origin-bottom-right mb-4 ${
+        className={`chat-widget-container w-[360px] xs:w-[380px] max-w-[calc(100vw-32px)] h-[520px] max-h-[calc(100vh-120px)] flex flex-col overflow-hidden border-border/80 shadow-2xl rounded-2xl bg-background transition-all duration-300 ease-out origin-bottom-right mb-4 ${
           isOpen
             ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
             : "opacity-0 scale-95 translate-y-4 pointer-events-none"
         }`}
+        style={{ viewTransitionName: "chat-widget-container" }}
       >
         {/* Header Widget */}
         <div className="px-4 py-3 border-b border-border/60 flex justify-between items-center bg-muted/10 shrink-0">
@@ -78,6 +91,15 @@ export function ChatWidget() {
             <span className="text-xs font-bold text-gray-700">Trợ lý AI SportHub</span>
           </div>
           <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleExpand}
+              className="h-8 w-8 text-muted-foreground hover:bg-muted rounded-lg"
+              title="Mở rộng trang"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Button>
             {messages.length > 1 && (
               <Button
                 variant="ghost"

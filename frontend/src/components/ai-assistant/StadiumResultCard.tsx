@@ -7,7 +7,7 @@ import Image from "next/image";
 import { StadiumResponse } from "@/types/stadium";
 
 export function StadiumResultCard({ stadium }: { stadium: StadiumResponse }) {
-  const { stadiumId, stadiumName, address, averageRating, sportName, firstImageUrl, pricePerHour } = stadium;
+  const { stadiumId, stadiumName, complexName, address, averageRating, sportName, firstImageUrl, pricePerHour } = stadium;
   const href = `/venues/${stadiumId}`;
 
   return (
@@ -36,8 +36,13 @@ export function StadiumResultCard({ stadium }: { stadium: StadiumResponse }) {
 
           <CardContent className="p-4">
             <h4 className="text-sm font-semibold leading-snug line-clamp-1 group-hover:text-primary transition-colors">
-              {stadiumName}
+              {complexName || stadiumName}
             </h4>
+            {complexName && stadiumName && (
+              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                {stadiumName}
+              </p>
+            )}
 
             <div className="mt-1.5 flex items-center text-xs text-muted-foreground">
               <MapPin className="mr-1 h-3.5 w-3.5 shrink-0 text-primary/70" />

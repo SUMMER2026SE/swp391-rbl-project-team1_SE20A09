@@ -124,6 +124,7 @@ services:
       FILE_BASE_URL: ${FILE_BASE_URL:-http://localhost:8080}
       MAIL_MOCK: ${MAIL_MOCK:-true}
       TZ: Asia/Ho_Chi_Minh
+      GROQ_API_KEYS: ${GROQ_API_KEYS:-}
       VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
       VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
       VNPAY_URL: ${VNPAY_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}

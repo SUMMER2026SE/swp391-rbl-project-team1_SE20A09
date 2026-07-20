@@ -13,6 +13,7 @@ import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.PublicStadiumService;
 import com.sportvenue.service.ai.AiConversationContextService;
+import com.sportvenue.util.RelativeDateParser;
 import com.sportvenue.util.location.VietnamLocationResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -55,6 +56,9 @@ public class StadiumSearchHandler {
     /** Giờ Việt Nam — server Docker thường chạy UTC (lệch 7 tiếng). Không final để test override. */
     private Clock clock = Clock.system(ZoneId.of("Asia/Ho_Chi_Minh"));
 
+    /** BUG B FIX: Fallback parser cho relative date expressions mà LLM không extract được. */
+    private final RelativeDateParser relativeDateParser = new RelativeDateParser(clock);
+
     public void setClock(Clock clock) {
         this.clock = clock;
     }
@@ -90,14 +94,7 @@ public class StadiumSearchHandler {
         }
 
         if (isGpsSearch(args)) {
-            if (userLat == null || userLng == null) {
-                return AiChatTurnResponse.builder()
-                        .intent("need_more_info")
-                        .message("Để tìm sân gần bạn nhất, mình cần quyền truy cập vị trí của bạn. " +
-                                "Vui lòng cho phép trình duyệt chia sẻ vị trí và thử lại nhé!")
-                        .build();
-            }
-            return handleGpsSearch(args, llmMessage, conversationKey, userLat, userLng);
+            return resolveGpsSearch(args, llmMessage, conversationKey, userLat, userLng);
         }
 
         // --- MERGE FROM CONTEXT ---
@@ -123,6 +120,7 @@ public class StadiumSearchHandler {
         }
 
         StadiumSearchRequest searchRequest = builder.build();
+
         PageResponse<StadiumResponse> result = publicStadiumService.searchStadiums(searchRequest);
 
         List<StadiumResponse> stadiums = getStadiumsWithFallback(result.getContent(), searchRequest);
@@ -139,7 +137,18 @@ public class StadiumSearchHandler {
             }
         }
 
+        // BUG B FIX: Nếu không tìm thấy sân VÀ date chưa được extract từ LLM,
+        // thử parse relative date từ raw message và tìm lại
+        if (stadiums.isEmpty() && targetDateStr == null && llmMessage != null) {
+            RetryWithDateResult retry = retryWithParsedDate(args, llmMessage, context, startTimeStr, conversationKey);
+            if (!retry.stadiums().isEmpty()) {
+                stadiums = retry.stadiums();
+                relaxationNote = retry.relaxationNote();
+            }
+        }
+
         if (stadiums.isEmpty()) {
+            log.debug("No stadiums found for searchRequest={}", searchRequest);
             return AiChatTurnResponse.builder()
                     .message("Chưa tìm thấy sân phù hợp với yêu cầu của bạn. Bạn có thể thử đổi khu vực, môn thể thao hoặc kiểm tra lại tên sân.")
                     .intent("search_stadiums")
@@ -155,6 +164,51 @@ public class StadiumSearchHandler {
                 .intent("search_stadiums")
                 .stadiums(stadiums)
                 .build();
+    }
+
+    private AiChatTurnResponse resolveGpsSearch(JsonNode args, String llmMessage, String conversationKey,
+                                                 Double userLat, Double userLng) {
+        if (userLat == null || userLng == null) {
+            return AiChatTurnResponse.builder()
+                    .intent("need_more_info")
+                    .message("Để tìm sân gần bạn nhất, mình cần quyền truy cập vị trí của bạn. " +
+                            "Vui lòng cho phép trình duyệt chia sẻ vị trí và thử lại nhé!")
+                    .build();
+        }
+        return handleGpsSearch(args, llmMessage, conversationKey, userLat, userLng);
+    }
+
+    private record RetryWithDateResult(List<StadiumResponse> stadiums, String relaxationNote) { }
+
+    /** BUG B FIX: Không tìm thấy sân + date chưa được LLM extract → thử parse relative date từ raw message và tìm lại. */
+    private RetryWithDateResult retryWithParsedDate(JsonNode args, String llmMessage, SearchContextHolder context,
+                                                      String startTimeStr, String conversationKey) {
+        LocalDate parsedDate = relativeDateParser.parse(llmMessage);
+        if (parsedDate == null) {
+            return new RetryWithDateResult(List.of(), null);
+        }
+
+        // Rebuild search request with parsed date
+        StadiumSearchRequest.StadiumSearchRequestBuilder retryBuilder = StadiumSearchRequest.builder();
+        applyFilters(retryBuilder, args, context);
+        retryBuilder.targetDate(parsedDate);
+        retryBuilder.page(0);
+        retryBuilder.size(AI_SEARCH_RESULT_LIMIT);
+
+        StadiumSearchRequest retryRequest = retryBuilder.build();
+        PageResponse<StadiumResponse> retryResult = publicStadiumService.searchStadiums(retryRequest);
+        List<StadiumResponse> stadiums = getStadiumsWithFallback(retryResult.getContent(), retryRequest);
+
+        if (stadiums.isEmpty()) {
+            return new RetryWithDateResult(stadiums, null);
+        }
+
+        // Update context with parsed date
+        String parsedDateStr = parsedDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        conversationContextService.saveCurrentFilters(conversationKey, context.sportName, context.district, context.province, parsedDateStr, startTimeStr);
+        String note = "Đã tìm thấy sân cho ngày " + parsedDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                + " (mình hiểu '" + extractDateHint(llmMessage) + "' là ngày này):";
+        return new RetryWithDateResult(stadiums, note);
     }
 
     private boolean isGpsSearch(JsonNode args) {
@@ -200,6 +254,7 @@ public class StadiumSearchHandler {
 
         applyDistrictFilter(builder, args, context.province);
         applyPriceFilters(builder, args);
+        applyFootballFieldTypeFilter(builder, args);
         applyDateTimeFilters(builder, args);
         applySort(builder, args);
 
@@ -234,6 +289,7 @@ public class StadiumSearchHandler {
         // Áp dụng datetime filter nếu user chỉ định giờ
         applyDateTimeFilters(builder, args);
         applyPriceFilters(builder, args);
+        applyFootballFieldTypeFilter(builder, args);
 
         StadiumSearchRequest req = builder.build();
         List<StadiumResponse> stadiums;
@@ -482,6 +538,25 @@ public class StadiumSearchHandler {
         }
     }
 
+    /**
+     * BUG 3 FIX: Trích xuất loại sân bóng đá từ input (Sân 5 người, Sân 7 người).
+     * Chỉ áp dụng khi user nói rõ "5 người" hoặc "7 người".
+     */
+    private void applyFootballFieldTypeFilter(StadiumSearchRequest.StadiumSearchRequestBuilder builder, JsonNode args) {
+        if (!args.hasNonNull("footballFieldType")) {
+            return;
+        }
+        try {
+            String value = args.get("footballFieldType").asText().toUpperCase();
+            com.sportvenue.entity.enums.FootballFieldType fieldType =
+                    com.sportvenue.entity.enums.FootballFieldType.valueOf(value);
+            builder.footballFieldType(fieldType);
+            log.info("BUG 3 FIX: Applying footballFieldType filter: {}", fieldType);
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid footballFieldType value: {}", args.get("footballFieldType").asText());
+        }
+    }
+
     private void applyDateTimeFilters(StadiumSearchRequest.StadiumSearchRequestBuilder builder, JsonNode args) {
         if (args.hasNonNull("targetDate")) {
             try {
@@ -616,5 +691,23 @@ public class StadiumSearchHandler {
                 .map(SportType::getSportTypeId)
                 .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * BUG B FIX: Extract date hint from raw message to include in fallback response.
+     */
+    private String extractDateHint(String message) {
+        if (message == null) {
+            return "";
+        }
+        // Try to extract "thứ X tuần này", "thứ X", etc.
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile(
+                "thứ\\s*(\\d+\\s*)?(?:tuần\\s*)?(?:này|sau)?|ngày\\s*mai|hôm\\s*nay",
+                java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher m = p.matcher(message);
+        if (m.find()) {
+            return m.group().trim();
+        }
+        return "";
     }
 }

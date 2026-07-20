@@ -31,6 +31,8 @@ public class PolicyHandler {
             policy = "Vào mục 'Đơn đặt sân của tôi' trên website, chọn đơn và bấm Hủy kèm lý do. Chỉ hủy được đơn CHƯA hoàn thành và CHƯA bị hủy trước đó. Nếu đơn đã thanh toán, hệ thống ghi nhận hoàn tiền; tiền hoàn về qua kênh thanh toán ban đầu và có thể cần thời gian xử lý.";
         } else if (topic.contains("refund") || topic.contains("hoàn tiền")) {
             policy = "Hoàn tiền được ghi nhận khi bạn hủy một đơn đã thanh toán hợp lệ (xem chính sách hủy đặt sân) — tiền về qua đúng kênh thanh toán ban đầu và có thể cần thời gian xử lý.";
+        } else if (topic.contains("complaint") || topic.contains("khiếu nại") || topic.contains("liên hệ") || topic.contains("hỗ trợ") || topic.contains("chủ sân")) {
+            policy = "Dùng mục Khiếu nại trên website để được Chủ sân hoặc Quản trị viên hỗ trợ.";
         } else {
             policy = "Không tìm thấy chính sách cụ thể cho chủ đề này. Vui lòng liên hệ bộ phận CSKH để biết thêm chi tiết.";
         }
