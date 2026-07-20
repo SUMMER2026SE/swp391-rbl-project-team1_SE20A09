@@ -86,12 +86,6 @@ public class StadiumSearchHandler {
 
     public AiChatTurnResponse handle(JsonNode args, String llmMessage, String conversationKey,
                                      Double userLat, Double userLng) {
-        // BUG B DEBUG: Log handler entry
-        LocalDate handlerDate = LocalDate.now(clock);
-        log.info("BUG B DEBUG [StadiumSearchHandler]: Entered handler, serverDate={}", handlerDate);
-        log.info("BUG B DEBUG [StadiumSearchHandler]: args={}", args);
-        log.info("BUG B DEBUG [StadiumSearchHandler]: llmMessage='{}'", llmMessage);
-
         if (args == null || args.isNull() || args.isMissingNode()) {
             return AiChatTurnResponse.builder()
                     .message("Bạn muốn tìm sân ở khu vực nào và chơi môn thể thao gì? Cho mình biết cụ thể hơn để tìm chính xác nhé.")
@@ -124,7 +118,6 @@ public class StadiumSearchHandler {
         // Lưu context mới (bao gồm cả province - Bug #3)
         String targetDateStr = args.hasNonNull("targetDate") ? args.get("targetDate").asText() : null;
         String startTimeStr = args.hasNonNull("startTime") ? args.get("startTime").asText() : null;
-        log.info("BUG B DEBUG [StadiumSearchHandler]: targetDateStr from LLM={}, startTimeStr={}", targetDateStr, startTimeStr);
         conversationContextService.saveCurrentFilters(conversationKey, context.sportName, context.district, context.province, targetDateStr, startTimeStr);
 
         StadiumSearchRequest.StadiumSearchRequestBuilder builder = StadiumSearchRequest.builder();
@@ -134,12 +127,10 @@ public class StadiumSearchHandler {
         }
 
         StadiumSearchRequest searchRequest = builder.build();
-        log.info("BUG B DEBUG [StadiumSearchHandler]: Final searchRequest.targetDate={}", searchRequest.getTargetDate());
 
         PageResponse<StadiumResponse> result = publicStadiumService.searchStadiums(searchRequest);
 
         List<StadiumResponse> stadiums = getStadiumsWithFallback(result.getContent(), searchRequest);
-        log.info("BUG B DEBUG [StadiumSearchHandler]: First search found {} stadiums", stadiums.size());
 
         // Vẫn rỗng dù đã thử theo tên (facility fallback/bỏ keyword nhiễu) — bộ lọc có thể đang
         // quá chặt (khu vực/giá/giờ) chứ không phải "không tồn tại". Nới lỏng dần thay vì báo
@@ -150,7 +141,6 @@ public class StadiumSearchHandler {
             if (!relaxed.stadiums().isEmpty()) {
                 stadiums = relaxed.stadiums();
                 relaxationNote = relaxed.relaxationNote();
-                log.info("BUG B DEBUG [StadiumSearchHandler]: Relaxed search found {} stadiums", stadiums.size());
             }
         }
 
@@ -158,10 +148,7 @@ public class StadiumSearchHandler {
         // thử parse relative date từ raw message và tìm lại
         if (stadiums.isEmpty() && targetDateStr == null && llmMessage != null) {
             LocalDate parsedDate = relativeDateParser.parse(llmMessage);
-            log.info("BUG B DEBUG [StadiumSearchHandler]: RelativeDateParser called. llmMessage='{}', parsedDate={}", llmMessage, parsedDate);
             if (parsedDate != null) {
-                log.info("BUG B FIX: No stadiums found, trying with parsed date: {}", parsedDate);
-
                 // Rebuild search request with parsed date
                 StadiumSearchRequest.StadiumSearchRequestBuilder retryBuilder = StadiumSearchRequest.builder();
                 applyFilters(retryBuilder, args, context);
@@ -170,43 +157,20 @@ public class StadiumSearchHandler {
                 retryBuilder.size(AI_SEARCH_RESULT_LIMIT);
 
                 StadiumSearchRequest retryRequest = retryBuilder.build();
-                log.info("BUG B DEBUG [StadiumSearchHandler]: Retry request targetDate={}", retryRequest.getTargetDate());
                 PageResponse<StadiumResponse> retryResult = publicStadiumService.searchStadiums(retryRequest);
                 stadiums = getStadiumsWithFallback(retryResult.getContent(), retryRequest);
-                log.info("BUG B DEBUG [StadiumSearchHandler]: Retry search found {} stadiums", stadiums.size());
 
                 if (!stadiums.isEmpty()) {
                     // Update context with parsed date
                     String parsedDateStr = parsedDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
                     conversationContextService.saveCurrentFilters(conversationKey, context.sportName, context.district, context.province, parsedDateStr, startTimeStr);
                     relaxationNote = "Đã tìm thấy sân cho ngày " + parsedDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) + " (mình hiểu '" + extractDateHint(llmMessage) + "' là ngày này):";
-                    log.info("BUG B FIX: Found {} stadiums with parsed date {}", stadiums.size(), parsedDate);
                 }
             }
         }
 
         if (stadiums.isEmpty()) {
-            // DETAILED LOG: Print all filter values at failure point
-            log.info("========================================");
-            log.info("BUG LOCATION DEBUG [StadiumSearchHandler]: NO STADIUMS FOUND - Detailed filter values:");
-            log.info("  - args.sportName: {}", args.hasNonNull("sportName") ? args.get("sportName").asText() : "null");
-            log.info("  - args.district: {}", args.hasNonNull("district") ? args.get("district").asText() : "null");
-            log.info("  - args.province: {}", args.hasNonNull("province") ? args.get("province").asText() : "null");
-            log.info("  - args.keyword: {}", args.hasNonNull("keyword") ? args.get("keyword").asText() : "null");
-            log.info("  - args.targetDate: {}", args.hasNonNull("targetDate") ? args.get("targetDate").asText() : "null");
-            log.info("  - args.startTime: {}", args.hasNonNull("startTime") ? args.get("startTime").asText() : "null");
-            log.info("  - args.footballFieldType: {}", args.hasNonNull("footballFieldType") ? args.get("footballFieldType").asText() : "null");
-            log.info("  - context.sportName: {}", context.sportName);
-            log.info("  - context.district: {}", context.district);
-            log.info("  - context.province: {}", context.province);
-            log.info("  - searchRequest.sportTypeId: {}", searchRequest.getSportTypeId());
-            log.info("  - searchRequest.province: {}", searchRequest.getProvince());
-            log.info("  - searchRequest.district: {}", searchRequest.getDistrict());
-            log.info("  - searchRequest.keyword: {}", searchRequest.getKeyword());
-            log.info("  - searchRequest.targetDate: {}", searchRequest.getTargetDate());
-            log.info("  - searchRequest.startTime: {}", searchRequest.getStartTime());
-            log.info("  - searchRequest.footballFieldType: {}", searchRequest.getFootballFieldType());
-            log.info("========================================");
+            log.debug("No stadiums found for searchRequest={}", searchRequest);
             return AiChatTurnResponse.builder()
                     .message("Chưa tìm thấy sân phù hợp với yêu cầu của bạn. Bạn có thể thử đổi khu vực, môn thể thao hoặc kiểm tra lại tên sân.")
                     .intent("search_stadiums")
