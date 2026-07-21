@@ -90,10 +90,10 @@ class AdminBookingServiceImplTest {
         when(bookingRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
 
         // Mock repositories for stats
-        when(paymentRepository.sumPlatformGrossByDateRange(any(), any())).thenReturn(new BigDecimal("150.00"));
-        when(paymentRepository.sumPlatformRefundByDateRange(any(), any())).thenReturn(BigDecimal.ZERO);
-        when(walletTransactionRepository.sumPlatformFeeByTypeAndDateRange(any(), any(), any())).thenReturn(new BigDecimal("15.00"));
-        when(bookingRepository.count()).thenReturn(1L);
+        when(paymentRepository.sumPlatformGrossByFilters(any(), any(), any(), any(), any(), any())).thenReturn(new BigDecimal("150.00"));
+        when(paymentRepository.sumPlatformRefundByFilters(any(), any(), any(), any(), any(), any())).thenReturn(BigDecimal.ZERO);
+        when(walletTransactionRepository.sumPlatformFeeByFilters(any(), any(), any(), any(), any(), any(), any())).thenReturn(new BigDecimal("15.00"));
+        when(bookingRepository.countByFilters(any(), any(), any(), any(), any(), any())).thenReturn(1L);
 
         // Act
         AdminBookingListResponse response = adminBookingService.getAdminBookings(
