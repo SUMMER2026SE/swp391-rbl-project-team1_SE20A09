@@ -110,6 +110,10 @@ interface RefundExceptionItem {
   status: string;
   reason?: string;
   createdAt?: string;
+  evidenceUrl?: string;
+  ownerNote?: string;
+  refundPercent?: number;
+  adminNote?: string;
 }
 
 function BookingManagementPage() {
@@ -1071,10 +1075,10 @@ function BookingManagementPage() {
                         Hoàn {previewData.refundPercentage}%
                       </Badge>
                     </div>
-                    {previewData.serviceFee > 0 && reasonType === "CUSTOMER_REQUEST" && (
+                    {(previewData.serviceFee ?? 0) > 0 && reasonType === "CUSTOMER_REQUEST" && (
                       <div className="flex justify-between items-center text-xs text-rose-600 font-medium">
                         <span>Phí dịch vụ (Không hoàn lại):</span>
-                        <span>-{previewData.serviceFee.toLocaleString('vi-VN')}đ</span>
+                        <span>-{(previewData.serviceFee ?? 0).toLocaleString('vi-VN')}đ</span>
                       </div>
                     )}
                     <div className="flex justify-between items-center text-sm border-t pt-1.5 mt-1.5">
