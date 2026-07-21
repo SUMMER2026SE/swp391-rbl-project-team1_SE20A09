@@ -208,6 +208,7 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
     java.math.BigDecimal sumPlatformRefundByDateRange(
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end);
+
     /**
      * Tổng Gross toàn hệ thống (Admin) theo b.reservationDate và toàn bộ filter.
      * Thống nhất cột ngày với danh sách — tránh lệch giữa stats và bảng booking.
