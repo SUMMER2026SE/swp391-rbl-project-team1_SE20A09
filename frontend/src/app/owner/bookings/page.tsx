@@ -78,6 +78,40 @@ interface StadiumOption {
   stadiumName: string;
 }
 
+interface RefundResponse {
+  bookingId: number;
+  stadiumName: string;
+  customerName: string;
+  playTime: string;
+  originalPrice: number;
+  serviceFee?: number;
+  refundAmount: number;
+  refundPercentage: number;
+  bookingStatus: string;
+  paymentStatus: string;
+  processedAt: string;
+  reason?: string;
+  cancellationPolicyDescription?: string;
+}
+
+interface OwnerBookingsSummary {
+  grossAmount: number;
+  refundedAmount: number;
+  serviceFee: number;
+  netAmount: number;
+}
+
+interface RefundExceptionItem {
+  id: number;
+  bookingId: number;
+  exceptionType: string;
+  requestedAmount: number;
+  approvedAmount?: number;
+  status: string;
+  reason?: string;
+  createdAt?: string;
+}
+
 function BookingManagementPage() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [bookingList, setBookingList] = useState<BookingItem[]>([]);
@@ -92,11 +126,11 @@ function BookingManagementPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Xem trước tiền hoàn từ Backend (Tránh clock skew của client)
-  const [previewData, setPreviewData] = useState<any>(null);
+  const [previewData, setPreviewData] = useState<RefundResponse | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   // States phục vụ hiển thị kết quả thành công Premium
-  const [successData, setSuccessData] = useState<any>(null);
+  const [successData, setSuccessData] = useState<RefundResponse | null>(null);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
 
   // Hủy đơn chưa thu tiền (vd: đang chờ thu tiền mặt) — không có gì để hoàn nên
@@ -158,14 +192,14 @@ function BookingManagementPage() {
       if (filterStartDate) query.set("startDate", filterStartDate);
       if (filterEndDate) query.set("endDate", filterEndDate);
       if (filterStadiumId !== "all") query.set("stadiumId", filterStadiumId);
-      const data = await get<any>(`/owner/bookings/summary?${query.toString()}`);
+      const data = await get<OwnerBookingsSummary>(`/owner/bookings/summary?${query.toString()}`);
       setSummary({
         grossAmount: Number(data?.grossAmount) || 0,
         refundedAmount: Number(data?.refundedAmount) || 0,
         serviceFee: Number(data?.serviceFee) || 0,
         netAmount: Number(data?.netAmount) || 0,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching bookings summary:", error);
     }
   }, [activeTab, filterStartDate, filterEndDate, filterStadiumId]);
@@ -188,7 +222,7 @@ function BookingManagementPage() {
       if (filterStartDate) query.set("startDate", filterStartDate);
       if (filterEndDate) query.set("endDate", filterEndDate);
       if (filterStadiumId !== "all") query.set("stadiumId", filterStadiumId);
-      const data = await get<any>(
+      const data = await get<PageResponse<BookingItem> | BookingItem[]>(
         `/owner/bookings?${query.toString()}`
       );
 
@@ -200,11 +234,12 @@ function BookingManagementPage() {
           ? data.content
           : [];
       setBookingList(list);
-      setTotalPages(data?.totalPages ?? 0);
-      setTotalElements(data?.totalElements ?? list.length);
-    } catch (error: any) {
+      setTotalPages(!Array.isArray(data) && data?.totalPages ? data.totalPages : 0);
+      setTotalElements(!Array.isArray(data) && data?.totalElements ? data.totalElements : list.length);
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : "Đã xảy ra lỗi không xác định";
       console.error("Error fetching bookings:", error);
-      toast.error("Không thể tải danh sách đặt sân từ máy chủ: " + error.message);
+      toast.error("Không thể tải danh sách đặt sân từ máy chủ: " + errMessage);
     } finally {
       setIsLoading(false);
     }
@@ -289,9 +324,9 @@ function BookingManagementPage() {
   const fetchRefundPreview = useCallback(async (bookingId: number, type: string) => {
     setIsPreviewLoading(true);
     try {
-      const data = await get<any>(`/owner/bookings/${bookingId}/refund/preview?reasonType=${type}`);
+      const data = await get<RefundResponse>(`/owner/bookings/${bookingId}/refund/preview?reasonType=${type}`);
       setPreviewData(data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching refund preview:", error);
       toast.error("Không tải được thông tin xem trước hoàn tiền.");
       setPreviewData(null);
@@ -336,7 +371,7 @@ function BookingManagementPage() {
       toast.loading("Đang kết nối backend xử lý hoàn tiền...", { id: "refund-process" });
 
       // Gọi API thật
-      const response = await post<any>(`/owner/bookings/${selectedBooking.id}/refund`, {
+      const response = await post<RefundResponse>(`/owner/bookings/${selectedBooking.id}/refund`, {
         reason: reasonType === "OWNER_FAULT" ? proofUrl.trim() : cancelReason.trim(),
         reasonType,
         proofUrl: reasonType === "OWNER_FAULT" ? proofUrl.trim() : null
@@ -360,9 +395,10 @@ function BookingManagementPage() {
       setIsSuccessModalOpen(true);
       toast.success("Đã hoàn tiền và giải phóng sân thành công!", { id: "refund-process" });
       fetchSummary();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : "Không thể thực hiện hoàn tiền. Vui lòng kiểm tra lại quyền sở hữu hoặc trạng thái đơn hàng!";
       console.error(error);
-      toast.error(error.message || "Không thể thực hiện hoàn tiền. Vui lòng kiểm tra lại quyền sở hữu hoặc trạng thái đơn hàng!", { id: "refund-process" });
+      toast.error(errMessage, { id: "refund-process" });
     } finally {
       setIsSubmitting(false);
     }
@@ -380,8 +416,9 @@ function BookingManagementPage() {
       fetchSummary();
       setCancelOnlyBooking(null);
       setCancelOnlyReason("");
-    } catch (error: any) {
-      toast.error(error.message || "Không thể hủy đơn, vui lòng thử lại");
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : "Không thể hủy đơn, vui lòng thử lại";
+      toast.error(errMessage);
     } finally {
       setIsCancelOnlySubmitting(false);
     }
@@ -399,8 +436,9 @@ function BookingManagementPage() {
       fetchSummary();
       setReceiptBooking({ ...confirmCashBooking, paymentStatus: "paid" });
       setConfirmCashBooking(null);
-    } catch (error: any) {
-      toast.error(error.message || "Không thể xác nhận thu tiền, vui lòng thử lại");
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : "Không thể xác nhận thu tiền, vui lòng thử lại";
+      toast.error(errMessage);
     } finally {
       setIsConfirmCashSubmitting(false);
     }
@@ -419,8 +457,9 @@ function BookingManagementPage() {
       const remaining = confirmRemainingBooking.amount - (confirmRemainingBooking.paidAmount || 0);
       setReceiptBooking({ ...confirmRemainingBooking, paymentStatus: "paid", amount: remaining });
       setConfirmRemainingBooking(null);
-    } catch (error: any) {
-      toast.error(error.message || "Không thể xác nhận thu tiền, vui lòng thử lại");
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : "Không thể xác nhận thu tiền, vui lòng thử lại";
+      toast.error(errMessage);
     } finally {
       setIsConfirmRemainingSubmitting(false);
     }
@@ -1473,7 +1512,7 @@ function BookingManagementPage() {
 export default BookingManagementPage;
 
 function BookingExceptionHistory({ bookingId }: { bookingId: number }) {
-  const [exception, setException] = useState<any | null>(null);
+  const [exception, setException] = useState<RefundExceptionItem | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -1481,7 +1520,7 @@ function BookingExceptionHistory({ bookingId }: { bookingId: number }) {
     const load = async () => {
       setLoading(true);
       try {
-        const data = await get<any>(`/refund-exceptions/booking/${bookingId}/latest`);
+        const data = await get<RefundExceptionItem>(`/refund-exceptions/booking/${bookingId}/latest`);
         if (active) setException(data || null);
       } catch {
         if (active) setException(null);

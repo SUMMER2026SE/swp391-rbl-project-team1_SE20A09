@@ -31,6 +31,7 @@ import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import com.sportvenue.constant.DateConstants;
 
 @Service
 @RequiredArgsConstructor
@@ -71,7 +72,7 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 
         // 2. Calculate aggregate stats — pass ALL active filters so stats always match the displayed list.
         AdminBookingStatsResponse stats = calculateStats(
-                startDate, endDate, bookingStatus, paymentStatus, stadiumId, ownerId);
+                startDate, endDate, bookingStatus, paymentStatus, stadiumId, ownerId, page.getTotalElements());
 
         return AdminBookingListResponse.builder()
                 .bookings(paginatedBookings)
@@ -149,7 +150,8 @@ public class AdminBookingServiceImpl implements AdminBookingService {
     private AdminBookingStatsResponse calculateStats(
             LocalDate startDate, LocalDate endDate,
             BookingStatus bookingStatus, PaymentStatus paymentStatus,
-            Integer stadiumId, Integer ownerId) {
+            Integer stadiumId, Integer ownerId,
+            long totalBookings) {
 
         // BookingStatus list — null = all statuses
         List<BookingStatus> bookingStatuses = bookingStatus != null
@@ -161,8 +163,8 @@ public class AdminBookingServiceImpl implements AdminBookingService {
                 ? List.of(paymentStatus)
                 : Arrays.asList(PaymentStatus.values());
 
-        LocalDate effectiveStart = startDate != null ? startDate : LocalDate.of(2000, 1, 1);
-        LocalDate effectiveEnd = endDate != null ? endDate : LocalDate.of(2100, 1, 1);
+        LocalDate effectiveStart = startDate != null ? startDate : DateConstants.EPOCH_START;
+        LocalDate effectiveEnd = endDate != null ? endDate : DateConstants.EPOCH_END;
 
         // Gross: Payment amount > 0, SUCCESS, lọc theo b.reservationDate
         BigDecimal totalGMV = paymentRepository.sumPlatformGrossByFilters(
@@ -187,10 +189,6 @@ public class AdminBookingServiceImpl implements AdminBookingService {
         }
 
         BigDecimal totalNet = totalGMV.subtract(totalRefund).subtract(totalServiceFee);
-
-        // Đếm booking theo đúng cùng tập filter
-        long totalBookings = bookingRepository.countByFilters(
-                effectiveStart, effectiveEnd, bookingStatuses, paymentStatuses, stadiumId, ownerId);
 
         log.info("Admin stats [{} → {}] bookingStatus={}, paymentStatus={}, stadiumId={}, ownerId={} "
                         + "— Gross={}, Refund={}, Fee={}, Net={}, Bookings={}",

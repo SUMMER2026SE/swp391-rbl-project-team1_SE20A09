@@ -45,6 +45,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.sportvenue.service.WalletService;
 import com.sportvenue.entity.enums.WalletTransactionType;
 
+import java.time.LocalDate;
+import com.sportvenue.constant.DateConstants;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -514,13 +517,13 @@ public class RefundServiceImpl implements RefundService {
     @Transactional(readOnly = true)
     @Override
     public Page<OwnerBookingResponse> getOwnerBookings(
-            String ownerEmail, Integer stadiumId, java.time.LocalDate startDate, java.time.LocalDate endDate,
+            String ownerEmail, Integer stadiumId, LocalDate startDate, LocalDate endDate,
             BookingStatus status, Pageable pageable) {
         log.info("Fetching bookings for owner: {}, stadiumId: {}, start: {}, end: {}, status: {}, page: {}",
                 ownerEmail, stadiumId, startDate, endDate, status, pageable.getPageNumber());
 
-        java.time.LocalDate effectiveStart = startDate != null ? startDate : java.time.LocalDate.of(2000, 1, 1);
-        java.time.LocalDate effectiveEnd = endDate != null ? endDate : java.time.LocalDate.of(2100, 1, 1);
+        LocalDate effectiveStart = startDate != null ? startDate : DateConstants.EPOCH_START;
+        LocalDate effectiveEnd = endDate != null ? endDate : DateConstants.EPOCH_END;
 
         Page<Booking> bookings = bookingRepository.findByOwnerEmailAndFilters(
                 ownerEmail, stadiumId, effectiveStart, effectiveEnd, status, pageable);
@@ -619,7 +622,7 @@ public class RefundServiceImpl implements RefundService {
     @Transactional(readOnly = true)
     @Override
     public com.sportvenue.dto.response.OwnerBookingsSummaryResponse getOwnerBookingsSummary(
-            String ownerEmail, Integer stadiumId, java.time.LocalDate startDate, java.time.LocalDate endDate,
+            String ownerEmail, Integer stadiumId, LocalDate startDate, LocalDate endDate,
             BookingStatus status) {
         // ── Nguồn sự thật đã chốt
         // ──────────────────────────────────────────────────────
@@ -637,8 +640,8 @@ public class RefundServiceImpl implements RefundService {
         Integer ownerId = owner.getOwnerId();
 
         // Normalize to LocalDate — các query giờ lọc theo b.reservationDate (LocalDate)
-        java.time.LocalDate effectiveStart = startDate != null ? startDate : java.time.LocalDate.of(2000, 1, 1);
-        java.time.LocalDate effectiveEnd = endDate != null ? endDate : java.time.LocalDate.of(2100, 1, 1);
+        LocalDate effectiveStart = startDate != null ? startDate : DateConstants.EPOCH_START;
+        LocalDate effectiveEnd = endDate != null ? endDate : DateConstants.EPOCH_END;
 
         // Use a list of statuses to avoid (:status IS NULL OR ...) which crashes
         // PostgreSQL

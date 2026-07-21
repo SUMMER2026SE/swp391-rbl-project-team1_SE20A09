@@ -184,30 +184,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
             @Param("endDate") LocalDate endDate,
             @Param("statuses") java.util.List<com.sportvenue.entity.enums.BookingStatus> statuses);
 
-    /**
-     * Tổng Gross toàn hệ thống (Admin) theo khoảng thời gian.
-     */
-    @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p " +
-           "WHERE p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
-           "AND p.amount > 0 " +
-           "AND (:start IS NULL OR p.paidAt >= :start) " +
-           "AND (:end IS NULL OR p.paidAt <= :end)")
-    java.math.BigDecimal sumPlatformGrossByDateRange(
-            @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end);
-
-    /**
-     * Tổng Refund toàn hệ thống (Admin) theo khoảng thời gian.
-     * Trả về giá trị dương (ABS).
-     */
-    @Query("SELECT COALESCE(SUM(ABS(p.amount)), 0) FROM Payment p " +
-           "WHERE p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
-           "AND p.amount < 0 " +
-           "AND (:start IS NULL OR p.paidAt >= :start) " +
-           "AND (:end IS NULL OR p.paidAt <= :end)")
-    java.math.BigDecimal sumPlatformRefundByDateRange(
-            @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end);
 
     /**
      * Tổng Gross toàn hệ thống (Admin) theo b.reservationDate và toàn bộ filter.
