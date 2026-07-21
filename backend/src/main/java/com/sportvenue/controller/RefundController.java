@@ -50,13 +50,16 @@ public class RefundController {
     )
     public ResponseEntity<Page<OwnerBookingResponse>> listOwnerBookings(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestParam(required = false) Integer stadiumId,
+            @RequestParam(required = false) java.time.LocalDate startDate,
+            @RequestParam(required = false) java.time.LocalDate endDate,
             @RequestParam(required = false) BookingStatus status,
             @org.springdoc.core.annotations.ParameterObject
             @PageableDefault(size = 20, sort = "bookingDate",
                     direction = Sort.Direction.DESC) Pageable pageable) {
 
         Page<OwnerBookingResponse> response = refundService.getOwnerBookings(
-                userPrincipal.getUsername(), status, pageable);
+                userPrincipal.getUsername(), stadiumId, startDate, endDate, status, pageable);
         return ResponseEntity.ok(response);
     }
 
@@ -69,9 +72,12 @@ public class RefundController {
     )
     public ResponseEntity<com.sportvenue.dto.response.OwnerBookingsSummaryResponse> getOwnerBookingsSummary(
             @AuthenticationPrincipal UserPrincipal userPrincipal,
+            @RequestParam(required = false) Integer stadiumId,
+            @RequestParam(required = false) java.time.LocalDate startDate,
+            @RequestParam(required = false) java.time.LocalDate endDate,
             @RequestParam(required = false) BookingStatus status) {
 
-        return ResponseEntity.ok(refundService.getOwnerBookingsSummary(userPrincipal.getUsername(), status));
+        return ResponseEntity.ok(refundService.getOwnerBookingsSummary(userPrincipal.getUsername(), stadiumId, startDate, endDate, status));
     }
 
     @GetMapping("/{bookingId}/refund/preview")

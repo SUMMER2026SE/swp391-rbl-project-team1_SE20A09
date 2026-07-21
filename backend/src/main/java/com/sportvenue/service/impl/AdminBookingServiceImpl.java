@@ -11,17 +11,13 @@ import com.sportvenue.entity.TimeSlot;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.entity.enums.PaymentStatus;
+import com.sportvenue.entity.enums.WalletTransactionType;
 import com.sportvenue.repository.BookingRepository;
+import com.sportvenue.repository.PaymentRepository;
+import com.sportvenue.repository.WalletTransactionRepository;
 import com.sportvenue.repository.specification.BookingSpecification;
 import com.sportvenue.service.AdminBookingService;
 import com.sportvenue.util.StadiumUtils;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.Expression;
-import jakarta.persistence.criteria.Predicate;
-import jakarta.persistence.criteria.Root;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -32,8 +28,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import com.sportvenue.constant.DateConstants;
 
 @Service
 @RequiredArgsConstructor
@@ -41,9 +39,8 @@ import java.util.stream.Collectors;
 public class AdminBookingServiceImpl implements AdminBookingService {
 
     private final BookingRepository bookingRepository;
-
-    @PersistenceContext
-    private final EntityManager entityManager;
+    private final PaymentRepository paymentRepository;
+    private final WalletTransactionRepository walletTransactionRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -73,8 +70,9 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 
         PageResponse<AdminBookingResponse> paginatedBookings = PageResponse.of(page, content);
 
-        // 2. Fetch aggregate stats using optimized Criteria API under the same filters
-        AdminBookingStatsResponse stats = calculateStats(spec);
+        // 2. Calculate aggregate stats — pass ALL active filters so stats always match the displayed list.
+        AdminBookingStatsResponse stats = calculateStats(
+                startDate, endDate, bookingStatus, paymentStatus, stadiumId, ownerId, page.getTotalElements());
 
         return AdminBookingListResponse.builder()
                 .bookings(paginatedBookings)
@@ -135,62 +133,74 @@ public class AdminBookingServiceImpl implements AdminBookingService {
                 .build();
     }
 
-    private AdminBookingStatsResponse calculateStats(Specification<Booking> spec) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Object[]> query = cb.createQuery(Object[].class);
-        Root<Booking> root = query.from(Booking.class);
+    /**
+     * Tính Gross/Refund/Fee/Net từ nguồn sự thật duy nhất:
+     * - Gross  = Payment (amount > 0, SUCCESS) — tiền thực thu
+     * - Refund = Payment (amount < 0, SUCCESS) — tiền đã hoàn, giá trị dương
+     * - Fee    = Platform Wallet (SERVICE_FEE_CREDIT) — phí Platform thực thu
+     * - Net    = Gross - Refund - Fee
+     *
+     * Tất cả filter (bookingStatus, paymentStatus, stadiumId, ownerId, startDate, endDate) đều
+     * được áp dụng cho cả aggregate lẫn đếm booking — đảm bảo stats LUÔN khớp với danh sách
+     * hiển thị trên cùng tập filter, tránh regression khi Admin lọc theo status / sân / owner.
+     *
+     * Cột ngày lọc dùng thống nhất là b.reservationDate (ngày chơi thực tế), khớp với
+     * Dashboard / Báo cáo doanh thu (RevenueServiceImpl) và danh sách Owner Bookings.
+     */
+    private AdminBookingStatsResponse calculateStats(
+            LocalDate startDate, LocalDate endDate,
+            BookingStatus bookingStatus, PaymentStatus paymentStatus,
+            Integer stadiumId, Integer ownerId,
+            long totalBookings) {
 
-        // Recreate the filters from Specification
-        Predicate filterPredicate = spec.toPredicate(root, query, cb);
+        // BookingStatus list — null = all statuses
+        List<BookingStatus> bookingStatuses = bookingStatus != null
+                ? List.of(bookingStatus)
+                : Arrays.asList(BookingStatus.values());
 
-        // GMV: PENDING, CONFIRMED, COMPLETED
-        Expression<BigDecimal> gmvExpression = cb.coalesce(
-            cb.sum(
-                cb.<BigDecimal>selectCase()
-                    .when(root.get("bookingStatus").in(BookingStatus.PENDING, BookingStatus.CONFIRMED, BookingStatus.COMPLETED), root.get("totalPrice"))
-                    .otherwise(BigDecimal.ZERO)
-            ),
-            BigDecimal.ZERO
-        );
+        // PaymentStatus list — null = all statuses
+        List<PaymentStatus> paymentStatuses = paymentStatus != null
+                ? List.of(paymentStatus)
+                : Arrays.asList(PaymentStatus.values());
 
-        // Service Fee: COMPLETED
-        Expression<BigDecimal> serviceFeeExpression = cb.coalesce(
-            cb.sum(
-                cb.<BigDecimal>selectCase()
-                    .when(cb.equal(root.get("bookingStatus"), BookingStatus.COMPLETED), root.get("serviceFee"))
-                    .otherwise(BigDecimal.ZERO)
-            ),
-            BigDecimal.ZERO
-        );
+        LocalDate effectiveStart = startDate != null ? startDate : DateConstants.EPOCH_START;
+        LocalDate effectiveEnd = endDate != null ? endDate : DateConstants.EPOCH_END;
 
-        query.multiselect(
-            cb.count(root),
-            gmvExpression,
-            serviceFeeExpression
-        );
-
-        if (filterPredicate != null) {
-            query.where(filterPredicate);
+        // Gross: Payment amount > 0, SUCCESS, lọc theo b.reservationDate
+        BigDecimal totalGMV = paymentRepository.sumPlatformGrossByFilters(
+                effectiveStart, effectiveEnd, bookingStatuses, paymentStatuses, stadiumId, ownerId);
+        if (totalGMV == null) {
+            totalGMV = BigDecimal.ZERO;
         }
 
-        try {
-            Object[] result = entityManager.createQuery(query).getSingleResult();
-            long totalBookings = result[0] != null ? (Long) result[0] : 0L;
-            BigDecimal totalGMV = result[1] != null ? (BigDecimal) result[1] : BigDecimal.ZERO;
-            BigDecimal totalServiceFee = result[2] != null ? (BigDecimal) result[2] : BigDecimal.ZERO;
-
-            return AdminBookingStatsResponse.builder()
-                    .totalBookings(totalBookings)
-                    .totalGMV(totalGMV)
-                    .totalServiceFee(totalServiceFee)
-                    .build();
-        } catch (Exception e) {
-            log.error("Error calculating admin booking stats", e);
-            return AdminBookingStatsResponse.builder()
-                    .totalBookings(0)
-                    .totalGMV(BigDecimal.ZERO)
-                    .totalServiceFee(BigDecimal.ZERO)
-                    .build();
+        // Refund: Payment amount < 0, SUCCESS, lọc theo b.reservationDate
+        BigDecimal totalRefund = paymentRepository.sumPlatformRefundByFilters(
+                effectiveStart, effectiveEnd, bookingStatuses, paymentStatuses, stadiumId, ownerId);
+        if (totalRefund == null) {
+            totalRefund = BigDecimal.ZERO;
         }
+
+        // Fee: Platform Wallet SERVICE_FEE_CREDIT, lọc theo b.reservationDate
+        BigDecimal totalServiceFee = walletTransactionRepository.sumPlatformFeeByFilters(
+                WalletTransactionType.SERVICE_FEE_CREDIT,
+                effectiveStart, effectiveEnd, bookingStatuses, paymentStatuses, stadiumId, ownerId);
+        if (totalServiceFee == null) {
+            totalServiceFee = BigDecimal.ZERO;
+        }
+
+        BigDecimal totalNet = totalGMV.subtract(totalRefund).subtract(totalServiceFee);
+
+        log.info("Admin stats [{} → {}] bookingStatus={}, paymentStatus={}, stadiumId={}, ownerId={} "
+                        + "— Gross={}, Refund={}, Fee={}, Net={}, Bookings={}",
+                startDate, endDate, bookingStatus, paymentStatus, stadiumId, ownerId,
+                totalGMV, totalRefund, totalServiceFee, totalNet, totalBookings);
+
+        return AdminBookingStatsResponse.builder()
+                .totalBookings(totalBookings)
+                .totalGMV(totalGMV)
+                .totalRefund(totalRefund)
+                .totalServiceFee(totalServiceFee)
+                .totalNet(totalNet)
+                .build();
     }
 }

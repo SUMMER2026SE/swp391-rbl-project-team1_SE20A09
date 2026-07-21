@@ -203,13 +203,22 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
     @Query("""
             SELECT b.reservationDate AS date,
                    COALESCE(SUM(
-                       CASE
-                           WHEN b.totalPrice > b.serviceFee THEN b.totalPrice - b.serviceFee
-                           ELSE 0
-                       END
+                       CASE WHEN p.amount > 0 AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS THEN p.amount ELSE 0 END
+                     - CASE WHEN p.amount < 0 AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS THEN ABS(p.amount) ELSE 0 END
+                   ), 0) - COALESCE((
+                       SELECT SUM(ABS(wt.amount))
+                       FROM WalletTransaction wt
+                       JOIN wt.booking b2
+                       JOIN b2.stadium s2
+                       WHERE s2.owner.user.email = :ownerEmail
+                       AND (:stadiumId IS NULL OR s2.stadiumId = :stadiumId)
+                       AND (b2.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED OR (b2.isWalkIn = true AND b2.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED))
+                       AND b2.reservationDate = b.reservationDate
+                       AND wt.transactionType = com.sportvenue.entity.enums.WalletTransactionType.SERVICE_FEE_DEBIT
                    ), 0) AS revenue
             FROM Booking b
             JOIN b.stadium s
+            LEFT JOIN Payment p ON p.booking = b
             WHERE s.owner.user.email = :ownerEmail
             AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId)
             AND (b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED OR (b.isWalkIn = true AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED))
@@ -228,24 +237,29 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
                    s.stadiumName AS stadiumName,
                    COUNT(DISTINCT b.bookingId) AS totalBookings,
                    COALESCE(SUM(
-                       CASE
-                           WHEN b.totalPrice > b.serviceFee THEN b.totalPrice - b.serviceFee
-                           ELSE 0
-                       END
+                       CASE WHEN p.amount > 0 AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS THEN p.amount ELSE 0 END
+                     - CASE WHEN p.amount < 0 AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS THEN ABS(p.amount) ELSE 0 END
+                   ), 0) - COALESCE((
+                       SELECT SUM(ABS(wt.amount))
+                       FROM WalletTransaction wt
+                       JOIN wt.booking b2
+                       JOIN b2.stadium s2
+                       WHERE s2.owner.user.email = :ownerEmail
+                       AND (:stadiumId IS NULL OR s2.stadiumId = :stadiumId)
+                       AND (b2.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED OR (b2.isWalkIn = true AND b2.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED))
+                       AND b2.reservationDate BETWEEN :startDate AND :endDate
+                       AND s2.stadiumId = s.stadiumId
+                       AND wt.transactionType = com.sportvenue.entity.enums.WalletTransactionType.SERVICE_FEE_DEBIT
                    ), 0) AS totalRevenue
             FROM Booking b
             JOIN b.stadium s
+            LEFT JOIN Payment p ON p.booking = b
             WHERE s.owner.user.email = :ownerEmail
             AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId)
             AND (b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED OR (b.isWalkIn = true AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED))
             AND b.reservationDate BETWEEN :startDate AND :endDate
             GROUP BY s.stadiumId, s.stadiumName
-            ORDER BY COALESCE(SUM(
-                       CASE
-                           WHEN b.totalPrice > b.serviceFee THEN b.totalPrice - b.serviceFee
-                           ELSE 0
-                       END
-                   ), 0) DESC
+            ORDER BY totalRevenue DESC
             """)
     List<com.sportvenue.repository.projection.VenueRevenueProjection> getOwnerVenueNetRevenueBreakdown(
             @Param("ownerEmail") String ownerEmail,
@@ -255,13 +269,21 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
 
     @Query("""
             SELECT COALESCE(SUM(
-                CASE
-                    WHEN b.totalPrice > b.serviceFee THEN b.totalPrice - b.serviceFee
-                    ELSE 0
-                END
+                CASE WHEN p.amount > 0 AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS THEN p.amount ELSE 0 END
+              - CASE WHEN p.amount < 0 AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS THEN ABS(p.amount) ELSE 0 END
+            ), 0) - COALESCE((
+                SELECT SUM(ABS(wt.amount))
+                FROM WalletTransaction wt
+                JOIN wt.booking b2
+                JOIN b2.stadium s2
+                WHERE s2.owner.user.email = :ownerEmail
+                AND (b2.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED OR (b2.isWalkIn = true AND b2.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED))
+                AND b2.reservationDate BETWEEN :startDate AND :endDate
+                AND wt.transactionType = com.sportvenue.entity.enums.WalletTransactionType.SERVICE_FEE_DEBIT
             ), 0)
             FROM Booking b
             JOIN b.stadium s
+            LEFT JOIN Payment p ON p.booking = b
             WHERE s.owner.user.email = :ownerEmail
             AND (b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED OR (b.isWalkIn = true AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED))
             AND b.reservationDate BETWEEN :startDate AND :endDate
@@ -289,6 +311,48 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
             @Param("stadiumIds") List<Integer> stadiumIds,
             @Param("status") BookingStatus status,
             Pageable pageable);
+
+    /** Lấy ID booking thuộc các sân của Owner có phân trang và filter. */
+    @Query("""
+            SELECT b.bookingId FROM Booking b
+            WHERE b.stadium.owner.user.email = :email
+            AND (:stadiumId IS NULL OR b.stadium.stadiumId = :stadiumId)
+            AND (:status IS NULL OR b.bookingStatus = :status)
+            AND b.reservationDate BETWEEN :startDate AND :endDate
+            ORDER BY b.bookingDate DESC
+            """)
+    Page<Integer> findIdsByOwnerEmailAndFilters(
+            @Param("email") String email,
+            @Param("stadiumId") Integer stadiumId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("status") BookingStatus status,
+            Pageable pageable);
+
+    @EntityGraph(attributePaths = {"user", "stadium", "slot"})
+    @Query("SELECT b FROM Booking b WHERE b.bookingId IN :ids")
+    List<Booking> findAllByIdsWithDetails(@Param("ids") List<Integer> ids);
+
+    default Page<Booking> findByOwnerEmailAndFilters(
+            String email,
+            Integer stadiumId,
+            LocalDate startDate,
+            LocalDate endDate,
+            BookingStatus status,
+            Pageable pageable) {
+        Page<Integer> idPage = findIdsByOwnerEmailAndFilters(email, stadiumId, startDate, endDate, status, pageable);
+        if (idPage.isEmpty()) {
+            return new org.springframework.data.domain.PageImpl<>(java.util.Collections.emptyList(), pageable, 0);
+        }
+        List<Booking> details = findAllByIdsWithDetails(idPage.getContent());
+        java.util.Map<Integer, Booking> map = details.stream()
+                .collect(java.util.stream.Collectors.toMap(Booking::getBookingId, b -> b));
+        List<Booking> ordered = idPage.getContent().stream()
+                .map(map::get)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        return new org.springframework.data.domain.PageImpl<>(ordered, pageable, idPage.getTotalElements());
+    }
 
     /** Lấy booking thuộc các sân của Owner, có phân trang và filter trạng thái. */
     @EntityGraph(attributePaths = {"user", "stadium", "slot"})
@@ -519,6 +583,28 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
     long countByDateRange(
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate);
+
+    /**
+     * Đếm booking theo toàn bộ Admin filter (khớp với Specification của getAdminBookings).
+     * Dùng b.reservationDate để thống nhất cột ngày với tất cả aggregate queries.
+     */
+    @Query("""
+            SELECT COUNT(b) FROM Booking b
+            JOIN b.stadium s
+            WHERE b.reservationDate >= :startDate
+            AND b.reservationDate <= :endDate
+            AND b.bookingStatus IN :bookingStatuses
+            AND b.paymentStatus IN :paymentStatuses
+            AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId)
+            AND (:ownerId IS NULL OR s.owner.ownerId = :ownerId)
+            """)
+    long countByFilters(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("bookingStatuses") List<BookingStatus> bookingStatuses,
+            @Param("paymentStatuses") List<com.sportvenue.entity.enums.PaymentStatus> paymentStatuses,
+            @Param("stadiumId") Integer stadiumId,
+            @Param("ownerId") Integer ownerId);
 
     /** UC-ADM-01: Top 5 đặt sân gần nhất trong khoảng ngày. */
     @EntityGraph(attributePaths = {"user", "stadium", "slot"})

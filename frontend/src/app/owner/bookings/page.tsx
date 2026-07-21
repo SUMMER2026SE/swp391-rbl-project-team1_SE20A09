@@ -73,6 +73,49 @@ interface BookingItem {
   isWalkIn?: boolean;
 }
 
+interface StadiumOption {
+  stadiumId: number;
+  stadiumName: string;
+}
+
+interface RefundResponse {
+  bookingId: number;
+  stadiumName: string;
+  customerName: string;
+  playTime: string;
+  originalPrice: number;
+  serviceFee?: number;
+  refundAmount: number;
+  refundPercentage: number;
+  bookingStatus: string;
+  paymentStatus: string;
+  processedAt: string;
+  reason?: string;
+  cancellationPolicyDescription?: string;
+}
+
+interface OwnerBookingsSummary {
+  grossAmount: number;
+  refundedAmount: number;
+  serviceFee: number;
+  netAmount: number;
+}
+
+interface RefundExceptionItem {
+  id: number;
+  bookingId: number;
+  exceptionType: string;
+  requestedAmount: number;
+  approvedAmount?: number;
+  status: string;
+  reason?: string;
+  createdAt?: string;
+  evidenceUrl?: string;
+  ownerNote?: string;
+  refundPercent?: number;
+  adminNote?: string;
+}
+
 function BookingManagementPage() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [bookingList, setBookingList] = useState<BookingItem[]>([]);
@@ -87,11 +130,11 @@ function BookingManagementPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Xem trước tiền hoàn từ Backend (Tránh clock skew của client)
-  const [previewData, setPreviewData] = useState<any>(null);
+  const [previewData, setPreviewData] = useState<RefundResponse | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   // States phục vụ hiển thị kết quả thành công Premium
-  const [successData, setSuccessData] = useState<any>(null);
+  const [successData, setSuccessData] = useState<RefundResponse | null>(null);
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
 
   // Hủy đơn chưa thu tiền (vd: đang chờ thu tiền mặt) — không có gì để hoàn nên
@@ -118,6 +161,23 @@ function BookingManagementPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
 
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+  const [filterStadiumId, setFilterStadiumId] = useState("all");
+  const [ownerStadiums, setOwnerStadiums] = useState<StadiumOption[]>([]);
+
+  useEffect(() => {
+    async function fetchStadiums() {
+      try {
+        const data = await get<StadiumOption[]>('/stadiums/my');
+        setOwnerStadiums(data || []);
+      } catch (err) {
+        console.error("Error fetching stadiums:", err);
+      }
+    }
+    fetchStadiums();
+  }, []);
+
   // Tổng Gross/Refund/Fee/Net trên TOÀN BỘ booking (không phụ thuộc phân trang) — lấy từ backend
   // thay vì tự cộng dồn bookingList (chỉ có 1 trang), tránh bug tổng bị lệch khi tạo đơn mới.
   const [summary, setSummary] = useState<{
@@ -133,17 +193,20 @@ function BookingManagementPage() {
       if (activeTab !== "all") {
         query.set("status", activeTab.toUpperCase());
       }
-      const data = await get<any>(`/owner/bookings/summary?${query.toString()}`);
+      if (filterStartDate) query.set("startDate", filterStartDate);
+      if (filterEndDate) query.set("endDate", filterEndDate);
+      if (filterStadiumId !== "all") query.set("stadiumId", filterStadiumId);
+      const data = await get<OwnerBookingsSummary>(`/owner/bookings/summary?${query.toString()}`);
       setSummary({
         grossAmount: Number(data?.grossAmount) || 0,
         refundedAmount: Number(data?.refundedAmount) || 0,
         serviceFee: Number(data?.serviceFee) || 0,
         netAmount: Number(data?.netAmount) || 0,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching bookings summary:", error);
     }
-  }, [activeTab]);
+  }, [activeTab, filterStartDate, filterEndDate, filterStadiumId]);
 
   useEffect(() => {
     fetchSummary();
@@ -160,7 +223,10 @@ function BookingManagementPage() {
       if (activeTab !== "all") {
         query.set("status", activeTab.toUpperCase());
       }
-      const data = await get<any>(
+      if (filterStartDate) query.set("startDate", filterStartDate);
+      if (filterEndDate) query.set("endDate", filterEndDate);
+      if (filterStadiumId !== "all") query.set("stadiumId", filterStadiumId);
+      const data = await get<PageResponse<BookingItem> | BookingItem[]>(
         `/owner/bookings?${query.toString()}`
       );
 
@@ -172,15 +238,16 @@ function BookingManagementPage() {
           ? data.content
           : [];
       setBookingList(list);
-      setTotalPages(data?.totalPages ?? 0);
-      setTotalElements(data?.totalElements ?? list.length);
-    } catch (error: any) {
+      setTotalPages(!Array.isArray(data) && data?.totalPages ? data.totalPages : 0);
+      setTotalElements(!Array.isArray(data) && data?.totalElements ? data.totalElements : list.length);
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : "Đã xảy ra lỗi không xác định";
       console.error("Error fetching bookings:", error);
-      toast.error("Không thể tải danh sách đặt sân từ máy chủ: " + error.message);
+      toast.error("Không thể tải danh sách đặt sân từ máy chủ: " + errMessage);
     } finally {
       setIsLoading(false);
     }
-  }, [activeTab, page]);
+  }, [activeTab, page, filterStartDate, filterEndDate, filterStadiumId]);
 
   useEffect(() => {
     fetchBookings();
@@ -261,9 +328,9 @@ function BookingManagementPage() {
   const fetchRefundPreview = useCallback(async (bookingId: number, type: string) => {
     setIsPreviewLoading(true);
     try {
-      const data = await get<any>(`/owner/bookings/${bookingId}/refund/preview?reasonType=${type}`);
+      const data = await get<RefundResponse>(`/owner/bookings/${bookingId}/refund/preview?reasonType=${type}`);
       setPreviewData(data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching refund preview:", error);
       toast.error("Không tải được thông tin xem trước hoàn tiền.");
       setPreviewData(null);
@@ -308,7 +375,7 @@ function BookingManagementPage() {
       toast.loading("Đang kết nối backend xử lý hoàn tiền...", { id: "refund-process" });
 
       // Gọi API thật
-      const response = await post<any>(`/owner/bookings/${selectedBooking.id}/refund`, {
+      const response = await post<RefundResponse>(`/owner/bookings/${selectedBooking.id}/refund`, {
         reason: reasonType === "OWNER_FAULT" ? proofUrl.trim() : cancelReason.trim(),
         reasonType,
         proofUrl: reasonType === "OWNER_FAULT" ? proofUrl.trim() : null
@@ -332,9 +399,10 @@ function BookingManagementPage() {
       setIsSuccessModalOpen(true);
       toast.success("Đã hoàn tiền và giải phóng sân thành công!", { id: "refund-process" });
       fetchSummary();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : "Không thể thực hiện hoàn tiền. Vui lòng kiểm tra lại quyền sở hữu hoặc trạng thái đơn hàng!";
       console.error(error);
-      toast.error(error.message || "Không thể thực hiện hoàn tiền. Vui lòng kiểm tra lại quyền sở hữu hoặc trạng thái đơn hàng!", { id: "refund-process" });
+      toast.error(errMessage, { id: "refund-process" });
     } finally {
       setIsSubmitting(false);
     }
@@ -352,8 +420,9 @@ function BookingManagementPage() {
       fetchSummary();
       setCancelOnlyBooking(null);
       setCancelOnlyReason("");
-    } catch (error: any) {
-      toast.error(error.message || "Không thể hủy đơn, vui lòng thử lại");
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : "Không thể hủy đơn, vui lòng thử lại";
+      toast.error(errMessage);
     } finally {
       setIsCancelOnlySubmitting(false);
     }
@@ -371,8 +440,9 @@ function BookingManagementPage() {
       fetchSummary();
       setReceiptBooking({ ...confirmCashBooking, paymentStatus: "paid" });
       setConfirmCashBooking(null);
-    } catch (error: any) {
-      toast.error(error.message || "Không thể xác nhận thu tiền, vui lòng thử lại");
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : "Không thể xác nhận thu tiền, vui lòng thử lại";
+      toast.error(errMessage);
     } finally {
       setIsConfirmCashSubmitting(false);
     }
@@ -391,8 +461,9 @@ function BookingManagementPage() {
       const remaining = confirmRemainingBooking.amount - (confirmRemainingBooking.paidAmount || 0);
       setReceiptBooking({ ...confirmRemainingBooking, paymentStatus: "paid", amount: remaining });
       setConfirmRemainingBooking(null);
-    } catch (error: any) {
-      toast.error(error.message || "Không thể xác nhận thu tiền, vui lòng thử lại");
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : "Không thể xác nhận thu tiền, vui lòng thử lại";
+      toast.error(errMessage);
     } finally {
       setIsConfirmRemainingSubmitting(false);
     }
@@ -659,7 +730,8 @@ function BookingManagementPage() {
                 <input
                   type="date"
                   className="w-full border rounded-lg px-3 py-2 bg-background focus:ring-1 focus:ring-primary focus:outline-none"
-                  placeholder="Từ ngày"
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
                 />
               </div>
               <div className="flex-1 min-w-[200px]">
@@ -667,24 +739,50 @@ function BookingManagementPage() {
                 <input
                   type="date"
                   className="w-full border rounded-lg px-3 py-2 bg-background focus:ring-1 focus:ring-primary focus:outline-none"
-                  placeholder="Đến ngày"
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
                 />
               </div>
               <div className="w-full md:w-56">
                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Sân thể thao</label>
-                <Select defaultValue="all">
+                <Select value={filterStadiumId} onValueChange={setFilterStadiumId}>
                   <SelectTrigger className="w-full h-[42px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Tất cả các sân</SelectItem>
-                    <SelectItem value="san1">Sân Bóng Đá Thủ Đức</SelectItem>
-                    <SelectItem value="san2">Sân Cầu Lông Bình Thạnh</SelectItem>
+                    {ownerStadiums.map((stadium) => (
+                      <SelectItem key={stadium.stadiumId} value={stadium.stadiumId.toString()}>
+                        {stadium.stadiumName}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-end">
-                <Button variant="outline" className="h-[42px] px-6 font-semibold shadow-sm hover:bg-muted">Lọc kết quả</Button>
+              <div className="flex items-end gap-2">
+                <Button 
+                  variant="outline" 
+                  className="h-[42px] px-6 font-semibold shadow-sm hover:bg-muted"
+                  onClick={() => {
+                    fetchBookings();
+                    fetchSummary();
+                  }}
+                >
+                  Lọc kết quả
+                </Button>
+                {(filterStartDate || filterEndDate || filterStadiumId !== "all") && (
+                  <Button 
+                    variant="ghost" 
+                    className="h-[42px] px-4 text-rose-500 hover:text-rose-600"
+                    onClick={() => {
+                      setFilterStartDate("");
+                      setFilterEndDate("");
+                      setFilterStadiumId("all");
+                    }}
+                  >
+                    Xóa lọc
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>
@@ -977,10 +1075,10 @@ function BookingManagementPage() {
                         Hoàn {previewData.refundPercentage}%
                       </Badge>
                     </div>
-                    {previewData.serviceFee > 0 && reasonType === "CUSTOMER_REQUEST" && (
+                    {(previewData.serviceFee ?? 0) > 0 && reasonType === "CUSTOMER_REQUEST" && (
                       <div className="flex justify-between items-center text-xs text-rose-600 font-medium">
                         <span>Phí dịch vụ (Không hoàn lại):</span>
-                        <span>-{previewData.serviceFee.toLocaleString('vi-VN')}đ</span>
+                        <span>-{(previewData.serviceFee ?? 0).toLocaleString('vi-VN')}đ</span>
                       </div>
                     )}
                     <div className="flex justify-between items-center text-sm border-t pt-1.5 mt-1.5">
@@ -1418,7 +1516,7 @@ function BookingManagementPage() {
 export default BookingManagementPage;
 
 function BookingExceptionHistory({ bookingId }: { bookingId: number }) {
-  const [exception, setException] = useState<any | null>(null);
+  const [exception, setException] = useState<RefundExceptionItem | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -1426,7 +1524,7 @@ function BookingExceptionHistory({ bookingId }: { bookingId: number }) {
     const load = async () => {
       setLoading(true);
       try {
-        const data = await get<any>(`/refund-exceptions/booking/${bookingId}/latest`);
+        const data = await get<RefundExceptionItem>(`/refund-exceptions/booking/${bookingId}/latest`);
         if (active) setException(data || null);
       } catch {
         if (active) setException(null);

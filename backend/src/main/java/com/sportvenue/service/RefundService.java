@@ -7,6 +7,7 @@ import com.sportvenue.dto.response.RefundResponse;
 import com.sportvenue.entity.enums.BookingStatus;
 import com.sportvenue.entity.enums.RefundReasonType;
 
+import java.time.LocalDate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -59,7 +60,7 @@ public interface RefundService {
      * @return Trang DTO chứa thông tin đặt sân
      */
     Page<OwnerBookingResponse> getOwnerBookings(
-            String ownerEmail, BookingStatus status, Pageable pageable);
+            String ownerEmail, Integer stadiumId, LocalDate startDate, LocalDate endDate, BookingStatus status, Pageable pageable);
 
     /**
      * Tổng hợp Gross/Refund/Fee/Net trên TOÀN BỘ booking của Owner (không phụ thuộc phân trang) —
@@ -69,5 +70,5 @@ public interface RefundService {
      * @param status trạng thái cần lọc, null để lấy tất cả
      * @return Tổng hợp doanh thu
      */
-    OwnerBookingsSummaryResponse getOwnerBookingsSummary(String ownerEmail, BookingStatus status);
+    OwnerBookingsSummaryResponse getOwnerBookingsSummary(String ownerEmail, Integer stadiumId, LocalDate startDate, LocalDate endDate, BookingStatus status);
 }
