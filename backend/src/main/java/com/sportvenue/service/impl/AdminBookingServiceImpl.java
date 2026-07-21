@@ -28,8 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -70,8 +69,9 @@ public class AdminBookingServiceImpl implements AdminBookingService {
 
         PageResponse<AdminBookingResponse> paginatedBookings = PageResponse.of(page, content);
 
-        // 2. Calculate aggregate stats using Payment + WalletTransaction as sources of truth
-        AdminBookingStatsResponse stats = calculateStats(startDate, endDate);
+        // 2. Calculate aggregate stats — pass ALL active filters so stats always match the displayed list.
+        AdminBookingStatsResponse stats = calculateStats(
+                startDate, endDate, bookingStatus, paymentStatus, stadiumId, ownerId);
 
         return AdminBookingListResponse.builder()
                 .bookings(paginatedBookings)
@@ -139,46 +139,63 @@ public class AdminBookingServiceImpl implements AdminBookingService {
      * - Fee    = Platform Wallet (SERVICE_FEE_CREDIT) — phí Platform thực thu
      * - Net    = Gross - Refund - Fee
      *
-     * Không dùng Booking.totalPrice hay Booking.serviceFee vì:
-     *   - DEPOSITED: chưa thu đủ nhưng totalPrice = full amount → Gross bị thổi phồng
-     *   - serviceFee ghi vào Booking tại thời điểm tạo đơn, không phản ánh phí thực tế
-     *     Platform đã nhận (đặc biệt khi hoàn tiền OWNER_FAULT platform phải trả lại phí)
+     * Tất cả filter (bookingStatus, paymentStatus, stadiumId, ownerId, startDate, endDate) đều
+     * được áp dụng cho cả aggregate lẫn đếm booking — đảm bảo stats LUÔN khớp với danh sách
+     * hiển thị trên cùng tập filter, tránh regression khi Admin lọc theo status / sân / owner.
+     *
+     * Cột ngày lọc dùng thống nhất là b.reservationDate (ngày chơi thực tế), khớp với
+     * Dashboard / Báo cáo doanh thu (RevenueServiceImpl) và danh sách Owner Bookings.
      */
-    private AdminBookingStatsResponse calculateStats(LocalDate startDate, LocalDate endDate) {
-        // Chuyển LocalDate sang LocalDateTime để query Payment.paidAt
-        LocalDateTime startDt = startDate != null ? startDate.atStartOfDay() : null;
-        LocalDateTime endDt = endDate != null ? endDate.atTime(LocalTime.MAX) : null;
+    private AdminBookingStatsResponse calculateStats(
+            LocalDate startDate, LocalDate endDate,
+            BookingStatus bookingStatus, PaymentStatus paymentStatus,
+            Integer stadiumId, Integer ownerId) {
 
-        // Gross: Payment amount > 0, SUCCESS
-        BigDecimal totalGMV = paymentRepository.sumPlatformGrossByDateRange(startDt, endDt);
+        // BookingStatus list — null = all statuses
+        List<BookingStatus> bookingStatuses = bookingStatus != null
+                ? List.of(bookingStatus)
+                : Arrays.asList(BookingStatus.values());
+
+        // PaymentStatus list — null = all statuses
+        List<PaymentStatus> paymentStatuses = paymentStatus != null
+                ? List.of(paymentStatus)
+                : Arrays.asList(PaymentStatus.values());
+
+        LocalDate effectiveStart = startDate != null ? startDate : LocalDate.of(2000, 1, 1);
+        LocalDate effectiveEnd = endDate != null ? endDate : LocalDate.of(2100, 1, 1);
+
+        // Gross: Payment amount > 0, SUCCESS, lọc theo b.reservationDate
+        BigDecimal totalGMV = paymentRepository.sumPlatformGrossByFilters(
+                effectiveStart, effectiveEnd, bookingStatuses, paymentStatuses, stadiumId, ownerId);
         if (totalGMV == null) {
             totalGMV = BigDecimal.ZERO;
         }
 
-        // Refund: Payment amount < 0, SUCCESS (trả về giá trị dương)
-        BigDecimal totalRefund = paymentRepository.sumPlatformRefundByDateRange(startDt, endDt);
+        // Refund: Payment amount < 0, SUCCESS, lọc theo b.reservationDate
+        BigDecimal totalRefund = paymentRepository.sumPlatformRefundByFilters(
+                effectiveStart, effectiveEnd, bookingStatuses, paymentStatuses, stadiumId, ownerId);
         if (totalRefund == null) {
             totalRefund = BigDecimal.ZERO;
         }
 
-        // Fee: Platform Wallet SERVICE_FEE_CREDIT — phí thực sự Platform thu được
-        // (không dùng SERVICE_FEE_DEBIT từ Owner wallet để tránh double-counting khi
-        //  nhiều owner — Platform wallet là đầu nhận duy nhất)
-        BigDecimal totalServiceFee = walletTransactionRepository.sumPlatformFeeByTypeAndDateRange(
-                WalletTransactionType.SERVICE_FEE_CREDIT, startDt, endDt);
+        // Fee: Platform Wallet SERVICE_FEE_CREDIT, lọc theo b.reservationDate
+        BigDecimal totalServiceFee = walletTransactionRepository.sumPlatformFeeByFilters(
+                WalletTransactionType.SERVICE_FEE_CREDIT,
+                effectiveStart, effectiveEnd, bookingStatuses, paymentStatuses, stadiumId, ownerId);
         if (totalServiceFee == null) {
             totalServiceFee = BigDecimal.ZERO;
         }
 
         BigDecimal totalNet = totalGMV.subtract(totalRefund).subtract(totalServiceFee);
 
-        // Đếm booking (all statuses) trong khoảng ngày
-        long totalBookings = startDate != null
-                ? bookingRepository.countByDateRange(startDate, endDate != null ? endDate : LocalDate.now())
-                : bookingRepository.count();
+        // Đếm booking theo đúng cùng tập filter
+        long totalBookings = bookingRepository.countByFilters(
+                effectiveStart, effectiveEnd, bookingStatuses, paymentStatuses, stadiumId, ownerId);
 
-        log.info("Admin stats [{} → {}] — Gross={}, Refund={}, Fee={}, Net={}, Bookings={}",
-                startDate, endDate, totalGMV, totalRefund, totalServiceFee, totalNet, totalBookings);
+        log.info("Admin stats [{} → {}] bookingStatus={}, paymentStatus={}, stadiumId={}, ownerId={} "
+                        + "— Gross={}, Refund={}, Fee={}, Net={}, Bookings={}",
+                startDate, endDate, bookingStatus, paymentStatus, stadiumId, ownerId,
+                totalGMV, totalRefund, totalServiceFee, totalNet, totalBookings);
 
         return AdminBookingStatsResponse.builder()
                 .totalBookings(totalBookings)

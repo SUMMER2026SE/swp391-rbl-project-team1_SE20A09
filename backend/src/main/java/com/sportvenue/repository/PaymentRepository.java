@@ -1,5 +1,6 @@
 package com.sportvenue.repository;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -141,7 +142,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
     // ── Unified Financial Aggregates (Nguồn sự thật: Payment table) ────────────────────────
 
     /**
-     * Tổng Gross của Owner theo khoảng thời gian (paidAt).
+     * Tổng Gross của Owner theo b.reservationDate (ngày chơi thực tế) — thống nhất với
+     * findByOwnerEmailAndFilters để danh sách và block tổng kết luôn khớp nhau.
      * Gross = tất cả payment SUCCESS có amount > 0 thuộc booking của các sân Owner sở hữu.
      * Bao gồm cả walk-in (CASH) và online (VNPay/Wallet).
      */
@@ -151,19 +153,19 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
            "AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId) " +
            "AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
            "AND p.amount > 0 " +
-           "AND p.paidAt >= :start " +
-           "AND p.paidAt <= :end " +
+           "AND b.reservationDate >= :startDate " +
+           "AND b.reservationDate <= :endDate " +
            "AND b.bookingStatus IN :statuses")
     java.math.BigDecimal sumOwnerGrossByDateRangeAndStatuses(
             @Param("ownerId") Integer ownerId,
             @Param("stadiumId") Integer stadiumId,
-            @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
             @Param("statuses") java.util.List<com.sportvenue.entity.enums.BookingStatus> statuses);
 
     /**
-     * Tổng Refund của Owner theo khoảng thời gian (paidAt).
-     * Refund = tất cả payment SUCCESS có amount < 0 thuộc booking của Owner.
+     * Tổng Refund của Owner theo b.reservationDate (ngày chơi thực tế) — thống nhất với
+     * danh sách Owner bookings. Refund = tất cả payment SUCCESS có amount < 0.
      * Trả về giá trị dương (ABS).
      */
     @Query("SELECT COALESCE(SUM(ABS(p.amount)), 0) FROM Payment p " +
@@ -172,14 +174,14 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
            "AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId) " +
            "AND p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
            "AND p.amount < 0 " +
-           "AND p.paidAt >= :start " +
-           "AND p.paidAt <= :end " +
+           "AND b.reservationDate >= :startDate " +
+           "AND b.reservationDate <= :endDate " +
            "AND b.bookingStatus IN :statuses")
     java.math.BigDecimal sumOwnerRefundByDateRangeAndStatuses(
             @Param("ownerId") Integer ownerId,
             @Param("stadiumId") Integer stadiumId,
-            @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
             @Param("statuses") java.util.List<com.sportvenue.entity.enums.BookingStatus> statuses);
 
     /**
@@ -206,5 +208,50 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
     java.math.BigDecimal sumPlatformRefundByDateRange(
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end);
+    /**
+     * Tổng Gross toàn hệ thống (Admin) theo b.reservationDate và toàn bộ filter.
+     * Thống nhất cột ngày với danh sách — tránh lệch giữa stats và bảng booking.
+     */
+    @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p " +
+           "JOIN p.booking b " +
+           "JOIN b.stadium s " +
+           "WHERE p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
+           "AND p.amount > 0 " +
+           "AND b.reservationDate >= :startDate " +
+           "AND b.reservationDate <= :endDate " +
+           "AND b.bookingStatus IN :bookingStatuses " +
+           "AND b.paymentStatus IN :paymentStatuses " +
+           "AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId) " +
+           "AND (:ownerId IS NULL OR s.owner.ownerId = :ownerId)")
+    java.math.BigDecimal sumPlatformGrossByFilters(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("bookingStatuses") List<com.sportvenue.entity.enums.BookingStatus> bookingStatuses,
+            @Param("paymentStatuses") List<com.sportvenue.entity.enums.PaymentStatus> paymentStatuses,
+            @Param("stadiumId") Integer stadiumId,
+            @Param("ownerId") Integer ownerId);
+
+    /**
+     * Tổng Refund toàn hệ thống (Admin) theo b.reservationDate và toàn bộ filter.
+     * Trả về giá trị dương (ABS).
+     */
+    @Query("SELECT COALESCE(SUM(ABS(p.amount)), 0) FROM Payment p " +
+           "JOIN p.booking b " +
+           "JOIN b.stadium s " +
+           "WHERE p.paymentStatus = com.sportvenue.entity.enums.TransactionStatus.SUCCESS " +
+           "AND p.amount < 0 " +
+           "AND b.reservationDate >= :startDate " +
+           "AND b.reservationDate <= :endDate " +
+           "AND b.bookingStatus IN :bookingStatuses " +
+           "AND b.paymentStatus IN :paymentStatuses " +
+           "AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId) " +
+           "AND (:ownerId IS NULL OR s.owner.ownerId = :ownerId)")
+    java.math.BigDecimal sumPlatformRefundByFilters(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("bookingStatuses") List<com.sportvenue.entity.enums.BookingStatus> bookingStatuses,
+            @Param("paymentStatuses") List<com.sportvenue.entity.enums.PaymentStatus> paymentStatuses,
+            @Param("stadiumId") Integer stadiumId,
+            @Param("ownerId") Integer ownerId);
 }
 

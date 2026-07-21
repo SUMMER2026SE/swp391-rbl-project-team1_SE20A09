@@ -35,7 +35,7 @@ public class CreateWalkInBookingRequest {
 
     @Schema(description = "Ngày chơi — phải là hôm nay hoặc trong quá khứ (yyyy-MM-dd)", example = "2026-06-25", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull(message = "reservationDate is required")
-    @PastOrPresent(message = "reservationDate phải là hôm nay hoặc trong quá khứ — khách vãng lai phải đang có mặt tại sân")
+    @PastOrPresent(message = "Ngày chơi không hợp lệ — chỉ được chọn hôm nay hoặc ngày đã qua cho đơn đặt vãng lai tại sân")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate reservationDate;
 

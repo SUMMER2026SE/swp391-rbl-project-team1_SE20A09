@@ -73,6 +73,11 @@ interface BookingItem {
   isWalkIn?: boolean;
 }
 
+interface StadiumOption {
+  stadiumId: number;
+  stadiumName: string;
+}
+
 function BookingManagementPage() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [bookingList, setBookingList] = useState<BookingItem[]>([]);
@@ -121,12 +126,12 @@ function BookingManagementPage() {
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
   const [filterStadiumId, setFilterStadiumId] = useState("all");
-  const [ownerStadiums, setOwnerStadiums] = useState<any[]>([]);
+  const [ownerStadiums, setOwnerStadiums] = useState<StadiumOption[]>([]);
 
   useEffect(() => {
     async function fetchStadiums() {
       try {
-        const data = await get<any>('/stadiums/my');
+        const data = await get<StadiumOption[]>('/stadiums/my');
         setOwnerStadiums(data || []);
       } catch (err) {
         console.error("Error fetching stadiums:", err);

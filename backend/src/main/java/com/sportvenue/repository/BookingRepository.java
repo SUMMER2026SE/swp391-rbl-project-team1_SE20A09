@@ -524,6 +524,28 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate);
 
+    /**
+     * Đếm booking theo toàn bộ Admin filter (khớp với Specification của getAdminBookings).
+     * Dùng b.reservationDate để thống nhất cột ngày với tất cả aggregate queries.
+     */
+    @Query("""
+            SELECT COUNT(b) FROM Booking b
+            JOIN b.stadium s
+            WHERE b.reservationDate >= :startDate
+            AND b.reservationDate <= :endDate
+            AND b.bookingStatus IN :bookingStatuses
+            AND b.paymentStatus IN :paymentStatuses
+            AND (:stadiumId IS NULL OR s.stadiumId = :stadiumId)
+            AND (:ownerId IS NULL OR s.owner.ownerId = :ownerId)
+            """)
+    long countByFilters(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("bookingStatuses") List<BookingStatus> bookingStatuses,
+            @Param("paymentStatuses") List<com.sportvenue.entity.enums.PaymentStatus> paymentStatuses,
+            @Param("stadiumId") Integer stadiumId,
+            @Param("ownerId") Integer ownerId);
+
     /** UC-ADM-01: Top 5 đặt sân gần nhất trong khoảng ngày. */
     @EntityGraph(attributePaths = {"user", "stadium", "slot"})
     @Query("""
