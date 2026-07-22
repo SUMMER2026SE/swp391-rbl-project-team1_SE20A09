@@ -1,10 +1,40 @@
+"use client";
+
 import Link from "next/link";
-import { Facebook, Instagram, Twitter, Mail, Phone, MapPin, ArrowRight } from "lucide-react";
+import { useState } from "react";
+import { Facebook, Instagram, Twitter, Mail, Phone, MapPin, ArrowRight, Loader2 } from "lucide-react";
 import { Separator } from "../ui/separator";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { toast } from "sonner";
 
 export function Footer() {
+  const [email, setEmail] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      toast.error("Vui lòng nhập địa chỉ email của bạn!");
+      return;
+    }
+    
+    // Validate email basic
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      toast.error("Vui lòng nhập một địa chỉ email hợp lệ!");
+      return;
+    }
+
+    setIsSubmitting(true);
+    // Giả lập API call
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    toast.success("Đăng ký nhận tin thành công! Cảm ơn bạn.");
+    setEmail("");
+    setIsSubmitting(false);
+  };
+
   return (
     <footer className="bg-slate-950 text-slate-200 border-t border-slate-900">
       <div className="container mx-auto px-4 py-16">
@@ -19,20 +49,29 @@ export function Footer() {
               </p>
             </div>
             
-            <div className="space-y-3">
+            <form onSubmit={handleSubscribe} className="space-y-3">
               <h4 className="text-sm font-semibold text-white">Đăng ký nhận tin</h4>
               <div className="flex gap-2">
                 <Input 
                   type="email" 
                   placeholder="Email của bạn..." 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={isSubmitting}
                   className="bg-slate-900 border-slate-800 text-slate-200 focus-visible:ring-primary/50"
                 />
-                <Button size="icon" variant="default" className="shrink-0 hover:scale-105 transition-transform">
-                  <ArrowRight className="h-4 w-4" />
+                <Button 
+                  type="submit" 
+                  size="icon" 
+                  variant="default" 
+                  disabled={isSubmitting}
+                  className="shrink-0 hover:scale-105 transition-transform"
+                >
+                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
                 </Button>
               </div>
               <p className="text-xs text-slate-500">Nhận ưu đãi và mã giảm giá mới nhất từ chúng tôi.</p>
-            </div>
+            </form>
           </div>
 
           {/* About Us */}
