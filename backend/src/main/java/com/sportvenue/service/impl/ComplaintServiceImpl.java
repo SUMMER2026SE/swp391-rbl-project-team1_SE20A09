@@ -289,7 +289,7 @@ public class ComplaintServiceImpl implements ComplaintService {
         Owner owner = ownerRepository.findByUserUserId(user.getUserId())
                 .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không có profile chủ sân (Owner)"));
 
-        if (!complaint.getBooking().getStadium().getOwner().getOwnerId().equals(owner.getOwnerId())) {
+        if (complaint.getBooking() == null || !complaint.getBooking().getStadium().getOwner().getOwnerId().equals(owner.getOwnerId())) {
             throw new BadRequestException("Bạn không có quyền giải quyết khiếu nại của sân này!");
         }
         if (complaint.getStatus() == ComplaintStatus.RESOLVED) {
