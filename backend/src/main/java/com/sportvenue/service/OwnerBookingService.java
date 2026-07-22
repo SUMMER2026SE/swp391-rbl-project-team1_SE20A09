@@ -36,7 +36,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.math.BigDecimal;
+import com.sportvenue.repository.TimeSlotExceptionRepository;
+import com.sportvenue.entity.TimeSlotException;
+import java.util.Optional;
 import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
@@ -58,6 +62,7 @@ public class OwnerBookingService {
     private final OwnerRepository ownerRepository;
     private final StadiumRepository stadiumRepository;
     private final TimeSlotRepository timeSlotRepository;
+    private final TimeSlotExceptionRepository timeSlotExceptionRepository;
     private final BookingService bookingService;
     private final PaymentRepository paymentRepository;
     private final AccessoryRepository accessoryRepository;
@@ -366,8 +371,16 @@ public class OwnerBookingService {
                         .build())
                 .slot(BookingResponse.SlotInfo.builder()
                         .slotId(slot.getSlotId())
-                        .startTime(LocalDateTime.of(booking.getReservationDate(), slot.getStartTime()))
-                        .endTime(LocalDateTime.of(booking.getReservationDate(), slot.getEndTime()))
+                        .startTime(LocalDateTime.of(booking.getReservationDate(),
+                                timeSlotExceptionRepository.findBySlotSlotIdAndExceptionDate(slot.getSlotId(), booking.getReservationDate())
+                                        .filter(e -> e.getStartTimeOverride() != null)
+                                        .map(TimeSlotException::getStartTimeOverride)
+                                        .orElse(slot.getStartTime())))
+                        .endTime(LocalDateTime.of(booking.getReservationDate(),
+                                timeSlotExceptionRepository.findBySlotSlotIdAndExceptionDate(slot.getSlotId(), booking.getReservationDate())
+                                        .filter(e -> e.getEndTimeOverride() != null)
+                                        .map(TimeSlotException::getEndTimeOverride)
+                                        .orElse(slot.getEndTime())))
                         .build())
                 .totalPrice(booking.getTotalPrice())
                 .bookingStatus(booking.getBookingStatus().name())

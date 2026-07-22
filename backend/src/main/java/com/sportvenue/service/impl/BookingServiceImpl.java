@@ -62,6 +62,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -1186,9 +1187,22 @@ public class BookingServiceImpl implements BookingService {
                 : null;
 
         String timeStr = null;
-        if (slot != null && slot.getStartTime() != null && slot.getEndTime() != null) {
-            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("HH:mm");
-            timeStr = slot.getStartTime().format(fmt) + " - " + slot.getEndTime().format(fmt);
+        if (slot != null) {
+            Optional<TimeSlotException> exceptionOpt = timeSlotExceptionRepository.findBySlotSlotIdAndExceptionDate(
+                    slot.getSlotId(), booking.getReservationDate());
+            LocalTime start = exceptionOpt
+                    .filter(e -> e.getStartTimeOverride() != null)
+                    .map(TimeSlotException::getStartTimeOverride)
+                    .orElse(slot.getStartTime());
+            LocalTime end = exceptionOpt
+                    .filter(e -> e.getEndTimeOverride() != null)
+                    .map(TimeSlotException::getEndTimeOverride)
+                    .orElse(slot.getEndTime());
+
+            if (start != null && end != null) {
+                DateTimeFormatter fmt = DateTimeFormatter.ofPattern("HH:mm");
+                timeStr = start.format(fmt) + " - " + end.format(fmt);
+            }
         }
 
         return BookingHistoryItemDto.builder()
@@ -1287,8 +1301,14 @@ public class BookingServiceImpl implements BookingService {
                 .reservationDate(booking.getReservationDate())
                 .slot(BookingDetailResponse.SlotInfo.builder()
                         .slotId(slot.getSlotId())
-                        .startTime(slot.getStartTime())
-                        .endTime(slot.getEndTime())
+                        .startTime(timeSlotExceptionRepository.findBySlotSlotIdAndExceptionDate(slot.getSlotId(), booking.getReservationDate())
+                                .filter(e -> e.getStartTimeOverride() != null)
+                                .map(TimeSlotException::getStartTimeOverride)
+                                .orElse(slot.getStartTime()))
+                        .endTime(timeSlotExceptionRepository.findBySlotSlotIdAndExceptionDate(slot.getSlotId(), booking.getReservationDate())
+                                .filter(e -> e.getEndTimeOverride() != null)
+                                .map(TimeSlotException::getEndTimeOverride)
+                                .orElse(slot.getEndTime()))
                         .build())
                 .stadium(BookingDetailResponse.StadiumInfo.builder()
                         .stadiumId(stadium.getStadiumId())
