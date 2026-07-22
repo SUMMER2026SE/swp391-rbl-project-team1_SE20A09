@@ -83,8 +83,10 @@ public class ComplaintServiceImpl implements ComplaintService {
     public ComplaintResponse createComplaint(CreateComplaintRequest request, String customerEmail) {
         log.info("Customer {} is creating complaint for bookingId: {}", customerEmail, request.getBookingId());
 
-        User user = userRepository.findByEmail(customerEmail)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng: " + customerEmail));
+        User user = null;
+        if (customerEmail != null && !customerEmail.equals("anonymousUser")) {
+            user = userRepository.findByEmail(customerEmail).orElse(null);
+        }
 
         Booking booking = null;
         if (request.getBookingId() != null) {
@@ -128,26 +130,30 @@ public class ComplaintServiceImpl implements ComplaintService {
     private void notifyComplaintCreated(Complaint saved, User user, Booking booking) {
         if (booking != null) {
             try {
-                customerNotificationService.notifyComplaintAcknowledged(user.getUserId(), saved);
+                if (user != null) {
+                    customerNotificationService.notifyComplaintAcknowledged(user.getUserId(), saved);
+                }
             } catch (Exception ex) {
                 log.warn("Failed to emit complaint acknowledged notification for complaint {}", saved.getComplaintId(), ex);
             }
 
+            String fullName = user != null ? user.getFullName() : "Khách vãng lai";
             notificationService.createNotification(
                     booking.getStadium().getOwner().getUser().getUserId(),
                     "Khiếu nại mới",
-                    "Khách hàng " + user.getFullName() + " vừa tạo khiếu nại cho đơn đặt sân #" + booking.getBookingId(),
+                    "Khách hàng " + fullName + " vừa tạo khiếu nại cho đơn đặt sân #" + booking.getBookingId(),
                     NotificationType.COMPLAINT,
                     String.valueOf(saved.getComplaintId())
             );
         }
 
         String adminResourceId = "COMPLAINT-" + saved.getComplaintId();
+        String fullName = user != null ? user.getFullName() : "Khách vãng lai";
         userRepository.findAllAdmins().forEach(admin ->
             notificationService.createNotification(
                 admin.getUserId(),
                 "Khiếu nại mới",
-                user.getFullName() + ": \"" + truncate(saved.getSubject(), 60) + "\"",
+                fullName + ": \"" + truncate(saved.getSubject(), 60) + "\"",
                 NotificationType.COMPLAINT,
                 adminResourceId
             )
@@ -162,7 +168,7 @@ public class ComplaintServiceImpl implements ComplaintService {
                             ownerUser.getFirstName() + " " + ownerUser.getLastName(),
                             booking.getStadium().getStadiumName(),
                             saved.getComplaintId(),
-                            user.getFirstName() + " " + user.getLastName(),
+                            fullName,
                             saved.getSubject()
                     );
                 } catch (Exception e) {

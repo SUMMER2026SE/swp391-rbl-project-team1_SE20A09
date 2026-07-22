@@ -54,9 +54,9 @@ public class Complaint implements Serializable {
     @JoinColumn(name = "booking_id")
     private Booking booking;
 
-    /** Người gửi khiếu nại. */
+    /** Người gửi khiếu nại. (Null nếu là khách vãng lai) */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id")
     private User user;
 
     /** Chủ đề khiếu nại. */
