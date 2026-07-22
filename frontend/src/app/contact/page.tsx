@@ -1,8 +1,31 @@
+"use client";
+
+import { useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/landing/Footer";
-import { MapPin, Phone, Mail, Clock } from "lucide-react";
+import { MapPin, Phone, Mail, Clock, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function ContactPage() {
+  const [formData, setFormData] = useState({ name: "", email: "", message: "" });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.email || !formData.message) {
+      toast.error("Vui lòng điền đầy đủ thông tin!");
+      return;
+    }
+
+    setIsSubmitting(true);
+    // Giả lập gửi yêu cầu đến Admin
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    toast.success("Yêu cầu của bạn đã được gửi đến Admin thành công! Chúng tôi sẽ phản hồi sớm nhất.");
+    setFormData({ name: "", email: "", message: "" });
+    setIsSubmitting(false);
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       <Header />
@@ -57,22 +80,48 @@ export default function ContactPage() {
             </div>
 
             <div className="bg-slate-50 p-6 rounded-xl border">
-              <h2 className="text-xl font-semibold text-slate-800 mb-4">Gửi tin nhắn cho chúng tôi</h2>
-              <form className="space-y-4">
+              <h2 className="text-xl font-semibold text-slate-800 mb-4">Gửi tin nhắn cho Ban Quản Trị (Admin)</h2>
+              <form className="space-y-4" onSubmit={handleSubmit}>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Họ và tên</label>
-                  <input type="text" className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="Nguyễn Văn A" />
+                  <input 
+                    type="text" 
+                    value={formData.name}
+                    onChange={e => setFormData({...formData, name: e.target.value})}
+                    disabled={isSubmitting}
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50" 
+                    placeholder="Nguyễn Văn A" 
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                  <input type="email" className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="email@example.com" />
+                  <input 
+                    type="email" 
+                    value={formData.email}
+                    onChange={e => setFormData({...formData, email: e.target.value})}
+                    disabled={isSubmitting}
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50" 
+                    placeholder="email@example.com" 
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Nội dung</label>
-                  <textarea rows={4} className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="Bạn cần hỗ trợ gì?"></textarea>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Nội dung yêu cầu</label>
+                  <textarea 
+                    rows={4} 
+                    value={formData.message}
+                    onChange={e => setFormData({...formData, message: e.target.value})}
+                    disabled={isSubmitting}
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50" 
+                    placeholder="Bạn cần hỗ trợ gì từ Admin?"
+                  ></textarea>
                 </div>
-                <button type="button" className="w-full bg-primary text-white py-2 rounded-md font-medium hover:bg-primary/90 transition-colors">
-                  Gửi yêu cầu
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting}
+                  className="w-full bg-primary text-white py-2 rounded-md font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                >
+                  {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {isSubmitting ? "Đang gửi..." : "Gửi yêu cầu"}
                 </button>
               </form>
             </div>

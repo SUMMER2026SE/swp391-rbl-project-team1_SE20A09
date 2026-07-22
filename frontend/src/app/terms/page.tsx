@@ -8,35 +8,49 @@ export default function TermsPage() {
       <main className="flex-grow container mx-auto px-4 py-12">
         <div className="bg-white rounded-xl shadow-sm border p-8 md:p-12 max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold mb-6 text-slate-900">Điều khoản sử dụng</h1>
-          <div className="prose prose-slate max-w-none space-y-4 text-slate-600">
-            <p className="text-sm text-slate-500 mb-6">Cập nhật lần cuối: 22/07/2026</p>
+          <div className="prose prose-slate max-w-none space-y-6 text-slate-600">
+            <p className="text-sm text-slate-500 mb-8 border-b pb-4">Cập nhật lần cuối: 22/07/2026</p>
             
-            <h2 className="text-xl font-semibold text-slate-800 mt-6">1. Chấp nhận điều khoản</h2>
-            <p>
-              Bằng việc đăng ký, truy cập và sử dụng dịch vụ của SportsBook, bạn đồng ý tuân thủ toàn bộ các điều khoản và điều kiện được nêu tại đây. 
-              Nếu bạn không đồng ý với bất kỳ điều khoản nào, vui lòng không sử dụng nền tảng của chúng tôi.
+            <p className="text-lg">
+              Vui lòng đọc kỹ các Điều khoản Sử dụng này trước khi đăng ký tài khoản hoặc sử dụng dịch vụ trên nền tảng SportsBook. Bằng việc tiếp tục truy cập và sử dụng ứng dụng của chúng tôi, bạn được xem là đã hiểu, đồng ý và tự nguyện ràng buộc bởi toàn bộ các quy định dưới đây.
             </p>
 
-            <h2 className="text-xl font-semibold text-slate-800 mt-6">2. Quy định đối với người dùng (Khách hàng)</h2>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>Cung cấp thông tin cá nhân chính xác khi đăng ký và đặt sân.</li>
-              <li>Thực hiện thanh toán đầy đủ theo quy định của sân đối với các đơn đặt có yêu cầu cọc hoặc thanh toán trước.</li>
-              <li>Tuân thủ các nội quy và quy định cụ thể của từng sân thể thao khi đến sử dụng dịch vụ.</li>
-              <li>SportsBook có quyền hủy đơn đặt sân nếu phát hiện dấu hiệu gian lận hoặc vi phạm.</li>
+            <h2 className="text-2xl font-bold text-slate-800 mt-8 mb-4 border-b pb-2">1. Định nghĩa</h2>
+            <ul className="list-disc pl-5 space-y-2">
+              <li><strong>SportsBook:</strong> Là nền tảng công nghệ cung cấp dịch vụ trung gian kết nối giữa Chủ sân và Người chơi.</li>
+              <li><strong>Người dùng (Khách hàng):</strong> Cá nhân hoặc tổ chức sử dụng SportsBook để tìm kiếm, xem thông tin và đặt lịch thuê sân thể thao.</li>
+              <li><strong>Chủ sân (Đối tác):</strong> Các cá nhân, doanh nghiệp sở hữu hoặc có quyền khai thác cơ sở vật chất thể thao, đăng tải thông tin lên SportsBook để cho thuê.</li>
             </ul>
 
-            <h2 className="text-xl font-semibold text-slate-800 mt-6">3. Chính sách hủy và hoàn tiền</h2>
-            <p>
-              Việc hủy lịch và hoàn tiền tuân theo chính sách riêng của hệ thống và của từng cơ sở thể thao.
-              Thông thường, bạn có thể hủy miễn phí nếu thực hiện trước giờ đá một khoảng thời gian nhất định (ví dụ: 12 tiếng).
-              Sau thời gian này, phí hủy có thể được áp dụng.
-            </p>
+            <h2 className="text-2xl font-bold text-slate-800 mt-8 mb-4 border-b pb-2">2. Điều kiện đăng ký tài khoản</h2>
+            <p>Để sử dụng đầy đủ các tính năng của nền tảng, bạn cần tạo tài khoản với các điều kiện sau:</p>
+            <ul className="list-disc pl-5 space-y-2">
+              <li>Bạn phải từ đủ 15 tuổi trở lên. Nếu dưới 15 tuổi, bạn cần có sự giám hộ của phụ huynh khi đặt sân và thanh toán.</li>
+              <li>Thông tin đăng ký (Họ tên, SĐT, Email) phải chính xác, hợp lệ và thuộc quyền sở hữu của bạn.</li>
+              <li>Bạn chịu trách nhiệm bảo mật thông tin đăng nhập. SportsBook không chịu trách nhiệm cho mọi tổn thất phát sinh do bạn để lộ mật khẩu.</li>
+            </ul>
 
-            <h2 className="text-xl font-semibold text-slate-800 mt-6">4. Giới hạn trách nhiệm</h2>
-            <p>
-              SportsBook đóng vai trò là nền tảng trung gian kết nối. Chúng tôi không chịu trách nhiệm pháp lý đối với các tranh chấp phát sinh giữa chủ sân và người chơi tại địa điểm thi đấu, 
-              nhưng sẽ hỗ trợ cung cấp thông tin giao dịch để giải quyết vấn đề một cách minh bạch.
-            </p>
+            <h2 className="text-2xl font-bold text-slate-800 mt-8 mb-4 border-b pb-2">3. Quy định về Đặt sân và Thanh toán</h2>
+            <ul className="list-disc pl-5 space-y-2">
+              <li><strong>Xác nhận đặt sân:</strong> Một giao dịch đặt sân chỉ được coi là thành công khi bạn nhận được thông báo xác nhận từ hệ thống qua Email/Ứng dụng, kèm theo mã đặt sân (Booking ID).</li>
+              <li><strong>Thanh toán:</strong> Tùy thuộc vào chính sách của từng sân, bạn có thể phải thanh toán 100%, đặt cọc một phần hoặc thanh toán trực tiếp tại sân. Nếu chọn thanh toán online, bạn cần thực hiện chuyển khoản/quẹt thẻ trong thời gian quy định (thường là 15 phút) trước khi hệ thống tự động hủy đơn.</li>
+              <li><strong>Tính chính xác:</strong> Giá thuê hiển thị trên ứng dụng là giá đã bao gồm các loại thuế, phí bắt buộc (trừ khi có ghi chú khác). Phí dịch vụ (nếu có) sẽ được thông báo rõ ràng trước khi bạn nhấn thanh toán.</li>
+            </ul>
+
+            <h2 className="text-2xl font-bold text-slate-800 mt-8 mb-4 border-b pb-2">4. Chính sách Hủy lịch và Hoàn tiền</h2>
+            <p>Việc hủy lịch phụ thuộc vào quy định cụ thể của Chủ sân (được hiển thị rõ ở bước thanh toán). Nhìn chung, chính sách chung áp dụng như sau:</p>
+            <ul className="list-disc pl-5 space-y-2">
+              <li><strong>Hủy sớm (Thường trước 12h-24h):</strong> Miễn phí hủy, hoàn trả 100% tiền cọc/tiền sân vào Ví SportsBook hoặc tài khoản gốc.</li>
+              <li><strong>Hủy trễ hoặc Không đến:</strong> Có thể mất một phần hoặc toàn bộ số tiền đã cọc tùy theo quy định của sân.</li>
+              <li><strong>Trường hợp bất khả kháng:</strong> (Thiên tai, bão lụt, sự cố kỹ thuật từ phía sân) Người chơi được hoàn tiền 100% mà không chịu phí phạt.</li>
+            </ul>
+
+            <h2 className="text-2xl font-bold text-slate-800 mt-8 mb-4 border-b pb-2">5. Trách nhiệm và Miễn trừ</h2>
+            <ul className="list-disc pl-5 space-y-2">
+              <li><strong>Quy định tại sân:</strong> Người chơi phải tuân thủ nội quy riêng của từng sân (trang phục, giữ vệ sinh, không mang vũ khí/chất cấm). Sân có quyền từ chối phục vụ mà không hoàn tiền nếu khách hàng vi phạm nghiêm trọng.</li>
+              <li><strong>Chấn thương/Mất mát tài sản:</strong> SportsBook là nền tảng đặt lịch, không chịu trách nhiệm bồi thường cho các chấn thương thể thao hoặc mất mát tài sản cá nhân xảy ra tại địa điểm thi đấu.</li>
+              <li><strong>Tính liên tục của dịch vụ:</strong> Chúng tôi luôn nỗ lực duy trì hệ thống ổn định 24/7 nhưng không cam kết ứng dụng sẽ không bao giờ bị gián đoạn do bảo trì hoặc sự cố mạng diện rộng.</li>
+            </ul>
           </div>
         </div>
       </main>

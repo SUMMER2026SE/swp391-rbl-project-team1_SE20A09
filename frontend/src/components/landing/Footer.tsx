@@ -110,21 +110,21 @@ export function Footer() {
             <h4 className="text-white font-semibold mb-6">Dành cho khách hàng</h4>
             <ul className="space-y-3 text-sm text-slate-400">
               <li>
-                <Link href="/venues?sport=football" className="hover:text-primary transition-colors flex items-center gap-2 group">
+                <Link href="/venues" className="hover:text-primary transition-colors flex items-center gap-2 group">
                   <span className="h-1 w-1 rounded-full bg-slate-700 group-hover:bg-primary transition-colors"></span>
-                  Tìm sân bóng đá
-                </Link>
-              </li>
-              <li>
-                <Link href="/venues?sport=badminton" className="hover:text-primary transition-colors flex items-center gap-2 group">
-                  <span className="h-1 w-1 rounded-full bg-slate-700 group-hover:bg-primary transition-colors"></span>
-                  Tìm sân cầu lông
+                  Tìm sân
                 </Link>
               </li>
               <li>
                 <Link href="/community" className="hover:text-primary transition-colors flex items-center gap-2 group">
                   <span className="h-1 w-1 rounded-full bg-slate-700 group-hover:bg-primary transition-colors"></span>
                   Cộng đồng thể thao
+                </Link>
+              </li>
+              <li>
+                <Link href="/help" className="hover:text-primary transition-colors flex items-center gap-2 group">
+                  <span className="h-1 w-1 rounded-full bg-slate-700 group-hover:bg-primary transition-colors"></span>
+                  Trợ giúp
                 </Link>
               </li>
             </ul>
