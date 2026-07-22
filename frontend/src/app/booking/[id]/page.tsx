@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Clock, Calendar, Star, MessageSquare, AlertCircle, AlertTriangle, Loader2, Info, HelpCircle, ExternalLink, WalletCards } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Calendar, Star, MessageSquare, AlertCircle, AlertTriangle, Loader2, Info, HelpCircle, ExternalLink, WalletCards, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -641,6 +641,14 @@ export default function BookingDetailPage() {
                 <MessageSquare className="h-4 w-4 mr-2" />
                 {chatStarting ? 'Đang mở...' : 'Liên hệ chủ sân'}
               </Button>
+              {booking.status === 'confirmed' && (
+                <Button asChild className="rounded-2xl flex-1 font-bold h-12 bg-indigo-500 hover:bg-indigo-600">
+                  <Link href={`/community?action=create&bookingId=${booking.id}`}>
+                    <Users className="h-4 w-4 mr-2" />
+                    Tìm đối thủ (Tạo kèo)
+                  </Link>
+                </Button>
+              )}
               {(booking.status === 'confirmed' || booking.status === 'pending') && (
                 <Button asChild variant="destructive" className="rounded-2xl flex-1 font-bold h-12">
                   <Link href={`/booking/${booking.id}/cancel`}>Huỷ đơn đặt</Link>

@@ -60,10 +60,11 @@ import {
   getMatchDetail,
   MatchResponse,
   JoinRequestResponse,
+  getEligibleBookingsForMatch,
+  MatchEligibleBookingResponse,
 } from "@/lib/api/matchmaking";
 import {
   getSportTypes,
-  searchStadiums,
   StadiumResponse,
 } from "@/lib/api/stadium";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -127,6 +128,7 @@ function MatchRequestFeedPage() {
     isLoading: confirming,
   } = useConfirm();
   const [hasProcessedParam, setHasProcessedParam] = useState(false);
+  const [hasProcessedCreateParam, setHasProcessedCreateParam] = useState(false);
 
   const requireLogin = () => {
     if (!session?.user) {
@@ -227,14 +229,10 @@ function MatchRequestFeedPage() {
   // Form states
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [sportTypeId, setSportTypeId] = useState("");
+  const [bookingId, setBookingId] = useState("");
   const [skillLevel, setSkillLevel] = useState<
     "BEGINNER" | "INTERMEDIATE" | "ADVANCED" | ""
   >("");
-  const [playDate, setPlayDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [stadiumId, setStadiumId] = useState("");
   const [maxPlayers, setMaxPlayers] = useState("");
   const [splitPrice, setSplitPrice] = useState(false);
   const [pricePerPlayer, setPricePerPlayer] = useState("");
@@ -259,6 +257,7 @@ function MatchRequestFeedPage() {
     JoinRequestResponse[]
   >([]);
   const [loadingSidebar, setLoadingSidebar] = useState(false);
+  const [eligibleBookings, setEligibleBookings] = useState<MatchEligibleBookingResponse[]>([]);
 
   // Fetch match requests
   const fetchFeed = async () => {
@@ -311,12 +310,13 @@ function MatchRequestFeedPage() {
   // Fetch dropdown data
   const fetchDropdowns = async () => {
     try {
-      const [sportsData, stadiumsData] = await Promise.all([
-        getSportTypes(),
-        searchStadiums({ size: 100 }),
-      ]);
+      const sportsData = await getSportTypes();
       setSportTypes(sportsData);
-      setStadiums(stadiumsData.content);
+      
+      if (session?.user) {
+        const bookingsData = await getEligibleBookingsForMatch();
+        setEligibleBookings(bookingsData);
+      }
     } catch (err: any) {
       console.error("Lỗi khi tải dữ liệu cấu hình sân và môn học:", err);
     }
@@ -325,7 +325,7 @@ function MatchRequestFeedPage() {
   useEffect(() => {
     fetchFeed();
     fetchDropdowns();
-  }, []);
+  }, [session?.user]);
 
   // (Previously had a useEffect here that auto-opened the HOST manage dialog for ANY
   // matchId in the URL. It was wrong: when the AI "Tham gia ghép kèo" card navigated
@@ -343,6 +343,31 @@ function MatchRequestFeedPage() {
       setMyJoinedRequests([]);
     }
   }, [session]);
+
+  // Auto open create dialog if action=create & bookingId=X in searchParams
+  useEffect(() => {
+    if (loadingFeed) return;
+    if (session?.user && loadingSidebar) return;
+    if (hasProcessedCreateParam) return;
+
+    const action = searchParams.get("action");
+    const paramBookingId = searchParams.get("bookingId");
+
+    if (action === "create") {
+      if (requireLogin()) return; // Redirect to login if not authenticated
+      setShowCreateDialog(true);
+      if (paramBookingId) {
+        setBookingId(paramBookingId);
+      }
+      setHasProcessedCreateParam(true);
+    }
+  }, [
+    loadingFeed,
+    loadingSidebar,
+    session,
+    searchParams,
+    hasProcessedCreateParam,
+  ]);
 
   useEffect(() => {
     if (loadingFeed) return;
@@ -444,20 +469,11 @@ function MatchRequestFeedPage() {
     const isIndividual = matchingType === "INDIVIDUAL";
     if (
       !title ||
-      !sportTypeId ||
+      !bookingId ||
       !skillLevel ||
-      !playDate ||
-      !startTime ||
-      !endTime ||
-      !stadiumId ||
       (isIndividual && !maxPlayers)
     ) {
       toast.error("Vui lòng điền đầy đủ các thông tin bắt buộc (*)");
-      return;
-    }
-
-    if (startTime >= endTime) {
-      toast.error("Giờ bắt đầu phải trước giờ kết thúc!");
       return;
     }
 
@@ -467,11 +483,7 @@ function MatchRequestFeedPage() {
       await createMatchRequest({
         title,
         description,
-        stadiumId: Number(stadiumId),
-        sportTypeId: Number(sportTypeId),
-        playDate,
-        startTime: startTime.length === 5 ? `${startTime}:00` : startTime,
-        endTime: endTime.length === 5 ? `${endTime}:00` : endTime,
+        bookingId: Number(bookingId),
         maxPlayers: finalMaxPlayers,
         skillLevel: skillLevel as "BEGINNER" | "INTERMEDIATE" | "ADVANCED",
         splitPrice,
@@ -488,12 +500,8 @@ function MatchRequestFeedPage() {
       // Reset form fields
       setTitle("");
       setDescription("");
-      setSportTypeId("");
+      setBookingId("");
       setSkillLevel("");
-      setPlayDate("");
-      setStartTime("");
-      setEndTime("");
-      setStadiumId("");
       setMaxPlayers("");
       setSplitPrice(false);
       setPricePerPlayer("");
@@ -502,6 +510,7 @@ function MatchRequestFeedPage() {
       // Reload match requests
       fetchFeed();
       fetchSidebarData();
+      fetchDropdowns();
     } catch (err: any) {
       toast.error(err.message || "Lỗi khi tạo kèo ghép.");
     } finally {
@@ -1179,28 +1188,40 @@ function MatchRequestFeedPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="sport" className="font-bold text-slate-700">
-                  Môn thể thao *
+                <Label htmlFor="booking" className="font-bold text-slate-700">
+                  Lịch đặt sân của bạn *
                 </Label>
-                <Select value={sportTypeId} onValueChange={setSportTypeId}>
-                  <SelectTrigger id="sport" className="border-slate-200">
-                    <SelectValue placeholder="Chọn môn thể thao" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sportTypes.map((st) => (
-                      <SelectItem
-                        key={st.sportTypeId}
-                        value={st.sportTypeId.toString()}
-                      >
-                        {st.sportName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {eligibleBookings.length === 0 ? (
+                  <div className="p-4 bg-amber-50 text-amber-700 text-sm rounded-md border border-amber-200">
+                    Bạn không có lịch đặt sân nào hợp lệ để tạo kèo (cần có lịch CONFIRMED ở tương lai). 
+                    <a href="/search" className="font-bold underline ml-1">Đặt sân ngay</a>
+                  </div>
+                ) : (
+                  <Select value={bookingId} onValueChange={setBookingId}>
+                    <SelectTrigger id="booking" className="border-slate-200 h-auto py-2">
+                      <SelectValue placeholder="Chọn lịch đặt sân của bạn" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {eligibleBookings.map((b) => (
+                        <SelectItem
+                          key={b.bookingId}
+                          value={b.bookingId.toString()}
+                        >
+                          <div className="flex flex-col gap-0.5 items-start">
+                            <span className="font-semibold">{b.playDate} {b.startTime}-{b.endTime}</span>
+                            <span className="text-xs text-slate-500">{b.sportName} • {b.stadiumName} • {b.complexName}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
+            </div>
 
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="skill" className="font-bold text-slate-700">
                   Trình độ yêu cầu *
@@ -1216,77 +1237,6 @@ function MatchRequestFeedPage() {
                     <SelectItem value="BEGINNER">Mới bắt đầu</SelectItem>
                     <SelectItem value="INTERMEDIATE">Trung bình</SelectItem>
                     <SelectItem value="ADVANCED">Nâng cao</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="date" className="font-bold text-slate-700">
-                  Ngày chơi *
-                </Label>
-                <Input
-                  id="date"
-                  type="date"
-                  min={new Date().toISOString().split("T")[0]}
-                  value={playDate}
-                  onChange={(e) => setPlayDate(e.target.value)}
-                  className="border-slate-200"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="startTime" className="font-bold text-slate-700">
-                  Giờ bắt đầu *
-                </Label>
-                <Input
-                  id="startTime"
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="border-slate-200"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="endTime" className="font-bold text-slate-700">
-                  Giờ kết thúc *
-                </Label>
-                <Input
-                  id="endTime"
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="border-slate-200"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label
-                  htmlFor="venue-select"
-                  className="font-bold text-slate-700"
-                >
-                  Sân chơi *
-                </Label>
-                <Select value={stadiumId} onValueChange={setStadiumId}>
-                  <SelectTrigger
-                    id="venue-select"
-                    className="border-slate-200 w-full overflow-hidden [&>span]:truncate"
-                  >
-                    <SelectValue placeholder="Chọn sân bóng" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stadiums.map((st) => (
-                      <SelectItem
-                        key={st.stadiumId}
-                        value={st.stadiumId.toString()}
-                      >
-                        {st.stadiumName} ({st.address})
-                      </SelectItem>
-                    ))}
                   </SelectContent>
                 </Select>
               </div>

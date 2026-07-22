@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2, XCircle, Loader2, ArrowRight, RefreshCw } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, ArrowRight, RefreshCw, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Header } from "@/components/layout/Header";
@@ -158,23 +158,34 @@ function PaymentResultContent() {
                 </p>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <div className="flex flex-col gap-3 pt-2">
                 <Button
                   asChild
-                  className="flex-1 rounded-2xl h-12 bg-emerald-600 hover:bg-emerald-700 font-bold"
+                  className="w-full rounded-2xl h-12 bg-indigo-500 hover:bg-indigo-600 font-bold"
                 >
-                  <Link href={booking ? `/booking/${booking.id}` : "/profile?tab=bookings"}>
-                    Xem chi tiết đơn
-                    <ArrowRight className="h-4 w-4 ml-2" />
+                  <Link href={booking ? `/community?action=create&bookingId=${booking.id}` : "/community"}>
+                    <Users className="h-4 w-4 mr-2" />
+                    Tìm đối thủ (Tạo kèo ghép)
                   </Link>
                 </Button>
-                <Button
-                  asChild
-                  variant="outline"
-                  className="flex-1 rounded-2xl h-12 border-slate-200 font-bold"
-                >
-                  <Link href="/profile?tab=bookings">Lịch sử đặt sân</Link>
-                </Button>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button
+                    asChild
+                    className="flex-1 rounded-2xl h-12 bg-emerald-600 hover:bg-emerald-700 font-bold"
+                  >
+                    <Link href={booking ? `/booking/${booking.id}` : "/profile?tab=bookings"}>
+                      Xem chi tiết đơn
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="flex-1 rounded-2xl h-12 border-slate-200 font-bold"
+                  >
+                    <Link href="/profile?tab=bookings">Lịch sử đặt sân</Link>
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

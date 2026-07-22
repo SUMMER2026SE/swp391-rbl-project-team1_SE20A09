@@ -1,13 +1,9 @@
 import api from "../api";
 
 export interface CreateMatchRequestDto {
-  stadiumId: number;
-  sportTypeId: number;
+  bookingId: number;
   title: string;
   description?: string;
-  playDate: string; // YYYY-MM-DD
-  startTime: string; // HH:MM:SS
-  endTime: string; // HH:MM:SS
   maxPlayers: number;
   skillLevel: "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
   splitPrice: boolean;
@@ -164,5 +160,21 @@ export async function cancelMatchRequest(
     ? `/matchmaking/${matchId}/cancel?reason=${encodeURIComponent(reason)}`
     : `/matchmaking/${matchId}/cancel`;
   const res = await api.put<{ message: string }>(url);
+  return res.data;
+}
+
+export interface MatchEligibleBookingResponse {
+  bookingId: number;
+  stadiumName: string;
+  complexName: string;
+  address: string;
+  sportName: string;
+  playDate: string;
+  startTime: string;
+  endTime: string;
+}
+
+export async function getEligibleBookingsForMatch(): Promise<MatchEligibleBookingResponse[]> {
+  const res = await api.get<MatchEligibleBookingResponse[]>("/matchmaking/eligible-bookings");
   return res.data;
 }
