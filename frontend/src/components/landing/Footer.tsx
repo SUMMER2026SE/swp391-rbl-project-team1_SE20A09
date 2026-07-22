@@ -122,12 +122,6 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/promotions" className="hover:text-primary transition-colors flex items-center gap-2 group">
-                  <span className="h-1 w-1 rounded-full bg-slate-700 group-hover:bg-primary transition-colors"></span>
-                  Khuyến mãi & Ưu đãi
-                </Link>
-              </li>
-              <li>
                 <Link href="/community" className="hover:text-primary transition-colors flex items-center gap-2 group">
                   <span className="h-1 w-1 rounded-full bg-slate-700 group-hover:bg-primary transition-colors"></span>
                   Cộng đồng thể thao
@@ -142,7 +136,7 @@ export function Footer() {
             <ul className="space-y-4 text-sm text-slate-400">
               <li className="flex items-start gap-3">
                 <MapPin className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                <span>Khu Công Nghệ Cao Hòa Lạc, Thạch Thất, Hà Nội</span>
+                <span>Khu Công Nghệ Cao FPT, Hòa Hải, Đà Nẵng</span>
               </li>
               <li className="flex items-center gap-3">
                 <Phone className="h-5 w-5 text-primary shrink-0" />
