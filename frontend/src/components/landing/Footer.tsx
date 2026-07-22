@@ -1,46 +1,14 @@
-"use client";
-
 import Link from "next/link";
-import { useState } from "react";
-import { Facebook, Instagram, Twitter, Mail, Phone, MapPin, ArrowRight, Loader2 } from "lucide-react";
+import { Facebook, Instagram, Twitter, Mail, Phone, MapPin } from "lucide-react";
 import { Separator } from "../ui/separator";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import { toast } from "sonner";
 
 export function Footer() {
-  const [email, setEmail] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubscribe = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) {
-      toast.error("Vui lòng nhập địa chỉ email của bạn!");
-      return;
-    }
-    
-    // Validate email basic
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      toast.error("Vui lòng nhập một địa chỉ email hợp lệ!");
-      return;
-    }
-
-    setIsSubmitting(true);
-    // Giả lập API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    toast.success("Đăng ký nhận tin thành công! Cảm ơn bạn.");
-    setEmail("");
-    setIsSubmitting(false);
-  };
-
   return (
     <footer className="bg-slate-950 text-slate-200 border-t border-slate-900">
       <div className="container mx-auto px-4 py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8">
           
-          {/* Brand & Newsletter */}
+          {/* Brand */}
           <div className="space-y-6">
             <div>
               <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">SportsBook<span className="text-primary">.</span></h3>
@@ -48,30 +16,6 @@ export function Footer() {
                 Nền tảng đặt sân thể thao hàng đầu Việt Nam. Khám phá, đặt lịch và kết nối đam mê thể thao của bạn một cách dễ dàng nhất.
               </p>
             </div>
-            
-            <form onSubmit={handleSubscribe} className="space-y-3">
-              <h4 className="text-sm font-semibold text-white">Đăng ký nhận tin</h4>
-              <div className="flex gap-2">
-                <Input 
-                  type="email" 
-                  placeholder="Email của bạn..." 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isSubmitting}
-                  className="bg-slate-900 border-slate-800 text-slate-200 focus-visible:ring-primary/50"
-                />
-                <Button 
-                  type="submit" 
-                  size="icon" 
-                  variant="default" 
-                  disabled={isSubmitting}
-                  className="shrink-0 hover:scale-105 transition-transform"
-                >
-                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                </Button>
-              </div>
-              <p className="text-xs text-slate-500">Nhận ưu đãi và mã giảm giá mới nhất từ chúng tôi.</p>
-            </form>
           </div>
 
           {/* About Us */}
@@ -110,7 +54,7 @@ export function Footer() {
             <h4 className="text-white font-semibold mb-6">Dành cho khách hàng</h4>
             <ul className="space-y-3 text-sm text-slate-400">
               <li>
-                <Link href="/venues" className="hover:text-primary transition-colors flex items-center gap-2 group">
+                <Link href="/search" className="hover:text-primary transition-colors flex items-center gap-2 group">
                   <span className="h-1 w-1 rounded-full bg-slate-700 group-hover:bg-primary transition-colors"></span>
                   Tìm sân
                 </Link>
