@@ -184,4 +184,18 @@ public class MatchRequestController {
         matchRequestService.cancelMatch(matchId, userPrincipal.getUser().getUserId(), reason);
         return ResponseEntity.ok(new MessageResponse("Hủy kèo thành công."));
     }
+
+    @GetMapping("/eligible-bookings")
+    @PreAuthorize("hasRole('Customer')")
+    @Operation(
+            summary = "Lấy danh sách các lịch đặt sân đủ điều kiện tạo kèo (Customer)",
+            description = "Trả về danh sách các booking CONFIRMED ở tương lai và chưa gắn với kèo ghép OPEN/FULL nào."
+    )
+    public ResponseEntity<List<com.sportvenue.dto.response.MatchEligibleBookingResponse>> getEligibleBookings(
+            @AuthenticationPrincipal UserPrincipal userPrincipal) {
+        log.info("REST request to get eligible bookings for match creation by User: {}", userPrincipal.getUsername());
+        List<com.sportvenue.dto.response.MatchEligibleBookingResponse> responses = 
+                matchRequestService.getEligibleBookingsForMatchCreation(userPrincipal.getUser().getUserId());
+        return ResponseEntity.ok(responses);
+    }
 }

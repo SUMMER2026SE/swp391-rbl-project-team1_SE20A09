@@ -52,13 +52,9 @@ class MatchRequestControllerTest {
     void createMatch_Success() {
         // Arrange
         CreateMatchRequest request = CreateMatchRequest.builder()
-                .stadiumId(10)
-                .sportTypeId(1)
+                .bookingId(1)
                 .title("Trận cầu đỉnh cao")
                 .description("Cần giao lưu vui vẻ")
-                .playDate(LocalDate.now().plusDays(1))
-                .startTime(LocalTime.of(17, 0))
-                .endTime(LocalTime.of(19, 0))
                 .maxPlayers(10)
                 .skillLevel(SkillLevel.BEGINNER)
                 .splitPrice(false)

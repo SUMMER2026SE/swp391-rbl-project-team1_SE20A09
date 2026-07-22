@@ -75,4 +75,6 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Inte
             @Param("endTime") LocalTime endTime);
 
     boolean existsBySportTypeSportTypeId(Integer sportTypeId);
+
+    boolean existsByBookingBookingIdAndMatchStatusIn(Integer bookingId, List<MatchStatus> statuses);
 }

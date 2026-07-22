@@ -57,6 +57,11 @@ public class MatchRequest implements Serializable {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    /** Đơn đặt sân gốc tạo ra kèo này */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "booking_id")
+    private Booking booking;
+
     /** Sân cụ thể diễn ra trận đấu (Legacy, nullable sau refactor) */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "stadium_id", nullable = true)

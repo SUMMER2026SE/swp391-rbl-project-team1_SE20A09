@@ -1,12 +1,10 @@
 package com.sportvenue.dto.request;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.sportvenue.entity.enums.MatchingType;
 import com.sportvenue.entity.enums.SkillLevel;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
-import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -18,8 +16,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalTime;
 
 /**
  * Request DTO cho việc tạo mới một kèo ghép thể thao.
@@ -31,19 +27,8 @@ import java.time.LocalTime;
 @AllArgsConstructor
 public class CreateMatchRequest {
 
-    @Min(value = 1, message = "Invalid Stadium ID")
-    private Integer stadiumId;
-
-    @Min(value = 1, message = "Invalid Complex ID")
-    private Integer complexId;
-
-    private Integer preferredFacilityId;
-
-    private Integer preferredCourtId;
-
-    @NotNull(message = "Sport Type ID is required")
-    @Min(value = 1, message = "Invalid Sport Type ID")
-    private Integer sportTypeId;
+    @NotNull(message = "Booking ID is required")
+    private Integer bookingId;
 
     @NotBlank(message = "Title is required")
     @Size(min = 5, max = 100, message = "Title must be between 5 and 100 characters")
@@ -51,19 +36,6 @@ public class CreateMatchRequest {
 
     @Size(max = 1000, message = "Description cannot exceed 1000 characters")
     private String description;
-
-    @NotNull(message = "Play date is required")
-    @FutureOrPresent(message = "Play date must be in the present or future")
-    @JsonFormat(pattern = "yyyy-MM-dd")
-    private LocalDate playDate;
-
-    @NotNull(message = "Start time is required")
-    @JsonFormat(pattern = "HH:mm:ss")
-    private LocalTime startTime;
-
-    @NotNull(message = "End time is required")
-    @JsonFormat(pattern = "HH:mm:ss")
-    private LocalTime endTime;
 
     @NotNull(message = "Max players is required")
     @Min(value = 2, message = "Max players must be at least 2")
@@ -83,14 +55,6 @@ public class CreateMatchRequest {
     @NotNull(message = "Matching type is required")
     @Builder.Default
     private MatchingType matchingType = MatchingType.INDIVIDUAL;
-
-    @AssertTrue(message = "End time must be after start time")
-    public boolean isEndTimeAfterStartTime() {
-        if (startTime == null || endTime == null) {
-            return true;
-        }
-        return endTime.isAfter(startTime);
-    }
 
     @AssertTrue(message = "Price per player must be greater than 0 if split price is enabled")
     public boolean isPriceValidForSplit() {

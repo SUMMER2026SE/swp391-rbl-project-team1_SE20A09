@@ -102,12 +102,16 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
       if (typeof window !== 'undefined') {
+        const hasToken = localStorage.getItem('access_token')
         localStorage.removeItem('access_token')
-        try {
-          const { signOut } = await import('next-auth/react')
-          signOut({ callbackUrl: '/login?error=session_expired' })
-        } catch {
-          // If next-auth is unavailable or signOut fails, still clear token locally.
+        const isLoginPage = window.location.pathname.startsWith('/login')
+        if (hasToken && !isLoginPage) {
+          try {
+            const { signOut } = await import('next-auth/react')
+            signOut({ callbackUrl: '/login?error=session_expired' })
+          } catch {
+            // If next-auth is unavailable or signOut fails, still clear token locally.
+          }
         }
       }
     }
@@ -135,7 +139,7 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401) {
       message = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
         import('next-auth/react').then(({ signOut }) => {
           signOut({ callbackUrl: '/login' })
         })

@@ -13,6 +13,7 @@ import com.sportvenue.repository.BookingRepository;
 import com.sportvenue.repository.OwnerRepository;
 import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.TimeSlotRepository;
+import com.sportvenue.repository.TimeSlotExceptionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,8 @@ class OwnerBookingServiceTest {
     private StadiumRepository stadiumRepository;
     @Mock
     private TimeSlotRepository timeSlotRepository;
+    @Mock
+    private TimeSlotExceptionRepository timeSlotExceptionRepository;
 
     @InjectMocks
     private OwnerBookingService ownerBookingService;

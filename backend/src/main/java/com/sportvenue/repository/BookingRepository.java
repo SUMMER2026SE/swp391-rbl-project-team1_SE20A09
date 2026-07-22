@@ -248,7 +248,7 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
                        AND (:stadiumId IS NULL OR s2.stadiumId = :stadiumId)
                        AND (b2.bookingStatus = com.sportvenue.entity.enums.BookingStatus.COMPLETED OR (b2.isWalkIn = true AND b2.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED))
                        AND b2.reservationDate BETWEEN :startDate AND :endDate
-                       AND s2.stadiumId = s.stadiumId
+                       AND s2 = s
                        AND wt.transactionType = com.sportvenue.entity.enums.WalletTransactionType.SERVICE_FEE_DEBIT
                    ), 0) AS totalRevenue
             FROM Booking b
@@ -442,18 +442,33 @@ public interface BookingRepository extends JpaRepository<Booking, Integer>, JpaS
     @Query("""
             SELECT COUNT(b) > 0 FROM Booking b
             WHERE b.user.userId = :userId
-            AND b.bookingDate >= :startOfDay
-            AND b.bookingDate <= :endOfDay
+            AND b.reservationDate = :reservationDate
             AND b.bookingStatus IN (com.sportvenue.entity.enums.BookingStatus.PENDING, com.sportvenue.entity.enums.BookingStatus.CONFIRMED)
             AND b.slot.startTime < :endTime
             AND b.slot.endTime > :startTime
             """)
     boolean existsOverlappingBooking(
             @Param("userId") Integer userId,
-            @Param("startOfDay") LocalDateTime startOfDay,
-            @Param("endOfDay") LocalDateTime endOfDay,
+            @Param("reservationDate") LocalDate reservationDate,
             @Param("startTime") java.time.LocalTime startTime,
             @Param("endTime") java.time.LocalTime endTime);
+
+    @Query("""
+            SELECT b FROM Booking b
+            WHERE b.user.userId = :userId
+            AND b.bookingStatus = com.sportvenue.entity.enums.BookingStatus.CONFIRMED
+            AND (b.reservationDate > :today OR (b.reservationDate = :today AND b.slot.startTime > :nowTime))
+            AND NOT EXISTS (
+                SELECT 1 FROM MatchRequest m
+                WHERE m.booking = b
+                AND m.matchStatus IN (com.sportvenue.entity.enums.MatchStatus.OPEN, com.sportvenue.entity.enums.MatchStatus.FULL)
+            )
+            ORDER BY b.reservationDate ASC, b.slot.startTime ASC
+            """)
+    List<Booking> findEligibleForMatchCreation(
+            @Param("userId") Integer userId,
+            @Param("today") LocalDate today,
+            @Param("nowTime") java.time.LocalTime nowTime);
 
     long countByBookingStatus(BookingStatus status);
 
