@@ -7,14 +7,8 @@ import com.sportvenue.entity.SportType;
 import com.sportvenue.entity.Stadium;
 import com.sportvenue.entity.User;
 import com.sportvenue.entity.enums.AccountStatus;
-import com.sportvenue.entity.enums.ApprovedStatus;
-import com.sportvenue.entity.enums.ComplexStatus;
 import com.sportvenue.entity.enums.MatchStatus;
-import com.sportvenue.entity.enums.StadiumStatus;
-import com.sportvenue.entity.enums.StadiumNodeType;
 import com.sportvenue.entity.enums.BookingStatus;
-import com.sportvenue.entity.StadiumComplex;
-import com.sportvenue.entity.TimeSlot;
 import com.sportvenue.exception.BadRequestException;
 import com.sportvenue.exception.ResourceNotFoundException;
 import com.sportvenue.repository.BookingRepository;
@@ -50,7 +44,6 @@ import java.time.LocalTime;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -80,42 +73,17 @@ public class MatchRequestServiceImpl implements MatchRequestService {
     public MatchResponse createMatch(CreateMatchRequest request, Integer userId) {
         log.info("Creating match request: '{}' for user ID: {}", request.getTitle(), userId);
 
-        // 1. Kiểm tra User
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
-        
         if (user.getAccountStatus() != AccountStatus.ACTIVE) {
             throw new BadRequestException("User account is not active");
         }
 
-        // 2. Load Booking
         com.sportvenue.entity.Booking booking = bookingRepository.findById(request.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found with ID: " + request.getBookingId()));
 
-        // 3. Check ownership
-        if (!booking.getUser().getUserId().equals(userId)) {
-            throw new BadRequestException("Booking này không thuộc về bạn");
-        }
+        validateBookingForMatchCreation(booking, userId);
 
-        // 4. Check status
-        if (booking.getBookingStatus() != BookingStatus.CONFIRMED) {
-            throw new BadRequestException("Chỉ có thể tạo kèo ghép cho lịch đặt sân đã được xác nhận");
-        }
-
-        // 5. Check future time
-        LocalDateTime slotStart = LocalDateTime.of(booking.getReservationDate(), booking.getSlot().getStartTime());
-        if (!slotStart.isAfter(LocalDateTime.now())) {
-            throw new BadRequestException("Không thể tạo kèo ghép cho lịch đã diễn ra");
-        }
-
-        // 6. Check active match for this booking
-        boolean hasActiveMatch = matchRequestRepository.existsByBookingBookingIdAndMatchStatusIn(
-                booking.getBookingId(), Arrays.asList(MatchStatus.OPEN, MatchStatus.FULL));
-        if (hasActiveMatch) {
-            throw new BadRequestException("Booking này đã có kèo ghép đang mở, hãy huỷ kèo cũ trước khi tạo mới");
-        }
-
-        // 7. Derive from booking
         Stadium stadium = booking.getStadium();
         SportType sportType = stadium.getSportType();
         if (sportType == null && stadium.getParentStadium() != null) {
@@ -133,20 +101,8 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                 .map(TimeSlotException::getEndTimeOverride)
                 .orElse(booking.getSlot().getEndTime());
 
-        // 8. Overlapping guard check
-        boolean hasOverlappingMatch = matchRequestRepository.existsOverlappingMatchRequest(
-                userId, playDate, startTime, endTime);
-        if (hasOverlappingMatch) {
-            throw new BadRequestException("Bạn đã có một kèo ghép đang mở trùng với khoảng thời gian này");
-        }
+        checkOverlappingSchedules(userId, playDate, startTime, endTime);
 
-        boolean hasApprovedOverlap = joinRequestRepository.existsApprovedOverlappingJoinRequest(
-                userId, playDate, startTime, endTime);
-        if (hasApprovedOverlap) {
-            throw new BadRequestException("Bạn đã được chấp nhận tham gia một kèo ghép khác trùng với khoảng thời gian này");
-        }
-
-        // 9. Build & save MatchRequest
         MatchRequest matchRequest = MatchRequest.builder()
                 .user(user)
                 .booking(booking)
@@ -171,8 +127,38 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         log.info("Successfully created match request with ID: {}", savedMatch.getMatchId());
 
         chatService.createOrUpdateMatchGroupChat(savedMatch, user.getUserId());
-
         return mapToResponse(savedMatch);
+    }
+
+    private void validateBookingForMatchCreation(com.sportvenue.entity.Booking booking, Integer userId) {
+        if (!booking.getUser().getUserId().equals(userId)) {
+            throw new BadRequestException("Booking này không thuộc về bạn");
+        }
+        if (booking.getBookingStatus() != BookingStatus.CONFIRMED) {
+            throw new BadRequestException("Chỉ có thể tạo kèo ghép cho lịch đặt sân đã được xác nhận");
+        }
+        LocalDateTime slotStart = LocalDateTime.of(booking.getReservationDate(), booking.getSlot().getStartTime());
+        if (!slotStart.isAfter(LocalDateTime.now())) {
+            throw new BadRequestException("Không thể tạo kèo ghép cho lịch đã diễn ra");
+        }
+        boolean hasActiveMatch = matchRequestRepository.existsByBookingBookingIdAndMatchStatusIn(
+                booking.getBookingId(), Arrays.asList(MatchStatus.OPEN, MatchStatus.FULL));
+        if (hasActiveMatch) {
+            throw new BadRequestException("Booking này đã có kèo ghép đang mở, hãy huỷ kèo cũ trước khi tạo mới");
+        }
+    }
+
+    private void checkOverlappingSchedules(Integer userId, LocalDate playDate, LocalTime startTime, LocalTime endTime) {
+        boolean hasOverlappingMatch = matchRequestRepository.existsOverlappingMatchRequest(
+                userId, playDate, startTime, endTime);
+        if (hasOverlappingMatch) {
+            throw new BadRequestException("Bạn đã có một kèo ghép đang mở trùng với khoảng thời gian này");
+        }
+        boolean hasApprovedOverlap = joinRequestRepository.existsApprovedOverlappingJoinRequest(
+                userId, playDate, startTime, endTime);
+        if (hasApprovedOverlap) {
+            throw new BadRequestException("Bạn đã được chấp nhận tham gia một kèo ghép khác trùng với khoảng thời gian này");
+        }
     }
 
     @Override

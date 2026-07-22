@@ -184,6 +184,7 @@ public class MatchRequestController {
         matchRequestService.cancelMatch(matchId, userPrincipal.getUser().getUserId(), reason);
         return ResponseEntity.ok(new MessageResponse("Hủy kèo thành công."));
     }
+
     @GetMapping("/eligible-bookings")
     @PreAuthorize("hasRole('Customer')")
     @Operation(

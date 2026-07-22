@@ -1258,33 +1258,12 @@ public class BookingServiceImpl implements BookingService {
             sportType = stadium.getSportType().getSportName();
         }
 
-        // Số tiền THỰC TẾ đã charge qua cổng — khác totalPrice khi là đơn đặt cọc (chỉ thu 30%),
-        // để FE hiển thị rõ "Đã đặt cọc: Xđ" thay vì chỉ ghi nhãn "Đặt cọc" mà không rõ số tiền.
-        // SUM toàn bộ payment SUCCESS (không chỉ lấy 1 dòng) — vì sau khi Owner xác nhận thu nốt
-        // phần còn lại của đơn cọc, booking có tới 2 dòng Payment SUCCESS (cọc VNPay + tiền mặt còn
-        // lại); .findFirst() không có ORDER BY nên có thể lấy nhầm dòng, khiến FE hiểu sai là vẫn
-        // còn nợ tiền dù đã thanh toán đủ.
-        List<Payment> successPayments = paymentRepository.findSuccessPaymentsByBookingId(booking.getBookingId());
-        BigDecimal paidAmount = successPayments.isEmpty()
-                ? null
-                : successPayments.stream().map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal paidAmount = calculatePaidAmount(booking.getBookingId());
 
-        // Hiển thị số tiền/% thực tế đã hoàn cho khách theo dõi — trước đây chỉ có badge
-        // "Đã hoàn tiền" chung chung, không rõ hoàn bao nhiêu (0%, 50%, hay 100%).
-        // Cộng dồn TẤT CẢ payment hoàn tiền SUCCESS (không chỉ lấy 1 dòng mới nhất) — vì luồng
-        // "Yêu cầu ngoại lệ" có thể tạo thêm payment hoàn bổ sung (top-up) sau lần hoàn gốc, lấy
-        // 1 dòng sẽ hiện thiếu số tiền thực đã nhận.
-        // % LUÔN tính trên paidAmount (TOÀN BỘ số tiền đã thanh toán, gồm cả phí dịch vụ) — không
-        // trừ phí ra khỏi mẫu số. Trước đây dùng "baseRefundable = paidAmount - serviceFee" làm mẫu
-        // số, nên trường hợp hoàn 100% gồm cả phí (OWNER_FAULT: refundedAmount = paidAmount) lại
-        // hiện %>100 (vd 111%, hoặc 150% với đơn cọc) do chia cho số đã trừ phí thay vì tổng thật.
         BigDecimal refundedAmount = null;
         Integer refundPercent = null;
         if (booking.getPaymentStatus() == PaymentStatus.REFUNDED) {
-            refundedAmount = paymentRepository.findRefundPaymentByBookingId(booking.getBookingId()).stream()
-                    .filter(p -> p.getPaymentStatus() == TransactionStatus.SUCCESS)
-                    .map(p -> p.getAmount().abs())
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            refundedAmount = calculateRefundedAmount(booking.getBookingId());
             if (paidAmount != null && paidAmount.compareTo(BigDecimal.ZERO) > 0) {
                 refundPercent = refundedAmount
                         .multiply(BigDecimal.valueOf(100))
@@ -1293,6 +1272,7 @@ public class BookingServiceImpl implements BookingService {
             }
         }
 
+        LocalTime[] effectiveTime = getEffectiveSlotTime(slot, booking.getReservationDate());
         List<com.sportvenue.dto.booking.BookingDetailResponse.AccessoryInfo> accessoriesDto = mapBookingAccessories(booking.getBookingId());
 
         return BookingDetailResponse.builder()
@@ -1301,14 +1281,8 @@ public class BookingServiceImpl implements BookingService {
                 .reservationDate(booking.getReservationDate())
                 .slot(BookingDetailResponse.SlotInfo.builder()
                         .slotId(slot.getSlotId())
-                        .startTime(timeSlotExceptionRepository.findBySlotSlotIdAndExceptionDate(slot.getSlotId(), booking.getReservationDate())
-                                .filter(e -> e.getStartTimeOverride() != null)
-                                .map(TimeSlotException::getStartTimeOverride)
-                                .orElse(slot.getStartTime()))
-                        .endTime(timeSlotExceptionRepository.findBySlotSlotIdAndExceptionDate(slot.getSlotId(), booking.getReservationDate())
-                                .filter(e -> e.getEndTimeOverride() != null)
-                                .map(TimeSlotException::getEndTimeOverride)
-                                .orElse(slot.getEndTime()))
+                        .startTime(effectiveTime[0])
+                        .endTime(effectiveTime[1])
                         .build())
                 .stadium(BookingDetailResponse.StadiumInfo.builder()
                         .stadiumId(stadium.getStadiumId())
@@ -1333,6 +1307,34 @@ public class BookingServiceImpl implements BookingService {
                 .expiredAt(booking.getExpiredAt())
                 .createdAt(booking.getBookingDate())
                 .build();
+    }
+
+    private BigDecimal calculatePaidAmount(Integer bookingId) {
+        List<Payment> successPayments = paymentRepository.findSuccessPaymentsByBookingId(bookingId);
+        return successPayments.isEmpty()
+                ? null
+                : successPayments.stream().map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private BigDecimal calculateRefundedAmount(Integer bookingId) {
+        return paymentRepository.findRefundPaymentByBookingId(bookingId).stream()
+                .filter(p -> p.getPaymentStatus() == TransactionStatus.SUCCESS)
+                .map(p -> p.getAmount().abs())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private LocalTime[] getEffectiveSlotTime(TimeSlot slot, LocalDate reservationDate) {
+        Optional<TimeSlotException> exceptionOpt = timeSlotExceptionRepository
+                .findBySlotSlotIdAndExceptionDate(slot.getSlotId(), reservationDate);
+        LocalTime startTime = exceptionOpt
+                .filter(e -> e.getStartTimeOverride() != null)
+                .map(TimeSlotException::getStartTimeOverride)
+                .orElse(slot.getStartTime());
+        LocalTime endTime = exceptionOpt
+                .filter(e -> e.getEndTimeOverride() != null)
+                .map(TimeSlotException::getEndTimeOverride)
+                .orElse(slot.getEndTime());
+        return new LocalTime[]{startTime, endTime};
     }
 
     private List<com.sportvenue.dto.booking.BookingDetailResponse.AccessoryInfo> mapBookingAccessories(Integer bookingId) {
