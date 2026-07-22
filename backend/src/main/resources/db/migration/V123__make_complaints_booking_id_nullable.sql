@@ -1,0 +1,1 @@
+ALTER TABLE complaints ALTER COLUMN booking_id DROP NOT NULL;

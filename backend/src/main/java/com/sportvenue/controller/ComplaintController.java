@@ -85,13 +85,13 @@ public class ComplaintController {
     }
 
     @PostMapping("/complaints")
-    @PreAuthorize("hasRole('Customer')")
-    @Operation(summary = "Khách hàng tạo khiếu nại mới")
+    @Operation(summary = "Người dùng tạo khiếu nại mới (Hệ thống hoặc Đặt sân)")
     public ResponseEntity<ComplaintResponse> createComplaint(
             @Valid @RequestBody CreateComplaintRequest request,
             @AuthenticationPrincipal UserPrincipal userPrincipal) {
-        log.info("REST request to create complaint for booking {} by customer: {}", request.getBookingId(), userPrincipal.getUsername());
-        ComplaintResponse response = complaintService.createComplaint(request, userPrincipal.getUsername());
+        String username = userPrincipal != null ? userPrincipal.getUsername() : "anonymousUser";
+        log.info("REST request to create complaint for booking {} by customer: {}", request.getBookingId(), username);
+        ComplaintResponse response = complaintService.createComplaint(request, username);
         return ResponseEntity.ok(response);
     }
 
