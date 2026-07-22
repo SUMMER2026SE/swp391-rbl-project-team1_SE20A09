@@ -26,8 +26,11 @@ import com.sportvenue.repository.StadiumRepository;
 import com.sportvenue.repository.StadiumComplexRepository;
 import com.sportvenue.repository.TimeSlotRepository;
 import com.sportvenue.repository.UserRepository;
+import com.sportvenue.repository.TimeSlotExceptionRepository;
+import com.sportvenue.entity.TimeSlotException;
 import com.sportvenue.entity.JoinRequest;
 import com.sportvenue.entity.enums.JoinRequestStatus;
+import java.util.Optional;
 import com.sportvenue.dto.response.JoinRequestResponse;
 import com.sportvenue.service.MaintenanceScheduleService;
 import com.sportvenue.service.MatchRequestService;
@@ -68,6 +71,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
     private final ChatService chatService;
     private final StadiumComplexRepository stadiumComplexRepository;
     private final TimeSlotRepository timeSlotRepository;
+    private final TimeSlotExceptionRepository timeSlotExceptionRepository;
     private final MaintenanceScheduleService maintenanceScheduleService;
     private final CustomerNotificationService customerNotificationService;
 
@@ -76,7 +80,7 @@ public class MatchRequestServiceImpl implements MatchRequestService {
     public MatchResponse createMatch(CreateMatchRequest request, Integer userId) {
         log.info("Creating match request: '{}' for user ID: {}", request.getTitle(), userId);
 
-        // 1. Kiểm tra User (Host) tồn tại và hoạt động
+        // 1. Kiểm tra User
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
         
@@ -84,113 +88,75 @@ public class MatchRequestServiceImpl implements MatchRequestService {
             throw new BadRequestException("User account is not active");
         }
 
-        // 2. Phân giải Complex ID và thiết lập các thông tin ưu tiên (hỗ trợ tương thích ngược)
-        ResolvedTargetComplex resolved = resolveTargetComplex(request);
-        final Integer targetComplexId = resolved.targetComplexId();
-        final StadiumComplex complex = resolved.complex();
-        final Stadium legacyStadium = resolved.legacyStadium();
+        // 2. Load Booking
+        com.sportvenue.entity.Booking booking = bookingRepository.findById(request.getBookingId())
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found with ID: " + request.getBookingId()));
 
-        // 3. Kiểm tra trạng thái hoạt động của Complex (nếu có) hoặc Stadium legacy
-        validateComplexOrStadiumAvailability(complex, legacyStadium);
+        // 3. Check ownership
+        if (!booking.getUser().getUserId().equals(userId)) {
+            throw new BadRequestException("Booking này không thuộc về bạn");
+        }
 
-        // 4 & 5. Nếu truyền preferredFacilityId / preferredCourtId, kiểm tra tính hợp lệ
-        final Stadium preferredFacility = request.getPreferredFacilityId() != null
-                ? validatePreferredFacility(request.getPreferredFacilityId(), targetComplexId)
-                : resolved.preferredFacility();
-        final Stadium preferredCourt = request.getPreferredCourtId() != null
-                ? validatePreferredCourt(request.getPreferredCourtId(), targetComplexId, preferredFacility)
-                : resolved.preferredCourt();
+        // 4. Check status
+        if (booking.getBookingStatus() != BookingStatus.CONFIRMED) {
+            throw new BadRequestException("Chỉ có thể tạo kèo ghép cho lịch đặt sân đã được xác nhận");
+        }
 
-        // 5b. Kiểm tra bảo trì theo khung ngày (MaintenanceSchedule) cho playDate — tách khỏi bước 3
-        // vì cần biết preferredCourt/preferredFacility (chính xác hơn complex chung chung) trước.
-        // Trước PR này chỉ check complexStatus/stadiumStatus tĩnh, bỏ sót bảo trì có khung ngày.
-        validateNotUnderMaintenance(complex, legacyStadium, preferredFacility, preferredCourt, request.getPlayDate());
-
-        // 6. Kiểm tra Sport Type tồn tại
-        SportType sportType = sportTypeRepository.findById(request.getSportTypeId())
-                .orElseThrow(() -> new ResourceNotFoundException("Sport Type not found with ID: " + request.getSportTypeId()));
-
-        // 7. Đảm bảo Tổ hợp (hoặc Sân/Khu vực ưu tiên) hỗ trợ đúng môn thể thao
-        validateSportTypeSupport(complex, legacyStadium, preferredFacility, preferredCourt, sportType);
-
-        // 8. Validate không tạo kèo với giờ đã qua
-        LocalDateTime slotStart = LocalDateTime.of(request.getPlayDate(), request.getStartTime());
+        // 5. Check future time
+        LocalDateTime slotStart = LocalDateTime.of(booking.getReservationDate(), booking.getSlot().getStartTime());
         if (!slotStart.isAfter(LocalDateTime.now())) {
-            throw new BadRequestException("Cannot create matchmaking request for a past time");
+            throw new BadRequestException("Không thể tạo kèo ghép cho lịch đã diễn ra");
         }
 
-        // 9. Kiểm tra trùng lịch kèo ghép và Booking của Host
-        validateOverlappingSchedule(userId, request);
-
-        // 10. Kiểm tra conflict sân trống ở cấp Complex (chỉ áp dụng cho luồng mới chọn Complex)
-        if (request.getComplexId() != null) {
-            validateComplexCourtAvailability(request);
+        // 6. Check active match for this booking
+        boolean hasActiveMatch = matchRequestRepository.existsByBookingBookingIdAndMatchStatusIn(
+                booking.getBookingId(), Arrays.asList(MatchStatus.OPEN, MatchStatus.FULL));
+        if (hasActiveMatch) {
+            throw new BadRequestException("Booking này đã có kèo ghép đang mở, hãy huỷ kèo cũ trước khi tạo mới");
         }
 
-        // 11. Tạo và lưu MatchRequest
-        return createAndSaveMatch(request, user, complex, legacyStadium, preferredFacility, preferredCourt, sportType);
-    }
+        // 7. Derive from booking
+        Stadium stadium = booking.getStadium();
+        SportType sportType = stadium.getSportType();
+        if (sportType == null && stadium.getParentStadium() != null) {
+            sportType = stadium.getParentStadium().getSportType();
+        }
+        LocalDate playDate = booking.getReservationDate();
+        Optional<TimeSlotException> exceptionOpt = timeSlotExceptionRepository.findBySlotSlotIdAndExceptionDate(
+                booking.getSlot().getSlotId(), playDate);
+        LocalTime startTime = exceptionOpt
+                .filter(e -> e.getStartTimeOverride() != null)
+                .map(TimeSlotException::getStartTimeOverride)
+                .orElse(booking.getSlot().getStartTime());
+        LocalTime endTime = exceptionOpt
+                .filter(e -> e.getEndTimeOverride() != null)
+                .map(TimeSlotException::getEndTimeOverride)
+                .orElse(booking.getSlot().getEndTime());
 
-    private ResolvedTargetComplex resolveTargetComplex(CreateMatchRequest request) {
-        Integer targetComplexIdOpt = request.getComplexId();
-        StadiumComplex resolvedComplex = null;
-        Stadium resolvedPreferredFacility = null;
-        Stadium resolvedPreferredCourt = null;
-        Stadium resolvedLegacyStadium = null;
-
-        if (targetComplexIdOpt == null) {
-            if (request.getStadiumId() == null) {
-                throw new BadRequestException("Either Complex ID or Stadium ID must be provided");
-            }
-            resolvedLegacyStadium = stadiumRepository.findByIdWithComplexAndParent(request.getStadiumId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Stadium not found with ID: " + request.getStadiumId()));
-            
-            if (resolvedLegacyStadium.getNodeType() != StadiumNodeType.COURT) {
-                throw new BadRequestException("The provided legacy Stadium ID must be of node type COURT");
-            }
-            
-            resolvedComplex = resolvedLegacyStadium.getComplex();
-            if (resolvedComplex != null) {
-                targetComplexIdOpt = resolvedComplex.getComplexId();
-                resolvedPreferredCourt = resolvedLegacyStadium;
-                resolvedPreferredFacility = resolvedLegacyStadium.getParentStadium();
-            }
-        } else {
-            final Integer finalComplexIdLookup = targetComplexIdOpt;
-            resolvedComplex = stadiumComplexRepository.findById(finalComplexIdLookup)
-                    .orElseThrow(() -> new ResourceNotFoundException("Complex not found with ID: " + finalComplexIdLookup));
+        // 8. Overlapping guard check
+        boolean hasOverlappingMatch = matchRequestRepository.existsOverlappingMatchRequest(
+                userId, playDate, startTime, endTime);
+        if (hasOverlappingMatch) {
+            throw new BadRequestException("Bạn đã có một kèo ghép đang mở trùng với khoảng thời gian này");
         }
 
-        return new ResolvedTargetComplex(targetComplexIdOpt, resolvedComplex, resolvedPreferredFacility, resolvedPreferredCourt, resolvedLegacyStadium);
-    }
+        boolean hasApprovedOverlap = joinRequestRepository.existsApprovedOverlappingJoinRequest(
+                userId, playDate, startTime, endTime);
+        if (hasApprovedOverlap) {
+            throw new BadRequestException("Bạn đã được chấp nhận tham gia một kèo ghép khác trùng với khoảng thời gian này");
+        }
 
-    private record ResolvedTargetComplex(
-            Integer targetComplexId,
-            StadiumComplex complex,
-            Stadium preferredFacility,
-            Stadium preferredCourt,
-            Stadium legacyStadium) { }
-
-    private MatchResponse createAndSaveMatch(
-            CreateMatchRequest request,
-            User user,
-            StadiumComplex complex,
-            Stadium legacyStadium,
-            Stadium preferredFacility,
-            Stadium preferredCourt,
-            SportType sportType) {
+        // 9. Build & save MatchRequest
         MatchRequest matchRequest = MatchRequest.builder()
                 .user(user)
-                .stadium(legacyStadium != null ? legacyStadium : preferredCourt)
-                .complex(complex)
-                .preferredFacility(preferredFacility)
-                .preferredCourt(preferredCourt)
+                .booking(booking)
+                .stadium(stadium)
                 .sportType(sportType)
                 .title(request.getTitle())
                 .description(request.getDescription())
-                .playDate(request.getPlayDate())
-                .startTime(request.getStartTime())
-                .endTime(request.getEndTime())
+                .playDate(playDate)
+                .startTime(startTime)
+                .endTime(endTime)
                 .maxPlayers(request.getMaxPlayers())
                 .currentPlayers(1)
                 .skillLevel(request.getSkillLevel())
@@ -204,158 +170,9 @@ public class MatchRequestServiceImpl implements MatchRequestService {
         MatchRequest savedMatch = matchRequestRepository.save(matchRequest);
         log.info("Successfully created match request with ID: {}", savedMatch.getMatchId());
 
-        // Create empty group chat for the host immediately upon match creation
         chatService.createOrUpdateMatchGroupChat(savedMatch, user.getUserId());
 
         return mapToResponse(savedMatch);
-    }
-
-    private void validateComplexOrStadiumAvailability(StadiumComplex complex, Stadium legacyStadium) {
-        if (complex != null) {
-            if (complex.getComplexStatus() != ComplexStatus.AVAILABLE) {
-                throw new BadRequestException("Complex is currently not available (CLOSED or under MAINTENANCE)");
-            }
-            if (complex.getApprovedStatus() != ApprovedStatus.APPROVED) {
-                throw new BadRequestException("Complex is not approved yet");
-            }
-        } else if (legacyStadium != null) {
-            if (legacyStadium.getStadiumStatus() != StadiumStatus.AVAILABLE) {
-                throw new BadRequestException("Stadium is currently not available (e.g. CLOSED or under MAINTENANCE)");
-            }
-            if (legacyStadium.getApprovedStatus() != ApprovedStatus.APPROVED) {
-                throw new BadRequestException("Stadium is not approved yet");
-            }
-        }
-    }
-
-    /**
-     * {@link #validateComplexOrStadiumAvailability} chỉ check cờ tĩnh (stadiumStatus/complexStatus —
-     * bảo trì vô thời hạn). Bảo trì có khung ngày ({@link com.sportvenue.entity.MaintenanceSchedule})
-     * cố tình KHÔNG đổi 2 cờ đó, nên cần check riêng qua {@code MaintenanceScheduleService} — dùng
-     * target cụ thể nhất đã biết (Court > Facility > Stadium legacy > Complex chung chung).
-     */
-    private void validateNotUnderMaintenance(StadiumComplex complex, Stadium legacyStadium,
-                                              Stadium preferredFacility, Stadium preferredCourt, LocalDate playDate) {
-        if (preferredCourt != null) {
-            if (maintenanceScheduleService.isStadiumUnderMaintenance(preferredCourt, playDate)) {
-                throw new BadRequestException("Selected court has a scheduled maintenance window on " + playDate);
-            }
-        } else if (preferredFacility != null) {
-            if (maintenanceScheduleService.isStadiumUnderMaintenance(preferredFacility, playDate)) {
-                throw new BadRequestException("Selected facility has a scheduled maintenance window on " + playDate);
-            }
-        } else if (legacyStadium != null) {
-            if (maintenanceScheduleService.isStadiumUnderMaintenance(legacyStadium, playDate)) {
-                throw new BadRequestException("Selected stadium has a scheduled maintenance window on " + playDate);
-            }
-        } else if (complex != null) {
-            if (maintenanceScheduleService.isComplexUnderMaintenance(complex, playDate)) {
-                throw new BadRequestException("Selected complex has a scheduled maintenance window on " + playDate);
-            }
-        }
-    }
-
-    private Stadium validatePreferredFacility(Integer preferredFacilityId, Integer targetComplexId) {
-        if (preferredFacilityId == null) {
-            return null;
-        }
-        Stadium facility = stadiumRepository.findById(preferredFacilityId)
-                .orElseThrow(() -> new ResourceNotFoundException("Preferred Facility not found with ID: " + preferredFacilityId));
-        if (facility.getNodeType() != StadiumNodeType.FACILITY) {
-            throw new BadRequestException("Preferred Facility ID must refer to a FACILITY node type");
-        }
-        if (facility.getComplex() == null || !facility.getComplex().getComplexId().equals(targetComplexId)) {
-            throw new BadRequestException("Preferred Facility does not belong to the selected Complex");
-        }
-        return facility;
-    }
-
-    private Stadium validatePreferredCourt(Integer preferredCourtId, Integer targetComplexId, Stadium preferredFacility) {
-        if (preferredCourtId == null) {
-            return null;
-        }
-        Stadium court = stadiumRepository.findById(preferredCourtId)
-                .orElseThrow(() -> new ResourceNotFoundException("Preferred Court not found with ID: " + preferredCourtId));
-        if (court.getNodeType() != StadiumNodeType.COURT) {
-            throw new BadRequestException("Preferred Court ID must refer to a COURT node type");
-        }
-        if (court.getComplex() == null || !court.getComplex().getComplexId().equals(targetComplexId)) {
-            throw new BadRequestException("Preferred Court does not belong to the selected Complex");
-        }
-        if (preferredFacility != null && (court.getParentStadium() == null || !court.getParentStadium().getStadiumId().equals(preferredFacility.getStadiumId()))) {
-            throw new BadRequestException("Preferred Court does not belong to the selected Facility");
-        }
-        return court;
-    }
-
-    private void validateSportTypeSupport(StadiumComplex complex, Stadium legacyStadium, Stadium preferredFacility, Stadium preferredCourt, SportType sportType) {
-        if (complex != null) {
-            if (preferredCourt != null) {
-                Stadium facilityOfCourt = preferredCourt.getParentStadium();
-                SportType courtSportType = preferredCourt.getSportType() != null ? preferredCourt.getSportType() :
-                        (facilityOfCourt != null ? facilityOfCourt.getSportType() : null);
-                if (courtSportType == null || !courtSportType.getSportTypeId().equals(sportType.getSportTypeId())) {
-                    throw new BadRequestException("Preferred Court does not support the sport type: " + sportType.getSportName());
-                }
-            } else if (preferredFacility != null) {
-                if (preferredFacility.getSportType() == null || !preferredFacility.getSportType().getSportTypeId().equals(sportType.getSportTypeId())) {
-                    throw new BadRequestException("Preferred Facility does not support the sport type: " + sportType.getSportName());
-                }
-            } else {
-                boolean complexSupportsSport = complex.getSportTypes().stream()
-                        .anyMatch(st -> st.getSportTypeId().equals(sportType.getSportTypeId()));
-                if (!complexSupportsSport) {
-                    throw new BadRequestException("Selected Complex does not support the sport type: " + sportType.getSportName());
-                }
-            }
-        } else {
-            if (!legacyStadium.getSportType().getSportTypeId().equals(sportType.getSportTypeId())) {
-                throw new BadRequestException("The selected stadium does not support the sport type: " + sportType.getSportName());
-            }
-        }
-    }
-
-    private void validateComplexCourtAvailability(CreateMatchRequest request) {
-        List<Stadium> candidateCourts;
-        if (request.getPreferredCourtId() != null) {
-            Stadium court = stadiumRepository.findById(request.getPreferredCourtId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Court not found"));
-            candidateCourts = List.of(court);
-        } else if (request.getPreferredFacilityId() != null) {
-            Stadium facility = stadiumRepository.findById(request.getPreferredFacilityId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Facility not found"));
-            candidateCourts = stadiumRepository.findCourtsByFacilityId(request.getPreferredFacilityId());
-        } else {
-            candidateCourts = stadiumRepository.findCourtsByComplexId(request.getComplexId());
-        }
-
-        if (candidateCourts.isEmpty()) {
-            throw new BadRequestException("No courts found in the selected range");
-        }
-
-        List<Integer> courtIds = candidateCourts.stream()
-                .map(Stadium::getStadiumId)
-                .collect(Collectors.toList());
-
-        List<TimeSlot> allSlots = timeSlotRepository.findOverlappingSlotsByStadiumIds(
-                courtIds, request.getStartTime(), request.getEndTime());
-
-        List<BookingStatus> activeStatuses = Arrays.asList(
-                BookingStatus.PENDING_PAYMENT, BookingStatus.PENDING, BookingStatus.CONFIRMED);
-        Set<String> bookedKeys = bookingRepository.findActiveBookingKeysByStadiumIds(
-                courtIds, request.getPlayDate(), activeStatuses)
-                .stream()
-                .map(row -> row[0] + "-" + row[1])
-                .collect(Collectors.toSet());
-
-        boolean hasAvailableCourt = allSlots.stream()
-                .filter(slot -> slot.getSlotStatus() == com.sportvenue.entity.enums.SlotStatus.AVAILABLE)
-                .anyMatch(slot -> !bookedKeys.contains(
-                        slot.getStadium().getStadiumId() + "-" + slot.getSlotId()));
-
-        if (!hasAvailableCourt) {
-            throw new BadRequestException("No available court in the selected complex/facility during the requested time slot");
-        }
     }
 
     @Override
@@ -484,41 +301,14 @@ public class MatchRequestServiceImpl implements MatchRequestService {
             throw new BadRequestException("Bạn đã được chấp nhận tham gia kèo khác trong khung giờ này.");
         }
 
-        LocalDateTime startOfDay = match.getPlayDate().atStartOfDay();
-        LocalDateTime endOfDay = match.getPlayDate().atTime(LocalTime.MAX);
         boolean hasOverlappingBooking = bookingRepository.existsOverlappingBooking(
-                userId, startOfDay, endOfDay, match.getStartTime(), match.getEndTime());
+                userId, match.getPlayDate(), match.getStartTime(), match.getEndTime());
         if (hasOverlappingBooking) {
             throw new BadRequestException("Bạn đã có lịch đặt sân trùng với khung giờ của kèo này.");
         }
     }
 
-    private void validateOverlappingSchedule(Integer userId, CreateMatchRequest request) {
-        boolean hasOverlappingMatch = matchRequestRepository.existsOverlappingMatchRequest(
-                userId,
-                request.getPlayDate(),
-                request.getStartTime(),
-                request.getEndTime()
-        );
-        if (hasOverlappingMatch) {
-            throw new BadRequestException(
-                "You already have another open or full match request overlapping with this time range"
-            );
-        }
 
-        LocalDateTime startOfDay = request.getPlayDate().atStartOfDay();
-        LocalDateTime endOfDay = request.getPlayDate().atTime(LocalTime.MAX);
-        boolean hasOverlappingBooking = bookingRepository.existsOverlappingBooking(
-                userId,
-                startOfDay,
-                endOfDay,
-                request.getStartTime(),
-                request.getEndTime()
-        );
-        if (hasOverlappingBooking) {
-            throw new BadRequestException("You have an active booking overlapping with this match request time range");
-        }
-    }
 
     @Override
     @Transactional(readOnly = true)
@@ -798,5 +588,38 @@ public class MatchRequestServiceImpl implements MatchRequestService {
                 .cancelReason(match.getCancelReason())
                 .createdAt(match.getCreatedAt())
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.sportvenue.dto.response.MatchEligibleBookingResponse> getEligibleBookingsForMatchCreation(Integer userId) {
+        log.info("Retrieving eligible bookings for match creation for User ID: {}", userId);
+        LocalDate today = LocalDate.now();
+        LocalTime nowTime = LocalTime.now();
+        List<com.sportvenue.entity.Booking> eligibleBookings = bookingRepository.findEligibleForMatchCreation(userId, today, nowTime);
+        
+        return eligibleBookings.stream().map(b -> {
+            Optional<TimeSlotException> exceptionOpt = timeSlotExceptionRepository.findBySlotSlotIdAndExceptionDate(
+                    b.getSlot().getSlotId(), b.getReservationDate());
+            LocalTime start = exceptionOpt
+                    .filter(e -> e.getStartTimeOverride() != null)
+                    .map(TimeSlotException::getStartTimeOverride)
+                    .orElse(b.getSlot().getStartTime());
+            LocalTime end = exceptionOpt
+                    .filter(e -> e.getEndTimeOverride() != null)
+                    .map(TimeSlotException::getEndTimeOverride)
+                    .orElse(b.getSlot().getEndTime());
+
+            return com.sportvenue.dto.response.MatchEligibleBookingResponse.builder()
+                    .bookingId(b.getBookingId())
+                    .stadiumName(b.getStadium().getStadiumName())
+                    .complexName(StadiumUtils.resolveComplexName(b.getStadium()))
+                    .address(b.getStadium().getAddress())
+                    .sportName(StadiumUtils.resolveSportName(b.getStadium()))
+                    .playDate(b.getReservationDate())
+                    .startTime(start)
+                    .endTime(end)
+                    .build();
+        }).collect(Collectors.toList());
     }
 }

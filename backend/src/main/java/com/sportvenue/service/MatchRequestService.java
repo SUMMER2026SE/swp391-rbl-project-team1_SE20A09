@@ -119,4 +119,12 @@ public interface MatchRequestService {
      * @param reason Lý do hủy kèo
      */
     void cancelMatch(Integer matchId, Integer userId, String reason);
+
+    /**
+     * Lấy danh sách booking đủ điều kiện tạo kèo ghép.
+     *
+     * @param userId ID của người dùng
+     * @return danh sách MatchEligibleBookingResponse
+     */
+    List<com.sportvenue.dto.response.MatchEligibleBookingResponse> getEligibleBookingsForMatchCreation(Integer userId);
 }
