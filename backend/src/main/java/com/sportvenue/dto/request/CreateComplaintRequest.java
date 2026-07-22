@@ -13,7 +13,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CreateComplaintRequest {
     
-    @NotNull(message = "ID đơn đặt sân không được để trống")
     private Integer bookingId;
     
     @NotBlank(message = "Tiêu đề không được để trống")

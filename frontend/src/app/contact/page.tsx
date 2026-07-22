@@ -23,18 +23,18 @@ export default function ContactPage() {
     try {
       // Gửi vào phần khiếu nại ở trang Admin (API tạo khiếu nại)
       await api.post('/complaints', {
-        bookingId: 1, // Dummy ID vì form liên hệ chung không thuộc về booking cụ thể nào
         subject: `Yêu cầu hỗ trợ từ ${formData.name} (${formData.email})`,
         description: formData.message
       });
       
       toast.success("Yêu cầu của bạn đã được gửi đến Ban Quản Trị thành công!");
       setFormData({ name: "", email: "", message: "" });
-    } catch (error) {
-      // Vì API yêu cầu xác thực và bookingId thật, chúng ta vẫn hiện thông báo thành công 
-      // để hoàn thiện mặt UI theo yêu cầu
-      toast.success("Yêu cầu của bạn đã được gửi đến Ban Quản Trị thành công!");
-      setFormData({ name: "", email: "", message: "" });
+    } catch (error: any) {
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        toast.error("Vui lòng đăng nhập để gửi yêu cầu hỗ trợ hệ thống.");
+      } else {
+        toast.error("Có lỗi xảy ra, vui lòng thử lại sau.");
+      }
     } finally {
       setIsSubmitting(false);
     }

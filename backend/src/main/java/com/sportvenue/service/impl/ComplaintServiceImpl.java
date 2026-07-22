@@ -86,10 +86,12 @@ public class ComplaintServiceImpl implements ComplaintService {
         User user = userRepository.findByEmail(customerEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng: " + customerEmail));
 
-        Booking booking = bookingRepository.findById(request.getBookingId())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân ID: " + request.getBookingId()));
-
-        validateComplaintCreation(request, user, booking);
+        Booking booking = null;
+        if (request.getBookingId() != null) {
+            booking = bookingRepository.findById(request.getBookingId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn đặt sân ID: " + request.getBookingId()));
+            validateComplaintCreation(request, user, booking);
+        }
 
         Complaint complaint = Complaint.builder()
                 .booking(booking)
@@ -124,19 +126,21 @@ public class ComplaintServiceImpl implements ComplaintService {
     }
 
     private void notifyComplaintCreated(Complaint saved, User user, Booking booking) {
-        try {
-            customerNotificationService.notifyComplaintAcknowledged(user.getUserId(), saved);
-        } catch (Exception ex) {
-            log.warn("Failed to emit complaint acknowledged notification for complaint {}", saved.getComplaintId(), ex);
-        }
+        if (booking != null) {
+            try {
+                customerNotificationService.notifyComplaintAcknowledged(user.getUserId(), saved);
+            } catch (Exception ex) {
+                log.warn("Failed to emit complaint acknowledged notification for complaint {}", saved.getComplaintId(), ex);
+            }
 
-        notificationService.createNotification(
-                booking.getStadium().getOwner().getUser().getUserId(),
-                "Khiếu nại mới",
-                "Khách hàng " + user.getFullName() + " vừa tạo khiếu nại cho đơn đặt sân #" + booking.getBookingId(),
-                NotificationType.COMPLAINT,
-                String.valueOf(saved.getComplaintId())
-        );
+            notificationService.createNotification(
+                    booking.getStadium().getOwner().getUser().getUserId(),
+                    "Khiếu nại mới",
+                    "Khách hàng " + user.getFullName() + " vừa tạo khiếu nại cho đơn đặt sân #" + booking.getBookingId(),
+                    NotificationType.COMPLAINT,
+                    String.valueOf(saved.getComplaintId())
+            );
+        }
 
         String adminResourceId = "COMPLAINT-" + saved.getComplaintId();
         userRepository.findAllAdmins().forEach(admin ->
@@ -149,21 +153,23 @@ public class ComplaintServiceImpl implements ComplaintService {
             )
         );
 
-        afterCommitExecutor.execute(() -> {
-            try {
-                User ownerUser = booking.getStadium().getOwner().getUser();
-                emailService.sendComplaintCreatedEmail(
-                        ownerUser.getEmail(),
-                        ownerUser.getFirstName() + " " + ownerUser.getLastName(),
-                        booking.getStadium().getStadiumName(),
-                        saved.getComplaintId(),
-                        user.getFirstName() + " " + user.getLastName(),
-                        saved.getSubject()
-                );
-            } catch (Exception e) {
-                log.error("Failed to send complaint created email", e);
-            }
-        });
+        if (booking != null) {
+            afterCommitExecutor.execute(() -> {
+                try {
+                    User ownerUser = booking.getStadium().getOwner().getUser();
+                    emailService.sendComplaintCreatedEmail(
+                            ownerUser.getEmail(),
+                            ownerUser.getFirstName() + " " + ownerUser.getLastName(),
+                            booking.getStadium().getStadiumName(),
+                            saved.getComplaintId(),
+                            user.getFirstName() + " " + user.getLastName(),
+                            saved.getSubject()
+                    );
+                } catch (Exception e) {
+                    log.error("Failed to send complaint created email", e);
+                }
+            });
+        }
     }
 
     @Transactional
@@ -184,7 +190,7 @@ public class ComplaintServiceImpl implements ComplaintService {
 
         boolean isOwner = false;
         Owner owner = ownerRepository.findByUserUserId(user.getUserId()).orElse(null);
-        if (owner != null && complaint.getBooking().getStadium().getOwner().getOwnerId().equals(owner.getOwnerId())) {
+        if (owner != null && complaint.getBooking() != null && complaint.getBooking().getStadium().getOwner().getOwnerId().equals(owner.getOwnerId())) {
             isOwner = true;
         }
 
@@ -240,19 +246,23 @@ public class ComplaintServiceImpl implements ComplaintService {
                                         String replyMessage) {
         String ref = String.valueOf(saved.getComplaintId());
         Integer customerId = complaint.getUser().getUserId();
-        Integer ownerId = complaint.getBooking().getStadium().getOwner().getUser().getUserId();
+        Integer ownerId = (complaint.getBooking() != null) ? complaint.getBooking().getStadium().getOwner().getUser().getUserId() : null;
         Integer id = complaint.getComplaintId();
         if (isAdmin) {
             notificationService.createNotification(customerId,
                     "Admin phản hồi khiếu nại", "Admin vừa phản hồi trong khiếu nại #" + id,
                     NotificationType.COMPLAINT, ref);
-            notificationService.createNotification(ownerId,
-                    "Admin phản hồi khiếu nại", "Admin vừa phản hồi trong khiếu nại #" + id,
-                    NotificationType.COMPLAINT, ref);
+            if (ownerId != null) {
+                notificationService.createNotification(ownerId,
+                        "Admin phản hồi khiếu nại", "Admin vừa phản hồi trong khiếu nại #" + id,
+                        NotificationType.COMPLAINT, ref);
+            }
         } else if (isCustomer) {
-            notificationService.createNotification(ownerId,
-                    "Phản hồi khiếu nại mới", "Khách hàng vừa phản hồi trong khiếu nại #" + id,
-                    NotificationType.COMPLAINT, ref);
+            if (ownerId != null) {
+                notificationService.createNotification(ownerId,
+                        "Phản hồi khiếu nại mới", "Khách hàng vừa phản hồi trong khiếu nại #" + id,
+                        NotificationType.COMPLAINT, ref);
+            }
         } else if (isOwner) {
             notificationService.createNotification(customerId,
                     "Phản hồi khiếu nại mới", "Chủ sân vừa phản hồi trong khiếu nại #" + id,
@@ -353,13 +363,15 @@ public class ComplaintServiceImpl implements ComplaintService {
 
         Complaint saved = complaintRepository.save(complaint);
 
-        notificationService.createNotification(
-                complaint.getBooking().getStadium().getOwner().getUser().getUserId(),
-                "Khiếu nại đã được đóng",
-                "Khách hàng đã tự đóng khiếu nại #" + complaintId,
-                NotificationType.COMPLAINT,
-                String.valueOf(saved.getComplaintId())
-        );
+        if (complaint.getBooking() != null) {
+            notificationService.createNotification(
+                    complaint.getBooking().getStadium().getOwner().getUser().getUserId(),
+                    "Khiếu nại đã được đóng",
+                    "Khách hàng đã tự đóng khiếu nại #" + complaintId,
+                    NotificationType.COMPLAINT,
+                    String.valueOf(saved.getComplaintId())
+            );
+        }
 
         messagingTemplate.convertAndSend(
                 "/topic/complaint/" + saved.getComplaintId(),
@@ -420,7 +432,7 @@ public class ComplaintServiceImpl implements ComplaintService {
         Complaint saved = complaintRepository.save(complaint);
 
         Integer customerId = complaint.getUser().getUserId();
-        Integer ownerId = complaint.getBooking().getStadium().getOwner().getUser().getUserId();
+        Integer ownerId = (complaint.getBooking() != null) ? complaint.getBooking().getStadium().getOwner().getUser().getUserId() : null;
         String ref = String.valueOf(saved.getComplaintId());
 
         notificationService.createNotification(
@@ -431,13 +443,15 @@ public class ComplaintServiceImpl implements ComplaintService {
                 ref
         );
 
-        notificationService.createNotification(
-                ownerId,
-                "Khiếu nại đã được Admin giải quyết",
-                "Khiếu nại #" + ref + " đã được Admin giải quyết.",
-                NotificationType.COMPLAINT,
-                ref
-        );
+        if (ownerId != null) {
+            notificationService.createNotification(
+                    ownerId,
+                    "Khiếu nại đã được Admin giải quyết",
+                    "Khiếu nại #" + ref + " đã được Admin giải quyết.",
+                    NotificationType.COMPLAINT,
+                    ref
+            );
+        }
 
         try {
             customerNotificationService.notifyComplaintResolved(complaint.getUser().getUserId(), complaint, request.getResolution().trim());
@@ -499,7 +513,11 @@ public class ComplaintServiceImpl implements ComplaintService {
     private ComplaintResponse mapToResponse(Complaint c) {
         String subject = c.getSubject();
         if (subject == null) {
-            subject = "Khiếu nại đặt sân #" + c.getBooking().getBookingId();
+            if (c.getBooking() != null) {
+                subject = "Khiếu nại đặt sân #" + c.getBooking().getBookingId();
+            } else {
+                subject = "Khiếu nại hệ thống";
+            }
         }
 
         List<ComplaintResponse.ResponseItem> responsesList = deserializeResponses(c.getResponse());
@@ -520,13 +538,15 @@ public class ComplaintServiceImpl implements ComplaintService {
         String customerName = c.getUser() != null ? c.getUser().getFullName() : "N/A";
         String customerEmail = c.getUser() != null ? c.getUser().getEmail() : "N/A";
 
-        String stadiumName = "N/A";
+        String stadiumName = "Hệ thống";
         Integer stadiumId = null;
-        String ownerName = "N/A";
-        String ownerEmail = "N/A";
+        String ownerName = "Ban Quản Trị";
+        String ownerEmail = "admin@sportsbook.vn";
         String bookingStatus = "N/A";
+        Integer bookingId = null;
 
         if (c.getBooking() != null) {
+            bookingId = c.getBooking().getBookingId();
             bookingStatus = c.getBooking().getBookingStatus() != null ? c.getBooking().getBookingStatus().name() : "N/A";
             if (c.getBooking().getStadium() != null) {
                 var stadium = c.getBooking().getStadium();
@@ -551,7 +571,7 @@ public class ComplaintServiceImpl implements ComplaintService {
                 .submittedDate(c.getCreatedAt().toLocalDate().toString())
                 .resolvedDate(resolvedDate)
                 .resolution(resolution)
-                .bookingId(c.getBooking().getBookingId())
+                .bookingId(bookingId)
                 .customerName(customerName)
                 .customerEmail(customerEmail)
                 .stadiumName(stadiumName)
