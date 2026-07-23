@@ -95,7 +95,7 @@ export function Footer() {
             <div className="mt-6 pt-6 border-t border-border">
               <h4 className="text-sm font-semibold mb-3">Hợp tác chủ sân</h4>
               <Link 
-                href="/owner/register" 
+                href="/register?tab=owner" 
                 className="inline-flex items-center justify-center text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2 rounded-md w-full"
               >
                 Đăng ký cho thuê sân

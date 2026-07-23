@@ -53,7 +53,7 @@ export default function PrivacyPage() {
             <h2 className="text-2xl font-bold text-slate-800 mt-8 mb-4 border-b pb-2">5. Quyền kiểm soát dữ liệu của bạn</h2>
             <p>Là người dùng của SportsBook, bạn có toàn quyền đối với dữ liệu của mình:</p>
             <ul className="list-disc pl-5 space-y-2">
-              <li><strong>Truy cập và Chỉnh sửa:</strong> Bạn có thể tự do cập nhật thông tin cá nhân trong mục "Hồ sơ của tôi".</li>
+              <li><strong>Truy cập và Chỉnh sửa:</strong> Bạn có thể tự do cập nhật thông tin cá nhân trong mục &quot;Hồ sơ của tôi&quot;.</li>
               <li><strong>Quyền được lãng quên (Xóa dữ liệu):</strong> Bạn có thể yêu cầu xóa vĩnh viễn tài khoản và toàn bộ dữ liệu liên quan bằng cách gửi email tới <a href="mailto:privacy@sportsbook.vn" className="text-primary hover:underline">privacy@sportsbook.vn</a>. Chúng tôi sẽ xử lý yêu cầu trong vòng 7 ngày làm việc.</li>
             </ul>
           </div>

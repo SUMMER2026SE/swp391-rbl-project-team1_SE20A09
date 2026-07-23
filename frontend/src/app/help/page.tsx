@@ -1,9 +1,14 @@
+'use client';
+
+import { useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/landing/Footer";
 import Link from "next/link";
 import { Search, ChevronRight, HelpCircle, FileText, CreditCard, CalendarDays, User } from "lucide-react";
 
 export default function HelpPage() {
+  const [searchQuery, setSearchQuery] = useState("");
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       <Header />
@@ -18,6 +23,8 @@ export default function HelpPage() {
                 type="text" 
                 placeholder="Nhập từ khóa tìm kiếm (Ví dụ: Hủy đặt sân, Thanh toán...)"
                 className="w-full pl-12 pr-4 py-4 rounded-full border shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-slate-700"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
           </div>
@@ -30,8 +37,8 @@ export default function HelpPage() {
               { icon: <FileText className="h-6 w-6 text-orange-500" />, title: "Chính sách Hủy & Hoàn tiền", desc: "Quy định hủy lịch và thời gian nhận lại tiền." },
               { icon: <User className="h-6 w-6 text-purple-500" />, title: "Quản lý Tài khoản", desc: "Đổi mật khẩu, cập nhật thông tin cá nhân." },
               { icon: <HelpCircle className="h-6 w-6 text-red-500" />, title: "Câu hỏi thường gặp (FAQ)", desc: "Tổng hợp các câu hỏi phổ biến nhất." },
-            ].map((cat, i) => (
-              <div key={i} className="bg-white p-6 rounded-xl border shadow-sm hover:shadow-md transition-shadow cursor-pointer group">
+            ].map((cat) => (
+              <div key={cat.title} className="bg-white p-6 rounded-xl border shadow-sm hover:shadow-md transition-shadow cursor-pointer group">
                 <div className="flex items-start gap-4">
                   <div className="p-3 bg-slate-50 rounded-lg group-hover:bg-primary/5 transition-colors">
                     {cat.icon}
