@@ -85,6 +85,7 @@ public class ComplaintController {
     }
 
     @PostMapping("/complaints")
+    @PreAuthorize("hasAnyRole('Customer', 'Owner', 'Admin')")
     @Operation(summary = "Người dùng tạo khiếu nại mới (Hệ thống hoặc Đặt sân)")
     public ResponseEntity<ComplaintResponse> createComplaint(
             @Valid @RequestBody CreateComplaintRequest request,

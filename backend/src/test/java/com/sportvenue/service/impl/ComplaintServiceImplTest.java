@@ -133,6 +133,40 @@ class ComplaintServiceImplTest {
     }
 
     @Test
+    void createComplaint_SystemComplaint_Success() {
+        CreateComplaintRequest request = CreateComplaintRequest.builder()
+                .bookingId(null)
+                .subject("System Feedback")
+                .description("System is slow")
+                .build();
+
+        User user = User.builder().userId(10).firstName("John").lastName("Doe").email("customer@example.com").build();
+
+        when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(user));
+
+        Complaint complaint = Complaint.builder()
+                .complaintId(501)
+                .booking(null)
+                .user(user)
+                .subject("System Feedback")
+                .content("System is slow")
+                .priority(ComplaintPriority.MEDIUM)
+                .status(ComplaintStatus.OPEN)
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        when(complaintRepository.save(any(Complaint.class))).thenReturn(complaint);
+
+        ComplaintResponse response = complaintService.createComplaint(request, "customer@example.com");
+
+        assertNotNull(response);
+        assertEquals(501, response.getComplaintId());
+        assertEquals("System Feedback", response.getSubject());
+
+        verify(notificationService, never()).createNotification(anyInt(), anyString(), anyString(), any(NotificationType.class), anyString());
+    }
+
+    @Test
     void createComplaint_NotOwnBooking_ThrowsBadRequest() {
         CreateComplaintRequest request = CreateComplaintRequest.builder().bookingId(1).build();
 

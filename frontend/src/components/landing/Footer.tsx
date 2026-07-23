@@ -60,7 +60,7 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/community" className="hover:text-primary transition-colors flex items-center gap-2 group">
+                <Link href="#" className="hover:text-primary transition-colors flex items-center gap-2 group">
                   <span className="h-1 w-1 rounded-full bg-muted-foreground group-hover:bg-primary transition-colors"></span>
                   Cộng đồng thể thao
                 </Link>

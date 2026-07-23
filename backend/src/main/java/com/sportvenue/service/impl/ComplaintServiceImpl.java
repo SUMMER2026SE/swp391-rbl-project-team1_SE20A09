@@ -114,7 +114,7 @@ public class ComplaintServiceImpl implements ComplaintService {
     }
 
     private void validateComplaintCreation(CreateComplaintRequest request, User user, Booking booking) {
-        if (!booking.getUser().getUserId().equals(user.getUserId())) {
+        if (user == null || !booking.getUser().getUserId().equals(user.getUserId())) {
             throw new BadRequestException("Bạn không có quyền khiếu nại đơn đặt sân này!");
         }
         // Allow complaints for COMPLETED (normal case) and CANCELLED (owner fault cases)
@@ -547,7 +547,7 @@ public class ComplaintServiceImpl implements ComplaintService {
         String stadiumName = "Hệ thống";
         Integer stadiumId = null;
         String ownerName = "Ban Quản Trị";
-        String ownerEmail = "admin@sportsbook.vn";
+        String ownerEmail = "N/A";
         String bookingStatus = "N/A";
         Integer bookingId = null;
 

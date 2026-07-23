@@ -104,7 +104,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/stadiums/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/documents/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/files/document").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/complaints").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/complaints").authenticated()
                         .requestMatchers("/api/v1/files/**").authenticated()
                         .anyRequest().authenticated()
                 )

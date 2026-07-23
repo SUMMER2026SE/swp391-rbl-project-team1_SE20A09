@@ -1,1 +1,0 @@
-ALTER TABLE complaints ALTER COLUMN user_id DROP NOT NULL;
